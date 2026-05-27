@@ -36,9 +36,11 @@ out/
 .parcel-cache/
 .turbo/
 
-# Data and models (gitignore artifacts, keep small fixtures)
-data/raw/
-data/processed/
+# Data and models (gitignore artifacts, keep small fixtures + .gitkeep markers)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
 data/parquet/
 models/*.pkl
 models/*.joblib
@@ -68,8 +70,9 @@ logs/
 # Credential rotation tracker (local timestamps only)
 .credential-ages.json
 
-# Experiment outputs (per-machine, not committed)
-runs/
+# Experiment outputs (per-machine, not committed beyond the keepfile)
+runs/*
+!runs/.gitkeep
 eval/cache/
 
 # uv environment
