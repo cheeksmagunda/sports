@@ -77,3 +77,4 @@ eval/cache/
 
 # uv environment
 .python-version
+scraper/
