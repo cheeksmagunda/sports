@@ -110,6 +110,37 @@ scripts/         Dev startup, credential probe, manual fires
 tests/           Pytest
 ```
 
+## Strategy: where the alpha comes from
+
+Three patterns ported from `basketball-main` (the sibling NBA Real Sports
+product the operator used to win late-season drafts):
+
+1. **Anti-popularity contrarian tilt.** Draft popularity has a strong
+   negative correlation with realized boost; the least-drafted half of
+   the pool produces ~24-26% more total value than the most-drafted
+   half. `picker/popularity.py` subtracts a popularity-scaled penalty
+   from each player's predicted real_score before the optimizer reads
+   it. Once `slate_labels.drafts` accumulates measured counts, the
+   contrarian path uses real data; until then it falls back to an
+   estimator (season ppg + big-market + slate size). Tunable via
+   `ContrarianConfig.strength` (default 0.2).
+2. **`max_per_team=2` constraint.** Three players from the same team
+   courts the negative same-team minutes-cannibalization correlation.
+   The optimizer skips any combo with > 2 players from one team before
+   EV evaluation, so the constraint is also a speedup (skips ~30% of
+   combos on typical chalk slates).
+3. **Injury-cascade minutes redistribution.** When a starter is OUT,
+   their minutes get redistributed to same-cohort teammates inversely
+   weighted by current minutes (bench players inherit more), with
+   center-forward cross-sharing and a per-player cap. The largest
+   upside in a WNBA slate is the backup who suddenly inherits 30
+   starter minutes; the optimizer that knows about it beats the one
+   that doesn't. Module: `features/injury_cascade.py`. Wiring into
+   `features/build.py` lands once the RotoWire `injury_status` field
+   flows through to the slate feature matrix.
+
+See `DECISIONS.md` D27 / D28 / D29 for the full reasoning + reverse paths.
+
 ## Sustainability notes
 
 - **Dependency hygiene.** `pyproject.toml` carries only what is imported

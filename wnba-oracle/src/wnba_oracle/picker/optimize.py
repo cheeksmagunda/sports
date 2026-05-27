@@ -34,6 +34,21 @@ log = get_logger("oracle.picker.optimize")
 DEFAULT_SLOT_MULTIPLIERS = np.array([3.0, 2.5, 2.0, 1.5, 1.0])
 
 
+def _exceeds_team_cap(
+    combo: tuple[int, ...], teams: list[str], max_per_team: int
+) -> bool:
+    """True if any team appears more than max_per_team times in combo."""
+    counts: dict[str, int] = {}
+    for idx in combo:
+        t = teams[idx]
+        if not t:
+            continue
+        counts[t] = counts.get(t, 0) + 1
+        if counts[t] > max_per_team:
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class LineupRecommendation:
     player_ids: tuple[int, ...]
@@ -53,6 +68,11 @@ class OptimizeConfig:
     skip_if_expected_payout_below: float = 0.95
     caveat_if_expected_payout_below: float = 1.10
     seed: int = 1729
+    # Ported from basketball-main. Caps how many players from one team
+    # appear in a lineup. Default 2 (one back-to-back stack is fine; three
+    # players courts the negative same-team minutes-cannibalization
+    # correlation). Set to 5 to disable.
+    max_per_team: int = 2
 
 
 def optimize_lineup(
@@ -101,19 +121,34 @@ def optimize_lineup(
             slot_multipliers,
         )
 
-    # Stage 2: enumerate C(n_filtered, 5) lineups.
+    # Stage 2: enumerate C(n_filtered, 5) lineups. Skip any that violate
+    # max_per_team early - counting same-team membership is much cheaper
+    # than scoring then rejecting.
+    keep_teams = [s.team for s in filtered_sampling]
     best_ev = -np.inf
     best_indices: tuple[int, ...] = ()
     best_samples: np.ndarray = np.zeros(cfg.n_samples)
+    n_evaluated = 0
+    n_skipped_team_cap = 0
     for combo in itertools.combinations(range(len(filtered_sampling)), 5):
+        if cfg.max_per_team < 5 and _exceeds_team_cap(combo, keep_teams, cfg.max_per_team):
+            n_skipped_team_cap += 1
+            continue
         own_samples = lineup_score_samples(
             real_score_samples, keep_boosts, list(combo), slot_multipliers
         )
         ev = expected_payout(own_samples, field_scores, curve, field_size=cfg.n_field_lineups + 1)
+        n_evaluated += 1
         if ev > best_ev:
             best_ev = ev
             best_indices = combo
             best_samples = own_samples
+    log.info(
+        "optimizer_stage2",
+        evaluated=n_evaluated,
+        skipped_team_cap=n_skipped_team_cap,
+        max_per_team=cfg.max_per_team,
+    )
 
     # Lineup assembly: assign slots by rearrangement inequality on median
     rs_median = np.median(real_score_samples[:, list(best_indices)], axis=0)

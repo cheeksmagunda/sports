@@ -178,6 +178,54 @@ Added `slate_date` under the "Identity (kept categorical / for joins)"
 group alongside `player_id` / `team` / etc. Verified via
 `tests/unit/test_features_build.py::test_build_slate_features_output_shape_and_allowlist`.
 
+### D27: Anti-popularity contrarian adjustment (basketball-main port) [reasoned]
+The operator's late-season alpha source in basketball-main (the sibling
+NBA Real Sports product) was a contrarian tilt against measured draft
+popularity. Their analysis: popularity has -0.457 correlation with
+realized boost, and the least-drafted 50% of pool produces 24-26% more
+total value than the most-drafted 50%.
+
+Implementation (`picker/popularity.py`):
+- `estimate_draft_popularity(season_ppg, team, ...)` emits an
+  arbitrary-units popularity score weighted by season scoring, big-market
+  multiplier (WNBA_BIG_MARKETS = {NYL, LVA, LAS, CHI, PHO, SEA, IND}),
+  national TV, slate size, recent hot streak.
+- `slate_labels_to_popularity(drafts)` rescales measured `drafts` counts
+  from `slate_labels` to the same units (median rescaled to anchor 2500).
+  Job 2 prefers measured over estimated.
+- `apply_contrarian_adjustment(preds, popularity, ContrarianConfig)`
+  subtracts `pop_normalized * strength * max_penalty` from each
+  player's predicted real_score before the optimizer reads it.
+  Defaults: strength=0.2, max_penalty=3.0 (basketball-main values).
+
+WNBA-specific: our `estimate_draft_popularity` uses pseudo-ppg derived
+from `card_boost` (inverse to hot-rating average) until per-player
+season stats land in `job1_enrichment`. Once `slate_labels.drafts`
+accumulates, the measured path takes over. Reverse: set
+`ContrarianConfig.enabled=False` in Job 2.
+
+### D28: max_per_team=2 in the optimizer (basketball-main port) [reasoned]
+Ported from `_select_with_team_cap`. Three players from the same team
+in one lineup courts the negative same-team minutes-cannibalization
+correlation (our Gaussian copula already prices this at
+rho_same_team=-0.25, but the EV penalty isn't strong enough to prevent
+the configuration on chalk slates). Adding a hard cap at 2 forces lineup
+diversification, smooths variance, and frees the optimizer to explore
+genuinely different game stacks. Default 2; set to 5 to disable. The
+constraint is checked before EV evaluation, so it is also a speedup -
+typical slate skips ~30% of combos.
+
+### D29: Injury-cascade minutes redistribution (basketball-main port) [reasoned]
+Ported from `_cascade_minutes`. When a starter is OUT, their minutes
+redistribute to same-cohort teammates inversely weighted by current
+minutes (bench players inherit proportionally more), with
+center-forward cross-sharing at 0.30, capped at 8 bonus minutes per
+player. Module: `features/injury_cascade.py`. Not yet wired into
+`features/build.py` - that hookup waits for the RotoWire `injury_status`
+field to flow through to the per-player slate feature matrix. Until
+then the cascade is callable from any code path that constructs a
+`CascadeInput` list. Reverse: simply do not call `redistribute_minutes`.
+
 ### D23: api domain targetPort=8080, not Dockerfile's 8000 default [verified]
 Step 1b verification. Railway injects PORT as a random ephemeral
 (observed 8080 in this deploy). The Dockerfile CMD uses ${PORT:-8000} so

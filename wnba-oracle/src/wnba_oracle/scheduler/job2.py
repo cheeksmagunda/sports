@@ -30,6 +30,12 @@ from wnba_oracle.db.engine import get_engine, get_redis
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig, optimize_lineup
 from wnba_oracle.picker.payout import default_curve_for_regime, load_curve_from_archive
+from wnba_oracle.picker.popularity import (
+    ContrarianConfig,
+    apply_contrarian_adjustment,
+    estimate_draft_popularity,
+    slate_labels_to_popularity,
+)
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 
 log = get_logger("oracle.job2")
@@ -67,11 +73,83 @@ def _load_enrichment(slate_date: str) -> list[dict]:
         return [dict(row._mapping) for row in result]
 
 
+def _load_measured_drafts(slate_date: str) -> dict[int, int]:
+    """Pull the most recent draftStats.drafts counts from slate_labels for
+    the slate. Empty if Job 2 is firing before any contest finalized
+    (typical case pregame). Job 2 then falls back to the popularity
+    estimator."""
+    try:
+        eng = get_engine()
+    except RuntimeError:
+        return {}
+    q = text(
+        "SELECT platform_player_id, MAX(drafts) AS drafts "
+        "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
+        "GROUP BY platform_player_id"
+    )
+    with eng.connect() as conn:
+        rows = conn.execute(q, {"sd": slate_date}).fetchall()
+    out: dict[int, int] = {}
+    for r in rows:
+        m = r._mapping
+        pid = m.get("platform_player_id")
+        d = m.get("drafts")
+        if pid is None or d is None:
+            continue
+        out[int(pid)] = int(d)
+    return out
+
+
 def _build_specs(
     enrichment: list[dict],
+    *,
+    slate_date: str,
+    contrarian_cfg: ContrarianConfig = ContrarianConfig(),
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec]]:
-    samps: list[PlayerSamplingSpec] = []
-    fields: list[FieldPlayerSpec] = []
+    """Build the (sampling, field) specs the optimizer reads.
+
+    Applies the anti-popularity contrarian adjustment (basketball-main
+    Finding 4) to the heuristic real_score. Popularity comes from
+    measured `drafts` in slate_labels when available, else from the
+    estimator (season ppg + big-market + slate size).
+    """
+    if not enrichment:
+        return [], []
+
+    # Slate-size signal for the popularity estimator
+    n_games_on_slate = len({str(r.get("team", "") or "") for r in enrichment if r.get("team")}) // 2
+    n_games_on_slate = max(n_games_on_slate, 1)
+
+    measured_drafts = _load_measured_drafts(slate_date)
+    if measured_drafts:
+        popularity_scores = slate_labels_to_popularity(measured_drafts)
+        log.info("contrarian_using_measured", n_measured=len(popularity_scores))
+    else:
+        # Estimator fallback: use card_boost as a weak proxy for season_ppg
+        # since we don't yet ingest per-player season stats. card_boost is
+        # inverse to rolling Real Rating average, so 3.0 -> cold star,
+        # 0.0 -> hot star. We invert it.
+        popularity_scores = {}
+        for r in enrichment:
+            pid_raw = r.get("real_sports_player_id")
+            if pid_raw is None:
+                continue
+            try:
+                pid = int(pid_raw)
+            except (TypeError, ValueError):
+                continue
+            boost = float(r.get("card_boost", 0.0) or 0.0)
+            # Pseudo-ppg in [10, 22] from boost in [3, 0]
+            pseudo_ppg = 10.0 + (3.0 - boost) * 4.0
+            popularity_scores[pid] = estimate_draft_popularity(
+                season_ppg=pseudo_ppg,
+                team=str(r.get("team", "") or ""),
+                n_games_on_slate=n_games_on_slate,
+            )
+
+    # First pass: per-player predicted real_score (heuristic)
+    pred_real_scores: dict[int, float] = {}
+    rows_by_pid: dict[int, dict] = {}
     for r in enrichment:
         pid_raw = r.get("real_sports_player_id")
         if pid_raw is None:
@@ -80,11 +158,22 @@ def _build_specs(
             pid = int(pid_raw)
         except (TypeError, ValueError):
             continue
+        boost = float(r.get("card_boost", 0.0) or 0.0)
+        pred_real_scores[pid] = _heuristic_real_score(boost)
+        rows_by_pid[pid] = r
+
+    # Apply contrarian adjustment
+    adjusted = apply_contrarian_adjustment(
+        pred_real_scores, popularity_scores, contrarian_cfg
+    )
+
+    samps: list[PlayerSamplingSpec] = []
+    fields: list[FieldPlayerSpec] = []
+    for pid, pred in adjusted.items():
+        r = rows_by_pid[pid]
         team = str(r.get("team", "") or "")
         opp = str(r.get("opponent", "") or "")
         boost = float(r.get("card_boost", 0.0) or 0.0)
-        # Heuristic predicted real_score (Step 6 model integration in next iteration)
-        pred = _heuristic_real_score(boost)
         K = 10.0
         mu_log = float(np.log(max(pred + K, 1.0)))
         samps.append(
@@ -172,7 +261,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         log.warning("job2_pool_too_small", n=len(enrichment))
         return Job2Result(sd, model_sha, None, False, "pool_too_small")
 
-    samps, fields = _build_specs(enrichment)
+    samps, fields = _build_specs(enrichment, slate_date=sd)
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
 
