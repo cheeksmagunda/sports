@@ -28,6 +28,7 @@ from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine, get_redis
 from wnba_oracle.picker.field import FieldPlayerSpec
+from wnba_oracle.picker.game_script import GameScriptConfig, game_script_multiplier
 from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig, optimize_lineup
 from wnba_oracle.picker.payout import default_curve_for_regime, load_curve_from_archive
 from wnba_oracle.picker.popularity import (
@@ -65,12 +66,34 @@ def _heuristic_real_score(card_boost: float) -> float:
 def _load_enrichment(slate_date: str) -> list[dict]:
     eng = get_engine()
     q = text(
-        "SELECT real_sports_player_id, name, team, opponent, position, card_boost "
+        "SELECT real_sports_player_id, name, team, opponent, position, "
+        "card_boost, features_json "
         "FROM job1_enrichment WHERE slate_date = :sd"
     )
     with eng.connect() as conn:
         result = conn.execute(q, {"sd": slate_date})
         return [dict(row._mapping) for row in result]
+
+
+def _vegas_from_features(features_json: object) -> tuple[float, float]:
+    """Extract (vegas_total, vegas_spread) from the features_json JSONB.
+    Returns (0.0, 0.0) when absent so the game-script multiplier degrades
+    to neutral. psycopg returns JSONB as already-parsed dicts."""
+    if not features_json:
+        return 0.0, 0.0
+    if isinstance(features_json, str):
+        import json as _json
+
+        try:
+            features_json = _json.loads(features_json)
+        except _json.JSONDecodeError:
+            return 0.0, 0.0
+    if not isinstance(features_json, dict):
+        return 0.0, 0.0
+    return (
+        float(features_json.get("vegas_total", 0.0) or 0.0),
+        float(features_json.get("vegas_spread", 0.0) or 0.0),
+    )
 
 
 def _load_measured_drafts(slate_date: str) -> dict[int, int]:
@@ -104,7 +127,7 @@ def _build_specs(
     enrichment: list[dict],
     *,
     slate_date: str,
-    contrarian_cfg: ContrarianConfig = ContrarianConfig(),
+    contrarian_cfg: ContrarianConfig | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec]]:
     """Build the (sampling, field) specs the optimizer reads.
 
@@ -113,6 +136,11 @@ def _build_specs(
     measured `drafts` in slate_labels when available, else from the
     estimator (season ppg + big-market + slate size).
     """
+    if contrarian_cfg is None:
+        s = get_settings()
+        contrarian_cfg = ContrarianConfig(
+            enabled=s.contrarian_enabled, strength=s.contrarian_strength
+        )
     if not enrichment:
         return [], []
 
@@ -147,9 +175,13 @@ def _build_specs(
                 n_games_on_slate=n_games_on_slate,
             )
 
-    # First pass: per-player predicted real_score (heuristic)
+    # First pass: per-player predicted real_score (heuristic) modulated by
+    # the per-game game-script multiplier. The multiplier reads Vegas
+    # total + spread from features_json (Job 1 persisted them). Games
+    # with no Vegas signal degrade to a neutral 1.0x.
     pred_real_scores: dict[int, float] = {}
     rows_by_pid: dict[int, dict] = {}
+    gs_cfg = GameScriptConfig()
     for r in enrichment:
         pid_raw = r.get("real_sports_player_id")
         if pid_raw is None:
@@ -159,7 +191,11 @@ def _build_specs(
         except (TypeError, ValueError):
             continue
         boost = float(r.get("card_boost", 0.0) or 0.0)
-        pred_real_scores[pid] = _heuristic_real_score(boost)
+        total, spread = _vegas_from_features(r.get("features_json"))
+        gs_mult = (
+            game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
+        )
+        pred_real_scores[pid] = _heuristic_real_score(boost) * gs_mult
         rows_by_pid[pid] = r
 
     # Apply contrarian adjustment
@@ -271,6 +307,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     cfg = OptimizeConfig(
         top_n_filter=settings.optimizer_top_n_filter,
         n_samples=settings.optimizer_n_samples,
+        max_per_team=settings.optimizer_max_per_team,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     log.info(

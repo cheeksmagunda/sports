@@ -118,22 +118,33 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
 
     # Build opponent / team map from odds + per-game roster join. For now
     # the platform pool gives team but not opponent; use the odds map.
+    # Game-script-relevant Vegas signals (total, abs(spread)) are written
+    # into features_json so Job 2 + the game-script multiplier can read them
+    # without re-querying The Odds API.
     from wnba_oracle.features.build import team_key_from_full_name
 
     team_to_opp: dict[str, str] = {}
+    team_to_vegas: dict[str, dict[str, float]] = {}
     for g in odds:
-        team_to_opp[team_key_from_full_name(g.home_team)] = team_key_from_full_name(
-            g.away_team
-        )
-        team_to_opp[team_key_from_full_name(g.away_team)] = team_key_from_full_name(
-            g.home_team
-        )
+        h_key = team_key_from_full_name(g.home_team)
+        a_key = team_key_from_full_name(g.away_team)
+        team_to_opp[h_key] = a_key
+        team_to_opp[a_key] = h_key
+        total = float(g.total_point) if g.total_point is not None else 0.0
+        home_spread = float(g.spread_home_point) if g.spread_home_point is not None else 0.0
+        away_spread = float(g.spread_away_point) if g.spread_away_point is not None else 0.0
+        team_to_vegas[h_key] = {"vegas_total": total, "vegas_spread": home_spread, "is_home": 1.0}
+        team_to_vegas[a_key] = {"vegas_total": total, "vegas_spread": away_spread, "is_home": 0.0}
 
     rows = []
     for p in pool:
+        vegas = team_to_vegas.get(p.team, {})
         features = {
             "primary_ranking": p.primary_ranking,
             "injury_status": p.injury_status,
+            "vegas_total": vegas.get("vegas_total", 0.0),
+            "vegas_spread": vegas.get("vegas_spread", 0.0),
+            "is_home": int(vegas.get("is_home", 0.0)),
         }
         rows.append(
             {

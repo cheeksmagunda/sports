@@ -18,6 +18,11 @@ import polars as pl
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.features.allowlist import assert_predict_features_allowed
+from wnba_oracle.features.injury_cascade import (
+    CascadeConfig,
+    CascadeInput,
+    redistribute_minutes,
+)
 from wnba_oracle.features.rolling import build_rolling_features
 from wnba_oracle.features.spec import cohort_for_position
 from wnba_oracle.ingest.identity import Resolver
@@ -99,6 +104,33 @@ def build_slate_features(
     )
     if not rolling.is_empty():
         base = base.join(rolling, on="player_id", how="left")
+
+    # 2b) Injury-cascade minutes redistribution. RotoWire surfaces an
+    # `injury_status` per starter ("IL" / "OUT" / "GTD" / "" etc); we
+    # treat IL/OUT as donors. Same-cohort teammates inherit the freed
+    # minutes inversely weighted by their current minutes. Each
+    # recipient's mins_l10 is bumped by the cascade bonus before the
+    # picker reads it. See DECISIONS D29.
+    cascade_rows = _build_cascade_inputs(base, lineups)
+    cascade_bonuses = redistribute_minutes(cascade_rows, CascadeConfig())
+    if cascade_bonuses and "mins_l10" in base.columns:
+        bonuses_map: dict[int, float] = {int(k): float(v) for k, v in cascade_bonuses.items()}
+
+        def _bonus_lookup(pid: object) -> float:
+            if not isinstance(pid, (int, str)):
+                return 0.0
+            try:
+                return bonuses_map.get(int(pid), 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        base = base.with_columns(
+            pl.col("player_id")
+            .map_elements(_bonus_lookup, return_dtype=pl.Float64)
+            .alias("_cascade_bonus")
+        ).with_columns(
+            (pl.col("mins_l10") + pl.col("_cascade_bonus")).alias("mins_l10")
+        ).drop("_cascade_bonus")
 
     # 3) Team / opponent context.
     team_lookup, opp_pace_map, _ = _team_lookup_from_stats(team_stats)
@@ -241,6 +273,63 @@ def build_slate_features(
     # Verify the result against the pre-game allowlist.
     assert_predict_features_allowed(base.columns)
     return base
+
+
+_OUT_STATUS_TOKENS = {"OUT", "IL", "INJ", "NA", "INACTIVE"}
+
+
+def _build_cascade_inputs(
+    base: pl.DataFrame,
+    lineups: Iterable[LineupEntry],
+) -> list[CascadeInput]:
+    """Cross-join the slate's per-player base frame against RotoWire's
+    starter list to flag OUT donors + collect minutes for recipients.
+
+    Players not in the lineup list are assumed available with their
+    current mins_l10. Players whose RotoWire `injury_status` matches a
+    common OUT marker (IL, OUT, INJ, NA, INACTIVE) are donors. Other
+    statuses (GTD, DTD, P, Q) are treated as available - they may sit
+    last minute but the cascade fires only on confirmed OUT.
+    """
+    if base.is_empty() or "player_id" not in base.columns:
+        return []
+    # name -> RotoWire entry (lower-cased for case-insensitive lookup)
+    by_team_name: dict[tuple[str, str], LineupEntry] = {}
+    for entry in lineups:
+        by_team_name[(entry.team, entry.player_name.lower())] = entry
+
+    out: list[CascadeInput] = []
+    mins_col = "mins_l10" if "mins_l10" in base.columns else None
+    for row in base.iter_rows(named=True):
+        pid = row.get("player_id")
+        team = str(row.get("team", "") or "")
+        position = str(row.get("position", "") or "")
+        if pid is None or not team:
+            continue
+        mins_l10 = float(row.get(mins_col, 0.0) or 0.0) if mins_col else 0.0
+        # Look up RotoWire injury_status by team + name. We have
+        # display_name on the pool but not here. Heuristic: scan all
+        # lineup entries for this team and pick the one matching position.
+        is_out = False
+        for (lt, _ln), entry in by_team_name.items():
+            if lt != team:
+                continue
+            status = (entry.injury_status or "").strip().upper()
+            if not status:
+                continue
+            if any(tok in status for tok in _OUT_STATUS_TOKENS):
+                is_out = True
+                break
+        out.append(
+            CascadeInput(
+                player_id=int(pid),
+                team=team,
+                position=position,
+                minutes_l10=mins_l10,
+                is_out=is_out,
+            )
+        )
+    return out
 
 
 def _team_lookup_from_stats(
