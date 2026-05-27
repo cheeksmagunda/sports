@@ -215,16 +215,63 @@ genuinely different game stacks. Default 2; set to 5 to disable. The
 constraint is checked before EV evaluation, so it is also a speedup -
 typical slate skips ~30% of combos.
 
-### D29: Injury-cascade minutes redistribution (basketball-main port) [reasoned]
+### D29: Injury-cascade minutes redistribution (basketball-main port) [verified]
 Ported from `_cascade_minutes`. When a starter is OUT, their minutes
 redistribute to same-cohort teammates inversely weighted by current
 minutes (bench players inherit proportionally more), with
 center-forward cross-sharing at 0.30, capped at 8 bonus minutes per
-player. Module: `features/injury_cascade.py`. Not yet wired into
-`features/build.py` - that hookup waits for the RotoWire `injury_status`
-field to flow through to the per-player slate feature matrix. Until
-then the cascade is callable from any code path that constructs a
-`CascadeInput` list. Reverse: simply do not call `redistribute_minutes`.
+player. Module: `features/injury_cascade.py`. **Wired into
+`features/build.py` via D33 (2026-05-27).** Reverse: skip the call to
+`redistribute_minutes` in `build_slate_features`.
+
+### D30: Game-script tier multipliers, WNBA-calibrated (basketball-main port) [reasoned]
+Ported from basketball-main `_game_script_weights`. NBA totals run
+215-250; WNBA totals run 145-180 - the tier ceilings recalibrate.
+
+`picker/game_script.py` returns a single scalar real_score multiplier
+based on Vegas total + spread:
+- defensive_grind (total < 155): 0.95x  (low pace = fewer counting stats)
+- balanced (155-165):            1.00x  (neutral)
+- fast_paced (165-175):          1.04x  (modest upweight on scorers)
+- track_meet (>= 175):           1.07x  (high pace upweight)
+- blowout penalty (track_meet AND |spread| >= 8): additional 0.92x (the
+  starters sit late in 30-point games).
+
+Wired into `job2._build_specs`: each player's heuristic real_score is
+multiplied by `game_script_multiplier(vegas_total, vegas_spread)`
+before the contrarian adjustment. The Vegas signals come from
+`job1_enrichment.features_json` (Job 1 persists them per player from
+the Odds API `basketball_wnba` pull, see D32). Once the multi-task
+model ships, the per-stat multipliers from basketball-main become
+useful and we will switch to applying them at the per-min-rate layer
+instead of as a single scalar.
+
+### D31: Env-tunable contrarian strength + max_per_team [reasoned]
+Operator action item 4. Both knobs now live on `common.Settings`:
+- `CONTRARIAN_STRENGTH` (default 0.2): real_score penalty multiplier
+- `CONTRARIAN_ENABLED` (default true): hard kill switch
+- `OPTIMIZER_MAX_PER_TEAM` (default 2): lineup team-cap
+
+Job 2 reads these at fire time and constructs `ContrarianConfig` +
+`OptimizeConfig` from them. The operator can tune mid-season via
+Railway env vars without a code deploy. All three are now set on api +
+cron-job1 + cron-job2 with the default values.
+
+### D32: Inject Vegas total + spread into job1_enrichment.features_json [verified]
+Job 1 propagates per-team Vegas total + spread + is_home into the
+`features_json` column so Job 2 + game_script + downstream features
+can read them without a second Odds API call (free-tier quota stays
+under 500 credits/month). Single Odds API hit per slate is the prior
+design; this just shares the data downstream.
+
+### D33: Wire injury_cascade into build_slate_features [verified]
+Operator action item 5. `features/build.py::_build_cascade_inputs`
+flags RotoWire lineup entries whose `injury_status` matches OUT / IL /
+INJ / NA / INACTIVE as donors; `redistribute_minutes` then bumps each
+surviving teammate's `mins_l10` by the cohort-aware
+inverse-minutes-weighted share. Other statuses (GTD / DTD / P / Q) are
+treated as available - the cascade fires only on confirmed OUT to
+avoid over-reacting to questionable injuries that resolve at warmups.
 
 ### D23: api domain targetPort=8080, not Dockerfile's 8000 default [verified]
 Step 1b verification. Railway injects PORT as a random ephemeral
