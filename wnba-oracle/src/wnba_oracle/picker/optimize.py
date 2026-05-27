@@ -1,6 +1,6 @@
 """Two-stage lineup optimizer.
 
-Stage 1: filter to top-N players by `pred_real_score * (1 + card_boost)`.
+Stage 1: filter to top-N players by `pred_real_score * (2.0 + card_boost)`.
 Stage 2: enumerate C(N, 5) lineups, score each by E[payout(lineup_score)],
          pick argmax. For N=30, C(30,5)=142506. Budget ~30s per slate.
 
@@ -10,6 +10,13 @@ gets the highest slot multiplier (handled in sample.lineup_score_samples).
 Output is a frozen Lineup with the 5 player_ids in slot order, the
 predicted EV, the predicted lineup-score percentile distribution, and
 the entry recommendation flag (enter / skip / enter_with_caveat).
+
+Slot scheme: verified 2026-05-27 against the 320-entry leaderboard corpus
+(every single top-20 entry across 16 slates used the same 5 base slot
+multipliers). The platform fixes 5 descending slot multipliers and the
+user only chooses which player goes in which slot. The CARD BOOST is
+additive on top of the slot multiplier (effective_mult = slot + boost).
+See D42.
 """
 
 from __future__ import annotations
@@ -31,7 +38,19 @@ from wnba_oracle.picker.sample import (
 
 log = get_logger("oracle.picker.optimize")
 
-DEFAULT_SLOT_MULTIPLIERS = np.array([3.0, 2.5, 2.0, 1.5, 1.0])
+# Verified against the 2026 WNBA leaderboards corpus: every single top-20
+# entry across all 16 finalized slates used exactly these 5 slot
+# multipliers (the platform fixes them; user only picks which player goes
+# in which slot). Effective per-slot multiplier = slot_mult + card_boost.
+DEFAULT_SLOT_MULTIPLIERS = np.array([2.0, 1.8, 1.6, 1.4, 1.2])
+
+# The max-slot effective multiplier estimate used by the stage-1 filter to
+# rank players for the top-N pool. Equals the highest slot any player
+# could land in (2.0) plus their card_boost. This is the player's
+# "ceiling contribution" to a lineup, which is the right quantity to
+# rank by since rearrangement-inequality slot assignment will hand the
+# highest-pred player slot 2.0.
+MAX_SLOT_MULT = float(DEFAULT_SLOT_MULTIPLIERS.max())
 
 
 def _exceeds_team_cap(
@@ -88,8 +107,13 @@ def optimize_lineup(
         raise ValueError(f"pool too small ({n_all}) - need >= 5 players")
 
     # Stage 1: filter to top-N by visible value.
+    # The (MAX_SLOT_MULT + card_boost) factor is the player's max possible
+    # effective multiplier (when assigned to slot 2.0 by rearrangement).
+    # Prior bug used (1.0 + card_boost) which under-weighted low-boost
+    # players relative to high-boost ones, biasing the pool toward chalk.
     visible_value = np.array(
-        [s.pred_real_score * (1.0 + s.card_boost) for s in field_specs], dtype=float
+        [s.pred_real_score * (MAX_SLOT_MULT + s.card_boost) for s in field_specs],
+        dtype=float,
     )
     order = np.argsort(visible_value)[::-1]
     keep = order[: min(cfg.top_n_filter, n_all)]

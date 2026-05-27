@@ -106,7 +106,13 @@ class ContrarianConfig:
     enabled: bool = True
     strength: float = 0.2  # basketball-main default; 0.0 disables contrarian tilt
     star_score_anchor: float = 2500.0  # popularity score above which penalty saturates
-    max_penalty: float = 3.0  # caps subtraction in real_score units
+    # Caps subtraction in real_score units. Calibrated to the WNBA
+    # corpus median real_score of ~2.4. At strength=0.2 + this cap, the
+    # peak penalty is 0.12 real_score units (~5% of median), enough to
+    # move slot assignments without zeroing out chalk. Bumped to 0.8
+    # for the WNBA scale; basketball-main NBA used 3.0 against a
+    # 15-score baseline.
+    max_penalty: float = 0.8
 
 
 def apply_contrarian_adjustment(
@@ -118,10 +124,11 @@ def apply_contrarian_adjustment(
     real_score.
 
     For a player whose popularity_score is 2500 (basketball-main star
-    anchor), the penalty equals `strength * max_penalty` (default 0.6).
-    Penalty grows linearly up to 1x the anchor, then caps. Unknown
-    popularity (player not in `popularity_scores`) gets zero penalty -
-    the cold-start prior should not be punished.
+    anchor), the penalty equals `strength * max_penalty` (default 0.16
+    at strength=0.2 + max_penalty=0.8). Penalty grows linearly up to 1x
+    the anchor, then caps. Unknown popularity (player not in
+    `popularity_scores`) gets zero penalty - the cold-start prior
+    should not be punished.
     """
     if not cfg.enabled or not popularity_scores:
         return dict(pred_real_scores)

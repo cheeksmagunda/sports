@@ -54,13 +54,20 @@ class Job2Result:
 def _heuristic_real_score(card_boost: float) -> float:
     """Transparent fallback used when no model artifact is loaded.
 
-    Documented score = 15.0 * (1 + 0.2 * card_boost). Anchors:
-    - WNBA per-slate Real Score historically lives in roughly [-10, 40]
-      with the median around 12-15 for starters.
-    - The 0.2 slope on card_boost rewards higher-boost players modestly
-      without dominating the heuristic.
+    Calibrated 2026-05-27 against the 16-slate parquet corpus (D43):
+    `real_score = 3.16 - 0.45 * card_boost` (linear fit, n=449
+    player-slates from 2026-05-10 onward — the date the boost system
+    rolled out). The slope is NEGATIVE because card_boost is a handicap
+    the platform assigns to weaker baseline players to balance the
+    multiplier contribution. A boost-3 player has lower expected
+    real_score (1.8) than a boost-0 player (3.16); the boost mechanic
+    compensates via the additive (slot + boost) effective multiplier.
+
+    Floored at 0.5 because the picker uses pred_real_score as the
+    log-scale mean for sampling, and a near-zero centre would explode
+    the percentile band.
     """
-    return 15.0 * (1.0 + 0.2 * card_boost)
+    return max(0.5, 3.16 - 0.45 * card_boost)
 
 
 def _load_enrichment(slate_date: str) -> list[dict]:

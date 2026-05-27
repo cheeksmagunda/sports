@@ -572,3 +572,43 @@ and cron `0 6 * * *`. Requires the same env as cron-job1
 plus DATABASE_URL (already shared).
 
 Reverse: drop the choice from `cron.py`, delete `job_dayclose.py`.
+
+### D42: Slot multipliers corrected to [2.0, 1.8, 1.6, 1.4, 1.2] [verified]
+2026-05-27 finding from the 16-slate leaderboards corpus (D38).
+Decomposing each entry's per-player `multiplier` minus `multiplierBonus`
+across all 320 top-20 lineups reveals exactly ONE pattern:
+`(1.2, 1.4, 1.6, 1.8, 2.0)`. The platform fixes these 5 slot
+multipliers; the user only picks which player goes in which slot.
+Effective per-slot multiplier = slot_mult + card_boost (additive, not
+multiplicative — verified vs cpgooner's 2026-05-25 winning lineup).
+
+Prior code used `DEFAULT_SLOT_MULTIPLIERS = [3.0, 2.5, 2.0, 1.5, 1.0]`
+which is the basketball-main NBA precedent applied without verification.
+Also fixed: stage-1 visible_value filter was
+`pred_real_score * (1.0 + card_boost)` — now
+`pred_real_score * (2.0 + card_boost)` to match the max-slot effective
+multiplier the picked player would land in by rearrangement.
+
+Tests in `tests/unit/test_slot_scheme.py` pin both the slot vector and
+the additive scoring formula so they can't drift back. Reverse: bump
+DEFAULT_SLOT_MULTIPLIERS back if the platform changes the contest
+format (visible from a parquet corpus refresh).
+
+### D43: Heuristic real_score calibrated to actual WNBA scale [verified]
+2026-05-27 from the same corpus. Prior `_heuristic_real_score(boost) =
+15.0 * (1 + 0.2 * card_boost)` predicted values in [15, 24] but the
+realized `real_score` distribution from /stats sits at p10=0.6, p50=2.4,
+p90=4.3. Magnitude was wrong by ~5x, slope direction was wrong (was
+positive, actually negative because card_boost is a handicap the
+platform assigns to weaker baseline players to balance the multiplier
+contribution).
+
+Linear fit on 449 player-slates (2026-05-10 onward; the boost system
+rolled out 5-10): `real_score = 3.16 - 0.45 * card_boost`. Replaces the
+old formula. Floored at 0.5 so log-mean sampling stays numerically
+stable. Also rescaled `ContrarianConfig.max_penalty` from 3.0 to 0.8
+(the old default would have zeroed-out most predictions at the new
+scale).
+
+Reverse: drop the calibration once a trained LightGBM artifact lands
+(see NEEDS_HUMAN #3) — `_heuristic_real_score` is the fallback only.
