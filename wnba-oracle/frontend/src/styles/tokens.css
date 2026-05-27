@@ -1,0 +1,256 @@
+/* WNBA Oracle design tokens. Teal + magenta primary palette.
+ * One file. Hex literals confined to the primitive ramp; everything else
+ * resolves through semantic tokens via light-dark().
+ *
+ * Why teal + magenta: league-neutral. Deep-purple + orange reads as
+ * Phoenix Mercury or Lakers and was rejected for that reason (DECISIONS D9).
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Teal ramp */
+  --teal-950: #053838;
+  --teal-900: #0a4a4a;
+  --teal-700: #0e8e8e;
+  --teal-500: #1ab3b3;
+  --teal-300: #5ed4d4;
+  --teal-200: #93e6e6;
+  --teal-100: #ccf3f3;
+
+  /* Magenta ramp */
+  --magenta-900: #4a0827;
+  --magenta-700: #8a1148;
+  --magenta-500: #d81b60;
+  --magenta-300: #ef5b8c;
+  --magenta-200: #f78cb0;
+  --magenta-100: #fdcfe0;
+
+  /* Neutral ramp */
+  --neutral-0:   #ffffff;
+  --neutral-50:  #f3f4f6;
+  --neutral-100: #e5e7eb;
+  --neutral-200: #d1d5db;
+  --neutral-300: #9ca3af;
+  --neutral-500: #6b7280;
+  --neutral-600: #4b5563;
+  --neutral-700: #374151;
+  --neutral-800: #1f2937;
+  --neutral-850: #161e2c;
+  --neutral-900: #111827;
+  --neutral-950: #050810;
+
+  /* Semantic tokens */
+  --bg-canvas:   light-dark(var(--neutral-50),  var(--neutral-950));
+  --bg-surface:  light-dark(var(--neutral-0),   var(--neutral-900));
+  --bg-elevated: light-dark(var(--neutral-0),   var(--neutral-850));
+  --bg-inset:    light-dark(var(--neutral-100), var(--neutral-800));
+
+  --border-subtle:  light-dark(var(--neutral-100), var(--neutral-800));
+  --border-default: light-dark(var(--neutral-200), var(--neutral-700));
+  --border-strong:  light-dark(var(--neutral-300), var(--neutral-500));
+
+  --text-primary:   light-dark(var(--neutral-950), var(--neutral-50));
+  --text-secondary: light-dark(var(--neutral-700), var(--neutral-200));
+  --text-muted:     light-dark(var(--neutral-500), var(--neutral-300));
+  --text-inverse:   light-dark(var(--neutral-50),  var(--neutral-950));
+
+  --primary:       light-dark(var(--teal-700), var(--teal-300));
+  --primary-hover: light-dark(var(--teal-900), var(--teal-200));
+  --on-primary:    #ffffff;
+
+  --accent:      light-dark(var(--magenta-500), var(--magenta-300));
+  --accent-text: light-dark(var(--magenta-700), var(--magenta-200));
+
+  --good: light-dark(oklch(0.46 0.12 152), oklch(0.78 0.14 152));
+  --warn: light-dark(oklch(0.55 0.16 70),  oklch(0.78 0.16 70));
+  --bad:  light-dark(oklch(0.5  0.18 25),  oklch(0.7  0.2  25));
+
+  --focus-ring: light-dark(var(--teal-700), var(--teal-300));
+
+  --shadow-sm: 0 1px 2px rgba(5,8,16,0.06);
+  --shadow-md: 0 4px 12px rgba(5,8,16,0.08);
+  --shadow-lg: 0 8px 32px rgba(5,8,16,0.12);
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.app-title-accent {
+  color: var(--accent);
+}
+
+.slate-meta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.entry-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.entry-flag--enter { background: var(--good); color: var(--on-primary); }
+.entry-flag--enter_with_caveat { background: var(--warn); color: var(--text-inverse); }
+.entry-flag--skip { background: var(--bad); color: var(--on-primary); }
+
+.lineup-stack {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.player-card {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  align-items: center;
+  transition: box-shadow var(--dur-2, 200ms) ease,
+    border-color var(--dur-2, 200ms) ease;
+}
+
+.player-card:hover {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-md);
+}
+
+.slot-badge {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 700;
+  font-size: 18px;
+  font-family: var(--font-mono);
+}
+
+.player-body {
+  display: grid;
+  gap: 4px;
+}
+
+.player-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.player-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  align-items: center;
+}
+
+.position-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.boost-badge {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.player-right {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+.score-row {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.score-row-secondary {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.minutes-row {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.minutes-row .ms { color: var(--text-muted); }
+
+.placeholder {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.error-state {
+  padding: 24px;
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  border-left: 4px solid var(--bad);
+  color: var(--text-secondary);
+}

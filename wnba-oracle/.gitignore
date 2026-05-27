@@ -35,6 +35,8 @@ out/
 .cache/
 .parcel-cache/
 .turbo/
+frontend/dist/
+frontend/*.tsbuildinfo
 
 # Data and models (gitignore artifacts, keep small fixtures + .gitkeep markers)
 data/raw/*
