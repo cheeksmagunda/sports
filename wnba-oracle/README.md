@@ -47,15 +47,40 @@ make determinism-check
 After the build completes, the 7-day shadow window is operator-started.
 
 ```sh
-# Start shadow scoring on the challenger model. Reads from the same
-# Job 1 enrichment as production but writes to model_shadow_runs.
-oracle-rotate-check --start-window --challenger-sha <sha>
+# 1. Train a challenger artifact against the latest slate_labels corpus.
+uv run oracle-train --corpus data/processed/training_corpus.parquet \
+    --commit $(git rev-parse --short HEAD) \
+    --metrics-path /tmp/train_metrics.json
+# 2. Inspect the SHA-256 sidecar emitted by oracle-train.
+ls -la models/picker_*_*.pkl.sha256
+# 3. Set WNBA_ORACLE_MODEL_ARTIFACT_SHA on Railway (api + cron-job2 services)
+#    to the new SHA. cron-job2 will start writing to model_shadow_runs with
+#    that challenger_sha. The incumbent_sha is the prior value of the env var.
+# 4. After >= 7 slate_labels rows accumulate for the challenger, evaluate:
+uv run oracle-rotate-check --window-days 7
+# 5. PROMOTE: leave WNBA_ORACLE_MODEL_ARTIFACT_SHA as the challenger.
+#    BLOCK: revert to the prior SHA. Document the decision in DECISIONS.md.
 ```
 
-Rotation gate auto-evaluates each midnight; promote/demote decision lands
-in `eval/rotation_<date>.json`. Operator approves the gate's recommendation
-by flipping `WNBA_ORACLE_MODEL_ARTIFACT_SHA` on the Railway api + cron-job2
-services.
+The rotation gate uses RBO@5 + NDCG@5 + realized_value_delta with
+1000-bootstrap CIs; defaults to BLOCK when fewer than 7 shadow rows are
+available (underpowered promotion is worse than no promotion).
+
+## Manual fire
+
+Quick end-to-end smoke (fixtures, no network, no DB writes):
+
+```sh
+uv run python scripts/manual_fire.py --fixtures
+```
+
+Live fire (requires DATABASE_URL + REDIS_URL + a fresh Real Sports JWT
+in `scraper/storage_state.json`):
+
+```sh
+uv run python scripts/realsports_login.py     # one-time, captures JWT
+uv run python scripts/manual_fire.py          # Job 1 + Job 2 + watchdog
+```
 
 ## Deploy
 

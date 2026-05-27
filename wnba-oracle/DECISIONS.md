@@ -119,6 +119,41 @@ WNBA contest id (verified 2026-05-26): 1840 (day 2026-05-27).
 `info.rankDisplayInfos` is null pregame; the picker reads it at Job 2 time
 and falls back to the top_20 regime when null.
 
+### D20: Single-bundle frontend stylesheet, no Tailwind [reasoned]
+Step 9. tokens.css is one file with primitive ramp + semantic tokens via
+light-dark(). Components consume tokens only; never hex literals. Easy
+to swap palette by editing one block. Reverse: replace `tokens.css` with
+Tailwind plus a teal/magenta theme config.
+
+### D21: Heuristic real_score = 15 * (1 + 0.2 * card_boost) as serving fallback [reasoned]
+Step 8 + Part 0.3 item 6. Until the slate_labels corpus reaches ~2000 rows
+(Q2/Q3 of the 2026 WNBA season, per the live collector's accumulation rate
+of ~80 rows/slate × 8 slates/week), Job 2 uses this transparent heuristic
+predictor instead of the LightGBM artifact. The 15.0 base anchors to the
+2026 WNBA per-slate Real Score median (12-15 for starters); the 0.2 slope
+on card_boost is a deliberate under-weighting so the heuristic does not
+overfit to boost alone. When a trained model is promoted, the env var
+WNBA_ORACLE_MODEL_ARTIFACT_SHA flips and Job 2's _build_specs gains a
+join against the artifact's predictions. Reverse: delete the heuristic
+branch in job2._build_specs once the corpus is large enough that the
+LightGBM path always wins.
+
+### D22: Cron schedule = 13:00 UTC Job 1, every 15 min 21:00-03:00 UTC Job 2 [reasoned]
+Step 1b. Job 1 (morning scrape) fires once at 09:00 ET. Job 2 (predict +
+freeze) fires every 15 min during the WNBA tip window (5pm - 11pm ET).
+Multiple fires per slate are safe: the Redis SET NX freeze invariant
+means only the first fire writes; subsequent fires are no-ops. Reverse:
+adjust cronSchedule on cron-job1 / cron-job2 via Railway GraphQL
+serviceInstanceUpdate.
+
+### D23: api domain targetPort=8080, not Dockerfile's 8000 default [verified]
+Step 1b verification. Railway injects PORT as a random ephemeral
+(observed 8080 in this deploy). The Dockerfile CMD uses ${PORT:-8000} so
+the container binds to 8080 at runtime. The api service domain was
+initially created with targetPort=8000 and returned 502 (Application
+failed to respond) because the proxy targeted a port the container
+didn't bind. Fixed via serviceDomainUpdate setting targetPort=8080.
+
 ### D19: Default device_uuid via env to avoid 401s on probe re-runs [reasoned]
 The Real Sports JWT is bound to the device UUID captured during the
 initial login. Passing a fresh UUID on probe re-run triggers 401 from
