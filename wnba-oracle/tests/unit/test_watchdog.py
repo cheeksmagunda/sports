@@ -153,3 +153,18 @@ def test_summarize_status_picks_highest_severity() -> None:
         )
         == "critical"
     )
+
+
+def test_route_order_today_before_slate_param() -> None:
+    """FastAPI matches routes in declaration order. If /{slate_date} is
+    declared before /today, requests to /watchdog/today silently bind
+    slate_date='today' and return empty events. Pin the order."""
+    from wnba_oracle.api.watchdog import router
+
+    watchdog_paths = [r.path for r in router.routes if hasattr(r, "path")]
+    today_idx = watchdog_paths.index("/watchdog/today")
+    param_idx = watchdog_paths.index("/watchdog/{slate_date}")
+    assert today_idx < param_idx, (
+        "/watchdog/today must be declared before /watchdog/{slate_date} or it "
+        "will be shadowed at runtime."
+    )

@@ -19,6 +19,24 @@ from wnba_oracle.db.engine import get_engine
 router = APIRouter(prefix="/watchdog", tags=["watchdog"])
 
 
+@router.get("/today")
+def get_watchdog_today(
+    severity_min: str = Query(default="warn", pattern="^(warn|error|critical)$"),
+) -> dict[str, Any]:
+    """Convenience: same as /watchdog/{slate_date} for today's UTC date.
+
+    Useful for a curl-from-phone health check:
+        curl https://<api-domain>/watchdog/today | jq .status
+
+    Declared BEFORE the ``/{slate_date}`` route so FastAPI matches the
+    specific path first — otherwise a request to ``/watchdog/today``
+    silently binds ``slate_date="today"`` and returns an empty event
+    list against the bogus slate.
+    """
+    today = dt.datetime.now(dt.UTC).date().isoformat()
+    return get_watchdog_for_slate(today, severity_min=severity_min)
+
+
 @router.get("/{slate_date}")
 def get_watchdog_for_slate(
     slate_date: str,
@@ -71,19 +89,6 @@ def get_watchdog_for_slate(
         "events": events,
         "status": _summarize(events),
     }
-
-
-@router.get("/today")
-def get_watchdog_today(
-    severity_min: str = Query(default="warn", pattern="^(warn|error|critical)$"),
-) -> dict[str, Any]:
-    """Convenience: same as /watchdog/{slate_date} for today's UTC date.
-
-    Useful for a curl-from-phone health check:
-        curl https://<api-domain>/watchdog/today | jq .status
-    """
-    today = dt.datetime.now(dt.UTC).date().isoformat()
-    return get_watchdog_for_slate(today, severity_min=severity_min)
 
 
 def _summarize(events: list[dict]) -> str:
