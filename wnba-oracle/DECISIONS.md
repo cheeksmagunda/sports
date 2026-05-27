@@ -393,6 +393,102 @@ idempotency, watchdog stub) are multi-day work and are documented in
 NEEDS_HUMAN.md items 7, 8, 9. None blocks tomorrow's first frozen
 lineup.
 
+### D37: Close out the three non-blocking audit items (NEEDS_HUMAN #7/#8/#9) [verified]
+The 2026-05-27 deep audit (D36) left three known-issues marked
+non-blocking-but-real. This commit closes all three.
+
+**(a) RotoWire injury_status wired into the live cron path.**
+``scheduler/job1.py`` was fetching RotoWire lineups but only counting
+them for a log line; the data never reached job2. Fix:
+
+- ``_index_rotowire(entries)`` builds a
+  ``(team_upper, normalized_name) -> LineupEntry`` lookup.
+- ``_normalize_name`` strips suffixes (Jr./Sr./III) and case-folds for
+  stable RotoWire <-> Real Sports name matching.
+- ``is_out_status(status)`` is the canonical "this player is a
+  confirmed non-draft" predicate, matching the same token set
+  ``features/build.py::_OUT_STATUS_TOKENS`` already uses (``OUT``,
+  ``IL``, ``INJ``, ``INACTIVE``, ``NA``). GTD/DTD/Q/P do NOT fire the
+  drop because those resolve at warmups and over-reacting trims
+  high-value names from the pool.
+- Each Real Sports pool row is enriched in O(1) with ``injury_status``
+  (RotoWire wins when present), ``is_out`` (int), ``is_starter``,
+  ``starter_slot``, ``rotowire_confirmed`` — all persisted into
+  ``features_json``.
+- ``scheduler/job2.run`` filters out ``is_out`` rows before
+  ``_build_specs`` runs, so OUT players never reach the optimizer or
+  the contrarian adjustment. Logs ``job2_dropped_out_players`` with
+  the count for grep-ability.
+
+The full ``features/build.py`` cascade (proportional minutes
+redistribution from D33) still needs per-player ``mins_l10`` from a
+game-log ingest that is not yet on the prod path. The binary
+drop-OUT-players is the higher-value half of the cascade and is now
+active in production. Reverse: drop the ``_index_rotowire``
++ ``is_out_status`` calls from job1's row builder; revert job2's
+``_is_out_from_features`` filter.
+
+**(b) job2 freeze is strictly idempotent.** Previously the Redis
+SETNX was advisory; the Postgres ``UPSERT ... DO UPDATE`` replaced
+the frozen lineup on every cron-job2 fire (28 fires/day from the
+``*/15 21-23,0-3 * * *`` schedule). That meant the operator could
+submit one lineup at 21:00 UTC and the row could silently change
+underneath them by 22:30 if measured draft popularity shifted. Fix:
+
+- The SQL is now ``INSERT ... ON CONFLICT DO NOTHING RETURNING id``.
+  Same UNIQUE constraint as before; ``RETURNING`` distinguishes "I
+  wrote this row" from "row already existed".
+- ``_freeze`` first SELECTs by ``(slate_date, model_sha)`` and bails
+  if a row exists. Postgres is the canonical state; Redis is the
+  fast-path soft lock.
+- Redis SETNX still happens after the SELECT to discourage
+  concurrent INSERTs across simultaneous cron-job2 fires (rare on
+  the same 15-min window but possible if a fire stalls). Lock loss
+  bails before INSERT.
+- The ``Job2Result.reason`` string is ``"already_frozen"`` for
+  subsequent fires (was ``"lock_held_by_prior_fire"``). The first
+  fire still returns ``"ok"``.
+
+Tests in ``tests/unit/test_freeze_idempotency.py`` cover: first-fire
+writes; second-fire short-circuits at the existence check; Redis
+lock loss bails without writing; insert-race loss returns False;
+per_player still rides through. Reverse: revert the SQL to
+``ON CONFLICT DO UPDATE`` and remove the existence check.
+
+**(c) Watchdog wired + operator-facing API.**
+``scheduler/watchdog.py`` was a stub returning ``[]``. Now ships
+with five concrete checks and an operator-facing surface:
+
+- ``no_job1_pool`` (critical) — zero job1_enrichment rows for the slate.
+- ``pool_too_small`` (warn) — fewer than 10 rows.
+- ``no_frozen_lineup`` (critical) — after 22:00 UTC, no frozen row
+  for the current slate (cron-job2 has had 4+ attempts).
+- ``missing_per_player`` (error) — frozen JSONB lacks the per_player
+  block. Should be impossible after D36 but the check is cheap.
+- ``zero_expected_payout`` (warn) — degenerate optimizer / payout
+  curve. Operator should skip.
+
+``run_watchdog(slate_date)`` is called from ``scheduler/cron.py``
+after every cron-job2 fire. Persistence is deduplicated within 6h
+per ``(slate, trigger)`` to avoid flooding ``watchdog_events`` from
+the every-15-min loop. Events emit a structured ``watchdog_event``
+log line so the operator can grep Railway logs.
+
+The api now exposes ``GET /watchdog/{slate_date}`` and
+``GET /watchdog/today`` returning ``{"status": "ok|warn|error|
+critical", "events": [...]}``. Operator can curl from a phone
+without log access:
+
+    curl https://<api-domain>/watchdog/today | jq .status
+
+External push-alerting (email / Slack / Discord webhook) is left
+for the operator to wire. Minimum viable: a UptimeRobot or
+healthchecks.io monitor that watches ``.status != "ok"`` on
+``/watchdog/today`` and pages on degradation.
+
+Total tests added across (a)/(b)/(c): 23 new tests. Suite is now
+104 passing. Reverse: revert the three commits as a group.
+
 ### D19: Default device_uuid via env to avoid 401s on probe re-runs [reasoned]
 The Real Sports JWT is bound to the device UUID captured during the
 initial login. Passing a fresh UUID on probe re-run triggers 401 from

@@ -43,9 +43,21 @@ def main() -> int:
 
         return job1.main()
     if args.job == "job2":
-        from wnba_oracle.scheduler import job2
+        import datetime as dt
 
-        return job2.main()
+        from wnba_oracle.scheduler import job2
+        from wnba_oracle.scheduler.watchdog import run_watchdog
+
+        rc = job2.main()
+        # Always run the watchdog, even on job2 failure — the most
+        # interesting checks (no_job1_pool, no_frozen_lineup) fire
+        # exactly when job2 cannot produce a freeze. Wrap so a watchdog
+        # crash never masks the underlying job2 exit code.
+        try:
+            run_watchdog(dt.date.today().isoformat())
+        except Exception as exc:
+            log.exception("watchdog_failed", error=str(exc))
+        return rc
     return 1
 
 

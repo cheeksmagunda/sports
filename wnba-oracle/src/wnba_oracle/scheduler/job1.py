@@ -32,7 +32,7 @@ from wnba_oracle.ingest.realsports import (
     fetch_pool_for_date,
     headers_or_capture,
 )
-from wnba_oracle.ingest.rotowire import fetch_lineups
+from wnba_oracle.ingest.rotowire import LineupEntry, fetch_lineups
 
 log = get_logger("oracle.job1")
 
@@ -74,6 +74,48 @@ def _device_uuid() -> str:
 
 def _device_name() -> str:
     return os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-prod-01")
+
+
+# RotoWire status strings that mean "do not draft" — matches the same
+# token set used by features/build.py's injury cascade so the two paths
+# agree on what "OUT" means even when the cascade itself isn't on the
+# prod path yet.
+_OUT_STATUS_TOKENS = {"OUT", "IL", "INJ", "INACTIVE", "NA"}
+
+
+def _normalize_name(name: str) -> str:
+    """Case-fold + strip suffixes for RotoWire <-> Real Sports name matching.
+
+    Real Sports often returns "A'ja Wilson"; RotoWire returns "A'ja Wilson"
+    too but occasionally with a Jr./Sr./III suffix. Normalize for a stable
+    join key.
+    """
+    if not name:
+        return ""
+    parts = [p for p in name.strip().split() if p]
+    suffixes = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv"}
+    parts = [p for p in parts if p.lower().rstrip(".") not in suffixes]
+    return " ".join(parts).lower()
+
+
+def _index_rotowire(entries: list[LineupEntry]) -> dict[tuple[str, str], LineupEntry]:
+    """Build a (team_upper, normalized_name) -> LineupEntry lookup so
+    Real Sports pool rows can be enriched in O(1)."""
+    index: dict[tuple[str, str], LineupEntry] = {}
+    for e in entries:
+        key = (e.team.upper(), _normalize_name(e.player_name))
+        index[key] = e
+    return index
+
+
+def is_out_status(status: str | None) -> bool:
+    """True iff RotoWire's status token marks the player as a confirmed
+    non-draft. Used by both job1 (when persisting features_json) and job2
+    (when filtering the optimizer pool)."""
+    if not status:
+        return False
+    upper = status.strip().upper()
+    return any(tok in upper for tok in _OUT_STATUS_TOKENS)
 
 
 async def _do_pool_fetch(slate_date: str) -> list:
@@ -136,12 +178,42 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         team_to_vegas[h_key] = {"vegas_total": total, "vegas_spread": home_spread, "is_home": 1.0}
         team_to_vegas[a_key] = {"vegas_total": total, "vegas_spread": away_spread, "is_home": 0.0}
 
+    # Build the RotoWire injury index once so the per-player loop stays
+    # O(n) and joins by (team, normalized_name). RotoWire is the
+    # authoritative injury signal — when present its status overrides
+    # whatever Real Sports has (Real Sports sometimes lags by hours).
+    rotowire_idx = _index_rotowire(lineups)
+    n_rotowire_matched = 0
+    n_rotowire_out = 0
+
     rows = []
     for p in pool:
         vegas = team_to_vegas.get(p.team, {})
+        rw_entry = rotowire_idx.get((p.team.upper(), _normalize_name(p.display_name)))
+        # Prefer RotoWire's injury status when we have a confirmed match;
+        # otherwise carry through the Real Sports value.
+        if rw_entry is not None:
+            n_rotowire_matched += 1
+            rw_status = rw_entry.injury_status or ""
+            injury_status = rw_status or p.injury_status
+            is_starter = 1 <= rw_entry.starter_slot <= 5
+            starter_slot = rw_entry.starter_slot
+            confirmed = bool(rw_entry.confirmed)
+        else:
+            injury_status = p.injury_status
+            is_starter = False
+            starter_slot = 0
+            confirmed = False
+        is_out = is_out_status(injury_status)
+        if is_out:
+            n_rotowire_out += 1
         features = {
             "primary_ranking": p.primary_ranking,
-            "injury_status": p.injury_status,
+            "injury_status": injury_status,
+            "is_out": int(is_out),
+            "is_starter": int(is_starter),
+            "starter_slot": int(starter_slot),
+            "rotowire_confirmed": int(confirmed),
             "vegas_total": vegas.get("vegas_total", 0.0),
             "vegas_spread": vegas.get("vegas_spread", 0.0),
             "is_home": int(vegas.get("is_home", 0.0)),
@@ -159,6 +231,14 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
                 "features_json": json.dumps(features),
             }
         )
+
+    log.info(
+        "job1_rotowire_merged",
+        n_pool=len(pool),
+        n_rotowire=len(lineups),
+        n_matched=n_rotowire_matched,
+        n_out=n_rotowire_out,
+    )
 
     persisted = 0
     if not dry_run and settings.database_url:

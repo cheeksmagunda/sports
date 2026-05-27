@@ -75,25 +75,40 @@ def _load_enrichment(slate_date: str) -> list[dict]:
         return [dict(row._mapping) for row in result]
 
 
-def _vegas_from_features(features_json: object) -> tuple[float, float]:
-    """Extract (vegas_total, vegas_spread) from the features_json JSONB.
-    Returns (0.0, 0.0) when absent so the game-script multiplier degrades
-    to neutral. psycopg returns JSONB as already-parsed dicts."""
+def _features_dict(features_json: object) -> dict:
+    """Coerce the features_json column into a dict. psycopg returns JSONB
+    as parsed dicts; older test fixtures pass strings."""
     if not features_json:
-        return 0.0, 0.0
+        return {}
     if isinstance(features_json, str):
         import json as _json
 
         try:
-            features_json = _json.loads(features_json)
+            return _json.loads(features_json)
         except _json.JSONDecodeError:
-            return 0.0, 0.0
-    if not isinstance(features_json, dict):
-        return 0.0, 0.0
+            return {}
+    return features_json if isinstance(features_json, dict) else {}
+
+
+def _vegas_from_features(features_json: object) -> tuple[float, float]:
+    """Extract (vegas_total, vegas_spread) from the features_json JSONB.
+    Returns (0.0, 0.0) when absent so the game-script multiplier degrades
+    to neutral."""
+    f = _features_dict(features_json)
     return (
-        float(features_json.get("vegas_total", 0.0) or 0.0),
-        float(features_json.get("vegas_spread", 0.0) or 0.0),
+        float(f.get("vegas_total", 0.0) or 0.0),
+        float(f.get("vegas_spread", 0.0) or 0.0),
     )
+
+
+def _is_out_from_features(features_json: object) -> bool:
+    """Drop signal: RotoWire confirmed OUT/IL/INJ/NA/INACTIVE. job1
+    writes ``is_out`` as an int (0/1) into features_json after matching
+    each Real Sports player to the RotoWire lineup index. Players with
+    no RotoWire match (or with a non-OUT status like GTD/DTD/Q/P) keep
+    is_out=0 and remain in the optimizer pool."""
+    f = _features_dict(features_json)
+    return bool(int(f.get("is_out", 0) or 0))
 
 
 def _load_measured_drafts(slate_date: str) -> dict[int, int]:
@@ -246,7 +261,7 @@ def _build_specs(
     return samps, fields, projection_by_pid
 
 
-FROZEN_UPSERT = text(
+FROZEN_INSERT = text(
     """
     INSERT INTO frozen_lineups (
         slate_date, model_sha, payout_regime, frozen_at, lineup,
@@ -255,13 +270,13 @@ FROZEN_UPSERT = text(
         :slate_date, :model_sha, :payout_regime, now(), CAST(:lineup AS JSONB),
         :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB)
     )
-    ON CONFLICT (slate_date, model_sha) DO UPDATE SET
-        lineup = EXCLUDED.lineup,
-        entry_recommendation = EXCLUDED.entry_recommendation,
-        expected_payout = EXCLUDED.expected_payout,
-        metadata_json = EXCLUDED.metadata_json,
-        frozen_at = now();
+    ON CONFLICT (slate_date, model_sha) DO NOTHING
+    RETURNING id;
     """
+)
+
+FROZEN_EXISTS = text(
+    "SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms"
 )
 
 
@@ -315,13 +330,49 @@ def _freeze(
     payout_regime: str,
     projection_by_pid: dict[int, dict],
 ) -> bool:
-    """Redis SET NX with TTL is the lock-once semantics. Postgres UPSERT
-    persists the chosen lineup. Returns True if this invocation actually
-    set the lock (was the first), False if a prior invocation already did."""
+    """Idempotent freeze: first job2 fire writes, subsequent fires no-op.
+
+    True-freeze semantics (the operator submits one lineup per slate and
+    must not see it change underneath them):
+
+    1. Check Postgres for an existing row keyed on (slate_date, model_sha).
+       Existence is the canonical "already frozen" signal — Redis is just
+       a fast-path hint.
+    2. If absent, take the Redis SETNX lock as a fast soft-lock to
+       discourage concurrent inserts within the cron window (cron-job2
+       fires every 15 min; without the lock two cron tasks could race
+       between the existence-check and the INSERT). On lock-miss treat
+       it as "another fire is in flight" and bail without writing.
+    3. Issue an INSERT ... ON CONFLICT DO NOTHING. If a parallel writer
+       won the race we still get a clean no-op return. ``RETURNING id``
+       distinguishes "I wrote this row" from "row already existed".
+
+    Returns True iff this invocation wrote the freeze record. Subsequent
+    fires return False and log ``job2_already_frozen`` — the lineup
+    columns are not touched.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        existing = conn.execute(
+            FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}
+        ).first()
+    if existing:
+        log.info("job2_already_frozen", slate_date=slate_date, model_sha=model_sha)
+        return False
+
     rd = get_redis()
     key = f"wnba.frozen.{slate_date}"
+    # The 24h TTL covers a full slate window; if the writer crashes the
+    # lock auto-releases for the next fire to retry.
     lock_acquired = bool(rd.set(key, model_sha, nx=True, ex=24 * 3600))
-    eng = get_engine()
+    if not lock_acquired:
+        log.info(
+            "job2_freeze_lock_held",
+            slate_date=slate_date,
+            note="another job2 fire is mid-freeze; deferring",
+        )
+        return False
+
     payload = {
         "slate_date": slate_date,
         "model_sha": model_sha,
@@ -338,11 +389,18 @@ def _freeze(
         ),
         "entry_recommendation": rec.entry_flag,
         "expected_payout": rec.expected_payout,
-        "metadata_json": json.dumps({"lock_acquired": lock_acquired}),
+        "metadata_json": json.dumps({"frozen_via": "job2_first_fire"}),
     }
     with eng.begin() as conn:
-        conn.execute(FROZEN_UPSERT, payload)
-    return lock_acquired
+        result = conn.execute(FROZEN_INSERT, payload).first()
+    if result is None:
+        # ON CONFLICT DO NOTHING fired between our existence check and
+        # the INSERT (rare; Redis lock should have prevented it). Treat
+        # as "we lost the race".
+        log.info("job2_lost_insert_race", slate_date=slate_date)
+        return False
+    log.info("job2_frozen", slate_date=slate_date, row_id=int(result[0]))
+    return True
 
 
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
@@ -351,9 +409,19 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     model_sha = settings.model_artifact_sha or "heuristic-v1"
 
     log.info("job2_start", slate_date=sd, model_sha=model_sha)
-    enrichment = _load_enrichment(sd)
+    enrichment_raw = _load_enrichment(sd)
+    # D33 wired into prod (NEEDS_HUMAN #7): RotoWire OUT players are
+    # excluded from the optimizer pool. The cascade-style minutes
+    # redistribution from build_slate_features is not yet on the prod
+    # path (requires mins_l10 from historical game logs which the
+    # ingest doesn't ship yet), but the binary drop-OUT-players is the
+    # high-value half of the cascade and lives here.
+    enrichment = [r for r in enrichment_raw if not _is_out_from_features(r.get("features_json"))]
+    n_dropped = len(enrichment_raw) - len(enrichment)
+    if n_dropped:
+        log.info("job2_dropped_out_players", n_dropped=n_dropped, n_remaining=len(enrichment))
     if len(enrichment) < 5:
-        log.warning("job2_pool_too_small", n=len(enrichment))
+        log.warning("job2_pool_too_small", n=len(enrichment), n_dropped=n_dropped)
         return Job2Result(sd, model_sha, None, False, "pool_too_small")
 
     samps, fields, projection_by_pid = _build_specs(enrichment, slate_date=sd)
@@ -378,7 +446,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     if dry_run:
         return Job2Result(sd, model_sha, rec, False, "dry_run")
     frozen = _freeze(sd, model_sha, rec, curve.regime, projection_by_pid)
-    return Job2Result(sd, model_sha, rec, frozen, "ok" if frozen else "lock_held_by_prior_fire")
+    return Job2Result(sd, model_sha, rec, frozen, "ok" if frozen else "already_frozen")
 
 
 def main() -> int:
