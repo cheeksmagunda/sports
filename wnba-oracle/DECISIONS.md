@@ -299,6 +299,47 @@ fallbacks, pre-hydration inline shell. Demo fixture is gated behind
 grep count = 0 in dist/assets/*.js). Reverse: revert this commit; old
 MVP shell is recoverable from git history.
 
+### D35: Railway env hardening — shared vars + service refs + secret pruning [verified]
+Pre-hardening: every operational and credential var was duplicated per
+service (3x), ``DATABASE_URL`` + ``REDIS_URL`` were hard-coded internal
+URLs (no service reference), ``GITHUB_TOKEN`` + ``RAILWAY_TOKEN`` were
+attached to every runtime service even though only the deploy automation
+needs them, and the api service carried ``REAL_SPORTS_*`` + ``WNBA_DEVICE_*``
+credentials it never consumes. Same on cron-job2 for the auth-side state.
+
+Fix (``scripts/railway_harden_env.py``, idempotent):
+
+1. **Shared env-scope variables** for non-secret operational config:
+   ``ENV``, ``LOG_LEVEL``, ``PYTHONUNBUFFERED``, ``TZ``, ``PAYOUT_REGIME``,
+   ``WNBA_ORACLE_MODEL_ARTIFACT_SHA``. Operator updates once and all
+   services inherit.
+
+2. **Service references** for cross-service config so credential
+   rotations propagate automatically:
+   ``DATABASE_URL = ${{postgres.DATABASE_URL}}`` and
+   ``REDIS_URL = ${{redis.REDIS_URL}}`` on api / cron-job1 / cron-job2.
+   ``VITE_API_URL = https://${{api.RAILWAY_PUBLIC_DOMAIN}}`` on frontend.
+   First attempt used PascalCase (``${{Postgres...}}``) and resolved to
+   empty strings — Railway service references are case-sensitive. Fixed
+   to lowercase to match the service names (postgres, redis, api).
+
+3. **Secret pruning**: ``GITHUB_TOKEN``, ``RAILWAY_TOKEN`` removed from
+   every runtime service (only build automation needs them, and those
+   pass through the CI env or local shell). ``REAL_SPORTS_*`` +
+   ``REALSPORTS_STORAGE_STATE_B64GZ`` + ``WNBA_DEVICE_*`` removed from
+   api (api never logs in) and cron-job2 (job2 reads from
+   ``job1_enrichment`` and never authenticates). ``CONTRARIAN_*`` +
+   ``OPTIMIZER_MAX_PER_TEAM`` removed from api + cron-job1 (only
+   cron-job2 runs the optimizer). ``ODDS_API_KEY`` removed from api +
+   cron-job2 (only cron-job1 calls The Odds API per D32).
+
+Post-state: api carries 2 vars (both refs); cron-job1 carries 8 (auth +
+ingest only); cron-job2 carries 5 (optimizer knobs + storage refs);
+frontend carries VITE_API_URL + PORT.
+
+Reverse: re-run the script with the inverse transformations, or restore
+each service's per-var snapshot from the dashboard's variable history.
+
 ### D19: Default device_uuid via env to avoid 401s on probe re-runs [reasoned]
 The Real Sports JWT is bound to the device UUID captured during the
 initial login. Passing a fresh UUID on probe re-run triggers 401 from
