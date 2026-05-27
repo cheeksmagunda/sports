@@ -545,3 +545,30 @@ capture, then needs re-capture. The existing one-shot retry-on-401 in
 transparently; total backfill wall-clock is ~1 minute for 86 contests.
 Reverse: harvest the rotated token from each response (set-cookie or
 header) and update the cached headers in-place between calls.
+
+### D41: Day-close cron extends the corpus by walking backward [reasoned]
+The historical backfill (D38) is one-shot; production needs the same
+extension to happen automatically as each WNBA slate finalizes. Picked
+the simplest viable mechanism: `oracle-cron --job dayclose` (new
+entrypoint, `scheduler/job_dayclose.py`) calls
+`discover_wnba_contest_id` for today's max contest id, then runs
+`run_historical_backfill(start_id=max-1, stop_id=max-12)`. The 12-id
+window comfortably covers the prior 2 days of contests at the
+observed sport-mix density (~1 WNBA per 5-8 ids). UPSERT semantics
+make re-processing already-seen contests a cheap no-op, so window
+overlap day-to-day is fine.
+
+Schedule: `0 6 * * *` UTC = 01:00 EST / 02:00 EDT. The latest observed
+finalization is contest 1831 (slate 2026-05-25) at
+processedAt=2026-05-26T05:07Z, so 06:00 UTC is the earliest fire time
+that always catches the prior night.
+
+The cron is wired locally + smoke-tested (5-id window walking back
+from 1840 correctly skipped 5 non-WNBA contests). Railway cron service
+config is operator action (item 10 in NEEDS_HUMAN.md): create a third
+service `cron-dayclose` with start command `oracle-cron --job dayclose`
+and cron `0 6 * * *`. Requires the same env as cron-job1
+(REALSPORTS_STORAGE_STATE_B64GZ + WNBA_DEVICE_UUID for Playwright auth)
+plus DATABASE_URL (already shared).
+
+Reverse: drop the choice from `cron.py`, delete `job_dayclose.py`.

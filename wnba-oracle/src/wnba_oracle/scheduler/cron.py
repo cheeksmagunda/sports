@@ -1,12 +1,10 @@
-"""Scheduled cron entry. Job 1 / Job 2 dispatch.
+"""Scheduled cron entry. Job 1 / Job 2 / dayclose dispatch.
 
 Invoked by Railway's cron with:
-  oracle-cron --job job1
-  oracle-cron --job job2
-
-Full Job 1 / Job 2 implementations land in Step 8 of the build plan. Until
-then this dispatcher logs the requested job, performs the credential probe,
-and exits 0 so cron fires are observable without crashing.
+  oracle-cron --job job1     # morning enrichment (13:00 UTC)
+  oracle-cron --job job2     # pre-tip optimizer (21:00 UTC, every 15 min)
+  oracle-cron --job dayclose # corpus extension (06:00 UTC, captures
+                             # the prior night's finalized contest)
 """
 
 from __future__ import annotations
@@ -20,7 +18,9 @@ from wnba_oracle.common.settings import get_settings
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--job", required=True, choices=["job1", "job2"])
+    parser.add_argument(
+        "--job", required=True, choices=["job1", "job2", "dayclose"]
+    )
     args = parser.parse_args()
 
     settings = get_settings()
@@ -58,6 +58,10 @@ def main() -> int:
         except Exception as exc:
             log.exception("watchdog_failed", error=str(exc))
         return rc
+    if args.job == "dayclose":
+        from wnba_oracle.scheduler import job_dayclose
+
+        return job_dayclose.main()
     return 1
 
 

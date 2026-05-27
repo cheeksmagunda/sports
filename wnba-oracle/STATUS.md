@@ -22,6 +22,10 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - redis:     internal, password-protected
 - cron-job1: `0 13 * * *` UTC, oracle-cron --job job1 (next: 2026-05-27T13:00Z)
 - cron-job2: `*/15 21-23,0-3 * * *` UTC, oracle-cron --job job2 (next: 2026-05-27T21:00Z)
+- cron-dayclose: `0 6 * * *` UTC, oracle-cron --job dayclose (D41 — local
+  only until operator wires the Railway cron service; corpus is auto-
+  extended each fire by walking back N ids from today's max contest id
+  and skipping anything not `sport=wnba` & finalized)
 - env-tunable knobs at shared scope: CONTRARIAN_STRENGTH=0.2,
   CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2, PAYOUT_REGIME=top_20
 

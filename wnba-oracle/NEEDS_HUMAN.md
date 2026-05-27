@@ -85,16 +85,17 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
    must opt in by polling the endpoint or wiring a UptimeRobot
    monitor that watches ``.status != "ok"``. See D37(c).
 
-10. **[NEW 2026-05-27]** Wire the day-close cron to extend the historical
-    corpus after each slate finalizes. Currently the new historical
-    backfill (D38) is one-shot — it captured 2026-05-08 through
-    2026-05-25 in a single invocation but the live pipeline does not
-    auto-append the prior day's contest after it finalizes (~05:00 UTC
-    based on contest 1831's `processedAt`). Minimal wiring: add a third
-    cron `cron-dayclose` at `0 6 * * *` UTC that calls
-    `oracle-backfill --mode historical --start-id $(today-cid) --stop-id
-    $(today-cid)` against the prior-day contest. The contest-id lookup
-    is the hard part; `discover_wnba_contest_id` only returns today's id.
-    Two viable approaches: (a) scan backward 5..15 ids from today's id
-    until sport=wnba is found; (b) persist each fired contest_id to a
-    `seen_contests` table during cron-job2 and read back from there.
+10. **[CODE DONE 2026-05-27]** Day-close corpus extension. Logic landed
+    in `scheduler/job_dayclose.py`, dispatched via
+    `oracle-cron --job dayclose` (D41). Smoke-tested locally. **Operator
+    action**: on Railway, create a third cron service `cron-dayclose`:
+    - Start command: `oracle-cron --job dayclose`
+    - Cron: `0 6 * * *` UTC
+    - Env vars: inherit the same shared vars as cron-job1
+      (REALSPORTS_STORAGE_STATE_B64GZ, WNBA_DEVICE_UUID for Playwright
+      auth) plus the shared DATABASE_URL. `WNBA_CORPUS_PARQUET_DIR` is
+      optional (only useful if you want a Railway-side parquet snapshot;
+      Postgres is the canonical store).
+    Also apply alembic upgrade head on prod Postgres so migration
+    `20260527_0003_contest_leaderboards` lands before the first
+    dayclose fires.
