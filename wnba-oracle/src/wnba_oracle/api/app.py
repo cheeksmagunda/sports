@@ -36,6 +36,10 @@ def create_app() -> FastAPI:
     def root() -> dict[str, str]:
         return {"service": "wnba-oracle", "version": __version__}
 
+    from wnba_oracle.api.lineup import router as lineup_router
+
+    app.include_router(lineup_router)
+
     return app
 
 
