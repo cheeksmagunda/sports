@@ -1,6 +1,6 @@
 status: BUILD_COMPLETE
-last_verified: 2026-05-27T05:30:00Z
-phase: ready_for_2026_05_27_slate
+last_verified: 2026-05-27T09:40:00Z
+phase: ready_for_2026_05_27_slate; historical corpus seeded (16 slates)
 
 # Build status
 
@@ -18,12 +18,40 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - api:       https://api-production-7033.up.railway.app/health -> 200
 - api:       https://api-production-7033.up.railway.app/lineup -> 200 (empty)
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
-- postgres:  internal, alembic head = 20260527_0002
+- postgres:  internal, alembic head = 20260527_0003 (local repo; Railway upgrade pending operator deploy)
 - redis:     internal, password-protected
 - cron-job1: `0 13 * * *` UTC, oracle-cron --job job1 (next: 2026-05-27T13:00Z)
 - cron-job2: `*/15 21-23,0-3 * * *` UTC, oracle-cron --job job2 (next: 2026-05-27T21:00Z)
 - env-tunable knobs at shared scope: CONTRARIAN_STRENGTH=0.2,
   CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2, PAYOUT_REGIME=top_20
+
+## Historical corpus (added 2026-05-27 09:40 UTC)
+
+`data/historical/{slate_labels,leaderboards}/slate_date=*/data.parquet`
+covers the 2026 WNBA season through 2026-05-25:
+
+- 16 finalized slates (cid 1755 = 2026-05-08 .. cid 1831 = 2026-05-25);
+  the 3 off-days for WNBA in that window (5-11, 5-16, 5-26) are absent
+  by design — the platform doesn't surface a WNBA contest on those.
+- 505 player rows in `slate_labels` (HV / popular / 3x sections,
+  deduped by player; first section seen wins).
+- 320 leaderboard rows in `leaderboards` (top-20 finishers per slate),
+  each with the 5-player lineup as `lineup_json` (playerId, chosen
+  multiplier, card boost, per-player realized real_score, computed
+  per-player score).
+
+To re-run / extend:
+```
+set -a && source .env && set +a
+export WNBA_DEVICE_UUID=<uuid matching storage_state>
+uv run oracle-backfill --mode historical --start-id 1755 --stop-id 1840 \
+    --pause-seconds 0.6 --parquet-out-dir data/historical
+```
+
+When DATABASE_URL is set (Railway env), the same command UPSERTs into
+Postgres (`slate_labels` + `contest_leaderboards`). See D38/D39/D40.
+A day-close cron that auto-extends the corpus from the prior night's
+finalized contest is **not yet wired** (NEEDS_HUMAN item 10).
 
 ## Today's slate (2026-05-27) — what to expect
 

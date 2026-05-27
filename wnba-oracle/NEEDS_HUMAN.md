@@ -22,8 +22,15 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
    the live collector has ~30 slates of data** (~2-3 weeks). Then run
    `oracle-train` against that parquet, set the resulting SHA on
    `WNBA_ORACLE_MODEL_ARTIFACT_SHA`, and start the shadow window.
-   _Wall-clock blocker; depends on the cron pipeline accumulating
-   data._
+   **[PARTIAL 2026-05-27]** Historical corpus seeded via
+   `oracle-backfill --mode historical --parquet-out-dir data/historical`
+   for the 16 finalized 2026 WNBA slates (cid 1755..1831). Local parquet
+   is ready; still need (a) Railway migration `20260527_0003` applied
+   so the Postgres tables match the local schema and (b) the same
+   backfill run with DATABASE_URL pointed at Railway to UPSERT into
+   `slate_labels` + `contest_leaderboards` on prod. After that, the
+   ~30-slate threshold is still a wall-clock blocker — 16 down, ~14
+   to go at the live collector's accumulation rate. See D38.
 
 4. **Tune `CONTRARIAN_STRENGTH` env var once you have 7-14 finalized
    slates.** Default 0.2 (basketball-main NBA value). [WIRED 2026-05-27]
@@ -77,3 +84,17 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
    (email / Slack / Discord webhook) is still manual — the operator
    must opt in by polling the endpoint or wiring a UptimeRobot
    monitor that watches ``.status != "ok"``. See D37(c).
+
+10. **[NEW 2026-05-27]** Wire the day-close cron to extend the historical
+    corpus after each slate finalizes. Currently the new historical
+    backfill (D38) is one-shot — it captured 2026-05-08 through
+    2026-05-25 in a single invocation but the live pipeline does not
+    auto-append the prior day's contest after it finalizes (~05:00 UTC
+    based on contest 1831's `processedAt`). Minimal wiring: add a third
+    cron `cron-dayclose` at `0 6 * * *` UTC that calls
+    `oracle-backfill --mode historical --start-id $(today-cid) --stop-id
+    $(today-cid)` against the prior-day contest. The contest-id lookup
+    is the hard part; `discover_wnba_contest_id` only returns today's id.
+    Two viable approaches: (a) scan backward 5..15 ids from today's id
+    until sport=wnba is found; (b) persist each fired contest_id to a
+    `seen_contests` table during cron-job2 and read back from there.
