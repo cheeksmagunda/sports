@@ -1,0 +1,15 @@
+# Project-wide Railway defaults. NO per-service blocks (Railway 2026
+# `railway.toml` does not support [services.<name>]). Per-service overrides
+# (healthcheckPath, preDeployCommand, startCommand) live on the service in
+# the Railway dashboard or via GraphQL — NOT here. See mlb-oracle's
+# 2026-05-07 to 2026-05-18 silent-cron regression for the cautionary tale.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# api uses ON_FAILURE; cron services override to NEVER at service level so
+# each scheduled tick is one-shot.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

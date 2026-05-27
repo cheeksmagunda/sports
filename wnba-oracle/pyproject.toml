@@ -1,0 +1,126 @@
+[project]
+name = "wnba-oracle"
+version = "0.1.0"
+description = "Real Sports WNBA daily top-5 picker. Pre-tip ranker + lineup optimizer over the slate's player pool."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "cheeksmagunda" }]
+
+dependencies = [
+    "fastapi>=0.120,<0.130",
+    "starlette>=0.49.1,<1.0",
+    "uvicorn[standard]>=0.32,<0.36",
+    "pydantic>=2.9,<3.0",
+    "pydantic-settings>=2.6,<3.0",
+    "sse-starlette>=2.1,<3.0",
+    "redis[hiredis]>=5.2,<6.0",
+    "psycopg[binary,pool]>=3.2,<4.0",
+    "sqlalchemy>=2.0,<3.0",
+    "asyncpg>=0.30,<1.0",
+    "alembic>=1.14,<2.0",
+    "httpx>=0.28,<0.30",
+    "structlog>=24.4,<26.0",
+    "tenacity>=9.0,<10.0",
+    "apscheduler>=3.10,<4.0",
+    "tzdata>=2024.2",
+    "polars>=1.16,<2.0",
+    "pandas>=2.2,<3.0",
+    "pyarrow>=18.0,<22.0",
+    "duckdb>=1.1,<2.0",
+    # ML stack. Exact pins on libs whose version influences pickled bytes.
+    # Determinism gate trains twice and asserts pickle SHA equality; only
+    # works with exact pins (LightGBM RFC 6731).
+    "numpy==2.2.6",
+    "lightgbm==4.6.0",
+    "scikit-learn>=1.5,<2.0",
+    "scipy>=1.13,<2.0",
+    "shap>=0.46,<1.0",
+    "optuna>=4.0,<5.0",
+    "mapie>=0.9,<1.0",
+    "pandera[polars]>=0.21,<1.0",
+    # WNBA data sources
+    "nba_api>=1.7,<2.0",
+    "pbpstats>=1.3,<2.0",
+    "beautifulsoup4>=4.12,<5.0",
+    "lxml>=5.0,<7.0",
+    "playwright>=1.59.0",
+    # Observability
+    "opentelemetry-api>=1.28,<2.0",
+    "opentelemetry-sdk>=1.28,<2.0",
+    "opentelemetry-instrumentation-fastapi>=0.51b0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3,<10.0",
+    "pytest-asyncio>=0.24,<2.0",
+    "httpx>=0.28,<0.30",
+    "respx>=0.21,<1.0",
+    "hypothesis>=6.115,<7.0",
+    "ruff>=0.7,<1.0",
+    "mypy>=1.13,<2.0",
+    "bandit>=1.7,<2.0",
+    "python-dotenv>=1.0,<2.0",
+    "pre-commit>=4.0,<5.0",
+]
+
+[project.scripts]
+# Operator surface: Job 2 (frozen lineup) runs via the scheduled cron path only.
+# Manual fires go through scripts/manual_job{1,2}_fire.py from a dev machine.
+oracle-job1 = "wnba_oracle.scheduler.job1:main"
+oracle-job2 = "wnba_oracle.scheduler.job2:main"
+oracle-cron = "wnba_oracle.scheduler.cron:main"
+oracle-train = "wnba_oracle.train.cli:main"
+oracle-rotate-check = "wnba_oracle.audit.rotation_cli:main"
+oracle-backfill = "wnba_oracle.ingest.backfill:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wnba_oracle"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "-m 'not contract'"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring postgres/redis",
+    "training: marks tests that train models against the corpus",
+    "contract: external-API schema contract tests (network). Default excludes them; nightly runs `pytest -m contract` to catch upstream schema drift before a fire.",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+exclude = [
+    "frontend/",
+    ".venv/",
+    "migrations/versions/",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "C4", "UP", "SIM", "RUF"]
+ignore = ["E501", "B008", "B905", "RUF001", "RUF002", "RUF003", "SIM105"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+exclude = ["frontend/", "migrations/versions/"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "frontend"]
+skips = ["B101", "B608"]

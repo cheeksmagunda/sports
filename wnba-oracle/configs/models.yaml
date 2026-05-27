@@ -1,0 +1,123 @@
+# Model + picker config. Loaded by the train CLI and the predict path.
+# Hyperparameters live here, not in code.
+
+# Cohort split. Single positional cohort per the Step 4 / Part 4 decision.
+cohorts:
+  - G
+  - F
+  - C
+
+# LightGBM defaults (regularized for low-data WNBA regime; Part 7).
+lightgbm:
+  num_leaves: 15
+  min_data_in_leaf: 25
+  learning_rate: 0.04
+  feature_fraction: 0.70
+  bagging_fraction: 0.80
+  bagging_freq: 5
+  lambda_l2: 1.0
+  min_gain_to_split: 0.01
+  num_boost_round: 200
+  early_stopping_rounds: 25
+  # categorical_feature: ['player_id'] (Part 6.10)
+  categorical_features:
+    - player_id
+
+# Monotonicity (Part 6.4 + DECISIONS D14).
+monotone_constraints:
+  mins_l5: 1
+  mins_l10: 1
+  pred_minutes: 1
+  usg_pct_l10: 1
+  opp_def_rtg: 1
+  is_back_to_back: -1
+  vegas_total: 1
+  implied_team_total: 1
+
+# Multi-task heads (Part 6.9).
+heads:
+  minutes:
+    objective: quantile
+    quantile_alphas: [0.1, 0.5, 0.9]
+    target: minutes_played
+  points_per_min:
+    objective: quantile
+    quantile_alphas: [0.1, 0.5, 0.9]
+    target: pts_per_min
+    condition: minutes_played > 0
+  reb_per_min:
+    objective: quantile
+    quantile_alphas: [0.1, 0.5, 0.9]
+    target: reb_per_min
+    condition: minutes_played > 0
+  ast_per_min:
+    objective: quantile
+    quantile_alphas: [0.1, 0.5, 0.9]
+    target: ast_per_min
+    condition: minutes_played > 0
+  stl_blk_per_min:
+    objective: quantile
+    quantile_alphas: [0.1, 0.5, 0.9]
+    target: stl_blk_per_min
+    condition: minutes_played > 0
+  real_score_residual:
+    objective: regression
+    target: real_score_residual
+
+# Ensemble weights (Part 6.11).
+ensemble:
+  lightgbm: 0.70
+  eb_baseline: 0.30
+  # Fallback path: if multi-task head CRPS regresses >5% vs single-head
+  # real_score on holdout, fall back to single-head and document.
+  multitask_max_crps_regression_pct: 5.0
+
+# Mondrian CQR (Part 6.3).
+conformal:
+  method: mondrian
+  cohort_splits: [position, home_away, back_to_back]
+  target_coverage: 0.80
+  band: [0.10, 0.90]
+
+# Optuna search (Part 6.13).
+optuna:
+  n_trials: 100
+  sampler: tpe
+  pruner: hyperband
+  inner_cv_folds: 5
+  outer_embargo_days: 3
+  objective: crps
+
+# Rolling decay (Part 7).
+rolling:
+  decay_half_life_slates: 20
+
+# Adversarial validation gate (Part 6.5).
+adversarial:
+  auc_hard_stop: 0.6
+
+# Low-data mode threshold (DECISIONS D11).
+low_data_mode:
+  min_labeled_rows: 2000
+  fallback_lightgbm:
+    num_leaves: 10
+    num_boost_round: 120
+    feature_fraction: 0.60
+    lambda_l2: 2.0
+
+# Random seeds.
+seeds:
+  numpy: 1729
+  lightgbm: 1729
+  python: 1729
+  optuna: 1729
+
+# Picker / lineup optimizer (Part 1).
+picker:
+  top_n_filter: 30
+  n_samples: 5000
+  budget_seconds: 30
+  default_payout_regime: top_20
+  entry_recommendation:
+    skip_if_expected_payout_ratio_below: 0.95
+    enter_with_caveat_below: 1.10

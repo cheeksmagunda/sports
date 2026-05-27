@@ -1,0 +1,76 @@
+# Secrets and env
+.env
+.env.*
+!.env.example
+credentials.md
+*.har
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node / frontend
+node_modules/
+.next/
+.nuxt/
+out/
+.cache/
+.parcel-cache/
+.turbo/
+
+# Data and models (gitignore artifacts, keep small fixtures)
+data/raw/
+data/processed/
+data/parquet/
+models/*.pkl
+models/*.joblib
+models/*.bin
+models/artifacts/
+*.parquet
+!tests/fixtures/**/*.parquet
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Local-only Claude settings (project settings.json is committed; *.local.json is per-machine)
+.claude/settings.local.json
+.claude/sessions/
+.claude/agents/
+.claude/worktrees/
+.claude/snapshots/
+
+# Credential rotation tracker (local timestamps only)
+.credential-ages.json
+
+# Experiment outputs (per-machine, not committed)
+runs/
+eval/cache/
+
+# uv environment
+.python-version
