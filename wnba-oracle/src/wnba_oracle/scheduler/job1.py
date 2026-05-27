@@ -20,7 +20,6 @@ import os
 from dataclasses import dataclass
 
 import httpx
-import sqlalchemy as sa
 from sqlalchemy import text
 
 from wnba_oracle.common.logging import configure_logging, get_logger
@@ -119,10 +118,16 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
 
     # Build opponent / team map from odds + per-game roster join. For now
     # the platform pool gives team but not opponent; use the odds map.
+    from wnba_oracle.features.build import team_key_from_full_name
+
     team_to_opp: dict[str, str] = {}
     for g in odds:
-        team_to_opp[_short(g.home_team)] = _short(g.away_team)
-        team_to_opp[_short(g.away_team)] = _short(g.home_team)
+        team_to_opp[team_key_from_full_name(g.home_team)] = team_key_from_full_name(
+            g.away_team
+        )
+        team_to_opp[team_key_from_full_name(g.away_team)] = team_key_from_full_name(
+            g.home_team
+        )
 
     rows = []
     for p in pool:
@@ -167,12 +172,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     return Job1Result(sd, len(pool), len(odds), len(lineups), persisted)
 
 
-def _short(full_name: str) -> str:
-    from wnba_oracle.features.build import _WNBA_TEAM_NAME_TO_KEY
-
-    return _WNBA_TEAM_NAME_TO_KEY.get(full_name, full_name[:3].upper())
-
-
 def main() -> int:
     configure_logging("INFO")
     settings = get_settings()
@@ -183,6 +182,3 @@ def main() -> int:
         log.exception("job1_failed", error=str(exc))
         return 1
     return 0
-
-
-_ = sa  # acknowledge import

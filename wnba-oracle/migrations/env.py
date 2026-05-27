@@ -8,6 +8,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine, pool
 
+from wnba_oracle.common.db_utils import normalize_postgres_url
+
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -17,12 +19,7 @@ def _get_url() -> str:
     url = os.environ.get("DATABASE_URL", "")
     if not url:
         raise RuntimeError("DATABASE_URL must be set for alembic to run")
-    # Alembic / SQLAlchemy 2 uses `postgresql+psycopg://`; convert if needed.
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+psycopg://", 1)
-    elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
+    return normalize_postgres_url(url)
 
 
 target_metadata = None  # tables created via raw SQL in versions/ (no ORM autogenerate)

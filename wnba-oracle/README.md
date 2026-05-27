@@ -100,12 +100,31 @@ src/wnba_oracle/
   predict/       Inference, conformal, joint sampling
   picker/        Lineup optimizer: sample, field, payout, optimize
   scheduler/     Job 1, Job 2, cron, watchdog
-  audit/         Rotation gate, adversarial validation, SHAP audit
+  audit/         Rotation gate, adversarial validation
   eval/          CRPS, reliability, conformal coverage, RBO@5, picker EV
-  db/            SQLAlchemy models + helpers
-  monitoring/    OpenTelemetry traces, structlog setup
+  db/            SQLAlchemy engine + Redis client
+  common/        Settings, structlog setup, db_utils
 frontend/        Vite + React app, teal+magenta tokens
 migrations/      Alembic
 scripts/         Dev startup, credential probe, manual fires
-tests/           Pytest + hypothesis
+tests/           Pytest
 ```
+
+## Sustainability notes
+
+- **Dependency hygiene.** `pyproject.toml` carries only what is imported
+  in production code. A `# Deferred dependencies` comment lists each
+  capability target that has been documented but not yet shipped (e.g.
+  Optuna search, SHAP audit, OpenTelemetry traces). Re-add the dep when
+  you implement the feature; log a DECISIONS entry to mirror the change.
+- **No `_ = symbol` shims.** If an import is unused, delete it. Don't
+  acknowledge it. The repo's audit history shows shims are a hazard:
+  they hide real dead code under a layer of "intentional".
+- **Postgres URL normalization, team-key mapping, JSON cache** each have
+  one home. Adding a second copy is a code smell; route through
+  `common.db_utils.normalize_postgres_url`,
+  `features.build.team_key_from_full_name`, and `ingest.cache.*`
+  respectively.
+- **Tests are cheap insurance.** Every new module merits a smoke test
+  that loads it and exercises one happy path. Coverage is not the goal;
+  catching schema drift and import-time bugs is.

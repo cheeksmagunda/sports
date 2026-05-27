@@ -1,9 +1,9 @@
-"""Mondrian Conformalized Quantile Regression (CQR) fallback.
+"""Mondrian Conformalized Quantile Regression (CQR).
 
-`mapie` 0.9 provides MapieQuantileRegressor and a Mondrian helper. If
-import fails or the API drifts, this module's `MondrianCQR` is a roughly
-80-LOC plain-numpy fallback that delivers the same marginal coverage
-guarantees.
+Pure-numpy implementation. The original plan was to use `mapie` 0.9's
+MapieQuantileRegressor with a Mondrian helper; the dependency was dropped
+during the post-build dep trim because nothing in the codebase imported
+it. Re-add `mapie` to pyproject.toml when swapping this in.
 
 Given calibration residuals split by `cohort` (G/F/C) and `condition`
 (home/away, b2b/rested), we compute conformity scores and translate

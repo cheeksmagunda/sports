@@ -146,6 +146,38 @@ means only the first fire writes; subsequent fires are no-ops. Reverse:
 adjust cronSchedule on cron-job1 / cron-job2 via Railway GraphQL
 serviceInstanceUpdate.
 
+### D24: Drop seven unimported deps; document re-add path [reasoned]
+Post-build audit (2026-05-27). The following deps were declared in
+pyproject.toml but had zero imports anywhere in the codebase:
+`apscheduler`, `asyncpg`, `duckdb`, `mapie`, `optuna`, `pbpstats`,
+`shap`, and the three `opentelemetry-*` packages. Each represents a
+documented future capability but ships as dead weight in the production
+Docker image today. Removed and replaced with a `# Deferred dependencies`
+block in pyproject.toml that lists each by name with the feature it
+unlocks. Re-add path: add the dep back to `dependencies`, log a new
+DECISIONS entry referencing the feature shipping. Net effect: ~80MB
+slimmer image, faster `uv sync`, no functional change.
+
+### D25: Public team-key helper + shared postgres-URL normalizer [reasoned]
+Post-build audit. `_team_key_from_full_name` was duplicated as
+`_short()` in scheduler/job1.py. Promoted to public
+`features.build.team_key_from_full_name` and the dict to public
+`WNBA_TEAM_NAME_TO_KEY`. Removed the `job1._short` wrapper.
+
+`normalize_postgres_url` was duplicated in three files: db/engine.py,
+ingest/backfill.py, migrations/env.py. Extracted to
+`common/db_utils.py` with five-case unit tests (legacy, qualified,
+already-driver, empty, non-postgres). Single source of truth.
+
+### D26: Allowlist includes slate_date (identity column) [verified]
+Post-build audit caught a real bug: `build_slate_features` writes
+`slate_date` into every row, then asserts the column set against
+`PREGAME_FEATURES`. `slate_date` wasn't in the allowlist, so any
+non-empty pool raised `FeatureLeakageError` at the end of the builder.
+Added `slate_date` under the "Identity (kept categorical / for joins)"
+group alongside `player_id` / `team` / etc. Verified via
+`tests/unit/test_features_build.py::test_build_slate_features_output_shape_and_allowlist`.
+
 ### D23: api domain targetPort=8080, not Dockerfile's 8000 default [verified]
 Step 1b verification. Railway injects PORT as a random ephemeral
 (observed 8080 in this deploy). The Dockerfile CMD uses ${PORT:-8000} so

@@ -12,15 +12,8 @@ import redis
 import sqlalchemy as sa
 from sqlalchemy import create_engine
 
+from wnba_oracle.common.db_utils import normalize_postgres_url
 from wnba_oracle.common.settings import get_settings
-
-
-def _normalize_pg_url(url: str) -> str:
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
 
 
 @lru_cache(maxsize=1)
@@ -29,7 +22,7 @@ def get_engine() -> sa.Engine:
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL not set")
     return create_engine(
-        _normalize_pg_url(settings.database_url),
+        normalize_postgres_url(settings.database_url),
         future=True,
         pool_pre_ping=True,
         pool_size=4,

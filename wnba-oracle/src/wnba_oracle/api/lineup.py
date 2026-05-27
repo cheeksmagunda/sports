@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -79,6 +78,3 @@ def list_recent_lineups(limit: int = Query(default=10, ge=1, le=60)) -> list[dic
         }
         for r in rows
     ]
-
-
-_ = json

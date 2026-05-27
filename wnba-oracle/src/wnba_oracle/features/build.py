@@ -271,8 +271,8 @@ def _odds_by_team(odds: list[GameOdds]) -> dict[str, dict[str, object]]:
     team-name → abbreviation table."""
     by_team: dict[str, dict[str, object]] = {}
     for g in odds:
-        home_key = _team_key_from_full_name(g.home_team)
-        away_key = _team_key_from_full_name(g.away_team)
+        home_key = team_key_from_full_name(g.home_team)
+        away_key = team_key_from_full_name(g.away_team)
         by_team[home_key] = {
             "opponent": away_key,
             "is_home": True,
@@ -288,7 +288,7 @@ def _odds_by_team(odds: list[GameOdds]) -> dict[str, dict[str, object]]:
     return by_team
 
 
-_WNBA_TEAM_NAME_TO_KEY: dict[str, str] = {
+WNBA_TEAM_NAME_TO_KEY: dict[str, str] = {
     "Las Vegas Aces": "LVA",
     "New York Liberty": "NYL",
     "Phoenix Mercury": "PHO",
@@ -306,9 +306,9 @@ _WNBA_TEAM_NAME_TO_KEY: dict[str, str] = {
 }
 
 
-def _team_key_from_full_name(name: str) -> str:
-    if name in _WNBA_TEAM_NAME_TO_KEY:
-        return _WNBA_TEAM_NAME_TO_KEY[name]
+def team_key_from_full_name(name: str) -> str:
+    if name in WNBA_TEAM_NAME_TO_KEY:
+        return WNBA_TEAM_NAME_TO_KEY[name]
     return name[:3].upper()
 
 

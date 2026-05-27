@@ -79,14 +79,11 @@ conformal:
   target_coverage: 0.80
   band: [0.10, 0.90]
 
-# Optuna search (Part 6.13).
-optuna:
-  n_trials: 100
-  sampler: tpe
-  pruner: hyperband
-  inner_cv_folds: 5
-  outer_embargo_days: 3
-  objective: crps
+# Optuna search (Part 6.13) - deferred. Hyperparameter search runs once
+# the corpus is large enough (>= 2000 labeled rows) that the inner-CV
+# folds carry signal. Until then the static `lightgbm:` block above
+# is the production hyperparameter set. When this lands, restore the
+# `optuna` dependency in pyproject.toml.
 
 # Rolling decay (Part 7).
 rolling:

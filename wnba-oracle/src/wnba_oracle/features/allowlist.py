@@ -20,6 +20,7 @@ from typing import Final
 PREGAME_FEATURES: Final[frozenset[str]] = frozenset(
     {
         # Identity (kept categorical / for joins)
+        "slate_date",
         "player_id",
         "platform_player_id",
         "team",

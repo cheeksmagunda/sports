@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import os
 from dataclasses import dataclass
 
 import numpy as np
@@ -209,6 +208,3 @@ def main() -> int:
     if result.recommendation is None:
         return 0
     return 0
-
-
-_ = os

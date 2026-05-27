@@ -108,6 +108,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-_ = _rbo_at_5  # acknowledge the helper (unit-tested separately)

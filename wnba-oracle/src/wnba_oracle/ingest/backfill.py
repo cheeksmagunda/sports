@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import datetime as dt
 import os
 import sys
 import time
@@ -34,6 +33,7 @@ import httpx
 import sqlalchemy as sa
 from sqlalchemy import create_engine, text
 
+from wnba_oracle.common.db_utils import normalize_postgres_url
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.ingest.contest_stats import (
@@ -55,12 +55,11 @@ def _engine() -> sa.Engine:
     settings = get_settings()
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL not set; cannot persist labels.")
-    url = settings.database_url
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+psycopg://", 1)
-    elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return create_engine(url, future=True, pool_pre_ping=True)
+    return create_engine(
+        normalize_postgres_url(settings.database_url),
+        future=True,
+        pool_pre_ping=True,
+    )
 
 
 UPSERT_SQL = text(
@@ -234,7 +233,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-# Acknowledge unused import in main flow.
-_ = dt

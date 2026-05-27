@@ -30,7 +30,6 @@ import yaml
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.features.parity import feature_module_sha
 from wnba_oracle.features.spec import (
-    COHORT_EXTRA_FEATURES,
     HEAD_SPECS,
     Cohort,
     cohort_for_position,
@@ -202,6 +201,23 @@ def train_picker(
     return art
 
 
+def _git_sha_short() -> str:
+    """Pinned alongside the artifact so reloads know the build commit."""
+    import subprocess
+
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2,
+        )
+        return r.stdout.strip()[:12]
+    except Exception:
+        return "no-git"
+
+
 def write_artifact(art: PickerArtifact, *, commit: str) -> Path:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     import time as _time
@@ -227,7 +243,3 @@ def load_artifact(path: Path) -> PickerArtifact:
                 f"artifact SHA mismatch for {path}: expected {expected}, got {actual}"
             )
     return pickle.loads(payload)
-
-
-# Acknowledge unused symbols referenced in docstrings.
-_ = COHORT_EXTRA_FEATURES
