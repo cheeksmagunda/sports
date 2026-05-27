@@ -497,3 +497,51 @@ the server. Operators run the probe with `--device-uuid` (or pin
 `realsports_login.py`. Cron containers pull from the
 `REALSPORTS_STORAGE_STATE_B64GZ`-derived storage_state plus a
 deterministic device UUID derived from the Railway service id.
+
+
+### D38: Historical backfill via contest-id walk + parquet partitions [verified]
+2026-05-27 finding. The first pre-fire data audit surfaced that no
+historical training corpus existed — `data/historical/` was empty, no
+`oracle-backfill --mode historical` had ever been run, and `slate_labels`
+was empty. Brought it up to parity with mlb-oracle's signal directory
+layout but adapted to WNBA-specific endpoint constraints (D17 + D18):
+MLB walks dates via `/home/mlb/day/next?day=YYYY-MM-DD`; WNBA must walk
+contest ids, filter by `info.contest.sport == "wnba"`, and skip the
+~80% of ids that resolve to MLB/NBA/NHL/NCAA/soccer/golf. For the 2026
+season so far (cid 1755..1840), this is 16 finalized WNBA slates +
+~70 sport-mismatch skips.
+
+Per-slate output to two parquet partition trees, matching the mlb-oracle
+convention:
+- `data/historical/slate_labels/slate_date=YYYY-MM-DD/data.parquet`
+  per-player rows (one per platform_player_id; HV/popular/3x sections
+  collapsed via `dedupe_by_player`, first-section-seen wins).
+- `data/historical/leaderboards/slate_date=YYYY-MM-DD/data.parquet`
+  per-finisher rows (top-20 entries; full 5-player lineup stored as
+  `lineup_json` to avoid schema fragility across slates).
+
+When `DATABASE_URL` is also set, the same backfill UPSERTs into
+`slate_labels` (existing) and `contest_leaderboards` (new migration
+`20260527_0003`). Reverse: drop the migration + the two partition trees.
+
+### D39: WNBA leaderboard endpoint requires undocumented query params [verified]
+2026-05-27 probe finding. `GET /games/playerratingcontest/{cid}/entries`
+returns a stale stub (`sport=ncaam, day=2022-11-14, entries=[]`)
+regardless of contest id unless the request includes
+`contestType=sport&isGuillotine=false`. With the params it returns
+top-20 finishers including per-player `multiplier` (the user's chosen
+multiplier, NOT `multiplierBonus` which is the card boost), `value`
+(per-slate real_score string), and computed per-player `score`. Total
+entries (`numBrawlers`) can be many thousands; the API only returns
+the top 20. Reverse: irrelevant once the API stabilizes the default.
+
+### D40: Auth-token rotation per request — 401 then refresh is normal [verified]
+2026-05-27 finding. During the 86-id historical walk every single
+contest 401'd on first attempt, then succeeded after the
+`refresh_headers` callback fired. The Real Sports server rotates the
+`real-request-token` per request; the cached token works once after
+capture, then needs re-capture. The existing one-shot retry-on-401 in
+`fetch_contest_stats` / `fetch_contest_entries` papers over this
+transparently; total backfill wall-clock is ~1 minute for 86 contests.
+Reverse: harvest the rotated token from each response (set-cookie or
+header) and update the cached headers in-place between calls.

@@ -1,29 +1,40 @@
-"""Real Sports contest /stats endpoint adapter.
+"""Real Sports contest endpoint adapters: /stats + /entries.
 
-Pulls per-player `real_score` (the training label) + `card_boost` for a
-single contest. Used by the live slate-close collector and (where the
-platform permits) by the historical backfill.
+Two endpoints share the same auth flow:
 
-Endpoint: GET /games/playerratingcontest/{id}/stats
-Response shape (post-finalization):
+1. `fetch_contest_stats` -> GET /games/playerratingcontest/{id}/stats
 
-    {
-      "contest": {"id": ..., "sport": "wnba", "day": "YYYY-MM-DD", "isFinalized": true},
-      "draftStats": [
-        {"sectionName": "highestBoostedValuePlayers",
-         "players": [
-           {"player": {"id": ..., "displayName": ...},
-            "team": {"key": ...},
-            "multiplierBonus": float,         # card_boost
-            "value": "string",                 # raw per-slate real_score
-            "displayStats": [{"label": ..., "value": ...}]}
-         ]},
-        ...
-      ]
-    }
+   Per-player aggregated stats across three sections
+   (highestBoostedValuePlayers, popularPlayers, mostCommon3xPlayers). One
+   row per (contest, player). Shape:
 
-Same DRAFT_STATS sections as the MLB precedent. Pregame contests have
-`draftStats == []`; the collector skips them.
+       {
+         "contest": {"id": ..., "sport": "wnba", "day": "YYYY-MM-DD", "isFinalized": true},
+         "draftStats": [
+           {"sectionName": "highestBoostedValuePlayers",
+            "players": [
+              {"player": {"id": ..., "displayName": ...},
+               "team": {"key": ...},
+               "multiplierBonus": float,         # card_boost
+               "value": "string",                 # raw per-slate real_score
+               "displayStats": [{"label": ..., "value": ...}]}
+            ]},
+           ...
+         ]
+       }
+
+2. `fetch_contest_entries` -> GET /games/playerratingcontest/{id}/entries
+   ?contestType=sport&isGuillotine=false
+
+   Top-20 finishers with their full lineups (each player's chosen
+   multiplier + the per-player real_score that was realized). One row per
+   (contest, entry). The `contestType=sport&isGuillotine=false` params
+   are mandatory; omitting them returns a stale ncaam stub regardless of
+   contest id.
+
+Both endpoints share auth (real-request-token + real-auth-info captured
+via Playwright). Pregame contests have `draftStats == []` and `entries == []`;
+collectors skip them.
 """
 
 from __future__ import annotations
@@ -171,6 +182,98 @@ def fetch_contest_stats(
                     real_score=_parse_real_score(entry.get("value")),
                 )
             )
+    return out
+
+
+@dataclass(frozen=True)
+class LeaderboardEntry:
+    """One top-N finisher's lineup for a single contest.
+
+    `lineup` is the raw 5-player payload from `additionalInfo.lineup` — each
+    player dict carries `playerId`, `multiplier` (the user's chosen
+    multiplier, NOT card_boost), `value` (the realized per-slate real_score
+    as a string), `score` (multiplier * value), plus display metadata. We
+    preserve the API shape verbatim per Hard Rule 7; consumers do their own
+    field extraction.
+    """
+
+    contest_id: int
+    slate_date: str
+    entry_id: int
+    rank: int
+    paged_rank: int
+    user_id: str
+    score: float
+    lineup: list[dict[str, object]]
+    num_brawlers: int | None
+
+
+def fetch_contest_entries(
+    contest_id: int,
+    headers: RequestHeaders,
+    client: httpx.Client,
+    *,
+    refresh_headers: Callable[[], RequestHeaders] | None = None,
+) -> list[LeaderboardEntry]:
+    """Synchronous fetch of top-20 leaderboard entries for a single contest.
+
+    Returns the parsed entries (one per finisher). The platform truncates
+    to top 20 — `num_brawlers` on each entry carries the full contest
+    entry count so consumers can reason about depth. 401 retries once via
+    `refresh_headers`. 404 raises `ContestUnavailable` (skip the slate).
+    Sport mismatch (cid resolved to a non-WNBA contest) raises
+    `ContestUnavailable`.
+    """
+    h = _http_headers(headers)
+    url = f"{BASE}/games/playerratingcontest/{contest_id}/entries"
+    params = {"contestType": "sport", "isGuillotine": "false"}
+    log.info("contest_entries_fetch", contest_id=contest_id)
+    refreshed = False
+    while True:
+        r = client.get(url, headers=h, params=params, timeout=20.0)
+        if r.status_code == 401 and refresh_headers is not None and not refreshed:
+            log.info("contest_entries_401_refresh", contest_id=contest_id)
+            h = _http_headers(refresh_headers())
+            refreshed = True
+            continue
+        if r.status_code == 401:
+            raise PlatformAuthRequired(f"401 on {url}")
+        if r.status_code == 404:
+            raise ContestUnavailable(f"404 on {url}")
+        r.raise_for_status()
+        break
+    body = r.json() or {}
+    contest = body.get("contest") or {}
+    if contest.get("sport") != "wnba":
+        raise ContestUnavailable(
+            f"contest {contest_id} sport={contest.get('sport')} (expected wnba)"
+        )
+    slate_date = str(contest.get("day", ""))
+    num_brawlers = contest.get("numBrawlers")
+    out: list[LeaderboardEntry] = []
+    for e in body.get("entries") or []:
+        eid = e.get("id")
+        rank = e.get("rank")
+        if eid is None or rank is None:
+            continue
+        try:
+            score_f = float(e.get("score", 0.0))
+        except (TypeError, ValueError):
+            score_f = 0.0
+        lineup = ((e.get("additionalInfo") or {}).get("lineup")) or []
+        out.append(
+            LeaderboardEntry(
+                contest_id=int(contest_id),
+                slate_date=slate_date,
+                entry_id=int(eid),
+                rank=int(rank),
+                paged_rank=int(e.get("pagedRank", rank)),
+                user_id=str(e.get("userId", "")),
+                score=score_f,
+                lineup=list(lineup),
+                num_brawlers=int(num_brawlers) if num_brawlers is not None else None,
+            )
+        )
     return out
 
 
