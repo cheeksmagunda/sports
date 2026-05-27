@@ -2,11 +2,50 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WNBA Oracle</title>
-    <link rel="stylesheet" href="/src/styles/tokens.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0e8e8e" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#5ed4d4" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="WNBA Oracle — today's frozen five-player lineup, ranked by predicted value." />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230e8e8e'/%3E%3Cstop offset='100%25' stop-color='%23d81b60'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='7' fill='url(%23g)'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='ui-sans-serif,system-ui,sans-serif' font-weight='800' font-size='18' fill='%23fff'%3EW%3C/text%3E%3C/svg%3E"
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    />
+
+    <title>WNBA Oracle — Today's Five</title>
   </head>
   <body>
+    <!-- Pre-hydration shell: paints in the user's first frame before the
+         compiled CSS bundle arrives, so the hand-off to the hydrated
+         OracleLoader appears as one continuous animation instead of a
+         flash of unstyled canvas. Inline styles are the deliberate
+         exception to the "no inline styles" convention. -->
+    <div
+      id="pre-hydration-shell"
+      aria-hidden="true"
+      style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:light-dark(#f3f4f6,#050810);color:light-dark(#0e8e8e,#5ed4d4);z-index:2000;"
+    >
+      <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true" id="pre-hydration-mark">
+        <defs>
+          <linearGradient id="phg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#0e8e8e" />
+            <stop offset="100%" stop-color="#d81b60" />
+          </linearGradient>
+        </defs>
+        <rect x="2" y="2" width="52" height="52" rx="12" fill="url(#phg)" />
+        <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-family="ui-sans-serif,system-ui,sans-serif" font-weight="800" font-size="30" fill="#fff">W</text>
+      </svg>
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:light-dark(#6b7280,#9ca3af);">Loading the oracle</span>
+      <style>#pre-hydration-mark { animation: pre-spin 4s linear infinite; transform-origin: center; } @keyframes pre-spin { to { transform: rotate(360deg); } } @media (prefers-reduced-motion: reduce) { #pre-hydration-mark { animation: none; } }</style>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

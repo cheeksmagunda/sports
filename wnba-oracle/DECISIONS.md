@@ -281,6 +281,24 @@ initially created with targetPort=8000 and returned 502 (Application
 failed to respond) because the proxy targeted a port the container
 didn't bind. Fixed via serviceDomainUpdate setting targetPort=8080.
 
+### D34: Frontend port from mlb-oracle, WNBA palette retained [reasoned]
+Replaced the MVP frontend (single placeholder shell + flat list) with the
+mlb-oracle component model: Header / SlateBand / 5-card grid / Footer,
+plus OracleLoader for the pre-fire wait state with a live T-minus
+countdown to the 13:00 UTC cron-job1 fire. Kept the teal+magenta
+primitives from the old tokens.css; only the structure and 2026-baseline
+techniques were copied. No new npm deps - swapped iconify for inline SVG
+glyphs and framer-motion for CSS stagger animations to keep the bundle
+under 70KB gzipped (was 41KB; now 66KB with fonts loaded lazily).
+2026-baseline applied: Hanken Grotesk + Barlow Condensed + JetBrains
+Mono via Google Fonts CDN, View Transitions API on theme toggle,
+`text-wrap: balance/pretty`, `content-visibility: auto` on cards,
+`scrollbar-gutter: stable`, `prefers-reduced-data/transparency`
+fallbacks, pre-hydration inline shell. Demo fixture is gated behind
+`import.meta.env.DEV` so it tree-shakes from production builds (verified
+grep count = 0 in dist/assets/*.js). Reverse: revert this commit; old
+MVP shell is recoverable from git history.
+
 ### D19: Default device_uuid via env to avoid 401s on probe re-runs [reasoned]
 The Real Sports JWT is bound to the device UUID captured during the
 initial login. Passing a fresh UUID on probe re-run triggers 401 from

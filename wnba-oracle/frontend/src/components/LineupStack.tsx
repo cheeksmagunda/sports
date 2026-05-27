@@ -1,14 +1,21 @@
+// Five-card grid. Cards are emitted in the order they were optimized;
+// rank is purely positional (1..5). CSS animations stagger the entry.
+
 import type { FrozenLineup, PlayerProjection } from "../lib/api";
 import { PlayerCard } from "./PlayerCard";
 
-type Props = { lineup: FrozenLineup };
+interface Props {
+  lineup: FrozenLineup;
+}
 
 export function LineupStack({ lineup }: Props) {
   const projections = lineup.lineup.per_player ?? [];
   const ids = lineup.lineup.player_ids;
   const mults = lineup.lineup.slot_multipliers;
 
-  // Fallback when API hasn't joined per-player projections yet.
+  // Fallback when API hasn't joined per-player projections (older slate
+  // freezes pre-D32). Render placeholder cards so the layout doesn't
+  // collapse, but with neutral data.
   const cards: PlayerProjection[] =
     projections.length === ids.length
       ? projections
@@ -26,25 +33,20 @@ export function LineupStack({ lineup }: Props) {
         }));
 
   return (
-    <div>
-      <p className="slate-meta" style={{ marginTop: 8 }}>
-        EV {lineup.expected_payout.toFixed(2)} ·{" "}
-        lineup P10 / P50 / P90:{" "}
-        {lineup.lineup.lineup_score_p10.toFixed(1)} /{" "}
-        {lineup.lineup.lineup_score_p50.toFixed(1)} /{" "}
-        {lineup.lineup.lineup_score_p90.toFixed(1)} ·{" "}
-        regime {lineup.payout_regime}
-      </p>
-      <div className="lineup-stack">
-        {cards.map((p, idx) => (
+    <div
+      role="list"
+      aria-label="Five-player frozen lineup"
+      className="grid"
+    >
+      {cards.map((p, i) => (
+        <div role="listitem" key={p.player_id}>
           <PlayerCard
-            key={p.player_id}
-            slotMultiplier={mults[idx] ?? 0}
-            slotRank={idx + 1}
+            rank={i + 1}
+            slotMultiplier={mults[i] ?? 1}
             player={p}
           />
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -68,7 +68,9 @@ Cron-job2 fires every 15 min from 21:00 UTC through 04:00 UTC:
 6. Freeze via Redis SET NX + Postgres UPSERT
 
 The frontend (https://frontend-production-a739.up.railway.app/) auto-
-fetches the frozen lineup from /lineup/2026-05-27.
+fetches the frozen lineup from /lineup/2026-05-27. Pre-fire it shows
+OracleLoader + T-minus countdown; once the cron freezes the lineup the
+page swaps to the Header / SlateBand / 5-card grid / Footer (D34).
 
 ## Quality gates
 
