@@ -57,6 +57,24 @@ Postgres (`slate_labels` + `contest_leaderboards`). See D38/D39/D40.
 A day-close cron that auto-extends the corpus from the prior night's
 finalized contest is **not yet wired** (NEEDS_HUMAN item 10).
 
+## Optimizer correctness (2026-05-27 10:00 UTC)
+
+The pre-fire backfill (D38) surfaced two long-standing bugs in the picker:
+
+- **Slot multipliers were [3.0, 2.5, 2.0, 1.5, 1.0]** (NBA precedent); actual
+  WNBA platform uses **[2.0, 1.8, 1.6, 1.4, 1.2]** verified empirically
+  across all 320 corpus entries. Fixed in commit `5fb6c6f` and pinned in
+  `tests/unit/test_slot_scheme.py`. See D42.
+
+- **Heuristic real_score was 15.0 * (1 + 0.2 * boost)** — wrong magnitude
+  (5x too high) and wrong slope (positive; actual relationship is
+  -0.45/boost-unit because card_boost is a handicap). Recalibrated to
+  `max(0.5, 3.16 - 0.45 * card_boost)`. See D43.
+
+Tonight's 21:00 UTC cron-job2 fire is the first to use the corrected
+optimizer. Backtest on 2026-05-25 realized values produced 49.73 points
+(brute-force optimum), vs the actual contest winner cpgooner at 40.60.
+
 ## Today's slate (2026-05-27) — what to expect
 
 **Cron-job1 fires at 13:00 UTC (8 AM CDT / 9 AM EDT):**
