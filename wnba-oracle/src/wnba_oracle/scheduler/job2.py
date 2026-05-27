@@ -20,6 +20,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from sqlalchemy import text
@@ -27,6 +28,7 @@ from sqlalchemy import text
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine, get_redis
+from wnba_oracle.features.spec import cohort_for_position
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.game_script import GameScriptConfig, game_script_multiplier
 from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig, optimize_lineup
@@ -38,6 +40,7 @@ from wnba_oracle.picker.popularity import (
     slate_labels_to_popularity,
 )
 from wnba_oracle.picker.sample import PlayerSamplingSpec
+from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
 
@@ -68,6 +71,83 @@ def _heuristic_real_score(card_boost: float) -> float:
     the percentile band.
     """
     return max(0.5, 3.16 - 0.45 * card_boost)
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _load_model_artifact(sha: str) -> PickerArtifact | None:
+    """Load the trained PickerArtifact whose SHA256 matches `sha`.
+
+    Looks under `models/` for any `picker_*.pkl` whose sidecar
+    `.sha256` file matches. Returns None on any failure (missing,
+    SHA mismatch, unpickle error) — the caller falls back to the
+    transparent heuristic.
+
+    Empty `sha` short-circuits to None so deployments without the
+    env var set behave exactly like the pre-D45 heuristic-only path.
+    """
+    if not sha:
+        return None
+    sha = sha.strip().lower()
+    models_dir = REPO_ROOT / "models"
+    if not models_dir.exists():
+        log.warning("model_artifact_dir_missing", dir=str(models_dir))
+        return None
+    # `write_artifact` writes the sidecar at `picker_<commit>_<ts>.sha256`
+    # (path.with_suffix(".sha256") REPLACES `.pkl`, it doesn't append).
+    for sidecar in models_dir.glob("picker_*.sha256"):
+        try:
+            disk_sha = sidecar.read_text().strip().lower()
+        except OSError:
+            continue
+        if disk_sha != sha:
+            continue
+        pkl_path = sidecar.with_suffix(".pkl")
+        if not pkl_path.exists():
+            log.warning("model_artifact_pkl_missing", path=str(pkl_path))
+            return None
+        try:
+            art = load_artifact(pkl_path)
+        except Exception as exc:
+            log.exception("model_artifact_load_failed", path=str(pkl_path), error=str(exc))
+            return None
+        log.info(
+            "model_artifact_loaded",
+            path=str(pkl_path),
+            sha=sha[:12],
+            training_rows=art.training_rows,
+            low_data_mode=art.low_data_mode,
+            n_heads=len(art.heads),
+            has_eb_baseline=art.eb_baseline is not None,
+            n_eb_players=len(art.eb_baseline.player_alpha) if art.eb_baseline else 0,
+        )
+        return art
+    log.warning("model_artifact_sha_not_found", sha=sha[:12])
+    return None
+
+
+def _eb_predict_one(
+    art: PickerArtifact | None, player_id: int, position: str
+) -> float | None:
+    """Single-player EB prediction with cohort + player-alpha lookup.
+
+    Returns None if (a) no artifact, (b) no EB baseline in artifact, or
+    (c) player_id wasn't seen in training. Caller falls back to the
+    heuristic on None — this preserves graceful degradation for new
+    players the model never saw. The `team_pace` term is dropped
+    because job1_enrichment doesn't yet carry team pace.
+    """
+    if art is None or art.eb_baseline is None:
+        return None
+    eb = art.eb_baseline
+    if int(player_id) not in eb.player_alpha:
+        return None
+    cohort = cohort_for_position(position)
+    mu = eb.cohort_means.get(cohort, 0.0)
+    alpha = eb.player_alpha[int(player_id)]
+    pred = mu + alpha
+    return max(0.5, float(pred))
 
 
 def _load_enrichment(slate_date: str) -> list[dict]:
@@ -171,6 +251,17 @@ def _build_specs(
     if not enrichment:
         return [], [], {}
 
+    # Load trained artifact when WNBA_ORACLE_MODEL_ARTIFACT_SHA matches a
+    # picker_*.pkl under models/. EB baseline predictions replace the
+    # heuristic for any player seen in training; unseen players still
+    # use _heuristic_real_score. None on missing/mismatched artifact
+    # means the entire pool falls back to heuristic — same path as before
+    # D45 wiring. This makes deployment of a new model SHA non-destructive.
+    settings = get_settings()
+    art = _load_model_artifact(settings.model_artifact_sha)
+    n_eb_predicted = 0
+    n_heuristic_fallback = 0
+
     # Slate-size signal for the popularity estimator
     n_games_on_slate = len({str(r.get("team", "") or "") for r in enrichment if r.get("team")}) // 2
     n_games_on_slate = max(n_games_on_slate, 1)
@@ -218,12 +309,27 @@ def _build_specs(
         except (TypeError, ValueError):
             continue
         boost = float(r.get("card_boost", 0.0) or 0.0)
+        position = str(r.get("position", "") or "")
         total, spread = _vegas_from_features(r.get("features_json"))
         gs_mult = (
             game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
         )
-        pred_real_scores[pid] = _heuristic_real_score(boost) * gs_mult
+        eb_pred = _eb_predict_one(art, pid, position)
+        if eb_pred is not None:
+            base = eb_pred
+            n_eb_predicted += 1
+        else:
+            base = _heuristic_real_score(boost)
+            n_heuristic_fallback += 1
+        pred_real_scores[pid] = max(0.5, base * gs_mult)
         rows_by_pid[pid] = r
+
+    log.info(
+        "predictor_mix",
+        artifact_sha=settings.model_artifact_sha[:12] if settings.model_artifact_sha else "",
+        n_eb_predicted=n_eb_predicted,
+        n_heuristic_fallback=n_heuristic_fallback,
+    )
 
     # Apply contrarian adjustment
     adjusted = apply_contrarian_adjustment(

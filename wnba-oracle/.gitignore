@@ -48,6 +48,12 @@ models/*.pkl
 models/*.joblib
 models/*.bin
 models/artifacts/
+# Production-served artifact is committed by exception so the Railway
+# deploy ships it. To bump the served model: train a new artifact via
+# `oracle-train`, then add another `!models/picker_<new-sha>.pkl` line
+# below + update WNBA_ORACLE_MODEL_ARTIFACT_SHA on Railway.
+!models/picker_cfe5868_1779880756.pkl
+!models/picker_cfe5868_1779880756.sha256
 *.parquet
 !tests/fixtures/**/*.parquet
 
