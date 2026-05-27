@@ -1,0 +1,32 @@
+{
+  "info": {
+    "contest": {
+      "id": 1840,
+      "day": "2026-05-27",
+      "sport": "wnba",
+      "numBrawlers": 0,
+      "isFinalized": false,
+      "additionalInfo": {
+        "lineupSize": 5
+      },
+      "createdAt": "2026-05-26T11:00:30.928Z",
+      "processedAt": null,
+      "postId": 845792,
+      "season": 2026,
+      "commentCount": 55,
+      "gameId": null
+    },
+    "rankDisplayInfos": null,
+    "nonce": "0_pregame",
+    "completedText": null,
+    "displayText": null,
+    "headerText": "Draft",
+    "streakDisplay": null,
+    "canEnter": true,
+    "permissionMessage": null,
+    "isLocked": false,
+    "userId": "dnWVwN13",
+    "showStatsButton": true
+  },
+  "lineup": []
+}

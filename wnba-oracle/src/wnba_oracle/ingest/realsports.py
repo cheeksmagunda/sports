@@ -1,0 +1,595 @@
+"""Real Sports (web.realapp.com) WNBA scraper.
+
+Adapted from the MLB Oracle precedent. The Real Sports API is sport-
+parameterized: every endpoint that takes `/sport/{sport}` accepts `wnba`.
+
+Two-stage auth, identical to MLB:
+
+1. **Login (rare):** operator runs `oracle-realsports-login` once. Playwright
+   logs in with REAL_SPORTS_USERNAME / REAL_SPORTS_PASSWORD, saves
+   scraper/storage_state.json with the JWT in localStorage. The JWT is
+   long-lived; this only re-runs on rotation or 401-burn.
+2. **Capture (per slate):** Playwright reloads realsports.io with the stored
+   state; the SPA emits authenticated requests immediately. We harvest
+   `real-request-token` + `real-auth-info` from those headers and cache
+   them in scraper/request_token_cache.json (30-min TTL).
+3. **Use:** `/players/sport/wnba/search?day=DATE&query=Q&searchType=ratingLineup`
+   returns the slate's player pool with `multiplierBonus` (card_boost).
+
+Hard Rule 7 (carried from MLB): if any step fails, raise. Never synthesize
+`card_boost=0`. The picker is silent when the source can't be trusted.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from wnba_oracle.scheduler.antibot import (
+    asleep_truncated_gaussian,
+    full_jitter_backoff,
+)
+
+SCRAPER_DIR = Path(__file__).resolve().parents[3] / "scraper"
+SCRAPER_DIR.mkdir(exist_ok=True)
+STORAGE_STATE_PATH = SCRAPER_DIR / "storage_state.json"
+TOKEN_CACHE_PATH = SCRAPER_DIR / "request_token_cache.json"
+
+TOKEN_TTL_SECONDS = 1800  # 30 min upper bound
+BASE = "https://web.realapp.com"
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+SPORT = "wnba"
+
+# WNBA position taxonomy. The platform may emit one of these or a hyphenated
+# combination (e.g. "G-F"). Pool parser accepts any nonempty string and lets
+# the cohort assigner reduce it to G/F/C.
+WNBA_POSITIONS = {"G", "F", "C", "G-F", "F-G", "F-C", "C-F"}
+
+
+@dataclass(frozen=True)
+class RequestHeaders:
+    real_request_token: str
+    real_version: str
+    real_device_type: str
+    real_device_uuid: str
+    real_device_id: str
+    real_device_name: str
+    real_auth_info: str | None
+    user_agent: str
+    captured_at: float
+
+
+@dataclass(frozen=True)
+class PlatformPlayer:
+    """One row from the rating-lineup pool endpoint."""
+
+    platform_id: str
+    first_name: str
+    last_name: str
+    display_name: str
+    position: str
+    team: str
+    multiplier_bonus: float  # card_boost
+    primary_ranking: int | None
+    injury_status: str
+
+
+class PlatformAuthRequired(RuntimeError):
+    """Raised on 401; the orchestrator refreshes headers and retries once."""
+
+
+class StorageStateMissing(RuntimeError):
+    """Storage state not seeded. Operator must run oracle-realsports-login first."""
+
+
+class StorageStateStale(RuntimeError):
+    """Storage state present but session has expired."""
+
+
+def load_cached_headers() -> RequestHeaders | None:
+    if not TOKEN_CACHE_PATH.exists():
+        return None
+    raw = json.loads(TOKEN_CACHE_PATH.read_text())
+    if time.time() - raw.get("captured_at", 0) > TOKEN_TTL_SECONDS:
+        return None
+    if "real-request-token" not in raw or "real-auth-info" not in raw:
+        return None
+    return RequestHeaders(
+        real_request_token=raw["real-request-token"],
+        real_version=raw.get("real-version", "31"),
+        real_device_type=raw.get("real-device-type", "desktop_web"),
+        real_device_uuid=raw["real-device-uuid"],
+        real_device_id=raw.get("real-device-id", raw["real-device-uuid"]),
+        real_device_name=raw.get("real-device-name", "wnba-oracle-prod-01"),
+        real_auth_info=raw["real-auth-info"],
+        user_agent=raw.get("user-agent", DEFAULT_USER_AGENT),
+        captured_at=raw["captured_at"],
+    )
+
+
+def _save_cached_headers(h: dict[str, Any]) -> None:
+    h["captured_at"] = time.time()
+    TOKEN_CACHE_PATH.write_text(json.dumps(h, indent=2))
+
+
+async def login_and_seed_storage(
+    login: str,
+    password: str,
+    *,
+    headed: bool = False,
+) -> None:
+    """One-time login. Fills the two visible inputs (email/username + password),
+    presses Enter, waits for the post-login feed, saves storage_state.json.
+    """
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=not headed)
+        ctx = await browser.new_context(
+            viewport={"width": 1440, "height": 900},
+            user_agent=DEFAULT_USER_AGENT,
+        )
+        page = await ctx.new_page()
+        await page.goto(
+            "https://realsports.io/", wait_until="domcontentloaded", timeout=30000
+        )
+        try:
+            await page.locator("input[type='password']").wait_for(
+                state="visible", timeout=15000
+            )
+        except Exception:
+            await page.wait_for_timeout(2000)
+
+        inputs = await page.eval_on_selector_all(
+            "input",
+            "els => els.filter(e => e.offsetParent !== null).map(e => ({type: e.type}))",
+        )
+        if len(inputs) < 2:
+            await browser.close()
+            raise RuntimeError(
+                f"Expected 2 visible inputs on realsports.io login; got {len(inputs)}. "
+                "Rerun with --headed and complete the login manually."
+            )
+
+        await page.locator("input").nth(0).fill(login)
+        pw_locator = page.locator("input").nth(1)
+        await pw_locator.fill(password)
+        await pw_locator.press("Enter")
+
+        try:
+            await page.locator("text=/WNBA|MLB|Home|Sport/").first.wait_for(
+                state="visible", timeout=25000
+            )
+        except Exception:
+            pass
+
+        body_text = await page.evaluate("() => document.body.innerText")
+        snippet = (body_text or "")[:300]
+        if "Attempts exceeded" in snippet or "Forgot password" in snippet[:120]:
+            await browser.close()
+            raise RuntimeError(
+                f"Real Sports login rejected (rate-limit or wrong creds). Body: {snippet!r}"
+            )
+        if not any(t in snippet for t in ("WNBA", "MLB", "Home", "Sport")):
+            await browser.close()
+            raise RuntimeError(
+                f"Login did not land on the home feed. Body: {snippet!r}"
+            )
+
+        await ctx.storage_state(path=str(STORAGE_STATE_PATH))
+        await browser.close()
+
+
+async def capture_live_headers(
+    device_uuid: str,
+    device_name: str,
+    *,
+    headed: bool = False,
+) -> RequestHeaders:
+    """Reload realsports.io with the stored state, harvest authenticated
+    request headers. Raises StorageStateMissing if storage_state.json is
+    absent; StorageStateStale if the page loads but no authenticated
+    request is observed within 20s.
+    """
+    if not STORAGE_STATE_PATH.exists():
+        raise StorageStateMissing(
+            f"{STORAGE_STATE_PATH} not found. Run `oracle-realsports-login`."
+        )
+
+    from playwright.async_api import async_playwright
+
+    captured: dict[str, str] = {}
+    done = asyncio.Event()
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=not headed)
+        ctx = await browser.new_context(
+            viewport={"width": 599, "height": 868},
+            storage_state=str(STORAGE_STATE_PATH),
+            user_agent=DEFAULT_USER_AGENT,
+        )
+
+        async def on_request(req):
+            if "realapp.com" not in req.url:
+                return
+            h = req.headers
+            if "real-request-token" in h and "real-auth-info" in h and not captured:
+                for k, v in h.items():
+                    captured[k.lower()] = v
+                captured["captured_at_url"] = req.url
+                done.set()
+
+        ctx.on("request", on_request)
+        page = await ctx.new_page()
+        try:
+            await page.goto(
+                "https://realsports.io/", wait_until="domcontentloaded", timeout=25000
+            )
+        except Exception:
+            pass
+
+        try:
+            await asyncio.wait_for(done.wait(), timeout=20.0)
+        except TimeoutError as exc:
+            await browser.close()
+            raise StorageStateStale(
+                "Did not capture authenticated headers within 20s. "
+                "storage_state.json's session has expired. Re-run "
+                "`oracle-realsports-login` locally and re-seed "
+                "REALSPORTS_STORAGE_STATE_B64GZ on Railway."
+            ) from exc
+
+        # Persist any sliding-window cookies updated during this reload.
+        await ctx.storage_state(path=str(STORAGE_STATE_PATH))
+        await browser.close()
+
+    captured["real-device-uuid"] = device_uuid
+    captured.setdefault("real-device-id", device_uuid)
+    captured["real-device-name"] = device_name
+    captured.setdefault("real-device-type", "desktop_web")
+    captured.setdefault("real-version", "31")
+
+    _save_cached_headers(captured)
+    h = load_cached_headers()
+    if h is None:
+        raise RuntimeError("Captured headers but failed to round-trip through cache")
+    return h
+
+
+async def headers_or_capture(
+    device_uuid: str,
+    device_name: str,
+) -> RequestHeaders:
+    """Return cached headers if still valid; otherwise launch Playwright."""
+    cached = load_cached_headers()
+    if cached is not None:
+        return cached
+    return await capture_live_headers(device_uuid, device_name)
+
+
+def _http_headers(h: RequestHeaders) -> dict[str, str]:
+    out = {
+        "real-request-token": h.real_request_token,
+        "real-version": h.real_version,
+        "real-device-type": h.real_device_type,
+        "real-device-uuid": h.real_device_uuid,
+        "real-device-id": h.real_device_id,
+        "real-device-name": h.real_device_name,
+        "user-agent": h.user_agent,
+        "accept": "application/json",
+        "content-type": "application/json",
+        "referer": "https://realsports.io/",
+        "origin": "https://realsports.io",
+    }
+    if h.real_auth_info:
+        out["real-auth-info"] = h.real_auth_info
+    return out
+
+
+async def _real_sports_get_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    headers: dict[str, str],
+    params: dict[str, Any] | None = None,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
+    max_attempts: int = 5,
+    timeout_s: float = 15.0,
+) -> httpx.Response:
+    """Bounded Full-Jitter retry with optional auth-refresh.
+
+    - 200: return.
+    - 401 + refresh_headers + not yet refreshed: refresh in place, retry once.
+      Subsequent 401 raises PlatformAuthRequired.
+    - 429/503: honor Retry-After capped by full_jitter_backoff(attempt).
+    - Transport error: backoff + retry.
+    - Other: raise_for_status().
+    """
+    last_status: int | None = None
+    refreshed = False
+    for attempt in range(max_attempts):
+        try:
+            r = await client.get(url, params=params, headers=headers, timeout=timeout_s)
+        except httpx.HTTPError:
+            await asyncio.sleep(full_jitter_backoff(attempt))
+            continue
+        last_status = r.status_code
+        if r.status_code == 200:
+            return r
+        if r.status_code == 401:
+            if refresh_headers is not None and not refreshed:
+                new_headers = await refresh_headers()
+                headers.clear()
+                headers.update(_http_headers(new_headers))
+                refreshed = True
+                continue
+            raise PlatformAuthRequired(f"401 on {url}")
+        if r.status_code in {429, 503}:
+            retry_after = float(r.headers.get("retry-after", "0") or 0)
+            await asyncio.sleep(max(retry_after, full_jitter_backoff(attempt)))
+            continue
+        r.raise_for_status()
+    raise RuntimeError(
+        f"fetch failed after {max_attempts} attempts; last_status={last_status} url={url}"
+    )
+
+
+async def _search_with_query(
+    slate_date: str,
+    query: str,
+    headers: dict[str, str],
+    client: httpx.AsyncClient,
+) -> tuple[int, list[dict[str, Any]]]:
+    """One /players/sport/wnba/search call. Returns (200, players[]).
+
+    WNBA-specific: the search endpoint does NOT accept a `day` parameter
+    (unlike MLB). Probe 2026-05-26 confirmed that passing `day=YYYY-MM-DD`
+    returns an empty player list; omitting it returns the full currently-
+    rated set. `slate_date` is retained in the signature for caller
+    parity but unused on the wire. See DECISIONS D17.
+    """
+    _ = slate_date  # acknowledge unused param
+    r = await _real_sports_get_with_retry(
+        client,
+        f"{BASE}/players/sport/{SPORT}/search",
+        headers=headers,
+        params={"query": query, "searchType": "ratingLineup"},
+    )
+    return 200, (r.json() or {}).get("players", []) or []
+
+
+async def fetch_pool_for_date(
+    slate_date: str,
+    headers: RequestHeaders,
+    client: httpx.AsyncClient,
+    *,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
+) -> list[PlatformPlayer]:
+    """Fetch the slate's full eligibility set + overlay card_boost.
+
+    Two API surfaces:
+
+    1. Per-game roster union via /home/wnba/next?cohort=0 + /games/{gid}/sport/wnba/players.
+       For ~6 WNBA games per slate that yields ~80-90 unique player ids.
+    2. Prefix-iterated card_boost overlay across a..z on /players/sport/wnba/search.
+
+    Pool membership is the intersection. A player Real Sports does not
+    surface across any a..z prefix is not draftable today.
+    """
+    h = _http_headers(headers)
+
+    home_r = await _real_sports_get_with_retry(
+        client,
+        f"{BASE}/home/{SPORT}/next",
+        headers=h,
+        params={"cohort": 0},
+        refresh_headers=refresh_headers,
+    )
+    games = (home_r.json().get("latestDayContent") or {}).get("games") or []
+    game_ids: list[int] = []
+    for g in games:
+        gid = g.get("id")
+        if gid is not None:
+            game_ids.append(int(gid))
+    if not game_ids:
+        raise RuntimeError(
+            f"no games found in /home/{SPORT}/next for slate_date={slate_date}"
+        )
+
+    sem = asyncio.Semaphore(4)
+
+    async def _one_game(gid: int) -> list[dict[str, Any]]:
+        async with sem:
+            r = await _real_sports_get_with_retry(
+                client,
+                f"{BASE}/games/{gid}/sport/{SPORT}/players",
+                headers=h,
+                refresh_headers=refresh_headers,
+            )
+            return r.json().get("players", []) or []
+
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(_one_game(gid)) for gid in game_ids]
+    union: dict[str, dict[str, Any]] = {}
+    for t in tasks:
+        for p in t.result():
+            pid = str(p.get("id", ""))
+            if not pid:
+                continue
+            if pid not in union:
+                union[pid] = p
+
+    # Prefix-iterated card_boost overlay
+    rated_by_id: dict[str, float] = {}
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    refreshed_during_overlay = False
+    for i, letter in enumerate(letters):
+        if i > 0:
+            await asleep_truncated_gaussian()
+        try:
+            _status, players = await _search_with_query(slate_date, letter, h, client)
+        except PlatformAuthRequired:
+            if refresh_headers is not None and not refreshed_during_overlay:
+                h = _http_headers(await refresh_headers())
+                refreshed_during_overlay = True
+                _status, players = await _search_with_query(slate_date, letter, h, client)
+            else:
+                raise
+        for rp in players:
+            rid = str(rp.get("id", ""))
+            mb = rp.get("multiplierBonus")
+            if not rid or mb is None:
+                continue
+            try:
+                rated_by_id[rid] = float(mb)
+            except (TypeError, ValueError):
+                continue
+
+    overlaid: list[dict[str, Any]] = []
+    for pid, p in union.items():
+        if pid not in rated_by_id:
+            continue
+        p = dict(p)
+        p["multiplierBonus"] = rated_by_id[pid]
+        overlaid.append(p)
+    return _parse_pool({"players": overlaid})
+
+
+def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
+    out: list[PlatformPlayer] = []
+    players = body.get("players", []) or body.get("data", []) or []
+    for p in players:
+        boost = p.get("multiplierBonus")
+        if boost is None:
+            boost = p.get("multiplier_bonus")
+        if boost is None:
+            raise RuntimeError(
+                f"Pool row missing multiplierBonus (id={p.get('id')}); "
+                "platform schema may have changed - halting fetch."
+            )
+        boost_f = float(boost)
+        if not (0.0 <= boost_f <= 3.0):
+            raise RuntimeError(
+                f"multiplierBonus out of range [0,3]: {boost_f} for "
+                f"id={p.get('id')}; halting fetch."
+            )
+        team_obj = p.get("team")
+        if isinstance(team_obj, dict):
+            team = (team_obj.get("key") or team_obj.get("abbreviation") or "").upper()
+        else:
+            team = (team_obj or "").upper()
+        out.append(
+            PlatformPlayer(
+                platform_id=str(p.get("id", "")),
+                first_name=p.get("firstName") or "",
+                last_name=p.get("lastName") or "",
+                display_name=p.get("displayName") or "",
+                position=p.get("position") or "",
+                team=team,
+                multiplier_bonus=boost_f,
+                primary_ranking=p.get("primaryRanking"),
+                injury_status=p.get("injuryStatus") or "",
+            )
+        )
+    return out
+
+
+async def fetch_contest_meta(
+    contest_id: int,
+    headers: RequestHeaders,
+    client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    """GET /games/playerratingcontest/{id}?contestType=sport&source=home
+
+    Returns the daily-draft contest metadata. Pregame, `info.contest`
+    has `id`, `day`, `sport`, `isFinalized`, `additionalInfo.lineupSize`.
+    Post-tip, `info.rankDisplayInfos` populates with the payout/leaderboard
+    structure the lineup optimizer consumes.
+
+    WNBA-specific note: unlike MLB, there is no `/home/{sport}/day/next`
+    endpoint to enumerate the current contest id; that endpoint returns
+    500 for WNBA. Use `discover_wnba_contest_id` (Playwright-based) to
+    find the active WNBA contest id, then call this with that id. See
+    DECISIONS D18.
+    """
+    h = _http_headers(headers)
+    r = await _real_sports_get_with_retry(
+        client,
+        f"{BASE}/games/playerratingcontest/{contest_id}",
+        headers=h,
+        params={"contestType": "sport", "source": "home"},
+    )
+    return r.json() or {}
+
+
+async def discover_wnba_contest_id() -> int | None:
+    """Headless-browse realsports.io/?sport=wnba and capture the contest id
+    from the /games/playerratingcontest/{id} URL the SPA hits.
+
+    Returns the int contest id, or None if no WNBA contest URL is observed.
+    Cheap to call (one Playwright session, ~5s); Job 1 calls it once per
+    fire to seed the day's contest id into Redis.
+    """
+    if not STORAGE_STATE_PATH.exists():
+        raise StorageStateMissing(
+            f"{STORAGE_STATE_PATH} not found; cannot discover contest id."
+        )
+    from playwright.async_api import async_playwright
+
+    seen_ids: list[int] = []
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        ctx = await browser.new_context(
+            viewport={"width": 599, "height": 868},
+            storage_state=str(STORAGE_STATE_PATH),
+            user_agent=DEFAULT_USER_AGENT,
+        )
+
+        def on_req(req):
+            url = req.url
+            if "/games/playerratingcontest/" not in url:
+                return
+            try:
+                tail = url.split("/games/playerratingcontest/")[1]
+                cid = int(tail.split("?")[0].split("/")[0])
+                seen_ids.append(cid)
+            except (ValueError, IndexError):
+                pass
+
+        page = await ctx.new_page()
+        page.on("request", on_req)
+        try:
+            await page.goto(
+                "https://realsports.io/", wait_until="domcontentloaded", timeout=15000
+            )
+            await page.evaluate("localStorage.setItem('selectedSport', 'wnba');")
+            await page.goto(
+                "https://realsports.io/", wait_until="domcontentloaded", timeout=15000
+            )
+            await page.wait_for_timeout(3000)
+            try:
+                await page.locator("text=/WNBA/i").first.click(timeout=3000)
+                await page.wait_for_timeout(2500)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        await browser.close()
+
+    # Need to distinguish WNBA contest from MLB. The discovered id list will
+    # include both if the user has both sports active. Caller validates with
+    # fetch_contest_meta and confirms info.contest.sport == "wnba".
+    if not seen_ids:
+        return None
+    # Return the maximum (most recent) id; both MLB and WNBA increment together.
+    # Caller validates sport.
+    return max(seen_ids)

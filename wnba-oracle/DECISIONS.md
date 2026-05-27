@@ -98,3 +98,32 @@ Gaussian copula on log-residuals. Budget: 30s per slate.
 ### D16: Default to top-20 payout regime when unknown [reasoned]
 Part 1.2 fallback. Convex above the line, some variance is good. Probed
 schedule swaps this default at Step 2.
+
+### D17: WNBA search endpoint omits the `day` parameter [verified]
+2026-05-26 probe finding. `/players/sport/wnba/search?query=Q&searchType=ratingLineup`
+returns the currently-rated WNBA pool. Adding `?day=YYYY-MM-DD` (which is
+the MLB precedent) returns an empty list. Pool composition is still the
+intersection of (today's per-game roster union from `/home/wnba/next`) and
+(currently-rated set from the day-less search). `_search_with_query`
+accepts `slate_date` for signature parity with MLB but does not transmit
+it. Reverse: remove the `_ = slate_date` shim once we are certain no
+caller relies on it.
+
+### D18: WNBA contest id discovery is Playwright-driven [verified]
+2026-05-26 probe finding. `/home/wnba/day/next` (the MLB precedent's
+contest-id enumerator) returns HTTP 500 for WNBA. There is no analogous
+listing endpoint we observed. Job 1's payout-curve probe must headless-
+browse `realsports.io/?sport=wnba` and capture the contest id from the
+`/games/playerratingcontest/{id}` URL the SPA emits. The current active
+WNBA contest id (verified 2026-05-26): 1840 (day 2026-05-27).
+`info.rankDisplayInfos` is null pregame; the picker reads it at Job 2 time
+and falls back to the top_20 regime when null.
+
+### D19: Default device_uuid via env to avoid 401s on probe re-runs [reasoned]
+The Real Sports JWT is bound to the device UUID captured during the
+initial login. Passing a fresh UUID on probe re-run triggers 401 from
+the server. Operators run the probe with `--device-uuid` (or pin
+`WNBA_DEVICE_UUID` in `.env`) matched to the one captured during
+`realsports_login.py`. Cron containers pull from the
+`REALSPORTS_STORAGE_STATE_B64GZ`-derived storage_state plus a
+deterministic device UUID derived from the Railway service id.

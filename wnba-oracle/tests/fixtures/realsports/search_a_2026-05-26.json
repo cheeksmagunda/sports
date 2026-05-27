@@ -1,0 +1,678 @@
+{
+  "players": [
+    {
+      "id": 745,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Alyssa",
+      "lastName": "Thomas",
+      "avatar": "679a5c2ccc856b44761d81b552a8e535",
+      "teamId": 6,
+      "injuryStatus": "Active",
+      "jersey": 25,
+      "birthDate": "1992-04-12T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 2,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 2
+      },
+      "sportRadarId": "87a32879-a19b-4603-86ce-1c8b0e4484ad",
+      "displayName": "A. Thomas",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "PHO_wnba",
+        "key": "PHO"
+      },
+      "multiplierBonus": 0.1,
+      "details": [
+        {
+          "text": "+0.1x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 598,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "A'ja",
+      "lastName": "Wilson",
+      "avatar": "8850a3912b6fc02af355f52f234de4fa",
+      "teamId": 1,
+      "injuryStatus": "Active",
+      "jersey": 22,
+      "birthDate": "1996-08-08T00:00:00.000Z",
+      "position": "C",
+      "primaryRanking": 3,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 3
+      },
+      "sportRadarId": "6340b055-3c1b-427e-88d6-6f9cdd1fc925",
+      "displayName": "A. Wilson",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "LVA_wnba",
+        "key": "LVA"
+      },
+      "multiplierBonus": 0,
+      "details": null
+    },
+    {
+      "id": 4322905,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Pauline",
+      "lastName": "Astier",
+      "avatar": "8667db9c48f8d88aa4b127702cc73c0a",
+      "teamId": 4,
+      "injuryStatus": "Active",
+      "jersey": 18,
+      "birthDate": "2002-02-15T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 22,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 22
+      },
+      "sportRadarId": "98fff88c-a6ac-48fd-a586-46fa33c7c25e",
+      "displayName": "P. Astier",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "NYL_wnba",
+        "key": "NYL"
+      },
+      "multiplierBonus": 0.8,
+      "details": [
+        {
+          "text": "+0.8x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 627,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Aliyah",
+      "lastName": "Boston",
+      "avatar": "e093c3ebdbd5ba89cab62ea452983946",
+      "teamId": 3,
+      "injuryStatus": "Active",
+      "jersey": 7,
+      "birthDate": "2001-12-11T00:00:00.000Z",
+      "position": "C-F",
+      "primaryRanking": 24,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 24
+      },
+      "sportRadarId": "63dde7d8-0af8-4adb-a556-01e0d2395420",
+      "displayName": "A. Boston",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "IND_wnba",
+        "key": "IND"
+      },
+      "multiplierBonus": 0.3,
+      "details": [
+        {
+          "text": "+0.3x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 767,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Arike",
+      "lastName": "Ogunbowale",
+      "avatar": "92a7bc800ca0d65777a24cc7f3c99e2e",
+      "teamId": 12,
+      "injuryStatus": "Active",
+      "jersey": 24,
+      "birthDate": "1997-03-02T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 29,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 29
+      },
+      "sportRadarId": "b84a83b9-07b1-4115-b2ad-8cb69a96ef08",
+      "displayName": "A. Ogunbowale",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "DAL_wnba",
+        "key": "DAL"
+      },
+      "multiplierBonus": 1,
+      "details": [
+        {
+          "text": "+1.0x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 4322745,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Aneesah",
+      "lastName": "Morrow",
+      "avatar": "12a5b381c7124a099ef60b2a7c93a054",
+      "teamId": 11,
+      "injuryStatus": "Active",
+      "jersey": 24,
+      "birthDate": "2003-02-02T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 31,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 31
+      },
+      "sportRadarId": "4e06c8c0-311c-4c8f-a6ef-3ef78200c823",
+      "displayName": "A. Morrow",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "CON_wnba",
+        "key": "CON"
+      },
+      "multiplierBonus": 1.4,
+      "details": [
+        {
+          "text": "+1.4x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 691,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Shakira",
+      "lastName": "Austin",
+      "avatar": "db8faba8434231e37a8b6ac7ed37b51c",
+      "teamId": 7,
+      "injuryStatus": "Active",
+      "jersey": 0,
+      "birthDate": "2000-07-25T00:00:00.000Z",
+      "position": "C",
+      "primaryRanking": 39,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 39
+      },
+      "sportRadarId": "a8e64df8-bd27-4c28-94c9-7c1c370960dc",
+      "displayName": "S. Austin",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "WAS_wnba",
+        "key": "WAS"
+      },
+      "multiplierBonus": 0.5,
+      "details": [
+        {
+          "text": "+0.5x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 605,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Allisha",
+      "lastName": "Gray",
+      "avatar": "7bf8bd8fce0a53ec4fa227808be7f6d1",
+      "teamId": 2,
+      "injuryStatus": "Active",
+      "jersey": 15,
+      "birthDate": "1995-01-12T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 43,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 43
+      },
+      "sportRadarId": "293b5925-fd31-4640-8ada-bf6451a2c488",
+      "displayName": "A. Gray",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "ATL_wnba",
+        "key": "ATL"
+      },
+      "multiplierBonus": 0.5,
+      "details": [
+        {
+          "text": "+0.5x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 701,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Angel",
+      "lastName": "Reese",
+      "avatar": "8a836a18d5c65b53125e97c0e7fc2840",
+      "teamId": 2,
+      "injuryStatus": "Active",
+      "jersey": 5,
+      "birthDate": "2002-05-06T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 47,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 47
+      },
+      "sportRadarId": "4fcc19db-1149-4081-9313-e3c2b24ae170",
+      "displayName": "A. Reese",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "ATL_wnba",
+        "key": "ATL"
+      },
+      "multiplierBonus": 0.7,
+      "details": [
+        {
+          "text": "+0.7x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 4322856,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Azzi",
+      "lastName": "Fudd",
+      "avatar": "c8fd95e5871627a6d211e92cbb5e7ffd",
+      "teamId": 12,
+      "injuryStatus": "Active",
+      "jersey": 35,
+      "birthDate": "2002-11-11T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 50,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 50
+      },
+      "sportRadarId": "f83b907a-387d-4fe1-b7d7-4d53d5da147c",
+      "displayName": "A. Fudd",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "DAL_wnba",
+        "key": "DAL"
+      },
+      "multiplierBonus": 1.1,
+      "details": [
+        {
+          "text": "+1.1x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 755,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Awak",
+      "lastName": "Kuier",
+      "avatar": "73dd89bc436379fce8a58ff0181ab61c",
+      "teamId": 12,
+      "injuryStatus": "Active",
+      "jersey": 34,
+      "birthDate": "2001-08-19T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 69,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 69
+      },
+      "sportRadarId": "07bea9c1-80ca-47e0-9b19-26f1bbe8168f",
+      "displayName": "A. Kuier",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "DAL_wnba",
+        "key": "DAL"
+      },
+      "multiplierBonus": 1.9,
+      "details": [
+        {
+          "text": "+1.9x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 615,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Laeticia",
+      "lastName": "Amihere",
+      "avatar": "3e174d863c0a871096effede4968bde1",
+      "teamId": 14,
+      "injuryStatus": "Active",
+      "jersey": 3,
+      "birthDate": "2001-07-10T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 72,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 72
+      },
+      "sportRadarId": "a8253b50-9712-4562-8f54-e36dac6299cd",
+      "displayName": "L. Amihere",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "78f9a95598",
+        "key": "GSV"
+      },
+      "multiplierBonus": 1.9,
+      "details": [
+        {
+          "text": "+1.9x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 4322750,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Aziaha",
+      "lastName": "James",
+      "avatar": "0330fd6ce118532bb8aacb2df502365a",
+      "teamId": 12,
+      "injuryStatus": "Active",
+      "jersey": 10,
+      "birthDate": "2002-11-19T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 75,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 75
+      },
+      "sportRadarId": "20b2fe63-ee47-4afb-bd2c-ec5abd646b7d",
+      "displayName": "A. James",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "DAL_wnba",
+        "key": "DAL"
+      },
+      "multiplierBonus": 2.6,
+      "details": [
+        {
+          "text": "+2.6x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 658,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Alanna",
+      "lastName": "Smith",
+      "avatar": "cdc436bec6dfb0226009d1cdb4eeb7b7",
+      "teamId": 12,
+      "injuryStatus": "Active",
+      "jersey": 8,
+      "birthDate": "1996-09-10T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 79,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 79
+      },
+      "sportRadarId": "96ebdfad-3ffa-4a02-9990-75977d7c94a1",
+      "displayName": "A. Smith",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "DAL_wnba",
+        "key": "DAL"
+      },
+      "multiplierBonus": 2.8,
+      "details": [
+        {
+          "text": "+2.8x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 683,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Aaliyah",
+      "lastName": "Edwards",
+      "avatar": "0325e356fa4c498197d009de3d7f9892",
+      "teamId": 11,
+      "injuryStatus": "Active",
+      "jersey": 8,
+      "birthDate": "2002-07-09T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 88,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 88
+      },
+      "sportRadarId": "2f1df065-07de-478f-9b37-76546561d8c2",
+      "displayName": "A. Edwards",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "CON_wnba",
+        "key": "CON"
+      },
+      "multiplierBonus": 2,
+      "details": [
+        {
+          "text": "+2.0x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 4322744,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Georgia",
+      "lastName": "Amoore",
+      "avatar": "6853752eace16022d6ab0e03142698a4",
+      "teamId": 7,
+      "injuryStatus": "Active",
+      "jersey": 8,
+      "birthDate": "2001-04-03T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 101,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 101
+      },
+      "sportRadarId": "7709c3e4-3fcb-4483-95b5-ba433eab864a",
+      "displayName": "G. Amoore",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "WAS_wnba",
+        "key": "WAS"
+      },
+      "multiplierBonus": 2.6,
+      "details": [
+        {
+          "text": "+2.6x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 682,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Ariel",
+      "lastName": "Atkins",
+      "avatar": "7a3d770160e93a2caf246801189372e6",
+      "teamId": 9,
+      "injuryStatus": "Active",
+      "jersey": 7,
+      "birthDate": "1996-07-30T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 102,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 102
+      },
+      "sportRadarId": "2861dedc-439b-4fbb-bc50-1873b498dc52",
+      "displayName": "A. Atkins",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "LAS_wnba",
+        "key": "LAS"
+      },
+      "multiplierBonus": 1.9,
+      "details": [
+        {
+          "text": "+1.9x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 4322866,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Nell",
+      "lastName": "Angloma",
+      "avatar": "cedf03e5491a3b484abb01f832290cde",
+      "teamId": 11,
+      "injuryStatus": "Active",
+      "jersey": 33,
+      "birthDate": "2006-06-12T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 117,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 117
+      },
+      "sportRadarId": "ff9cfdc5-d29d-4d4a-a253-cfac77bb2cab",
+      "displayName": "N. Angloma",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "CON_wnba",
+        "key": "CON"
+      },
+      "multiplierBonus": 3,
+      "details": [
+        {
+          "text": "+3.0x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 4322863,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Angela",
+      "lastName": "Dugali\u0107",
+      "avatar": "8a976b61f38f379ca5be707d3613dd2f",
+      "teamId": 7,
+      "injuryStatus": "Active",
+      "jersey": 32,
+      "birthDate": "2001-12-29T00:00:00.000Z",
+      "position": "F",
+      "primaryRanking": 120,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 120
+      },
+      "sportRadarId": "02cb88c5-7e72-4e85-a930-eb9da814db71",
+      "displayName": "A. Dugali\u0107",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "WAS_wnba",
+        "key": "WAS"
+      },
+      "multiplierBonus": 3,
+      "details": [
+        {
+          "text": "+3.0x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "id": 713,
+      "nbaId": null,
+      "sport": "wnba",
+      "firstName": "Julie",
+      "lastName": "Allemand",
+      "avatar": "23eb5a9c4511da4d54e193eb75289eaa",
+      "teamId": 16,
+      "injuryStatus": "Questionable",
+      "jersey": 22,
+      "birthDate": "1996-07-07T00:00:00.000Z",
+      "position": "G",
+      "primaryRanking": 124,
+      "deletedAt": null,
+      "isTemp": null,
+      "rankings": {
+        "primaryRanking": 124
+      },
+      "sportRadarId": "25318651-8344-43b8-9842-79938e694b77",
+      "displayName": "J. Allemand",
+      "hasInjuryInfo": true,
+      "team": {
+        "avatar": "e3f9303f97",
+        "key": "TOR"
+      },
+      "multiplierBonus": 2.4,
+      "details": [
+        {
+          "text": "+2.4x",
+          "bold": true,
+          "color": "green"
+        }
+      ]
+    }
+  ]
+}

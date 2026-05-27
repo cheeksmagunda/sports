@@ -1,0 +1,71 @@
+"""Parser tests for the Real Sports pool response. Hits no network."""
+
+from __future__ import annotations
+
+import pytest
+
+from wnba_oracle.ingest.realsports import _parse_pool
+
+
+def test_parse_pool_basic() -> None:
+    body = {
+        "players": [
+            {
+                "id": "12345",
+                "firstName": "AJ",
+                "lastName": "Wilson",
+                "displayName": "A'ja Wilson",
+                "position": "F",
+                "team": {"key": "LAS"},
+                "multiplierBonus": 1.5,
+                "primaryRanking": 1,
+                "injuryStatus": "",
+            },
+            {
+                "id": "23456",
+                "firstName": "Caitlin",
+                "lastName": "Clark",
+                "displayName": "Caitlin Clark",
+                "position": "G",
+                "team": "IND",
+                "multiplierBonus": 0.0,
+                "primaryRanking": 2,
+                "injuryStatus": "",
+            },
+        ]
+    }
+    out = _parse_pool(body)
+    assert len(out) == 2
+    assert out[0].team == "LAS"
+    assert out[0].position == "F"
+    assert out[0].multiplier_bonus == 1.5
+    assert out[1].team == "IND"
+    assert out[1].multiplier_bonus == 0.0
+
+
+def test_parse_pool_missing_boost_hard_fails() -> None:
+    """Hard Rule 7: schema drift halts fetch, never imputes."""
+    body = {"players": [{"id": "1", "team": "LAS", "position": "G"}]}
+    with pytest.raises(RuntimeError, match="missing multiplierBonus"):
+        _parse_pool(body)
+
+
+def test_parse_pool_boost_out_of_range_hard_fails() -> None:
+    body = {
+        "players": [{"id": "1", "team": "LAS", "position": "G", "multiplierBonus": 5.0}]
+    }
+    with pytest.raises(RuntimeError, match="out of range"):
+        _parse_pool(body)
+
+
+def test_parse_pool_accepts_alternate_key() -> None:
+    body = {
+        "players": [{"id": "1", "team": "LAS", "position": "G", "multiplier_bonus": 0.5}]
+    }
+    out = _parse_pool(body)
+    assert out[0].multiplier_bonus == 0.5
+
+
+def test_parse_pool_empty_returns_empty() -> None:
+    assert _parse_pool({"players": []}) == []
+    assert _parse_pool({}) == []
