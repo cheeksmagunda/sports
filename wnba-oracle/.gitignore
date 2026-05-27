@@ -68,6 +68,7 @@ logs/
 .claude/agents/
 .claude/worktrees/
 .claude/snapshots/
+.claude/scheduled_tasks.lock
 
 # Credential rotation tracker (local timestamps only)
 .credential-ages.json
