@@ -62,6 +62,26 @@ SHARED_KEYS = [
     "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
 ]
 
+# Railway behavior (verified 2026-05-27): shared variables stored at
+# environment-scope are NOT auto-injected into services. Each service
+# must explicitly opt-in via ${{shared.KEY}} references for the value
+# to appear in the container's runtime env. The previous version of
+# this script assumed auto-inheritance and left services without the
+# operational vars — fixed by writing ${{shared.KEY}} refs back onto
+# every service that needs each key.
+
+# Which services need which shared keys at runtime.
+SHARED_KEY_CONSUMERS: dict[str, list[str]] = {
+    "ENV":                            ["api", "cron-job1", "cron-job2"],
+    "LOG_LEVEL":                      ["api", "cron-job1", "cron-job2"],
+    "PYTHONUNBUFFERED":               ["api", "cron-job1", "cron-job2"],
+    "TZ":                             ["api", "cron-job1", "cron-job2"],
+    # Optimizer-side only — read in job2.py + api/lineup.py round-trip.
+    "PAYOUT_REGIME":                  ["api", "cron-job2"],
+    # Used by job2 to stamp the freeze record + the api when echoing back.
+    "WNBA_ORACLE_MODEL_ARTIFACT_SHA": ["api", "cron-job2"],
+}
+
 # Reference paths.
 DATABASE_URL_REF = "${{postgres.DATABASE_URL}}"
 REDIS_URL_REF = "${{redis.REDIS_URL}}"
@@ -205,15 +225,20 @@ def main() -> None:
     else:
         print("    frontend.VITE_API_URL: already a ref")
 
-    print(">>> Step 4: drop per-service copies of newly-shared keys")
-    for svc_name, sid in SERVICES.items():
-        if svc_name == "frontend":
-            continue
-        cur = read_vars(sid)
-        for key in SHARED_KEYS:
-            if key in cur:
-                delete_var(key, sid)
-                print(f"    {svc_name}.{key}: removed (now inherited from env scope)")
+    print(">>> Step 4: wire ${{shared.KEY}} refs onto each consumer")
+    # Railway does NOT auto-inject env-scope vars into services; each
+    # service must opt-in. We write a ref pointing at the shared store
+    # so there's exactly one source of truth per key.
+    for key, consumers in SHARED_KEY_CONSUMERS.items():
+        ref = "${{shared." + key + "}}"
+        for svc_name in consumers:
+            sid = SERVICES[svc_name]
+            cur = read_vars(sid)
+            if cur.get(key) == ref:
+                print(f"    {svc_name}.{key}: already a shared ref")
+                continue
+            upsert_var(key, ref, sid)
+            print(f"    {svc_name}.{key} -> {ref}")
 
     print(">>> Step 5: drop unused secrets from each service")
     for svc_name, unused in UNUSED_PER_SERVICE.items():

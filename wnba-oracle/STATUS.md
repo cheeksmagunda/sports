@@ -1,5 +1,5 @@
 status: BUILD_COMPLETE
-last_verified: 2026-05-27T03:30:00Z
+last_verified: 2026-05-27T05:30:00Z
 phase: ready_for_2026_05_27_slate
 
 # Build status
@@ -13,71 +13,131 @@ end-to-end via `scripts/manual_fire.py --fixtures`. The operator starts
 the live shadow window via `oracle-rotate-check --window-days 7` after
 the live collector has accumulated >= 7 slate labels in `slate_labels`.
 
-## Live services (verified 2026-05-27)
+## Live services (verified 2026-05-27 05:30 UTC)
 
 - api:       https://api-production-7033.up.railway.app/health -> 200
-- api:       https://api-production-7033.up.railway.app/lineup -> 200
+- api:       https://api-production-7033.up.railway.app/lineup -> 200 (empty)
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
 - postgres:  internal, alembic head = 20260527_0002
 - redis:     internal, password-protected
-- cron-job1: `0 13 * * *` UTC, oracle-cron --job job1
-- cron-job2: `*/15 21-23,0-3 * * *` UTC, oracle-cron --job job2
-- cron services seeded with REALSPORTS_STORAGE_STATE_B64GZ + WNBA_DEVICE_UUID
-- env-tunable knobs set: CONTRARIAN_STRENGTH=0.2, CONTRARIAN_ENABLED=true,
-  OPTIMIZER_MAX_PER_TEAM=2, PAYOUT_REGIME=top_20
+- cron-job1: `0 13 * * *` UTC, oracle-cron --job job1 (next: 2026-05-27T13:00Z)
+- cron-job2: `*/15 21-23,0-3 * * *` UTC, oracle-cron --job job2 (next: 2026-05-27T21:00Z)
+- env-tunable knobs at shared scope: CONTRARIAN_STRENGTH=0.2,
+  CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2, PAYOUT_REGIME=top_20
 
-## Strategy ports from basketball-main (2026-05-27)
+## Today's slate (2026-05-27) — what to expect
 
-Six patterns ported across two rounds. See DECISIONS D27-D33.
-
-Round 1 (commit 65cef5b):
-- D27 **Anti-popularity contrarian tilt.** Late-season alpha source;
-  basketball-main measured -0.457 popularity-vs-boost correlation and
-  ~24-26% value uplift in the least-drafted half.
-- D28 **`max_per_team=2`** in the optimizer. Skips ~30% of combos early
-  so the constraint is also a speedup.
-- D29 **Injury-cascade minutes redistribution** module.
-
-Round 2 (commit 797ceac):
-- D30 **Game-script tier multipliers, WNBA-calibrated.** Vegas total
-  drives a real_score multiplier; blowout penalty fires only in
-  track_meet games with |spread| >= 8.
-- D31 **Env-tunable contrarian strength + max_per_team.** Operator
-  tunes via Railway env vars without a code deploy.
-- D32 **Inject Vegas total + spread into job1_enrichment.features_json.**
-  Single Odds API hit per slate; the signals flow to all downstream
-  consumers without re-fetching.
-- D33 **Wire injury_cascade into build_slate_features.** Operator
-  action item 5 complete.
-
-## Tomorrow's slate (2026-05-27)
-
-Cron-job1 fires at 13:00 UTC (9am ET) tomorrow:
+**Cron-job1 fires at 13:00 UTC (8 AM CDT / 9 AM EDT):**
 1. Headless re-auth via REALSPORTS_STORAGE_STATE_B64GZ + WNBA_DEVICE_UUID
 2. /home/wnba/next + /players/sport/wnba/search a..z pool fetch
 3. The Odds API basketball_wnba pull (vegas signals -> features_json)
 4. RotoWire WNBA lineups scrape
 5. UPSERT into job1_enrichment
 
-Cron-job2 fires every 15 min from 21:00 UTC through 04:00 UTC:
+**Cron-job2 fires every 15 min from 21:00 UTC through 04:00 UTC** (16:00 CDT
+to 23:00 CDT). First fire at 21:00 UTC is when the frontend's countdown
+expires and the lineup lands.
 1. Load slate from job1_enrichment + slate_labels (drafts if available)
 2. Compute per-player heuristic real_score
 3. Apply game_script_multiplier (Vegas-driven tier weights)
 4. Apply anti-popularity contrarian adjustment
 5. Optimize lineup (top-30 -> C(30,5), max_per_team=2)
-6. Freeze via Redis SET NX + Postgres UPSERT
+6. Freeze via Redis SET NX + Postgres UPSERT (with per_player block — D36)
 
-The frontend (https://frontend-production-a739.up.railway.app/) auto-
-fetches the frozen lineup from /lineup/2026-05-27. Pre-fire it shows
-OracleLoader + T-minus countdown; once the cron freezes the lineup the
-page swaps to the Header / SlateBand / 5-card grid / Footer (D34).
+**Frontend** (https://frontend-production-a739.up.railway.app/) polls
+/lineup/2026-05-27 every 5-60s with backoff:
+- Until 21:00 UTC: full-bleed OracleLoader with countdown to lineup-freeze
+- After 21:00 UTC (when job2 first writes): swaps to the 5-card grid
+
+## Where to look if something goes wrong
+
+| Symptom | First place to check |
+|---|---|
+| Frontend shows countdown past 21:00 UTC | Railway logs for cron-job2 service. Most likely `pool_too_small` (job1 didn't write rows) or `job2_failed` (DB / Redis hiccup) |
+| Frontend shows ErrorState block | `curl https://api-production-7033.up.railway.app/health` first; if 200, check api Railway logs |
+| Lineup loaded but card names show "Player 12345" | per_player block missing — should be impossible after D36; check job2's `_build_per_player` ran |
+| Job1 fails with StorageStateStale | JWT inside REALSPORTS_STORAGE_STATE_B64GZ rotated. Re-run `scripts/realsports_login.py` locally and re-seed the env var on cron-job1 + cron-job2 (NEEDS_HUMAN item 6) |
+| Odds API returns 429 / 401 | Free-tier quota or rotated key. Job1 degrades to empty odds; game_script_multiplier reverts to 1.0x. Lineup still ships, just without the Vegas tilt |
+
+Railway dashboard for logs:
+https://railway.com/project/ab83f44c-0bbc-4a58-931c-37d9fbfda73a
+
+## Audit findings + fixes (2026-05-27 03:30-05:30 UTC)
+
+The pre-fire audit surfaced four issues; all fixed before the operator
+went to bed.
+
+1. **Critical UX fix — per_player block** (D36): job2 was writing the
+   frozen lineup JSONB without a `per_player` array, so the frontend
+   would have rendered 5 placeholder cards ("Player 12345", "—", "—",
+   all-zero scores) for tomorrow's first slate. Now job2 materializes
+   the full projection contract (display_name / team / opponent /
+   position / card_boost / pred_real_score_p50 / pred_minutes_p10-p90)
+   into the JSONB. Four tests pin the contract in `tests/unit/
+   test_per_player_frozen.py`.
+
+2. **Frontend countdown target** (D36): countdown pointed at 13:00 UTC
+   (job1 ingest, not user-visible) instead of 21:00 UTC (job2 freeze,
+   when the lineup actually appears). Re-targeted; caption changed
+   from "Next fire in" to "Lineup freezes in".
+
+3. **Settings env aliases** (D36): pydantic-settings has
+   `case_sensitive=True`, so fields without explicit `alias=` (env,
+   log_level, payout_regime, optimizer_*, contrarian_*) never picked
+   up Railway's uppercase env vars — silently falling back to defaults.
+   The current Railway values happened to match defaults so today's
+   run was not affected, but any future env-var tuning would have
+   silently no-op'd. Added aliases on every uppercase env-var consumer.
+   Verified: `ENV=prod LOG_LEVEL=DEBUG CONTRARIAN_STRENGTH=0.25` now
+   propagates correctly through `Settings()`.
+
+4. **Railway env hardening** (D35): promoted operational config to
+   shared env-scope via `${{shared.KEY}}` references; converted
+   DATABASE_URL / REDIS_URL to `${{postgres.DATABASE_URL}}` /
+   `${{redis.REDIS_URL}}` service refs; converted frontend
+   VITE_API_URL to `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`. Dropped
+   GITHUB_TOKEN + RAILWAY_TOKEN from every runtime service; dropped
+   REAL_SPORTS_* / WNBA_DEVICE_* / REALSPORTS_STORAGE_STATE_B64GZ from
+   api + cron-job2 (only cron-job1 authenticates).
+
+## Known caveats — multi-day work, not blocking tomorrow
+
+These came out of the deep code audit (general-purpose subagent, 2026-05-27
+05:00 UTC) and are documented for follow-up; they will NOT block
+tomorrow's first frozen lineup.
+
+- **RotoWire lineups fetched but not persisted** (NEEDS_HUMAN item 7):
+  `job1.py:114` calls `fetch_lineups()` and counts the result for the
+  log line, but the rows aren't written to `job1_enrichment`. The
+  injury-cascade port (D33) only fires through `features/build.py`
+  which the live cron path never calls. Impact for tomorrow: players
+  RotoWire flags OUT still draft into the optimizer pool; minutes
+  redistribution does not apply. The lineup will still ship with
+  reasonable picks (boost + Vegas signals carry it), just without the
+  injury-aware adjustment.
+
+- **Job2 `_freeze` is not strictly idempotent** (NEEDS_HUMAN item 8):
+  The Redis SETNX guards the lock metadata but the Postgres UPSERT
+  fires every invocation. Subsequent cron-job2 fires within the same
+  slate window can replace the frozen lineup if new draft data arrives
+  via slate_labels and shifts the contrarian adjustment. Documented
+  intent vs. behavior mismatch — should either skip the UPSERT when
+  the lock is held, or accept the refresh-as-data-arrives semantics
+  and rename "freeze" everywhere.
+
+- **Watchdog not wired** (NEEDS_HUMAN item 9): `scheduler/watchdog.py`
+  is a stub returning `[]` and is not called from `cron.py`. Operator
+  must read Railway logs manually for failure detection until the
+  watchdog + alerting path lands.
 
 ## Quality gates
 
-- 77 unit tests pass.
-- ruff + mypy strict on `src/` clean.
+- 81 unit tests pass (was 77; added 4 in `test_per_player_frozen.py`).
+- ruff + mypy on `src/` clean (project config; `--strict` flagged
+  pre-existing dict-type-args lint, non-blocking).
 - 57 source files in `src/wnba_oracle/`.
 - 6 basketball-main patterns ported with zero new external dependencies.
+- Frontend bundle: 209KB / 66KB gz, builds in ~470ms.
 
 The eval/ bundle is seeded with placeholder JSON. It auto-populates once
 the live collector accumulates enough slates (Part 0.4 deliverable list).

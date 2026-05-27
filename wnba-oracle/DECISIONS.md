@@ -340,6 +340,59 @@ frontend carries VITE_API_URL + PORT.
 Reverse: re-run the script with the inverse transformations, or restore
 each service's per-var snapshot from the dashboard's variable history.
 
+### D36: Pre-fire audit fixes — per_player, countdown target, settings aliases [verified]
+Deep code audit (general-purpose subagent, 2026-05-27 05:00 UTC) surfaced
+four findings; three were fixed in this commit, the fourth (Railway env
+hardening) shipped as D35.
+
+(a) **per_player block in frozen JSONB** (was DEGRADED #1): job2's
+``_freeze`` previously wrote only ``player_ids / slot_multipliers /
+lineup_score_p10/p50/p90`` into the JSONB. The frontend's FrozenLineup
+contract expects a ``per_player`` array with display_name / team /
+opponent / position / card_boost / pred_real_score_p50 / pred_minutes_*
+per slot — without it, ``LineupStack.tsx`` falls back to 5 placeholder
+cards ("Player 12345", "—", "—", all-zero stats). Fix: thread the
+per-pid projection map produced by ``_build_specs`` into ``_freeze`` and
+materialize ``per_player`` via a new ``_build_per_player`` helper. Until
+a minutes model lands, the helper synthesizes a rank-aware minutes
+interval (P50 = 32 - 1.5 * slot_idx, ± 4 spread) consistent with WNBA
+starter minutes. Four unit tests in ``tests/unit/test_per_player_frozen.py``
+pin the contract. Reverse: revert ``_build_per_player`` and the
+``_freeze`` signature change.
+
+(b) **Frontend countdown target** (was DEGRADED #2):
+``frontend/src/lib/scheduling.ts`` pointed at 13:00 UTC (cron-job1
+ingest) which is when the data fetch happens, NOT when the user-visible
+lineup lands. Re-targeted to 21:00 UTC (first cron-job2 fire window);
+the user-facing caption changed from "Next fire in" to "Lineup freezes
+in". The polling hook continues to pick up the lineup the moment it
+appears, so the countdown rolling to zero approximately coincides with
+the page swapping to the 5-card grid. Reverse: edit
+``scheduling.ts::FREEZE_HOUR_UTC`` back to 13.
+
+(c) **Settings env-var aliases** (was DEGRADED #5):
+``common/settings.py`` had ``case_sensitive=True`` on the model_config
+but most fields had no explicit ``alias=``. Pydantic-settings with
+case-sensitive matching only injected ``env`` / ``log_level`` (lowercase),
+never ``ENV`` / ``LOG_LEVEL`` (the Railway convention). Verified
+empirically: ``ENV=prod LOG_LEVEL=DEBUG python -c "from
+wnba_oracle.common.settings import Settings; print(Settings().env,
+Settings().log_level)"`` printed ``dev INFO`` before the fix, ``prod
+DEBUG`` after. Coverage gap: today's deployed values happened to match
+the pydantic defaults (env="dev" vs intended "prod" — no production code
+branches on env; LOG_LEVEL="INFO" matches default), so today's run is
+not affected. Future env tuning would have silently no-op'd. Added
+explicit ``alias=`` to env, log_level, job1_dry_run, job2_dry_run,
+payout_regime, optimizer_*, contrarian_*. Reverse: drop the aliases (do
+not — this silently breaks env injection).
+
+(d) See **D35** for Railway env hardening.
+
+The remaining DEGRADED audit findings (RotoWire wiring, job2 freeze
+idempotency, watchdog stub) are multi-day work and are documented in
+NEEDS_HUMAN.md items 7, 8, 9. None blocks tomorrow's first frozen
+lineup.
+
 ### D19: Default device_uuid via env to avoid 401s on probe re-runs [reasoned]
 The Real Sports JWT is bound to the device UUID captured during the
 initial login. Passing a fresh UUID on probe re-run triggers 401 from

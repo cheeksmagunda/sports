@@ -81,3 +81,6 @@ eval/cache/
 # uv environment
 .python-version
 scraper/
+
+# Playwright MCP debug artifacts (per-session snapshots + console logs)
+.playwright-mcp/

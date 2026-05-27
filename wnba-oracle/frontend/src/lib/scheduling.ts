@@ -1,10 +1,14 @@
-// Time-to-next-fire helper. Cron-job1 fires at 13:00 UTC daily.
+// Time-to-next-freeze helper. cron-job2 first fires at 21:00 UTC (4 PM
+// CDT / 5 PM EDT) — that is when today's lineup actually lands in the
+// `frozen_lineups` table. cron-job1 (the data fetch) fires earlier at
+// 13:00 UTC but produces nothing user-visible; pointing the countdown
+// at 21:00 UTC matches what the operator is actually waiting for.
 
-const FIRE_HOUR_UTC = 13;
+const FREEZE_HOUR_UTC = 21;
 
-export function nextFireUTC(now: Date = new Date()): Date {
+export function nextFreezeUTC(now: Date = new Date()): Date {
   const next = new Date(now);
-  next.setUTCHours(FIRE_HOUR_UTC, 0, 0, 0);
+  next.setUTCHours(FREEZE_HOUR_UTC, 0, 0, 0);
   if (next.getTime() <= now.getTime()) {
     next.setUTCDate(next.getUTCDate() + 1);
   }
