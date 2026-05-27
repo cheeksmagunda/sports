@@ -99,3 +99,17 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     Also apply alembic upgrade head on prod Postgres so migration
     `20260527_0003_contest_leaderboards` lands before the first
     dayclose fires.
+
+11. **[NEW 2026-05-27]** Wire the trained model artifact into the
+    serving picker. D44 produced a working EB hierarchical baseline
+    artifact (`models/picker_cfe5868_1779880756.pkl`, SHA
+    `db18f6c9...`) trained on 121 slates / 2980 rows. D45 found
+    `job2.run()` only uses `WNBA_ORACLE_MODEL_ARTIFACT_SHA` as a
+    freeze tag, never loading the pickle. To make trained predictions
+    actually serve tonight (or any future night), `_build_specs` needs
+    to call `train.pipeline.load_artifact(...)` and use
+    `art.eb_baseline.predict(player_id, cohort)` in place of
+    `_heuristic_real_score`. The pickle also needs to be shipped with
+    the deploy (currently `models/*.pkl` is gitignored — either
+    un-ignore the production artifact or download from object
+    storage at startup).

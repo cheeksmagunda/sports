@@ -133,6 +133,9 @@ def fetch_contest_stats(
     url = f"{BASE}/games/playerratingcontest/{contest_id}/stats"
     log.info("contest_stats_fetch", contest_id=contest_id)
     refreshed = False
+    import time as _time
+
+    backoff_429 = 0
     while True:
         r = client.get(url, headers=h, timeout=20.0)
         if r.status_code == 401 and refresh_headers is not None and not refreshed:
@@ -144,6 +147,19 @@ def fetch_contest_stats(
             raise PlatformAuthRequired(f"401 on {url}")
         if r.status_code == 404:
             raise ContestUnavailable(f"404 on {url}")
+        if r.status_code == 403:
+            # Real Sports returns 403 on contests not visible to this account
+            # (older seasons sometimes), or as a transient rate-limit signal.
+            # Treat as unavailable so the backfill walker skips and continues.
+            raise ContestUnavailable(f"403 on {url}")
+        if r.status_code == 429:
+            backoff_429 += 1
+            if backoff_429 > 3:
+                raise ContestUnavailable(f"429 on {url} after {backoff_429} retries")
+            sleep_s = min(30, 2 ** backoff_429)
+            log.warning("contest_stats_429_backoff", contest_id=contest_id, sleep_s=sleep_s)
+            _time.sleep(sleep_s)
+            continue
         r.raise_for_status()
         break
     body = r.json() or {}
@@ -229,6 +245,9 @@ def fetch_contest_entries(
     params = {"contestType": "sport", "isGuillotine": "false"}
     log.info("contest_entries_fetch", contest_id=contest_id)
     refreshed = False
+    import time as _time
+
+    backoff_429 = 0
     while True:
         r = client.get(url, headers=h, params=params, timeout=20.0)
         if r.status_code == 401 and refresh_headers is not None and not refreshed:
@@ -240,6 +259,16 @@ def fetch_contest_entries(
             raise PlatformAuthRequired(f"401 on {url}")
         if r.status_code == 404:
             raise ContestUnavailable(f"404 on {url}")
+        if r.status_code == 403:
+            raise ContestUnavailable(f"403 on {url}")
+        if r.status_code == 429:
+            backoff_429 += 1
+            if backoff_429 > 3:
+                raise ContestUnavailable(f"429 on {url} after {backoff_429} retries")
+            sleep_s = min(30, 2 ** backoff_429)
+            log.warning("contest_entries_429_backoff", contest_id=contest_id, sleep_s=sleep_s)
+            _time.sleep(sleep_s)
+            continue
         r.raise_for_status()
         break
     body = r.json() or {}

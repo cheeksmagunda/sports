@@ -612,3 +612,50 @@ scale).
 
 Reverse: drop the calibration once a trained LightGBM artifact lands
 (see NEEDS_HUMAN #3) — `_heuristic_real_score` is the fallback only.
+
+### D44: 2025 WNBA backfill + first trained EB artifact [verified]
+2026-05-27. Real Sports retains prior-season contests (probed cid=700 =
+2025-06-29 wnba, all finalized). Walked cid 540..880 and found 105 WNBA
+contests from 2025-05-16 through 2025-09-17. Total corpus is now 121
+slates / 3485 player-slate rows, well above the 2000-row low_data_mode
+threshold.
+
+`oracle-train` runs end-to-end on the assembled
+`data/processed/training_corpus.parquet`. The artifact contains:
+- 0 LightGBM quantile heads (the multi-task targets — minutes_played,
+  pts_per_min, etc. — aren't sourced yet; pipeline gracefully skips
+  any head whose target column is absent).
+- 1 trained EB hierarchical baseline on `real_score`. Cohort F mean =
+  2.55, 132 per-player alpha offsets ranging from -2.03 (low-volume
+  bench) to +2.10 (high-volume star). This is genuinely more
+  informative than the per-boost heuristic in [[d43]], which gives
+  the same prediction for every player at a given boost level.
+
+Artifact SHA: `db18f6c9f495555e9df8f995e17679b93a7d26b1de77b39546d51ce2f5538f62`
+(under `models/picker_*.pkl`, gitignored). Position is unknown for all
+players (slate_labels doesn't capture it), so everyone routes to cohort F.
+
+Also hardened `fetch_contest_stats` / `fetch_contest_entries` to treat
+403 as `ContestUnavailable` (Real Sports returns 403 on some legacy
+contests, transiently rate-limited responses) and to back off + retry
+on 429 with exponential delays. Without this, the 2025 backfill
+crashed on cid 643.
+
+### D45: Trained artifact NOT wired into serving path — gap to close [verified]
+2026-05-27. `job2.run()` reads `settings.model_artifact_sha` but only
+uses it as a freeze tag (`model_sha`). It never calls
+`pickle.load(models/picker_*.pkl)` — `_build_specs` calls
+`_heuristic_real_score` unconditionally. The trained EB baseline from
+D44 sits unused.
+
+For tonight's fire (cron-job2 at 21:00 UTC 2026-05-27): the heuristic
++ corrected slot multipliers [[d42]] + calibrated heuristic [[d43]] is
+what runs. Trained model deployment is deferred to a follow-up.
+
+Reverse / next step: wire `_load_model_artifact()` into `_build_specs`
+that, when `settings.model_artifact_sha` is set, loads the matching
+pickle via `train.pipeline.load_artifact` and uses
+`art.eb_baseline.predict(player_id, cohort)` in place of
+`_heuristic_real_score`. Add a fallback path when the artifact file
+is missing on disk (which would happen if SHA is set but the pickle
+wasn't shipped with the deploy).
