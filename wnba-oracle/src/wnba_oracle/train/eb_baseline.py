@@ -77,10 +77,9 @@ class EBHierarchicalBaseline:
         # Single linear pace effect (least-squares on residuals).
         if pace_col in df.columns:
             mean_pace = df.get_column(pace_col).mean()
-            if isinstance(mean_pace, (int, float)):
-                league_pace = float(mean_pace)
-            else:
-                league_pace = 0.0
+            league_pace = (
+                float(mean_pace) if isinstance(mean_pace, (int, float)) else 0.0
+            )
         else:
             league_pace = 0.0
         self.league_pace = league_pace
