@@ -54,6 +54,8 @@ models/artifacts/
 # below + update WNBA_ORACLE_MODEL_ARTIFACT_SHA on Railway.
 !models/picker_cfe5868_1779880756.pkl
 !models/picker_cfe5868_1779880756.sha256
+!models/picker_2a2fe836_1779943299.pkl
+!models/picker_2a2fe836_1779943299.sha256
 *.parquet
 !tests/fixtures/**/*.parquet
 

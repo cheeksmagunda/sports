@@ -74,6 +74,30 @@ def _heuristic_real_score(card_boost: float) -> float:
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+_CORPUS_PATH = REPO_ROOT / "data" / "processed" / "training_corpus.parquet"
+
+
+def _load_player_history() -> dict[int, float]:
+    """Per-player mean real_score from the training corpus.
+
+    Used as a fallback prediction tier between the EB model and the generic
+    heuristic. Players not yet in the EB model (trained before their 2026 data
+    was backfilled) but with any corpus history get their actual observed mean
+    rather than the boost-level heuristic. This matters most for boost-3
+    players: the heuristic gives them 1.81, but a player like Milic whose only
+    observed slate scored 0.51 should not be treated as average-for-boost-3.
+
+    Returns an empty dict on any read/parse error so the caller degrades
+    gracefully to the heuristic.
+    """
+    if not _CORPUS_PATH.exists():
+        return {}
+    try:
+        import pandas as pd
+        df = pd.read_parquet(_CORPUS_PATH, columns=["player_id", "real_score"])
+        return {int(pid): float(score) for pid, score in df.groupby("player_id")["real_score"].mean().items()}
+    except Exception:
+        return {}
 
 
 def _load_model_artifact(sha: str) -> PickerArtifact | None:
@@ -230,6 +254,7 @@ def _build_specs(
     *,
     slate_date: str,
     contrarian_cfg: ContrarianConfig | None = None,
+    player_history: dict[int, float] | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict]]:
     """Build the (sampling, field) specs the optimizer reads.
 
@@ -260,6 +285,7 @@ def _build_specs(
     settings = get_settings()
     art = _load_model_artifact(settings.model_artifact_sha)
     n_eb_predicted = 0
+    n_history_fallback = 0
     n_heuristic_fallback = 0
 
     # Slate-size signal for the popularity estimator
@@ -318,6 +344,12 @@ def _build_specs(
         if eb_pred is not None:
             base = eb_pred
             n_eb_predicted += 1
+        elif player_history is not None and pid in player_history:
+            # Use observed per-player mean from the training corpus. More
+            # accurate than the generic heuristic for players whose data
+            # postdates the last training run (common early-season pattern).
+            base = max(0.5, player_history[pid])
+            n_history_fallback += 1
         else:
             base = _heuristic_real_score(boost)
             n_heuristic_fallback += 1
@@ -328,6 +360,7 @@ def _build_specs(
         "predictor_mix",
         artifact_sha=settings.model_artifact_sha[:12] if settings.model_artifact_sha else "",
         n_eb_predicted=n_eb_predicted,
+        n_history_fallback=n_history_fallback,
         n_heuristic_fallback=n_heuristic_fallback,
     )
 
@@ -537,7 +570,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         log.warning("job2_pool_too_small", n=len(enrichment), n_dropped=n_dropped)
         return Job2Result(sd, model_sha, None, False, "pool_too_small")
 
-    samps, fields, projection_by_pid = _build_specs(enrichment, slate_date=sd)
+    player_history = _load_player_history()
+    log.info("player_history_loaded", n_players=len(player_history))
+    samps, fields, projection_by_pid = _build_specs(enrichment, slate_date=sd, player_history=player_history)
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
 
