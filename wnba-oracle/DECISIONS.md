@@ -659,3 +659,44 @@ pickle via `train.pipeline.load_artifact` and uses
 `_heuristic_real_score`. Add a fallback path when the artifact file
 is missing on disk (which would happen if SHA is set but the pickle
 wasn't shipped with the deploy).
+
+### D46: Per-player history fallback between EB model and heuristic [verified]
+2026-05-28. Root cause of 2026-05-27 lineup quality issue:
+
+**Findings** [verified]:
+- The EB model artifact (picker_cfe5868) was trained on the walk-forward
+  training split, which excluded all players whose only data fell in the
+  validation split (most-recent ~17 slates). Beers (4322915), Milic (129),
+  Hof (515) had 1-3 slates each in May 2026, all in the validation split,
+  so they were absent from `eb_baseline.player_alpha`.
+- Players not in the EB model fell through to the heuristic: boost-3 ->
+  1.81 predicted real_score. At slot EV = 1.81 * (slot_mult + 3.0), boost-3
+  unknowns dominated every other player in the optimizer, crowding out
+  EB-known mid-boost players (Diggins 3.23, C. Williams 3.19).
+- Actual historical means: Beers=1.49, Milic=0.51, Hof=0.26 -- all far
+  below the heuristic's 1.81. The optimizer should have avoided Milic and
+  Hof entirely.
+- N. Hillmon (617) was correctly elevated by the EB model (alpha=+0.168,
+  pred=2.714) and was a good pick (actual 2.5, leaderboard top-10).
+
+**Fix** [verified]:
+Added `_load_player_history()` in job2.py that reads the full training
+corpus (not the train split) and returns per-player mean real_score. In
+`_build_specs`, tier order is now: EB model > corpus history mean > heuristic.
+New `predictor_mix` log key `n_history_fallback` counts usage.
+
+Also retrained the picker artifact (picker_2a2fe836) on the current corpus
+(3485 rows through 2026-05-25) and shipped both the pkl and sha256.
+Updated `WNBA_ORACLE_MODEL_ARTIFACT_SHA` on Railway for all services.
+
+**Why history mean and not re-fit EB**: Walk-forward split is intentional
+for LightGBM generalization measurement. The EB baseline conceptually should
+train on all data (shrinkage self-regulates for low-n players), but changing
+the split would require a separate EB-specific training pass. The corpus mean
+is an approximation of the shrunken EB alpha for validation-split players;
+since most of them have only 1-3 observations the shrinkage would pull them
+strongly toward the cohort mean anyway, so the corpus mean is a reasonable
+proxy. [reasoned]
+
+Reverse: delete `_load_player_history()` and the history-lookup branch in
+`_build_specs`. The heuristic fallback remains as before.
