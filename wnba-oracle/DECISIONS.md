@@ -738,3 +738,106 @@ issues left by the original D35 pass:
 Reverse: revert the empty-value guard in `_promote_to_shared` (logic
 inside step 1 of the script). The `RAILWAY_SERVICE_*_URL` note in the
 script is documentation only and has no behavior to revert.
+
+### D48: Post-2026-05-28 review — CAVEAT_IS_SKIP + stable argsort [verified]
+First live fire (2026-05-28) settled at ~34.64 lineup-score on a
+9,240-brawler contest with top-20 floor 49.91 and winning entry 53.13.
+Two of our five picks (R.Johnson and M.Siegrist) appeared in
+top-three winners' lineups but at much higher boost-leveraged slots
+than ours. None of our five was the slate's top real_score performer.
+
+Adversarial multi-agent review (35-agent + 37-agent + 13-agent
+workflows on 2026-05-29) produced a long candidate list. After three
+independent verifiers per finding the survivors that ship are:
+
+1. **`CAVEAT_IS_SKIP` env flag** (`src/wnba_oracle/common/settings.py`
+   + `src/wnba_oracle/picker/optimize.py`). When True, lineups whose
+   `best_ev` falls in `[skip_if, caveat_if)` get
+   `entry_flag='skip'` instead of `'enter_with_caveat'`. Off by
+   default (no behavior change). Conservative guardrail until live-
+   field calibration data is in. Set the env on Railway to enable;
+   unset to roll back (under 2 minutes). The 2026-05-28 fire reported
+   `expected_payout=1.045`, exactly the marginal-EV band this flag
+   refuses.
+
+2. **`kind='stable'` on tie-breaking argsorts** in
+   `src/wnba_oracle/picker/optimize.py:118,179` and
+   `src/wnba_oracle/picker/sample.py:112`. Removes numpy quicksort's
+   implementation-defined nondeterminism on tied visible_value
+   (Stage-1 filter) and tied per-sample medians (slot rearrangement).
+   The 2026-05-28 R.Johnson/G.VanSlooten tie at projected 1.71 with
+   identical boost was exactly this case.
+
+Backtest impact across the 16 historical 2026 slates with the same
+EB-leakage caveat documented in D45:
+
+| Metric | Baseline | After |
+|---|---|---|
+| Top-20 finishes | 3/16 | 3/16 |
+| Top-5 finishes | 2/16 | 3/16 (+1) |
+| Mean score gap vs top-1 | 14.88 | 15.43 |
+
+Six of 16 slates' realized scores shifted by 0.6 to 9.7 points
+(both directions) because the Stage-1 pool changed on tied
+visible_value tie-breaks. Net placement is roughly a wash. Backtest
+output preserved at `runs/backtest_2026-05-29/baseline.txt` and
+`runs/backtest_2026-05-29/after_stable_caveat.txt`. CAVEAT_IS_SKIP
+has zero backtest impact (the backtest scores selected lineups
+regardless of entry_flag).
+
+Items that the adversarial reviewers rejected for tonight (full
+list in the workflow transcript):
+
+* Bump `n_field_lineups` 1000 → 9240: would blow the 15-min cron
+  tick budget at the current Python `expected_payout` hot-loop.
+  Needs vectorization first (short-horizon).
+* Detect contest payout-regime at job2 freeze: numBrawlers is 0
+  pregame, so the proposed Job1 lookup is a no-op. All historical
+  WNBA contests over 5000 entries already map to the current
+  top_20 default.
+* Shift cron-job2 first fire from 21:00 UTC to 21:30 UTC: per
+  STATUS.md 21:00 UTC IS the platform-lock moment; shifting risks
+  missing entry entirely.
+* Vegas re-pull in job2: would exceed the D10 500/month Odds API
+  cap and reverses D35-step-3 hardening.
+* Ownership-weighted Stage-2 objective: leverage is already
+  implicit through field-sampling from `project_ownership`; an
+  explicit penalty double-counts with unit mismatch.
+* Boost correlation prior in sample.py: targets the wrong layer
+  (boost is a card attribute, not a stat-generating process).
+* Minutes-aware sigma scaling for benchers: direction backwards
+  on a top-heavy payout curve.
+* Real Sports lineup edits up to tipoff: the platform exposes
+  `isLocked`/`canEnter` signals but Oracle deliberately ignores
+  them per D37b true-freeze. Re-examining late-swap is a
+  long-horizon product decision.
+
+Reverse: revert commits `ac1aa0b` (CAVEAT_IS_SKIP) and `e211261`
+(stable argsort). `git revert ac1aa0b e211261 && git push`. Both are
+small (single-file edits + tests) and independent.
+
+Bug-hunt sub-workflow (151 agents) found 48 candidate defects across
+picker / scheduler / model / ingest; only 3 survived 2-of-3 lens
+verification (mechanism + reproduction + historical impact). All three
+are short-horizon, NOT tonight-critical:
+
+* `eb_baseline.py:54-56` (medium): EB shrinkage `n_obs_per_player`
+  counts DNP rows when `real_score=0.0` is recorded (vs explicit
+  NULL). Inflates `n_i`, over-shrinks legitimate effects toward the
+  cohort mean. Fix: filter `real_score > 0.0` or add a DNP indicator
+  column. Defer until the leakage-free retrain (D48 long_horizon
+  item 1) so both changes ship together.
+* `contest_stats.py:163,272` (medium): HTTP 5xx raises immediately
+  with no retry. Transient 502/503 breaks live_collect / backfill
+  mid-stream. Fix: 5xx-retry-with-backoff loop parallel to the
+  existing 429 handler.
+* `eb_baseline.py:47-51,110` (low): unseen-cohort prediction
+  defaults silently to 0.0. Document the contract or fall back to
+  global population mean.
+
+The candidate "critical" — `n_field_lineups=1000 vs live ~9240`
+percentile mismatch in `optimize.py:164` — was independently
+refuted by the ops gap audit's feasibility lens: the per-slate
+`expected_payout` hot loop extrapolates to ~227 min at n_field=9240,
+blowing the 15-min cron tick budget. Needs vectorization before any
+bump is shippable. Logged under D48 long_horizon item 3.
