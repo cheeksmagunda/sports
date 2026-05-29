@@ -88,6 +88,14 @@ REDIS_URL_REF = "${{redis.REDIS_URL}}"
 VITE_API_URL_REF = "https://${{api.RAILWAY_PUBLIC_DOMAIN}}"
 
 # Unused per-service vars to delete (after the shared step).
+# Note: RAILWAY_SERVICE_API_URL / RAILWAY_SERVICE_FRONTEND_URL are
+# Railway-managed system vars (auto-injected on every service that shares
+# a project, like RAILWAY_PROJECT_NAME). variableDelete returns true but
+# the value reappears on next read. They cannot be removed via the API.
+# To untangle them from the dashboard connector graph, use the Service
+# Connect UI in the Railway dashboard. They are harmless at runtime (no
+# code reads them).
+
 UNUSED_PER_SERVICE: dict[str, list[str]] = {
     "api": [
         "REAL_SPORTS_USERNAME", "REAL_SPORTS_PASSWORD",
@@ -190,13 +198,16 @@ def main() -> None:
         if key in shared_existing:
             print(f"    {key}: already shared, skipping")
             continue
-        # Use the api service's current value as the source of truth, falling
-        # back to cron-job2 if absent (e.g. CONTRARIAN_* style — but those
-        # aren't in SHARED_KEYS anyway).
-        value = api_vars.get(key)
-        if value is None:
-            value = read_vars(SERVICES["cron-job1"]).get(key)
-        if value is None:
+        # Source of truth: first service that has a NON-EMPTY value. An
+        # empty string on api (which can happen if the SHA was rotated and
+        # the api hadn't been redeployed yet) used to silently propagate to
+        # shared and zero out every consumer. Skip empties on each lookup.
+        value = api_vars.get(key) or ""
+        if not value:
+            value = read_vars(SERVICES["cron-job1"]).get(key) or ""
+        if not value:
+            value = read_vars(SERVICES["cron-job2"]).get(key) or ""
+        if not value:
             print(f"    {key}: not set on any service, skipping (set manually if needed)")
             continue
         upsert_var(key, value, service_id=None)

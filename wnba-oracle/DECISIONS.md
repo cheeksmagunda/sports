@@ -700,3 +700,41 @@ proxy. [reasoned]
 
 Reverse: delete `_load_player_history()` and the history-lookup branch in
 `_build_specs`. The heuristic fallback remains as before.
+
+### D47: Railway env hardening followups [verified]
+Re-running `scripts/railway_harden_env.py` on 2026-05-29 surfaced two
+issues left by the original D35 pass:
+
+1. **Empty `shared.WNBA_ORACLE_MODEL_ARTIFACT_SHA`**: step 1's promotion
+   logic read the source-of-truth value from api first, falling through to
+   cron-job1 only on `None`. The api had an empty string for the SHA at
+   promotion time, so the empty string got upserted to shared, and step 4
+   then pointed every consumer at the empty shared ref — silently zeroing
+   the SHA that job2 stamps into the freeze record and the api echoes back.
+   Fixed by changing the source-of-truth fallback to skip empty values, not
+   just `None`, walking api -> cron-job1 -> cron-job2 until a non-empty
+   value is found. Backfilled `shared.WNBA_ORACLE_MODEL_ARTIFACT_SHA` to
+   the canonical value from cron-job1
+   (000f54fe08b47a20504d52de171108d0a93dd85ce6dacb3c372418309c0d4b01) and
+   flipped cron-job1 from its literal copy to the shared ref so all three
+   consumers now share one source of truth.
+
+2. **`RAILWAY_SERVICE_API_URL` / `RAILWAY_SERVICE_FRONTEND_URL` cannot be
+   removed via the API**: these appeared on every service as a literal
+   string equal to the api / frontend public domain. They are not consumed
+   by any code (verified by repo-wide grep). `variableDelete` returns
+   `true` for them but the value reappears on the next read, and
+   `variableUpsert` to a sentinel value silently no-ops — they are
+   Railway-managed system vars in the `RAILWAY_*` namespace, like
+   `RAILWAY_PROJECT_NAME` and `RAILWAY_SERVICE_NAME`. The dashboard's
+   connector graph treats them as cross-service references, which is the
+   visual "spaghetti" between the cron services and api/frontend.
+   Untangling requires the dashboard's Service Connect UI; there is no
+   GraphQL mutation for it (`serviceConnect`/`serviceDisconnect` operate
+   on the service's source repo/image, not on inter-service var
+   injection). Logged in the script as a comment to prevent future
+   maintainers from re-adding these to `UNUSED_PER_SERVICE`.
+
+Reverse: revert the empty-value guard in `_promote_to_shared` (logic
+inside step 1 of the script). The `RAILWAY_SERVICE_*_URL` note in the
+script is documentation only and has no behavior to revert.
