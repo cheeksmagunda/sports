@@ -109,7 +109,8 @@ def lineup_score_samples(
     # highest slot. This is the rearrangement-inequality assignment.
     boosts_lineup = boosts[lineup_indices]
     for s in range(n_samples):
-        order = np.argsort(rs_per_player[s])[::-1]  # high to low
+        # kind='stable' for deterministic tie-breaking by input order
+        order = np.argsort(rs_per_player[s], kind="stable")[::-1]  # high to low
         rs_sorted = rs_per_player[s, order]
         boosts_sorted = boosts_lineup[order]
         # slot_multipliers already sorted high to low

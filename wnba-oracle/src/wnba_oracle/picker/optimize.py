@@ -115,7 +115,11 @@ def optimize_lineup(
         [s.pred_real_score * (MAX_SLOT_MULT + s.card_boost) for s in field_specs],
         dtype=float,
     )
-    order = np.argsort(visible_value)[::-1]
+    # kind='stable' so ties resolve in input order (the build-specs caller
+    # already orders by EB-tier confidence + player_id), removing
+    # quicksort's implementation-defined nondeterminism on tied
+    # visible_value scores.
+    order = np.argsort(visible_value, kind="stable")[::-1]
     keep = order[: min(cfg.top_n_filter, n_all)]
     filtered_sampling = [sampling_specs[i] for i in keep]
     filtered_field = [field_specs[i] for i in keep]
@@ -176,7 +180,11 @@ def optimize_lineup(
 
     # Lineup assembly: assign slots by rearrangement inequality on median
     rs_median = np.median(real_score_samples[:, list(best_indices)], axis=0)
-    order = np.argsort(rs_median)[::-1]
+    # kind='stable' so tied medians (e.g. two boost-3 rookies with the
+    # same EB shrinkage pull, as on 2026-05-28's R.Johnson/G.VanSlooten
+    # tie at 1.71) resolve deterministically by input order, not by
+    # quicksort implementation detail.
+    order = np.argsort(rs_median, kind="stable")[::-1]
     ordered_pids = tuple(keep_ids[best_indices[i]] for i in order)
 
     p10, p50, p90 = np.quantile(best_samples, [0.1, 0.5, 0.9])
