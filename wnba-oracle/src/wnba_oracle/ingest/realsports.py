@@ -492,7 +492,9 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
                 platform_id=str(p.get("id", "")),
                 first_name=p.get("firstName") or "",
                 last_name=p.get("lastName") or "",
-                display_name=p.get("displayName") or "",
+                display_name=p.get("displayName") or (
+                    f"{p.get('firstName') or ''} {p.get('lastName') or ''}".strip()
+                ),
                 position=p.get("position") or "",
                 team=team,
                 multiplier_bonus=boost_f,

@@ -69,3 +69,28 @@ def test_parse_pool_accepts_alternate_key() -> None:
 def test_parse_pool_empty_returns_empty() -> None:
     assert _parse_pool({"players": []}) == []
     assert _parse_pool({}) == []
+
+
+def test_parse_pool_empty_display_name_falls_back_to_first_last() -> None:
+    """The Real Sports pool endpoint occasionally returns ``displayName=""``
+    on rookies while still populating ``firstName``/``lastName`` (observed
+    2026-05-29 — first manifested as the frontend rendering ``Player 4322873``
+    placeholders). Reconstruct from the parts so downstream (job1_enrichment
+    -> job2._build_per_player -> frozen lineup JSONB -> frontend card)
+    carries a real name.
+    """
+    body = {
+        "players": [
+            {
+                "id": "4322873",
+                "firstName": "Frieda",
+                "lastName": "Buhner",
+                "displayName": "",
+                "position": "F-C",
+                "team": "POR",
+                "multiplierBonus": 3.0,
+            }
+        ]
+    }
+    out = _parse_pool(body)
+    assert out[0].display_name == "Frieda Buhner"

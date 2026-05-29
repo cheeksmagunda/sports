@@ -841,3 +841,48 @@ refuted by the ops gap audit's feasibility lens: the per-slate
 `expected_payout` hot loop extrapolates to ~227 min at n_field=9240,
 blowing the 15-min cron tick budget. Needs vectorization before any
 bump is shippable. Logged under D48 long_horizon item 3.
+
+### D49: Real Sports pool `displayName` empty fallback to firstName + lastName [verified]
+On 2026-05-29 the 22:54 UTC freeze for slate 2026-05-29 shipped with
+all five `per_player.display_name` values rendering as
+`Player <platform_id>` placeholders on the frontend. Root cause:
+the Real Sports pool endpoint returned `displayName=""` for at least
+the five picked players (verified by re-running `fetch_pool_for_date`
+against the live API for 2026-05-29 — `displayName` was empty but
+`firstName`/`lastName` were populated, e.g.
+`firstName="Frieda" lastName="Buhner"` for `id=4322873`). The empty
+string flowed through `_parse_pool` -> `PlatformPlayer.display_name=""`
+-> `job1_enrichment.name=""` -> `job2._build_per_player`'s
+`r.get("name", "") or f"Player {pid}"` fallback -> the frozen JSONB.
+The frontend faithfully rendered what was stored.
+
+Fix: in `ingest/realsports.py:_parse_pool`, fall back to
+`f"{firstName} {lastName}".strip()` when `displayName` is empty.
+Pinned in `tests/unit/test_realsports_parse.py::
+test_parse_pool_empty_display_name_falls_back_to_first_last`. Live
+verification: the same `fetch_pool_for_date` call that previously
+yielded `display_name=""` now yields the correct
+`Naz Hillmon / Leonie Fiebich / Alex Wilson / Noemie Brochant /
+Frieda Buhner` strings end-to-end.
+
+Out of scope for this commit (logged for follow-up): `contest_stats.
+_parse_leaderboard_v2` at line 194 also reads `displayName` only
+and would silently emit empty `slate_labels.display_name` rows if
+the contest endpoint regresses the same way. Contest stats is hit
+only by the day-close backfill, not the live cron path, so the live
+slate ship today already trusts the patched pool parser.
+
+Today's 22:54 UTC frozen lineup row in Postgres still carries the
+placeholder names: the freeze is a single row keyed by
+`(slate_date, model_sha)` and the cron schedule (`*/15` ticks
+through 04:00 UTC) will overwrite it on the next fire after deploy
+because `_freeze` is non-idempotent on the UPSERT (NEEDS_HUMAN item
+8). No manual backfill needed if the deploy lands before 04:00 UTC;
+otherwise the row stays placeholder until tomorrow's slate replaces
+it. The `entry_recommendation` was already `skip` so no
+actionability is lost either way.
+
+Reverse: revert this commit. The pre-D49 behavior re-emerges only
+if the Real Sports API continues to return empty `displayName`,
+which appears to be a recent change (prior 16 slates in the corpus
+all carry `"N. Hillmon"`-style first-initial display names).
