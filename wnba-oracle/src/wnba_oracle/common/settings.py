@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     # in top-1 regime, down to 0.1 for cash games.
     contrarian_strength: float = Field(default=0.2, alias="CONTRARIAN_STRENGTH")
     contrarian_enabled: bool = Field(default=True, alias="CONTRARIAN_ENABLED")
+    # caveat_is_skip: when True, demote 'enter_with_caveat' lineups to
+    # 'skip'. Conservative interim guardrail for marginal-EV contests
+    # (expected_payout in [skip_if, caveat_if)) until the per-slate live
+    # calibration logger lands and the caveat threshold can be retuned
+    # against placement data rather than the leakage-contaminated 16-slate
+    # backtest. Default False preserves current behavior.
+    caveat_is_skip: bool = Field(default=False, alias="CAVEAT_IS_SKIP")
 
 
 @lru_cache(maxsize=1)

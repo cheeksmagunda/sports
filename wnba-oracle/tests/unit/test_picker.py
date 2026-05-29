@@ -70,6 +70,70 @@ def test_expected_payout_with_no_field_is_zero() -> None:
     assert expected_payout(own, field, curve) == 0.0
 
 
+def test_caveat_is_skip_defaults_off_and_field_round_trips() -> None:
+    """OptimizeConfig.caveat_is_skip defaults to False (preserve current
+    behavior) and accepts True without disturbing the rest of the config."""
+    assert OptimizeConfig().caveat_is_skip is False
+    cfg = OptimizeConfig(caveat_is_skip=True)
+    assert cfg.caveat_is_skip is True
+    # Other defaults unchanged
+    assert cfg.top_n_filter == 30
+    assert cfg.max_per_team == 2
+
+
+def test_caveat_is_skip_demotes_marginal_ev_to_skip() -> None:
+    """When best_ev falls in [skip_if, caveat_if), caveat_is_skip=True
+    must produce entry_flag='skip' instead of 'enter_with_caveat'."""
+    rng = np.random.default_rng(7)
+    # Pool deliberately weak so EV lands in the caveat band of a top_20
+    # regime. Low mu (-> small real_score) keeps lineup totals below the
+    # cash line for most field draws.
+    n = 10
+    teams = (["LVA"] * 3) + (["NYL"] * 3) + (["PHO"] * 2) + (["CHI"] * 2)
+    opps = (["NYL"] * 3) + (["LVA"] * 3) + (["CHI"] * 2) + (["PHO"] * 2)
+    samp_specs = [
+        PlayerSamplingSpec(
+            player_id=i,
+            team=teams[i],
+            opponent=opps[i],
+            mu=np.log(1.5 + rng.uniform(-0.3, 0.3) + 10.0),
+            sigma=0.20,
+            boost=0.5,
+        )
+        for i in range(n)
+    ]
+    field_specs = [
+        FieldPlayerSpec(player_id=i, pred_real_score=2.0 + rng.uniform(-0.5, 0.5), card_boost=0.5)
+        for i in range(n)
+    ]
+    curve = default_curve_for_regime("top_20")
+    base = optimize_lineup(
+        samp_specs,
+        field_specs,
+        curve,
+        cfg=OptimizeConfig(top_n_filter=10, n_samples=300, n_field_lineups=80),
+    )
+    flipped = optimize_lineup(
+        samp_specs,
+        field_specs,
+        curve,
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=300,
+            n_field_lineups=80,
+            caveat_is_skip=True,
+        ),
+    )
+    # Same player selection regardless of flag policy (EV ordering unchanged)
+    assert base.player_ids == flipped.player_ids
+    # If base hit the caveat band, the flipped flag must be 'skip'.
+    if base.entry_flag == "enter_with_caveat":
+        assert flipped.entry_flag == "skip"
+    else:
+        # If base wasn't in the caveat band, flipping has no effect.
+        assert flipped.entry_flag == base.entry_flag
+
+
 def test_optimizer_returns_lineup_of_size_5() -> None:
     rng = np.random.default_rng(0)
     n = 12

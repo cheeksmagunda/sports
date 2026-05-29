@@ -92,6 +92,11 @@ class OptimizeConfig:
     # players courts the negative same-team minutes-cannibalization
     # correlation). Set to 5 to disable.
     max_per_team: int = 2
+    # caveat_is_skip: when True, demote 'enter_with_caveat' to 'skip'.
+    # Off by default to preserve current behavior; flip via the
+    # CAVEAT_IS_SKIP env var on services that should refuse marginal-EV
+    # contests until live-field calibration data is in.
+    caveat_is_skip: bool = False
 
 
 def optimize_lineup(
@@ -192,7 +197,7 @@ def optimize_lineup(
     if best_ev < cfg.skip_if_expected_payout_below:
         flag = "skip"
     elif best_ev < cfg.caveat_if_expected_payout_below:
-        flag = "enter_with_caveat"
+        flag = "skip" if cfg.caveat_is_skip else "enter_with_caveat"
     else:
         flag = "enter"
 

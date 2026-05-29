@@ -583,6 +583,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         top_n_filter=settings.optimizer_top_n_filter,
         n_samples=settings.optimizer_n_samples,
         max_per_team=settings.optimizer_max_per_team,
+        caveat_is_skip=settings.caveat_is_skip,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     log.info(
