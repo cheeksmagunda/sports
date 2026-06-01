@@ -737,6 +737,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     cfg = OptimizeConfig(
         top_n_filter=settings.optimizer_top_n_filter,
         n_samples=settings.optimizer_n_samples,
+        n_field_lineups=settings.optimizer_n_field_lineups,
         max_per_team=settings.optimizer_max_per_team,
         dynamic_team_cap=settings.optimizer_dynamic_team_cap,
         caveat_is_skip=settings.caveat_is_skip,

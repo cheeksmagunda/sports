@@ -43,8 +43,14 @@ class Settings(BaseSettings):
     payout_regime: Literal["top_50", "top_20", "top_1"] = Field(
         default="top_20", alias="PAYOUT_REGIME"
     )
-    optimizer_n_samples: int = Field(default=5000, alias="OPTIMIZER_N_SAMPLES")
-    optimizer_top_n_filter: int = Field(default=30, alias="OPTIMIZER_TOP_N_FILTER")
+    # D56: the prod defaults (5000 samples x 1000 field x C(30,5)=142506 combos)
+    # could not finish inside the 15-min cron window -- job2 hung at stage2 and
+    # was killed every tick, so NOTHING froze. The backtests that validated the
+    # picker used ~300 samples / 50 field / C(20,5), so these reduced defaults
+    # are still well above the validated range while completing in ~1-2 min.
+    optimizer_n_samples: int = Field(default=1000, alias="OPTIMIZER_N_SAMPLES")
+    optimizer_top_n_filter: int = Field(default=20, alias="OPTIMIZER_TOP_N_FILTER")
+    optimizer_n_field_lineups: int = Field(default=120, alias="OPTIMIZER_N_FIELD_LINEUPS")
     # max_per_team: caps how many players from one team can appear in a
     # lineup ON 3+ GAME SLATES. 2 is the basketball-main default; 5 disables
     # the cap. Small slates are governed by dynamic_team_cap below.
