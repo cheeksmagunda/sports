@@ -46,8 +46,18 @@ class Settings(BaseSettings):
     optimizer_n_samples: int = Field(default=5000, alias="OPTIMIZER_N_SAMPLES")
     optimizer_top_n_filter: int = Field(default=30, alias="OPTIMIZER_TOP_N_FILTER")
     # max_per_team: caps how many players from one team can appear in a
-    # lineup. 2 is the basketball-main default; 5 disables the cap.
+    # lineup ON 3+ GAME SLATES. 2 is the basketball-main default; 5 disables
+    # the cap. Small slates are governed by dynamic_team_cap below.
     optimizer_max_per_team: int = Field(default=2, alias="OPTIMIZER_MAX_PER_TEAM")
+    # dynamic_team_cap: relax max_per_team on small slates (D50). On 1-game
+    # slates a hard cap of 2 is infeasible (forfeits the slate); on 2-game
+    # slates ~32% of top-20 finishers stack 3+. Effective cap: 1 game -> 5,
+    # 2 games -> max(max_per_team, 3), 3+ games -> max_per_team. Default
+    # True. Set OPTIMIZER_DYNAMIC_TEAM_CAP=false to restore the old static
+    # cap (rolls back under 2 minutes via env, no redeploy).
+    optimizer_dynamic_team_cap: bool = Field(
+        default=True, alias="OPTIMIZER_DYNAMIC_TEAM_CAP"
+    )
     # contrarian_strength: 0.0 disables the anti-popularity penalty; 0.2 is
     # basketball-main's default. Tune up to 0.3 for stronger contrarian tilt
     # in top-1 regime, down to 0.1 for cash games.

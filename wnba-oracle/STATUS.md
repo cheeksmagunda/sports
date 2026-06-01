@@ -1,6 +1,6 @@
 status: BUILD_COMPLETE
-last_verified: 2026-05-29T14:50:00Z
-phase: live; first fire 2026-05-28T22:00Z scored ~34.6 (top-20 floor 49.91, winner 53.13). Adversarial review of 2026-05-29 shipped CAVEAT_IS_SKIP guardrail + stable argsort tie-break. See D48.
+last_verified: 2026-06-01T00:00:00Z
+phase: live; first fire 2026-05-28T22:00Z scored ~34.6 (top-20 floor 49.91, winner 53.13). Adversarial review of 2026-05-29 shipped CAVEAT_IS_SKIP guardrail + stable argsort tie-break (D48). 2026-06-01 operator-review pass: dynamic team cap by slate size (D50, fixes 1-game-slate forfeit + small-slate stacking), contrarian investigated and KEPT at 0.2 (D51, off is neutral-to-worse). Real gap is prediction resolution (Spearman 0.37); starter/minutes signal scoped in NEEDS_HUMAN #12.
 
 # Build status
 
@@ -27,7 +27,9 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
   extended each fire by walking back N ids from today's max contest id
   and skipping anything not `sport=wnba` & finalized)
 - env-tunable knobs at shared scope: CONTRARIAN_STRENGTH=0.2,
-  CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2, PAYOUT_REGIME=top_20
+  CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
+  OPTIMIZER_DYNAMIC_TEAM_CAP=true (D50; relaxes the cap on <=2-game
+  slates, set false to restore static cap), PAYOUT_REGIME=top_20
 - env-tunable knobs at cron-job2 service: CAVEAT_IS_SKIP=true (set
   2026-05-29 per D48; demotes `enter_with_caveat` to `skip` on
   marginal-EV slates). Unset or set to `false` to roll back.

@@ -124,11 +124,17 @@ product the operator used to win late-season drafts):
    contrarian path uses real data; until then it falls back to an
    estimator (season ppg + big-market + slate size). Tunable via
    `ContrarianConfig.strength` (default 0.2).
-2. **`max_per_team=2` constraint.** Three players from the same team
-   courts the negative same-team minutes-cannibalization correlation.
-   The optimizer skips any combo with > 2 players from one team before
-   EV evaluation, so the constraint is also a speedup (skips ~30% of
-   combos on typical chalk slates).
+2. **Dynamic team cap (was static `max_per_team=2`).** On 3+ game
+   slates the optimizer still caps a lineup at 2 players per team: three
+   from one team courts the negative same-team minutes-cannibalization
+   correlation, and the corpus shows zero realized-oracle cost to the cap
+   there. But on small slates the cap is wrong or impossible: on a 1-game
+   slate, 5 players over 2 teams forces a 3-2 split, so a hard cap of 2
+   admits no lineup at all (the optimizer shipped a 0.0 forfeit on
+   2026-05-19). The effective cap now scales with distinct-team count: 2
+   teams -> uncapped, 3-4 teams -> 3, 5+ teams -> 2. 100% of 1-game-slate
+   winners and ~25% of 2-game-slate winners stack 3+. Env toggle
+   `OPTIMIZER_DYNAMIC_TEAM_CAP` (default on). See DECISIONS D50.
 3. **Injury-cascade minutes redistribution.** When a starter is OUT,
    their minutes get redistributed to same-cohort teammates inversely
    weighted by current minutes (bench players inherit more), with

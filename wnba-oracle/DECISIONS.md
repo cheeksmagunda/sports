@@ -886,3 +886,94 @@ Reverse: revert this commit. The pre-D49 behavior re-emerges only
 if the Real Sports API continues to return empty `displayName`,
 which appears to be a recent change (prior 16 slates in the corpus
 all carry `"N. Hillmon"`-style first-initial display names).
+
+### D50: Dynamic team cap by slate size (operator-requested) [verified]
+2026-06-01. Operator reviewed the 5-29/5-30/5-31 leaderboards and asked
+for dynamic stacking: "if two games or fewer on slate, team stacking
+allowed." The corpus confirms it, and surfaces that the static
+`max_per_team=2` (D28) is not just suboptimal but **infeasible** on
+1-game slates.
+
+**Verified** (`scripts/analyze_strategy_gap.py` over the 16 2026 slates):
+- 1-game slate (2 teams): 5 players across 2 teams forces a 3-2 split by
+  pigeonhole, so EVERY combo violates `max_per_team=2` and the optimizer
+  evaluates ZERO lineups -- it shipped an empty lineup scoring 0.0 on
+  2026-05-19 (visible in `runs/backtest_2026-05-29/baseline.txt`, our
+  only 0.0). 100% of top-20 finishers and 100% of winners stacked exactly
+  3-2.
+- 2-game slate (3-4 teams): 31.7% of top-20 finishers and 25% of winners
+  stacked 3+ from one team. Realized-oracle leaves points on the table
+  under the cap.
+- 3+ game slate (5+ teams): only 13.3% of top-20 finishers stacked 3+,
+  and the realized-oracle cap-cost is 0.00 -- the cap costs nothing here,
+  so the D28 diversification/leverage rationale stands.
+- Mean realized-oracle cap-cost: 12.75 pts on <=2-game slates (n=4,
+  dominated by the 50.92-pt forfeit on the 1-game slate), 0.00 on 3+
+  game slates (n=12).
+
+**Decision** [reasoned]: make the cap a function of distinct-team count
+(keyed on teams, not games, so odd counts degrade gracefully):
+- `<= 2 teams` (1 game)  -> effective cap 5 (uncapped). The copula's
+  `rho_same_team=-0.25` still discourages all-one-team configurations
+  via EV; we let the optimizer choose the 3-2/4-1 split rather than
+  hard-forcing it.
+- `3-4 teams` (2 games)  -> effective cap `max(max_per_team, 3)`.
+- `>= 5 teams` (3+ games) -> effective cap `max_per_team` (default 2).
+
+Implemented in `picker/optimize.py` (`optimize_lineup` computes `n_teams`
+from the full pool, derives `effective_max_per_team`). Env-toggleable via
+`OPTIMIZER_DYNAMIC_TEAM_CAP` (default true; settings + job2 wired). Added
+`_cap_is_feasible()` as a hard backstop: if any cap setting admits no
+valid 5-combo, the optimizer relaxes to uncapped and logs
+`optimizer_cap_infeasible` rather than ever shipping an empty lineup
+again. Four new tests in `tests/unit/test_optimizer_team_cap.py`.
+
+Reverse: set `OPTIMIZER_DYNAMIC_TEAM_CAP=false` on Railway (under 2
+minutes, no redeploy) to restore the static cap; the feasibility
+backstop still prevents the 0.0-forfeit. Or revert the commit.
+
+### D51: Contrarian tilt investigated and KEPT (intuition not supported) [verified]
+2026-06-01. Same operator review raised: "seems like we're picking
+slightly too contrarian, missing some obvious wins." Tested before
+acting; the data does NOT support dialing the contrarian penalty down.
+
+**Verified** (`scripts/analyze_strategy_gap.py` +
+`scripts/backtest_counterfactual.py`, 16 2026 slates):
+- The WNBA popularity->value signal is real but much weaker than the
+  NBA -0.457 the strength was calibrated from (D27): corr(drafts,
+  real_score) = -0.10, within-slate corr(draft_pct, val_pct) = -0.16,
+  least-drafted-half produces 1.17x the most-drafted-half value (NBA
+  claim was ~1.25x).
+- It still points the right way: the 5 best realized plays per slate
+  sit at median draft percentile 0.24 (i.e. the points genuinely live
+  on the lower-drafted side), and winners roster at mean draft-pct 0.43
+  (mildly contrarian, near neutral).
+- Counterfactual backtest, contrarian ON (0.2) vs OFF, leakage held
+  constant: turning it OFF is neutral-to-WORSE -- top-20 4/16 -> 3/16,
+  mean gap-to-winner 10.71 -> 11.95, beat-cashline 25% -> 19% (and the
+  same direction with the dynamic cap on: C 4/16 -> D 3/16). The mild
+  fade helps the optimizer lean toward the value side where the points
+  are.
+
+**Decision**: keep `CONTRARIAN_STRENGTH=0.2`. No code change. The
+penalty is small by construction (max 0.16 real_score units at 0.2,
+~6.7% of the median real_score), so it tie-breaks toward value rather
+than zeroing chalk -- it is NOT what keeps us off the obvious studs.
+
+**Why the "missing obvious wins" feeling is real but mis-attributed**
+[reasoned]: the actual gap is prediction resolution, not the contrarian
+penalty. Same backtest: Spearman(our ranking, realized) = +0.37 (real
+signal, far from perfect); our top-5 recovers only 2.44/5 of the
+realized top-8 plays (boost-only recovers 1.50, so the EB model does
+add value -- but there is large headroom). Human winners reach 89% of
+the perfect-hindsight oracle; we trail the winner by ~10.7 pts. Closing
+that is a prediction problem: the live predictor uses card_boost + a
+shrunk EB alpha and IGNORES the confirmed-starter / minutes signal that
+job1 already persists (`is_starter`, `starter_slot`, `rotowire_confirmed`
+in features_json -- job2 reads only `is_out`). Minutes is the dominant
+driver of real_score. Wiring a starter/minutes term into `_build_specs`
+(mirroring `game_script_multiplier`), plus differentiating the flat
+`sigma=0.25` and softening the `K=10` log-offset that compresses the
+right-skew, are the next levers. These need walk-forward validation
+(the EB artifact saw the 16 test slates), so they are scoped as a
+follow-up rather than shipped blind here. See NEEDS_HUMAN.

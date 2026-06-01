@@ -113,3 +113,27 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     the deploy (currently `models/*.pkl` is gitignored — either
     un-ignore the production artifact or download from object
     storage at startup).
+
+12. **[NEW 2026-06-01] Prediction-quality lever: wire the
+    confirmed-starter / minutes signal into the live predictor.** D51
+    found our leaderboard gap is dominated by prediction resolution
+    (Spearman 0.37, top-5 recovers 2.44/5 of the realized top-8), not
+    by the contrarian tilt or (now-fixed) stacking. job1 ALREADY
+    persists `is_starter`, `starter_slot`, `rotowire_confirmed` into
+    `features_json`, but job2's `_build_specs` reads only `is_out`.
+    Minutes is the dominant driver of real_score. Proposed first step
+    (cheap, data already present): a `starter_signal_multiplier` applied
+    to `pred_real_score` in `_build_specs`, mirroring
+    `game_script_multiplier` — confirmed starters up, confirmed bench
+    down. Follow-ons: real box-score features from the `stats_wnba`
+    (nba_api) ingest (recent real_score form, opponent defense, pace);
+    per-player `sigma` instead of the flat 0.25 (starters lower-variance,
+    boost/bench plays higher-variance) so ceiling plays are priced for
+    the top-heavy payout; and softening the `K=10` log-offset in
+    `sample.py` that compresses the right-skew where boom games live.
+    **Why operator-gated, not shipped here**: honest measurement needs a
+    walk-forward backtest (retrain EB on slates < N for each test slate
+    N). The current 16-slate backtest has EB leakage (D45), so a
+    prediction change cannot be validated offline on it. Build the
+    walk-forward harness first (the `cv_splitter` + `oracle-train`
+    pieces exist), then iterate the signals against it.
