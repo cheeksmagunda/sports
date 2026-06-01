@@ -1098,3 +1098,55 @@ equal code defaults (kept as explicit operational intent).
 **Operator note**: the phantom api/frontend canvas edges can only be hidden
 from the Railway dashboard UI (if at all); there is no API path. They reflect
 a real platform behavior, not a config error.
+
+### D54: The edge is minutes/role, not anything boost-derived [verified]
+2026-06-01. Operator pushed to stop tweaking multipliers and figure out how
+to actually win. Stepped back to the scoring identity and proved where the
+edge can and cannot be, full 121-slate corpus
+(`scripts/analyze_boost_edge.py`).
+
+Scoring: `score = sum_i real_i * (slot_i + boost_i)`. Slots auto-assign by
+realized rank; boost is fixed and known pre-game. So the only free variable
+under our control that affects EV is WHICH players we pick, and the only way
+to gain is to estimate E[real_i] better than the boost implies.
+
+**The boost is an efficient handicap** [verified]:
+- Within-slate corr(card_boost, realized real*(2+boost)) = **+0.016** -- i.e.
+  boost level carries essentially ZERO information about who will have the
+  best lineup contribution. The handicap neutralizes itself. Ranking by
+  `pred*(2+boost)` (our stage-1 + EV bias) is chasing a ceiling that the
+  handicap has already cancelled.
+- Mean calibration is good (realized - boost_prior ~ 0) for boosts 0-2, with
+  ONE exploitable error: the boost-3.0 bucket realizes 1.38 vs a 1.81 prior
+  (resid -0.43) and hits a 4+ game only 2% of the time. Boost-3 is a lottery
+  trap our ranker over-rates (it scores them 1.81*5=9.05; they deliver 6.90).
+- Winners (rank-1 across all slates) roster mean realized real_score **3.74**
+  vs the pool mean **2.54**, at moderate boost ~1.4. They win by rostering
+  players who PRODUCE, not by chasing boost.
+
+**Tested the best zero-new-data lever and it is a wash for winning**
+[verified] (`scripts/test_recalibrated_prior.py`, walk-forward): replacing
+boost_prior with the empirical E[real|boost] curve (which fades the boost-3
+trap) moved cash-rate 4/16 -> 5/16 and mean gap 14.25 -> 13.17 but LOST the
+top-5s and the one win (top5 4->2, win 1->0). It trades floor for ceiling.
+NOT shipped: it does not help the win objective, and confirms no boost-based
+reweighting yields a real edge.
+
+**Conclusion** [reasoned]: combined with D52 (history/recency cannot beat
+boost), the ONLY signal orthogonal to the boost is tonight's MINUTES/ROLE.
+real_score is minutes * per-minute rate; the per-minute rate is stable and
+the boost already prices the player's recent minutes, so the edge is
+same-day minutes the boost has not absorbed: confirmed starts/sits
+(RotoWire, already scraped), injury-cascade minutes redistribution (D29/D33
+ported, NOT on the live path), and blowout/pace (Vegas, game_script exists).
+A confirmed 30-min starter at boost 1.5 has a far higher floor than a 12-min
+scrub at boost 3.0 the boost rates equal -- that mispricing is the alpha, and
+it is exactly the 3.74-vs-2.54 gap winners exploit. This requires INGESTING
+real minutes (stats_wnba/nba_api game logs; module exists, not wired to
+features). The ceiling on what is achievable without it is roughly break-even
+(efficient market). Build order + the hard truths (single 9k-field slates are
+variance-dominated; the edge compounds over a season via cash-rate/ROI, not
+any one night; verify multi-entry for volume) are in the operator writeup.
+
+Scripts retained: analyze_boost_edge.py, test_recalibrated_prior.py,
+replay_slate.py (replay any past slate, old vs shipped config).
