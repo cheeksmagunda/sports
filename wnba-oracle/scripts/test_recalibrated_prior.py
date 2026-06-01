@@ -78,8 +78,10 @@ def run(corpus, lb, slates, mode):
         teams = pool["team"].unique().tolist()
         opp = {t: teams[(i + 1) % len(teams)] for i, t in enumerate(teams)}
         samps, fields = [], []
+        K = 2.0
         for r in pool.itertuples():
-            pid = int(r.player_id); pred = max(0.5, adj[pid]); K = 2.0
+            pid = int(r.player_id)
+            pred = max(0.5, adj[pid])
             mu = float(np.log(max(pred + K, 1.0)))
             sigma = min(0.6, max(0.12, vol.get(pid, 1.17) / max(pred + K, 1e-6)))
             samps.append(PlayerSamplingSpec(pid, str(r.team), str(opp.get(r.team, "")), mu, sigma, float(r.card_boost)))
@@ -108,10 +110,11 @@ def main():
     for mode in ("boost_prior", "empirical"):
         r = run(corpus, lb, slates, mode)
         n = len(r)
-        t20 = sum(1 for x in r if x["place"] <= 20); t5 = sum(1 for x in r if x["place"] <= 5)
+        t5 = sum(1 for x in r if x["place"] <= 5)
         t1 = sum(1 for x in r if x["place"] == 1)
         cash = sum(1 for x in r if x["our"] >= x["cash"])
-        gap = np.mean([x["top1"] - x["our"] for x in r]); ov = np.mean([x["ov"] for x in r])
+        gap = np.mean([x["top1"] - x["our"] for x in r])
+        ov = np.mean([x["ov"] for x in r])
         print(f"  {mode:12s}: cash(top20) {cash:2d}/{n}  top5 {t5}  win {t1}  "
               f"mean_gap {gap:5.2f}  overlap {ov:.2f}/5")
 

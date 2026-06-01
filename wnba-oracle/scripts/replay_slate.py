@@ -46,7 +46,7 @@ def score_truth(pids, boost_by, rs_by):
 
 def oracle(pool, cap):
     rows = pool.to_dict("records")
-    best, combo = -1.0, None
+    best, _combo = -1.0, None
     teams = [r["team"] for r in rows]
     for c in itertools.combinations(range(len(rows)), 5):
         t = [teams[i] for i in c]
@@ -55,7 +55,7 @@ def oracle(pool, cap):
         v = sorted(((rows[i]["real_score"], rows[i]["card_boost"]) for i in c), key=lambda x: -x[0])
         s = sum(val * (SLOTS[j] + b) for j, (val, b) in enumerate(v))
         if s > best:
-            best, combo = s, c
+            best, _combo = s, c
     return best
 
 

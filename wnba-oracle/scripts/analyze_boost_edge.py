@@ -54,7 +54,6 @@ def main() -> None:
     print("\n" + "=" * 80)
     print("Q2. WHAT BOOST DO WINNERS ROSTER? (multiplierBonus in lineup_json)")
     print("=" * 80)
-    pool_boost_by_slate = df.groupby("slate_date")["card_boost"].mean().to_dict()
     rows = []
     for r in lb.iter_rows(named=True):
         lj = json.loads(r["lineup_json"]) if isinstance(r["lineup_json"], str) else r["lineup_json"]
@@ -77,7 +76,7 @@ def main() -> None:
     print("Q3. THE ACTUALLY-BEST PLAYS (top-5 realized ceil_contrib / slate)")
     print("=" * 80)
     best_boost, best_real = [], []
-    for sd, g in df.groupby("slate_date"):
+    for _sd, g in df.groupby("slate_date"):
         top5 = g.nlargest(5, "ceil_contrib")
         best_boost.append(top5["card_boost"].mean())
         best_real.append(top5["real_score"].mean())
@@ -85,7 +84,7 @@ def main() -> None:
     print(f"  best-5 mean real:  {np.mean(best_real):.2f} (vs pool {df['real_score'].mean():.2f})")
     # Correlation within slate: does higher boost -> higher realized ceil_contrib?
     cors = []
-    for sd, g in df.groupby("slate_date"):
+    for _sd, g in df.groupby("slate_date"):
         if len(g) >= 8:
             cors.append(np.corrcoef(g["card_boost"], g["ceil_contrib"])[0, 1])
     print(f"  within-slate corr(boost, realized ceil_contrib): {np.nanmean(cors):+.3f}")
