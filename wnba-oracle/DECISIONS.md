@@ -1213,3 +1213,41 @@ And the deeper truth from D54 stands: a single 9k-entry slate is variance-
 dominated; success is season cash-rate/ROI, and multi-entry volume (entry
 rules unverified) would be the larger multiplier. Reverse:
 `MINUTES_MODEL_ENABLED=false` (env, no redeploy).
+
+### D56: Optimizer too slow to freeze in the cron window -- prod outage [verified]
+2026-06-01. Operator reported the frontend serving player IDs / no picks. Root
+cause was an OUTAGE, not just a names bug: cron-job2 reached `optimizer_stage1`
+then was KILLED at the next 15-min tick before reaching `optimizer_stage2` or
+the freeze, so no lineup ever froze for today's 2-game slate. The prod defaults
+(`n_samples=5000` x `n_field_lineups=1000` x `top_n_filter=30` -> C(30,5)=
+142506 combos) made `optimize_lineup` take HOURS; the picker was only ever
+validated in backtests at ~300 samples / 50 field / C(20,5). The dynamic cap
+(D50) made it worse on small slates (cap 3 skips fewer combos). Symptoms seen:
+2026-05-31 froze EMPTY (1-game slate, old static-cap infeasibility) and
+2026-05-30 froze 5 players all named "Player <id>" (the optimizer picked
+obscure boost-3 rookies whose Real Sports `displayName` was empty -> the
+`_build_per_player` fallback).
+
+Fix: reduced defaults to `n_samples=1000` / `n_field_lineups=120` /
+`top_n_filter=20` (still above the validated backtest range), wired
+`OPTIMIZER_N_FIELD_LINEUPS` as a setting. `optimize_lineup` on a realistic
+43-player 2-game pool: ~85s vs effectively never. All env-tunable.
+
+Recovery (manual, since cron only ticks on schedule and the freeze is
+idempotent per model_sha so a bad freeze would lock): parked cron-job2
+(`serviceInstanceUpdate cronSchedule`, which is instant and does NOT redeploy)
+to prevent a stale-enrichment freeze, force-ran cron-job1 on the new code
+(real names via D49 + minutes via D55; matched 48/49 players to nba_api
+minutes), then fired cron-job2 -> froze 2026-06-01 with real names
+(Shepard / Holmes / Siegrist / Horston / McCowan), `entry_recommendation=enter`.
+Restored both cron schedules.
+
+Forward fix is durable: D56 speed + D49 names + D55 minutes (picks real
+rotation players, not 11-min darts with blank names) all deployed, so the
+normal 13:00 job1 / 21:00 job2 cycle produces named picks. Follow-ups:
+- Vectorize `picker.payout.expected_payout` (drop the per-sample Python loop)
+  so we can restore high sample counts without the cron-window risk.
+- RotoWire `wnba-lineups.php` returned 404 during recovery, so the starter /
+  injury-cascade signals were OFF (minutes model fell back to the recency
+  baseline). If it persists, the RotoWire URL/scrape needs fixing -- that is
+  half the minutes edge (same-day role). See NEEDS_HUMAN.

@@ -140,3 +140,17 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
        multiplier on the edge (D54). Verify the entry rules first.
     e. Wire the dayclose cron on Railway (item 10) so the minutes/rate
        history and slate_labels keep extending without manual backfills.
+
+13. **[NEW 2026-06-01, D56] Two follow-ups from the freeze outage:**
+    a. VECTORIZE `picker.payout.expected_payout`. It loops over samples in
+       Python, which forced the emergency knob reduction (n_samples 5000->1000
+       etc.) to fit the 15-min cron window. Vectorizing the rank/payout step
+       (one numpy pass over the (n_field, n_samples) array) would let us
+       restore high sample counts with no window risk. Verify numerical
+       equivalence against the scalar version before shipping.
+    b. RotoWire `wnba-lineups.php` returned 404 on 2026-06-01 (job1
+       `job1_lineups_failed`). job1 degrades gracefully (no OUT filtering, no
+       confirmed-starter signal -> minutes model uses the recency baseline),
+       but that is HALF the minutes edge (same-day role). Check whether the
+       RotoWire URL/markup changed and fix `ingest/rotowire.py`. Watch the
+       job1 `n_matched` (RotoWire) and `n_minutes_matched` (nba_api) keys.
