@@ -25,6 +25,7 @@ from sqlalchemy import text
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine
+from wnba_oracle.ingest.minutes_features import build_minutes_features, lookup
 from wnba_oracle.ingest.odds import fetch_odds_for_slate
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
@@ -186,6 +187,21 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     n_rotowire_matched = 0
     n_rotowire_out = 0
 
+    # Minutes/role features (D55): the minutes edge orthogonal to card_boost.
+    # One league-wide stats.wnba.com pull, reconstruct real_score per game via
+    # the locked formula, emit as-of recency minutes + per-minute rate. Current
+    # season for role, prior season to stabilise the rate. Degrades to {} on
+    # any nba_api failure -> job2 falls back to the boost predictor.
+    year = int(sd[:4])
+    try:
+        minutes_feats = build_minutes_features(
+            as_of_date=sd, seasons=[str(year), str(year - 1)]
+        )
+    except Exception as exc:
+        log.warning("job1_minutes_failed", reason=str(exc)[:120])
+        minutes_feats = {}
+    n_minutes_matched = 0
+
     rows = []
     for p in pool:
         vegas = team_to_vegas.get(p.team, {})
@@ -218,6 +234,13 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
             "vegas_spread": vegas.get("vegas_spread", 0.0),
             "is_home": int(vegas.get("is_home", 0.0)),
         }
+        mf = lookup(minutes_feats, display_name=p.display_name, team=p.team)
+        if mf is not None:
+            n_minutes_matched += 1
+            features["recent_minutes"] = round(mf.recent_minutes, 2)
+            features["per_min_rate"] = round(mf.per_min_rate, 5)
+            features["minutes_vol"] = round(mf.minutes_vol, 2)
+            features["n_min_games"] = mf.n_games
         rows.append(
             {
                 "slate_date": sd,
@@ -238,6 +261,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_rotowire=len(lineups),
         n_matched=n_rotowire_matched,
         n_out=n_rotowire_out,
+        n_minutes_matched=n_minutes_matched,
     )
 
     persisted = 0

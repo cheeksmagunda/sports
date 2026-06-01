@@ -28,6 +28,7 @@ from sqlalchemy import text
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine, get_redis
+from wnba_oracle.features.injury_cascade import CascadeInput, redistribute_minutes
 from wnba_oracle.features.spec import cohort_for_position
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.game_script import GameScriptConfig, game_script_multiplier
@@ -41,6 +42,7 @@ from wnba_oracle.picker.popularity import (
 )
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 from wnba_oracle.predict.form import player_volatility
+from wnba_oracle.predict.minutes import MinutesConfig, blended_real_score
 from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
@@ -245,6 +247,44 @@ def _starter_multiplier(features_json: object, *, enabled: bool) -> float:
     return 1.10 if int(f.get("is_starter", 0) or 0) else 0.82
 
 
+def _minutes_features(features_json: object) -> dict | None:
+    """Pull the D55 minutes features job1 persisted, or None if absent (job1
+    couldn't reach stats.wnba.com, or no match) -> caller falls back to boost."""
+    f = _features_dict(features_json)
+    if "per_min_rate" not in f or "recent_minutes" not in f:
+        return None
+    return {
+        "recent_minutes": float(f.get("recent_minutes", 0.0) or 0.0),
+        "per_min_rate": float(f.get("per_min_rate", 0.0) or 0.0),
+        "minutes_vol": float(f.get("minutes_vol", 5.0) or 5.0),
+        "n_min_games": int(f.get("n_min_games", 0) or 0),
+    }
+
+
+def _cascade_bonuses(enrichment_raw: list[dict]) -> dict[int, float]:
+    """Injury-cascade bonus minutes per player (D55). Built from the FULL pool
+    (incl. OUT players, who are the donors) using each player's recent_minutes
+    as minutes_l10. Empty when no OUT player has minutes history."""
+    rows: list[CascadeInput] = []
+    for r in enrichment_raw:
+        mf = _minutes_features(r.get("features_json"))
+        if mf is None:
+            continue
+        pid_raw = r.get("real_sports_player_id")
+        try:
+            pid = int(pid_raw)
+        except (TypeError, ValueError):
+            continue
+        rows.append(CascadeInput(
+            player_id=pid,
+            team=str(r.get("team", "") or ""),
+            position=str(r.get("position", "") or ""),
+            minutes_l10=mf["recent_minutes"],
+            is_out=_is_out_from_features(r.get("features_json")),
+        ))
+    return redistribute_minutes(rows) if rows else {}
+
+
 def _load_prior_real_scores(slate_date: str) -> dict[int, list[float]]:
     """As-of per-player realized real_scores from slate_labels for all slates
     STRICTLY BEFORE `slate_date`, most-recent-first. Drives per-player
@@ -306,6 +346,7 @@ def _build_specs(
     contrarian_cfg: ContrarianConfig | None = None,
     player_history: dict[int, float] | None = None,
     prior_by_player: dict[int, list[float]] | None = None,
+    injury_bonus_by_pid: dict[int, float] | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict]]:
     """Build the (sampling, field) specs the optimizer reads.
 
@@ -376,7 +417,11 @@ def _build_specs(
     # with no Vegas signal degrade to a neutral 1.0x.
     pred_real_scores: dict[int, float] = {}
     rows_by_pid: dict[int, dict] = {}
+    minutes_vol_by_pid: dict[int, float] = {}
     gs_cfg = GameScriptConfig()
+    mcfg = MinutesConfig()
+    bonus = injury_bonus_by_pid or {}
+    n_minutes_predicted = 0
     for r in enrichment:
         pid_raw = r.get("real_sports_player_id")
         if pid_raw is None:
@@ -391,6 +436,32 @@ def _build_specs(
         gs_mult = (
             game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
         )
+        f = _features_dict(r.get("features_json"))
+        mf = _minutes_features(r.get("features_json")) if settings.minutes_model_enabled else None
+        if mf is not None and mf["n_min_games"] >= mcfg.min_obs_for_history:
+            # D55 minutes edge: blended_real_score handles the boost<->minutes
+            # weighting internally, with same-day role signals. Blowout is left
+            # to game_script (it already penalises via the spread tier) to avoid
+            # double-counting; the starter multiplier is superseded by the
+            # confirmed-role minutes anchor here, so it is NOT applied.
+            base = blended_real_score(
+                recent_min=mf["recent_minutes"],
+                rate=mf["per_min_rate"],
+                n_games=mf["n_min_games"],
+                boost_prior=_heuristic_real_score(boost),
+                rotowire_confirmed=bool(int(f.get("rotowire_confirmed", 0) or 0)),
+                is_starter=bool(int(f.get("is_starter", 0) or 0)),
+                injury_bonus_min=float(bonus.get(pid, 0.0)),
+                blowout=False,
+                cfg=mcfg,
+            )
+            pred_real_scores[pid] = max(0.5, base * gs_mult)
+            minutes_vol_by_pid[pid] = mf["minutes_vol"] * mf["per_min_rate"]
+            n_minutes_predicted += 1
+            rows_by_pid[pid] = r
+            continue
+        # Fallback (no minutes match): EB > corpus history > boost heuristic,
+        # with the legacy starter nudge.
         starter_mult = _starter_multiplier(
             r.get("features_json"), enabled=settings.starter_signal_enabled
         )
@@ -413,6 +484,7 @@ def _build_specs(
     log.info(
         "predictor_mix",
         artifact_sha=settings.model_artifact_sha[:12] if settings.model_artifact_sha else "",
+        n_minutes_predicted=n_minutes_predicted,
         n_eb_predicted=n_eb_predicted,
         n_history_fallback=n_history_fallback,
         n_heuristic_fallback=n_heuristic_fallback,
@@ -423,10 +495,12 @@ def _build_specs(
         pred_real_scores, popularity_scores, contrarian_cfg
     )
 
-    # Per-player sampling sigma from as-of realized volatility (D52). A flat
-    # sigma priced every player the same; ceiling plays (high game-to-game
-    # variance) should sample wider so the EV/percentile math sees their
-    # upside. K and sigma share the same score_offset the copula un-offsets.
+    # Per-player sampling sigma from volatility (D52/D55). A flat sigma priced
+    # every player the same; ceiling plays (high game-to-game variance) should
+    # sample wider so the EV/percentile math sees their upside. Prefer the
+    # minutes-derived volatility (minutes_vol x rate, D55) for matched players,
+    # else fall back to realized real_score volatility. K and sigma share the
+    # same score_offset the copula un-offsets.
     K = float(settings.sampling_score_offset)
     volatility = player_volatility(prior_by_player or {})
 
@@ -442,7 +516,7 @@ def _build_specs(
         # Convert the real_score-unit volatility to a log-scale sigma via the
         # delta method: std(real) ~= (pred + K) * sigma_log. Clamp to a sane
         # band so a single outlier game can't blow up the percentile bias.
-        vol = volatility.get(int(pid), 1.17)
+        vol = minutes_vol_by_pid.get(int(pid)) or volatility.get(int(pid), 1.17)
         sigma_log = min(0.6, max(0.12, vol / max(pred + K, 1e-6)))
         samps.append(
             PlayerSamplingSpec(
@@ -621,12 +695,17 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
 
     log.info("job2_start", slate_date=sd, model_sha=model_sha)
     enrichment_raw = _load_enrichment(sd)
-    # D33 wired into prod (NEEDS_HUMAN #7): RotoWire OUT players are
-    # excluded from the optimizer pool. The cascade-style minutes
-    # redistribution from build_slate_features is not yet on the prod
-    # path (requires mins_l10 from historical game logs which the
-    # ingest doesn't ship yet), but the binary drop-OUT-players is the
-    # high-value half of the cascade and lives here.
+    # Injury cascade (D55): redistribute OUT players' recent minutes to active
+    # teammates BEFORE dropping the OUT players from the pool (they are the
+    # donors). job1 now ships recent_minutes per player, so the full D33/D29
+    # cascade finally has the mins_l10 it needs. Empty when no OUT player has
+    # minutes history.
+    injury_bonus = _cascade_bonuses(enrichment_raw)
+    if injury_bonus:
+        log.info("job2_injury_cascade", n_recipients=len(injury_bonus),
+                 max_bonus=round(max(injury_bonus.values()), 1))
+    # RotoWire OUT players are excluded from the optimizer pool (the binary
+    # drop is the other half of the cascade).
     enrichment = [r for r in enrichment_raw if not _is_out_from_features(r.get("features_json"))]
     n_dropped = len(enrichment_raw) - len(enrichment)
     if n_dropped:
@@ -647,6 +726,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         slate_date=sd,
         player_history=player_history,
         prior_by_player=prior_by_player,
+        injury_bonus_by_pid=injury_bonus,
     )
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")

@@ -114,30 +114,29 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     un-ignore the production artifact or download from object
     storage at startup).
 
-12. **[MOSTLY DONE 2026-06-01] Prediction-quality lever.** D52 built the
-    walk-forward harness (`scripts/backtest_walkforward.py`, no leakage)
-    and acted on what it measured:
-    - SHIPPED: per-player sampling sigma + K recalibration (10->2),
-      cutting walk-forward gap-to-winner ~2 pts and lifting winner overlap
-      1.19 -> 1.75.
-    - SHIPPED: RotoWire confirmed-starter multiplier in `_build_specs`
-      (1.10 / 0.82 / 1.0). This is the cheap minutes/role proxy.
-    - REJECTED (measured): recency/form prediction and EB-over-boost. The
-      card_boost handicap already encodes recent form, so per-game
-      real_score is not further predictable from history.
-    **Remaining (genuinely needs new data, not just code):**
-    a. A real minutes model. The starter flag is binary; actual projected
-       minutes (from the `stats_wnba`/nba_api game-log ingest, not yet on
-       the live path) would sharpen both the pred and the per-player sigma.
-       Tune the 1.10/0.82 starter magnitudes once a minutes-vs-real_score
-       fit exists (cannot be backtested on the current corpus -- it has no
-       starter/minutes labels).
+12. **[MINUTES MODEL SHIPPED 2026-06-01, D55] Prediction-quality lever.**
+    The minutes/role edge is built and live: job1 ingests per-player
+    recent_minutes + per_min_rate from stats.wnba.com game logs (real_score
+    reconstructed from the box line, R^2 0.957), job2 blends boost<->minutes
+    with confirmed-starter / injury-cascade / blowout signals. Validated
+    walk-forward: minutes x rate corr 0.554 (actual-min ceiling) vs boost
+    0.246. Kill-switch MINUTES_MODEL_ENABLED.
+    **Remaining to maximise the edge (operator / next build):**
+    a. LIVE CALIBRATION. The big same-day lift (toward the 0.554 ceiling)
+       can't be backtested on the corpus (no historical RotoWire/Vegas).
+       Tune the starter/bench anchors (MinutesConfig.starter_minutes 30 /
+       bench_minutes 13 / confirm_weight 0.6) and the cascade
+       redistribution_rate against live results as they accumulate. Watch
+       the job1 `n_minutes_matched` and job2 `n_minutes_predicted` log keys.
     b. Field simulator stacks. `picker/field.py` samples opponents by
-       independent ownership picks, so it never produces a stacked
-       opponent. On <=2-game slates the real field stacks heavily, so EV
-       /leverage is mispriced there. Add correlated (game-stack) field
-       lineups before relying on small-slate EV.
-    c. Consider the payout regime. "Win a ~9k-entry field" is the steeply
-       convex top_1 shape, not the top_20 (20th-percentile cash line) we
-       run. Detecting regime needs numBrawlers, which is 0 pregame (D48),
-       so this is a product decision, not a quick toggle.
+       independent ownership picks, so it never produces a stacked opponent;
+       on <=2-game slates the real field stacks heavily, so EV/leverage is
+       mispriced there. Add correlated (game-stack) field lineups.
+    c. Payout regime. "Win a ~9k-entry field" is the convex top_1 shape, not
+       the top_20 (20th-pct cash line) we run. Product decision (numBrawlers
+       is 0 pregame, D48).
+    d. Multi-entry VOLUME. If Real Sports allows >1 entry per contest, a
+       portfolio of differentiated +EV lineups is the single biggest
+       multiplier on the edge (D54). Verify the entry rules first.
+    e. Wire the dayclose cron on Railway (item 10) so the minutes/rate
+       history and slate_labels keep extending without manual backfills.

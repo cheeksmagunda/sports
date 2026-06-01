@@ -1,6 +1,6 @@
 status: BUILD_COMPLETE
 last_verified: 2026-06-01T00:00:00Z
-phase: live; first fire 2026-05-28T22:00Z scored ~34.6 (top-20 floor 49.91, winner 53.13). Adversarial review of 2026-05-29 shipped CAVEAT_IS_SKIP guardrail + stable argsort tie-break (D48). 2026-06-01 operator-review pass shipped: dynamic team cap by slate size (D50, fixes 1-game forfeit + small-slate stacking); contrarian kept at 0.2 (D51, off is worse); sampling recalibrated K=10->2 + per-player sigma (D52, cuts walk-forward gap-to-winner ~2 pts, lifts winner overlap 1.19->1.75); RotoWire confirmed-starter signal wired into the predictor (D52). Recency/EB-over-boost prediction tested and rejected (boost already encodes form). Walk-forward harness built (scripts/backtest_walkforward.py).
+phase: live. 2026-06-01 build pass shipped: dynamic team cap by slate size (D50); contrarian kept at 0.2 (D51); sampling recalibrated K=10->2 + per-player sigma (D52); and the MINUTES/ROLE MODEL (D55) -- the real edge. Proven walk-forward: minutes x rate predicts real_score at corr 0.554 (actual-min ceiling) / 0.355 (recency) vs boost 0.246; real_score is a fixed box formula (R^2 0.957) so the pipeline is self-contained on nba_api. job1 ingests per-player recent_minutes + per_min_rate from stats.wnba.com game logs; job2 uses a boost<->minutes blend with confirmed-starter / injury-cascade / blowout same-day signals. Env kill-switch MINUTES_MODEL_ENABLED. Earlier: CAVEAT_IS_SKIP + stable argsort (D48); recency/EB-over-boost tested and rejected (D52/D54, boost already encodes form). Harnesses: scripts/backtest_walkforward.py, validate_minutes_model.py, test_minutes_placement.py, replay_slate.py.
 
 # Build status
 
@@ -31,10 +31,14 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
     PYTHONUNBUFFERED, TZ, PAYOUT_REGIME=top_20, WNBA_ORACLE_MODEL_ARTIFACT_SHA.
   - cron-job2 scope (optimizer): CONTRARIAN_STRENGTH=0.2 (reconciled from a
     drifted 0.3, D53), CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
-    CAVEAT_IS_SKIP=true. The D50/D52 knobs OPTIMIZER_DYNAMIC_TEAM_CAP (true),
-    SAMPLING_SCORE_OFFSET (2.0), STARTER_SIGNAL_ENABLED (true) are NOT set on
-    Railway and run on code defaults; set them on cron-job2 only to override
-    (e.g. SAMPLING_SCORE_OFFSET=10 or STARTER_SIGNAL_ENABLED=false to revert).
+    CAVEAT_IS_SKIP=true. The D50/D52/D55 knobs OPTIMIZER_DYNAMIC_TEAM_CAP (true),
+    SAMPLING_SCORE_OFFSET (2.0), STARTER_SIGNAL_ENABLED (true),
+    MINUTES_MODEL_ENABLED (true) are NOT set on Railway and run on code
+    defaults; set them on cron-job2 to override (e.g. MINUTES_MODEL_ENABLED=false
+    to fall back to the boost/EB predictor, SAMPLING_SCORE_OFFSET=10 to revert).
+  - cron-job1 now also pulls stats.wnba.com game logs (nba_api) for the D55
+    minutes features; a stats.wnba.com outage degrades gracefully (job2 falls
+    back to boost). Watch the job1 log key n_minutes_matched.
   - DATABASE_URL / REDIS_URL are service references; never literals.
 - env-tunable knobs at cron-job2 service: CAVEAT_IS_SKIP=true (set
   2026-05-29 per D48; demotes `enter_with_caveat` to `skip` on

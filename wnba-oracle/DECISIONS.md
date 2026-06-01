@@ -1150,3 +1150,66 @@ any one night; verify multi-entry for volume) are in the operator writeup.
 
 Scripts retained: analyze_boost_edge.py, test_recalibrated_prior.py,
 replay_slate.py (replay any past slate, old vs shipped config).
+
+### D55: Minutes/role model -- the real edge, built and shipped [verified]
+2026-06-01. Acted on D54 ("the edge is minutes/role"). Built the data
+foundation, validated the edge walk-forward, and wired it into the live
+pipeline. This is the substantive model change the operator asked for.
+
+**Data foundation** [verified]: `scripts/backfill_minutes.py` pulls the
+league's per-game box logs from stats.wnba.com (nba_api `PlayerGameLogs`,
+one call/season, league_id=10): 13,236 player-games over 2024-2026, team
+codes matching the corpus. Joined to the realized-real_score corpus at 97%
+overall / 99% on 2026 (name+team+date).
+
+**Edge validated** (`scripts/validate_minutes_model.py`, walk-forward, no
+leakage, 2026, established players): corr(next real_score, ...):
+    actual_minutes x rate = +0.554   <- ceiling if tonight's minutes known
+    recency minutes x rate = +0.355
+    boost_prior           = +0.246
+Minutes is the dominant driver and the per-minute rate is stable; the
+recency baseline already beats the boost (early-season, when the boost lags
+fresh in-season form), and the gap up to 0.554 is what same-day role signals
+close. Decomposition note: minutes x rate ~= plain recency (0.355 vs 0.350),
+so the value is in being able to INJECT tonight's minutes, not the algebra.
+
+**real_score is a fixed formula** [verified]: fitting real_score on the box
+line recovers it at R^2 = 0.957 (`predict/scoring.py`, locked weights). This
+makes the pipeline SELF-CONTAINED on nba_api -- minutes AND real_score (hence
+the rate) come from one source, with no dependency on slate_labels being
+maintained on prod (it is not; dayclose cron unwired, NEEDS_HUMAN #10).
+
+**Shipped predictor** = `predict/minutes.blended_real_score`: boost prior
+shrinking toward minutes x rate as a player accumulates games
+(w = n/(n+3)), with same-day role signals on the minutes side: a RotoWire-
+confirmed start/sit pulls the projection toward the starter/bench anchor
+(captures promotions/demotions the rolling history lags), injury-cascade
+minutes inherited from OUT teammates (`features.injury_cascade`, finally fed
+real `minutes_l10`), and a blowout left to game_script to avoid double-count.
+Per-player sampling sigma now comes from minutes volatility x rate.
+
+Walk-forward PLACEMENT (`scripts/test_minutes_placement.py`, baseline only --
+the corpus has no historical RotoWire/Vegas so the same-day lift is NOT in
+these numbers): the blend matches boost on cash/top5/win and improves
+gap-to-winner (11.64 -> 11.33) and winner-overlap (1.50 -> 1.75). Pure
+minutes alone was ceiling-tilted (wins 1 -> 3, cash 5 -> 3); the blend keeps
+the floor. End-to-end smoke: a confirmed-starter stud (boost 1.0, 32 min)
+now predicts 3.31 vs a boost-3 bench dart's 1.18 -- inverting the 2026-05-25
+failure where we rostered the darts over the studs.
+
+**Live wiring**: job1 calls `ingest.minutes_features.build_minutes_features`
+(graceful {} on any nba_api failure -> picker falls back to boost, so a
+stats.wnba.com outage never blocks a fire) and persists recent_minutes /
+per_min_rate / minutes_vol / n_min_games into features_json. job2 computes
+the injury cascade from the full pool (OUT players are the donors, before
+they're dropped) and uses blended_real_score for matched players, EB/
+heuristic for the rest. Env kill-switch `MINUTES_MODEL_ENABLED` (default
+true). Tests: tests/unit/test_minutes_model.py (14).
+
+**Honest caveats**: the big same-day lift (toward 0.554) is NOT backtestable
+on the corpus (no historical RotoWire/Vegas), only mechanically sound; the
+1.10/0.82-style starter anchors and cascade magnitudes want live calibration.
+And the deeper truth from D54 stands: a single 9k-entry slate is variance-
+dominated; success is season cash-rate/ROI, and multi-entry volume (entry
+rules unverified) would be the larger multiplier. Reverse:
+`MINUTES_MODEL_ENABLED=false` (env, no redeploy).

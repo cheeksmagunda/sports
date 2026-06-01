@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     starter_signal_enabled: bool = Field(
         default=True, alias="STARTER_SIGNAL_ENABLED"
     )
+    # minutes_model_enabled: use the D55 minutes x rate blended predictor for
+    # players job1 matched to nba_api game logs. The one signal orthogonal to
+    # card_boost (corr 0.554 vs boost 0.246 walk-forward). Default on; set
+    # MINUTES_MODEL_ENABLED=false to fall back to the EB/heuristic predictor
+    # for every player (rolls back via env, no redeploy).
+    minutes_model_enabled: bool = Field(
+        default=True, alias="MINUTES_MODEL_ENABLED"
+    )
 
 
 @lru_cache(maxsize=1)

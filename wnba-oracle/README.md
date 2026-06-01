@@ -112,8 +112,23 @@ tests/           Pytest
 
 ## Strategy: where the alpha comes from
 
-Three patterns ported from `basketball-main` (the sibling NBA Real Sports
-product the operator used to win late-season drafts):
+**The core edge is the minutes/role model (D54/D55).** Real Sports is a
+handicap market: `card_boost` is set so `boost x E[real_score]` is roughly
+equal for everyone (within-slate corr(boost, realized value) = +0.016), so
+boost level carries no edge and history/recency can't beat it (the boost
+already encodes recent form). The one signal orthogonal to the boost is
+tonight's MINUTES: `real_score = minutes x per-minute-rate`, the rate is
+stable, and minutes is what same-day info (confirmed starters, injury
+cascade, blowouts) reveals before the boost catches up. Walk-forward,
+minutes x rate predicts real_score at corr 0.554 (if minutes known) vs the
+boost's 0.246. `predict/minutes.py` + `ingest/minutes_features.py` ingest
+per-game minutes from stats.wnba.com and blend a minutes prediction with the
+boost prior; `predict/scoring.py` reconstructs real_score from the box line
+(R^2 0.957) so the pipeline is self-contained on nba_api. Kill-switch
+`MINUTES_MODEL_ENABLED`.
+
+Three supporting patterns ported from `basketball-main` (the sibling NBA
+Real Sports product the operator used to win late-season drafts):
 
 1. **Anti-popularity contrarian tilt.** Draft popularity has a strong
    negative correlation with realized boost; the least-drafted half of
