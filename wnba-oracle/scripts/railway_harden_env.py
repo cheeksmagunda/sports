@@ -88,13 +88,15 @@ REDIS_URL_REF = "${{redis.REDIS_URL}}"
 VITE_API_URL_REF = "https://${{api.RAILWAY_PUBLIC_DOMAIN}}"
 
 # Unused per-service vars to delete (after the shared step).
-# Note: RAILWAY_SERVICE_API_URL / RAILWAY_SERVICE_FRONTEND_URL are
-# Railway-managed system vars (auto-injected on every service that shares
-# a project, like RAILWAY_PROJECT_NAME). variableDelete returns true but
-# the value reappears on next read. They cannot be removed via the API.
-# To untangle them from the dashboard connector graph, use the Service
-# Connect UI in the Railway dashboard. They are harmless at runtime (no
-# code reads them).
+# Note: RAILWAY_SERVICE_API_URL / RAILWAY_SERVICE_FRONTEND_URL are reserved
+# RAILWAY_* service-discovery vars Railway auto-injects into EVERY service for
+# each service that has a public domain (only api + frontend do). D53 (2026-
+# 06-01) triple-verified they cannot be removed via the API: variableDelete
+# returns true but the value re-appears, and environmentPatchCommit nulling
+# them no-ops. They are tied to the public domains the product requires, so
+# they cannot be eliminated; they are harmless at runtime (no code reads them)
+# and the only cost is dashboard-canvas edges. A STORED stray copy on the api
+# service (api referencing its own URL) WAS removed via config patch in D53.
 
 UNUSED_PER_SERVICE: dict[str, list[str]] = {
     "api": [

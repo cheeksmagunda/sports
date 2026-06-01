@@ -1043,3 +1043,58 @@ restore pre-D52 behavior via env (no redeploy). Or revert the commit.
 Tests: test_form.py (6), test_starter_signal.py (5), test_sampling_offset.py
 (2). Not done: per-player sigma also wants a minutes model; the field
 simulator still picks independently (no stacked opponents on small slates).
+
+### D53: Railway connector-graph audit — phantom-var root cause + drift fix [verified]
+2026-06-01. Operator reported the Railway dashboard "looks like spaghetti."
+Audited every service's variables (raw config + resolved) and config via
+GraphQL (`scripts/rwgql.sh`, workspace token; the railway CLI/MCP reject it).
+
+**Root cause of the visual spaghetti** [verified]: `RAILWAY_SERVICE_API_URL`
+and `RAILWAY_SERVICE_FRONTEND_URL` appear in the RESOLVED variable set of
+EVERY service (api, crons, postgres, redis, frontend), each resolving to the
+respective public domain. Railway auto-injects a `RAILWAY_SERVICE_<NAME>_URL`
+for every service that HAS a public domain (only api + frontend do), into all
+services, as reserved service-discovery vars. They are in the `RAILWAY_*`
+reserved namespace, so they are NOT removable via the API: `variableDelete`
+(service scope) returns true but the value re-appears; `environmentPatchCommit`
+nulling them also no-ops. Triple-verified 2026-06-01. This supersedes D47's
+tentative "cannot remove" note with the mechanism: it is tied to the public
+domains, which api (browser -> lineup) and frontend (browser) both require, so
+the vars cannot be eliminated without removing networking the product needs.
+No code reads them (repo-wide grep, confirmed D47), so they are harmless at
+runtime; the cost is purely the dashboard canvas drawing edges for them.
+
+**What WAS cleaned** [verified]:
+- Removed the one STORED stray reference var: api carried an explicit
+  `RAILWAY_SERVICE_API_URL` in its service config (api pointing at its own
+  URL, unused). `environmentPatchCommit` with `variables.<KEY>: null` removed
+  it from stored config (0 stored phantom vars remain). Stored reference vars
+  are what the canvas draws edges from; the auto-injected resolved values are
+  flat context vars (like `RAILWAY_PROJECT_NAME`) and should not.
+- Reconciled config drift: cron-job2 ran `CONTRARIAN_STRENGTH=0.3` (an
+  early-tuning leftover) while the code default, D51, and STATUS all say 0.2.
+  Set to 0.2 via `variableUpsert`. Revert with
+  `CONTRARIAN_STRENGTH=0.3` on cron-job2 if 0.3 was intentional (it slightly
+  increases the contrarian fade; D51's validation used 0.2).
+
+**Confirmed already at 2026 best practice (no change needed)**:
+- Shared operational vars (ENV, LOG_LEVEL, PYTHONUNBUFFERED, TZ,
+  PAYOUT_REGIME, WNBA_ORACLE_MODEL_ARTIFACT_SHA) at env scope, consumed via
+  `${{shared.KEY}}` refs (D35/D47).
+- DATABASE_URL / REDIS_URL as service references (`${{postgres.DATABASE_URL}}`,
+  `${{redis.REDIS_URL}}`) -> private internal networking, auto-rotating creds.
+- frontend VITE_API_URL as `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`.
+- No runtime secrets carried by services that don't consume them (D35).
+- Service config: crons use `restartPolicyType=NEVER` + cron schedules
+  (one-shot ticks); api/frontend have healthchecks + `ON_FAILURE`. Correct.
+
+**Cosmetic, left alone**: serviceInstance `builder` reads RAILPACK on the
+code services while `railway.toml` pins `DOCKERFILE` (railway.toml governs the
+actual build, which works); aligning the stored field would force 4 redeploys
+for no behavior change. `restartPolicyMaxRetries=10` on the NEVER crons is
+inert. cron-job2's `OPTIMIZER_MAX_PER_TEAM=2` / `CONTRARIAN_ENABLED=true`
+equal code defaults (kept as explicit operational intent).
+
+**Operator note**: the phantom api/frontend canvas edges can only be hidden
+from the Railway dashboard UI (if at all); there is no API path. They reflect
+a real platform behavior, not a config error.

@@ -26,14 +26,16 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
   only until operator wires the Railway cron service; corpus is auto-
   extended each fire by walking back N ids from today's max contest id
   and skipping anything not `sport=wnba` & finalized)
-- env-tunable knobs at shared scope: CONTRARIAN_STRENGTH=0.2,
-  CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
-  OPTIMIZER_DYNAMIC_TEAM_CAP=true (D50; relaxes the cap on <=2-game
-  slates, set false to restore static cap), SAMPLING_SCORE_OFFSET=2.0
-  (D52; set 10 to restore pre-D52 sampling), STARTER_SIGNAL_ENABLED=true
-  (D52; set false to ignore the RotoWire starter flag), PAYOUT_REGIME=top_20.
-  The D50/D52 knobs use code defaults (not yet set on Railway), so a deploy
-  activates them; set explicitly on Railway only to override.
+- env-tunable knobs (scope verified 2026-06-01, D53):
+  - SHARED (env scope, via ${{shared.KEY}} refs): ENV, LOG_LEVEL,
+    PYTHONUNBUFFERED, TZ, PAYOUT_REGIME=top_20, WNBA_ORACLE_MODEL_ARTIFACT_SHA.
+  - cron-job2 scope (optimizer): CONTRARIAN_STRENGTH=0.2 (reconciled from a
+    drifted 0.3, D53), CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
+    CAVEAT_IS_SKIP=true. The D50/D52 knobs OPTIMIZER_DYNAMIC_TEAM_CAP (true),
+    SAMPLING_SCORE_OFFSET (2.0), STARTER_SIGNAL_ENABLED (true) are NOT set on
+    Railway and run on code defaults; set them on cron-job2 only to override
+    (e.g. SAMPLING_SCORE_OFFSET=10 or STARTER_SIGNAL_ENABLED=false to revert).
+  - DATABASE_URL / REDIS_URL are service references; never literals.
 - env-tunable knobs at cron-job2 service: CAVEAT_IS_SKIP=true (set
   2026-05-29 per D48; demotes `enter_with_caveat` to `skip` on
   marginal-EV slates). Unset or set to `false` to roll back.
