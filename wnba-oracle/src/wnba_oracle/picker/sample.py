@@ -36,6 +36,14 @@ class CopulaConfig:
     rho_same_team: float = -0.25
     rho_opp_team: float = +0.20
     seed: int = 1729
+    # score_offset (K): log-sampling is done on log(real_score + K), then K is
+    # subtracted after exp. K must exceed the most-negative real_score (corpus
+    # min -0.39) to keep the log positive. D52 recalibrated K from 10 -> 2:
+    # at K=10 the implied real_score std was ~3.2 (3x the observed ~1.17) and
+    # the right-skew was flattened; at K=2 the implied std matches reality and
+    # the lognormal skew is preserved. mu MUST be built with the same K (the
+    # caller and this module share it via this field).
+    score_offset: float = 2.0
 
 
 def build_correlation_matrix(
@@ -78,12 +86,10 @@ def sample_joint_real_scores(
     mu = np.array([s.mu for s in specs])
     sigma = np.array([s.sigma for s in specs])
     log_samples = z * sigma + mu
-    # Convert log-scale samples back to real_score. The handoff says
-    # real_score can be negative; we keep an offset so the exponential stays
-    # numerically stable. Convention: store predictions in log(real_score + K)
-    # space, K=10. Subtract K after exp.
-    K = 10.0
-    return np.exp(log_samples) - K
+    # Convert log-scale samples back to real_score. Predictions are stored in
+    # log(real_score + K) space; subtract K after exp. K = cfg.score_offset
+    # (D52). The caller MUST build mu with the same K.
+    return np.exp(log_samples) - cfg.score_offset
 
 
 def lineup_score_samples(

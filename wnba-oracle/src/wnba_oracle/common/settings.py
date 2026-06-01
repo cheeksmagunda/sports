@@ -70,6 +70,19 @@ class Settings(BaseSettings):
     # against placement data rather than the leakage-contaminated 16-slate
     # backtest. Default False preserves current behavior.
     caveat_is_skip: bool = Field(default=False, alias="CAVEAT_IS_SKIP")
+    # sampling_score_offset (K): log(real_score + K) sampling space. D52
+    # recalibrated 10 -> 2 so the implied real_score std (~1.1) and right-skew
+    # match the corpus. job2 builds mu and the copula un-offsets with this same
+    # value. Set SAMPLING_SCORE_OFFSET=10 to restore the pre-D52 sampling.
+    sampling_score_offset: float = Field(default=2.0, alias="SAMPLING_SCORE_OFFSET")
+    # starter_signal_enabled: modulate predicted real_score by the RotoWire
+    # confirmed-starter flag job1 persists (is_starter / rotowire_confirmed).
+    # This is the one pre-game signal additive to card_boost (a lagging
+    # average can't know tonight's starting five). Default on; set
+    # STARTER_SIGNAL_ENABLED=false to disable. See D52.
+    starter_signal_enabled: bool = Field(
+        default=True, alias="STARTER_SIGNAL_ENABLED"
+    )
 
 
 @lru_cache(maxsize=1)

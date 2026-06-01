@@ -114,26 +114,30 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     un-ignore the production artifact or download from object
     storage at startup).
 
-12. **[NEW 2026-06-01] Prediction-quality lever: wire the
-    confirmed-starter / minutes signal into the live predictor.** D51
-    found our leaderboard gap is dominated by prediction resolution
-    (Spearman 0.37, top-5 recovers 2.44/5 of the realized top-8), not
-    by the contrarian tilt or (now-fixed) stacking. job1 ALREADY
-    persists `is_starter`, `starter_slot`, `rotowire_confirmed` into
-    `features_json`, but job2's `_build_specs` reads only `is_out`.
-    Minutes is the dominant driver of real_score. Proposed first step
-    (cheap, data already present): a `starter_signal_multiplier` applied
-    to `pred_real_score` in `_build_specs`, mirroring
-    `game_script_multiplier` — confirmed starters up, confirmed bench
-    down. Follow-ons: real box-score features from the `stats_wnba`
-    (nba_api) ingest (recent real_score form, opponent defense, pace);
-    per-player `sigma` instead of the flat 0.25 (starters lower-variance,
-    boost/bench plays higher-variance) so ceiling plays are priced for
-    the top-heavy payout; and softening the `K=10` log-offset in
-    `sample.py` that compresses the right-skew where boom games live.
-    **Why operator-gated, not shipped here**: honest measurement needs a
-    walk-forward backtest (retrain EB on slates < N for each test slate
-    N). The current 16-slate backtest has EB leakage (D45), so a
-    prediction change cannot be validated offline on it. Build the
-    walk-forward harness first (the `cv_splitter` + `oracle-train`
-    pieces exist), then iterate the signals against it.
+12. **[MOSTLY DONE 2026-06-01] Prediction-quality lever.** D52 built the
+    walk-forward harness (`scripts/backtest_walkforward.py`, no leakage)
+    and acted on what it measured:
+    - SHIPPED: per-player sampling sigma + K recalibration (10->2),
+      cutting walk-forward gap-to-winner ~2 pts and lifting winner overlap
+      1.19 -> 1.75.
+    - SHIPPED: RotoWire confirmed-starter multiplier in `_build_specs`
+      (1.10 / 0.82 / 1.0). This is the cheap minutes/role proxy.
+    - REJECTED (measured): recency/form prediction and EB-over-boost. The
+      card_boost handicap already encodes recent form, so per-game
+      real_score is not further predictable from history.
+    **Remaining (genuinely needs new data, not just code):**
+    a. A real minutes model. The starter flag is binary; actual projected
+       minutes (from the `stats_wnba`/nba_api game-log ingest, not yet on
+       the live path) would sharpen both the pred and the per-player sigma.
+       Tune the 1.10/0.82 starter magnitudes once a minutes-vs-real_score
+       fit exists (cannot be backtested on the current corpus -- it has no
+       starter/minutes labels).
+    b. Field simulator stacks. `picker/field.py` samples opponents by
+       independent ownership picks, so it never produces a stacked
+       opponent. On <=2-game slates the real field stacks heavily, so EV
+       /leverage is mispriced there. Add correlated (game-stack) field
+       lineups before relying on small-slate EV.
+    c. Consider the payout regime. "Win a ~9k-entry field" is the steeply
+       convex top_1 shape, not the top_20 (20th-percentile cash line) we
+       run. Detecting regime needs numBrawlers, which is 0 pregame (D48),
+       so this is a product decision, not a quick toggle.

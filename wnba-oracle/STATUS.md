@@ -1,6 +1,6 @@
 status: BUILD_COMPLETE
 last_verified: 2026-06-01T00:00:00Z
-phase: live; first fire 2026-05-28T22:00Z scored ~34.6 (top-20 floor 49.91, winner 53.13). Adversarial review of 2026-05-29 shipped CAVEAT_IS_SKIP guardrail + stable argsort tie-break (D48). 2026-06-01 operator-review pass: dynamic team cap by slate size (D50, fixes 1-game-slate forfeit + small-slate stacking), contrarian investigated and KEPT at 0.2 (D51, off is neutral-to-worse). Real gap is prediction resolution (Spearman 0.37); starter/minutes signal scoped in NEEDS_HUMAN #12.
+phase: live; first fire 2026-05-28T22:00Z scored ~34.6 (top-20 floor 49.91, winner 53.13). Adversarial review of 2026-05-29 shipped CAVEAT_IS_SKIP guardrail + stable argsort tie-break (D48). 2026-06-01 operator-review pass shipped: dynamic team cap by slate size (D50, fixes 1-game forfeit + small-slate stacking); contrarian kept at 0.2 (D51, off is worse); sampling recalibrated K=10->2 + per-player sigma (D52, cuts walk-forward gap-to-winner ~2 pts, lifts winner overlap 1.19->1.75); RotoWire confirmed-starter signal wired into the predictor (D52). Recency/EB-over-boost prediction tested and rejected (boost already encodes form). Walk-forward harness built (scripts/backtest_walkforward.py).
 
 # Build status
 
@@ -29,7 +29,11 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - env-tunable knobs at shared scope: CONTRARIAN_STRENGTH=0.2,
   CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
   OPTIMIZER_DYNAMIC_TEAM_CAP=true (D50; relaxes the cap on <=2-game
-  slates, set false to restore static cap), PAYOUT_REGIME=top_20
+  slates, set false to restore static cap), SAMPLING_SCORE_OFFSET=2.0
+  (D52; set 10 to restore pre-D52 sampling), STARTER_SIGNAL_ENABLED=true
+  (D52; set false to ignore the RotoWire starter flag), PAYOUT_REGIME=top_20.
+  The D50/D52 knobs use code defaults (not yet set on Railway), so a deploy
+  activates them; set explicitly on Railway only to override.
 - env-tunable knobs at cron-job2 service: CAVEAT_IS_SKIP=true (set
   2026-05-29 per D48; demotes `enter_with_caveat` to `skip` on
   marginal-EV slates). Unset or set to `false` to roll back.

@@ -132,6 +132,10 @@ class OptimizeConfig:
     # CAVEAT_IS_SKIP env var on services that should refuse marginal-EV
     # contests until live-field calibration data is in.
     caveat_is_skip: bool = False
+    # score_offset (K): passed through to the copula sampler. MUST equal the K
+    # the caller used to build each spec's mu (job2 reads both from settings).
+    # D52 default 2.0 (was 10.0).
+    score_offset: float = 2.0
 
 
 def optimize_lineup(
@@ -182,7 +186,9 @@ def optimize_lineup(
 
     # Joint sample once for the filtered pool.
     real_score_samples = sample_joint_real_scores(
-        filtered_sampling, cfg.n_samples, CopulaConfig(seed=cfg.seed)
+        filtered_sampling,
+        cfg.n_samples,
+        CopulaConfig(seed=cfg.seed, score_offset=cfg.score_offset),
     )
     # Project field ownership + sample opponent lineups.
     ownership = project_ownership(filtered_field)

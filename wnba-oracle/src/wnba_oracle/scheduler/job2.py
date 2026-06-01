@@ -40,6 +40,7 @@ from wnba_oracle.picker.popularity import (
     slate_labels_to_popularity,
 )
 from wnba_oracle.picker.sample import PlayerSamplingSpec
+from wnba_oracle.predict.form import player_volatility
 from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
@@ -222,6 +223,55 @@ def _is_out_from_features(features_json: object) -> bool:
     return bool(int(f.get("is_out", 0) or 0))
 
 
+def _starter_multiplier(features_json: object, *, enabled: bool) -> float:
+    """Real_score multiplier from the RotoWire confirmed-starter flag (D52).
+
+    card_boost is a lagging rolling-rating handicap, so it cannot know
+    tonight's starting five. RotoWire's same-day confirmation is the one
+    pre-game signal additive to boost. We only act on CONFIRMED rows
+    (rotowire_confirmed=1); an unconfirmed/unmatched player gets 1.0 (no
+    info) so we never punish a player RotoWire simply did not list.
+
+    Magnitudes are modest on purpose -- boost already captures most of a
+    player's role, so this is a nudge for same-day starts/sits, not a
+    wholesale re-rating. confirmed starter -> 1.10, confirmed non-starter
+    -> 0.82.
+    """
+    if not enabled:
+        return 1.0
+    f = _features_dict(features_json)
+    if not int(f.get("rotowire_confirmed", 0) or 0):
+        return 1.0
+    return 1.10 if int(f.get("is_starter", 0) or 0) else 0.82
+
+
+def _load_prior_real_scores(slate_date: str) -> dict[int, list[float]]:
+    """As-of per-player realized real_scores from slate_labels for all slates
+    STRICTLY BEFORE `slate_date`, most-recent-first. Drives per-player
+    sampling sigma (volatility). Empty on any DB error -> caller uses the
+    calibrated default sigma. Walk-forward-safe: never reads the target slate.
+    """
+    try:
+        eng = get_engine()
+    except RuntimeError:
+        return {}
+    q = text(
+        "SELECT platform_player_id, slate_date, MAX(real_score) AS real_score "
+        "FROM slate_labels WHERE slate_date < :sd AND real_score IS NOT NULL "
+        "GROUP BY platform_player_id, slate_date ORDER BY slate_date DESC"
+    )
+    out: dict[int, list[float]] = {}
+    with eng.connect() as conn:
+        for row in conn.execute(q, {"sd": slate_date}):
+            m = row._mapping
+            pid = m.get("platform_player_id")
+            rs = m.get("real_score")
+            if pid is None or rs is None:
+                continue
+            out.setdefault(int(pid), []).append(float(rs))
+    return out
+
+
 def _load_measured_drafts(slate_date: str) -> dict[int, int]:
     """Pull the most recent draftStats.drafts counts from slate_labels for
     the slate. Empty if Job 2 is firing before any contest finalized
@@ -255,6 +305,7 @@ def _build_specs(
     slate_date: str,
     contrarian_cfg: ContrarianConfig | None = None,
     player_history: dict[int, float] | None = None,
+    prior_by_player: dict[int, list[float]] | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict]]:
     """Build the (sampling, field) specs the optimizer reads.
 
@@ -340,6 +391,9 @@ def _build_specs(
         gs_mult = (
             game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
         )
+        starter_mult = _starter_multiplier(
+            r.get("features_json"), enabled=settings.starter_signal_enabled
+        )
         eb_pred = _eb_predict_one(art, pid, position)
         if eb_pred is not None:
             base = eb_pred
@@ -353,7 +407,7 @@ def _build_specs(
         else:
             base = _heuristic_real_score(boost)
             n_heuristic_fallback += 1
-        pred_real_scores[pid] = max(0.5, base * gs_mult)
+        pred_real_scores[pid] = max(0.5, base * gs_mult * starter_mult)
         rows_by_pid[pid] = r
 
     log.info(
@@ -369,6 +423,13 @@ def _build_specs(
         pred_real_scores, popularity_scores, contrarian_cfg
     )
 
+    # Per-player sampling sigma from as-of realized volatility (D52). A flat
+    # sigma priced every player the same; ceiling plays (high game-to-game
+    # variance) should sample wider so the EV/percentile math sees their
+    # upside. K and sigma share the same score_offset the copula un-offsets.
+    K = float(settings.sampling_score_offset)
+    volatility = player_volatility(prior_by_player or {})
+
     samps: list[PlayerSamplingSpec] = []
     fields: list[FieldPlayerSpec] = []
     projection_by_pid: dict[int, dict] = {}
@@ -377,15 +438,19 @@ def _build_specs(
         team = str(r.get("team", "") or "")
         opp = str(r.get("opponent", "") or "")
         boost = float(r.get("card_boost", 0.0) or 0.0)
-        K = 10.0
         mu_log = float(np.log(max(pred + K, 1.0)))
+        # Convert the real_score-unit volatility to a log-scale sigma via the
+        # delta method: std(real) ~= (pred + K) * sigma_log. Clamp to a sane
+        # band so a single outlier game can't blow up the percentile bias.
+        vol = volatility.get(int(pid), 1.17)
+        sigma_log = min(0.6, max(0.12, vol / max(pred + K, 1e-6)))
         samps.append(
             PlayerSamplingSpec(
                 player_id=pid,
                 team=team,
                 opponent=opp,
                 mu=mu_log,
-                sigma=0.25,
+                sigma=sigma_log,
                 boost=boost,
             )
         )
@@ -571,8 +636,18 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         return Job2Result(sd, model_sha, None, False, "pool_too_small")
 
     player_history = _load_player_history()
-    log.info("player_history_loaded", n_players=len(player_history))
-    samps, fields, projection_by_pid = _build_specs(enrichment, slate_date=sd, player_history=player_history)
+    prior_by_player = _load_prior_real_scores(sd)
+    log.info(
+        "player_history_loaded",
+        n_players=len(player_history),
+        n_prior_history=len(prior_by_player),
+    )
+    samps, fields, projection_by_pid = _build_specs(
+        enrichment,
+        slate_date=sd,
+        player_history=player_history,
+        prior_by_player=prior_by_player,
+    )
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
 
@@ -585,6 +660,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         max_per_team=settings.optimizer_max_per_team,
         dynamic_team_cap=settings.optimizer_dynamic_team_cap,
         caveat_is_skip=settings.caveat_is_skip,
+        score_offset=settings.sampling_score_offset,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     log.info(

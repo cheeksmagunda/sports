@@ -977,3 +977,69 @@ driver of real_score. Wiring a starter/minutes term into `_build_specs`
 right-skew, are the next levers. These need walk-forward validation
 (the EB artifact saw the 16 test slates), so they are scoped as a
 follow-up rather than shipped blind here. See NEEDS_HUMAN.
+
+### D52: Walk-forward prediction work -- sampling calibrated, recency rejected, starter signal shipped [verified]
+2026-06-01. Followed up D51's "real gap is prediction" by building the
+walk-forward harness and testing every prediction lever honestly. Built
+`scripts/backtest_walkforward.py`: for each 2026 test slate N it predicts
+using ONLY slates < N (no EB leakage), unlike the D45-contaminated
+`backtest_counterfactual.py`. New module `predict/form.py`.
+
+**Finding 1 -- recency does NOT beat card_boost** [verified]. card_boost
+is the platform's rolling-rating handicap, so it already encodes recent
+form. On 3,315 within-player (prior -> next) pairs:
+`corr(next_real_score, recency_EWMA)=+0.448` and
+`corr(next_real_score, boost_prior)=+0.448` -- identical, MAE tied at
+~1.08. Walk-forward predictor quality (Spearman of ceil_contrib ranking,
+top-5 recovery of the realized top-8):
+| predictor | Spearman | recovery |
+|---|---|---|
+| boost_only | +0.251 | 2.06/5 |
+| eb_wf (career-mean, honest) | +0.234 | 1.88/5 |
+| form (recency blend) | +0.217 | 1.69/5 |
+Recency and EB both UNDERperform boost-only out-of-sample: adding a
+player real_score estimate on top of boost just injects idiosyncratic
+noise. `predict/form.predict_real_scores` is retained ONLY as the
+documented challenger; it is NOT wired into serving. Per-game real_score
+beyond boost is essentially unpredictable from history.
+
+**Finding 2 -- sampling was miscalibrated; fixing it is a real win**
+[verified]. Corpus real_score lives in [-0.4, 9.9], median 2.46,
+right-skewed (0.57), per-player game-to-game std ~1.17. The sampler used
+`log(real + K)` with K=10 and a flat `sigma=0.25`, implying a real_score
+std of `(2.5+10)*0.254 ~= 3.2` (3x reality) and flattening the skew.
+Recalibrated K=10 -> 2 (implied std `(2.5+2)*0.254 ~= 1.14`, matches, and
+the lognormal skew survives) and made sigma per-player from as-of realized
+volatility (`std(real)/(pred+K)`, clamped [0.12, 0.6]) so ceiling plays
+sample wide. Walk-forward placement (predictor held fixed, dynamic cap on,
+contrarian 0.2):
+| config | top-20 | gap-to-winner | winner overlap |
+|---|---|---|---|
+| eb + old(K10,flat) [honest current] | 3/16 | 16.05 | 1.19/5 |
+| eb + new(K2,per-player sigma) | 3/16 | 14.22 | 1.75/5 |
+| boost + new(K2,per-player sigma) | 2/16 | 14.06 | 1.31/5 |
+The sampling fix cuts gap-to-winner ~1.8-2.0 pts and lifts winner overlap
+1.19 -> 1.75 (+47%), consistent across both predictors. Shipped: K and
+per-player sigma. Env knob `SAMPLING_SCORE_OFFSET` (default 2.0, set 10
+to revert). `CopulaConfig.score_offset` + `OptimizeConfig.score_offset`
+thread it; job2 builds mu and sets per-player sigma with the same K.
+
+**Finding 3 -- predictor stays EB** [verified]. boost wins predictor-
+quality (Finding 1) but placement is a wash-to-slightly-worse vs EB (above
+table: eb 3/16 + overlap 1.75 vs boost 2/16 + overlap 1.31 under the new
+sampling). Not worth ripping out the EB/history tiers (D44-46). No change.
+
+**Finding 4 -- starter signal shipped** [reasoned]. The one pre-game
+signal additive to boost is same-day minutes/role, which a lagging average
+cannot contain. job1 already persists `is_starter`/`rotowire_confirmed`;
+job2 now multiplies pred_real_score by 1.10 (confirmed starter) / 0.82
+(confirmed bench) / 1.0 (unconfirmed). NOT backtestable on the corpus (no
+starter labels there), so magnitudes are modest and it is env-gated:
+`STARTER_SIGNAL_ENABLED` (default true, set false to disable). Mirrors
+`game_script_multiplier`.
+
+Reverse: `SAMPLING_SCORE_OFFSET=10` + `STARTER_SIGNAL_ENABLED=false`
+restore pre-D52 behavior via env (no redeploy). Or revert the commit.
+Tests: test_form.py (6), test_starter_signal.py (5), test_sampling_offset.py
+(2). Not done: per-player sigma also wants a minutes model; the field
+simulator still picks independently (no stacked opponents on small slates).
