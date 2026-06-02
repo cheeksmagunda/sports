@@ -154,3 +154,29 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
        but that is HALF the minutes edge (same-day role). Check whether the
        RotoWire URL/markup changed and fix `ingest/rotowire.py`. Watch the
        job1 `n_matched` (RotoWire) and `n_minutes_matched` (nba_api) keys.
+
+14. **[NEW 2026-06-02, D57] `make determinism-check` is silently broken (pre-
+    existing, NOT Tier 3).** Two bugs: (a) `oracle-train` truncates `--commit`
+    to 8 chars in the artifact filename (`dev_determ_1` -> `picker_dev_dete_*`),
+    but the Makefile `find ... picker_*dev_determ_1*.pkl` looks for the full
+    string, matches nothing, and `mv` errors before any comparison runs (both
+    test commits even truncate to the same `dev_dete`). (b) The assertion
+    compares pickle SHAs, but LightGBM Booster pickles are NOT byte-stable even
+    when the trained model content is identical, so the check would FAIL on
+    deterministic training. Fix: compare model CONTENT (per-array
+    `np.array_equal` over heads + eb_baseline), not pickle bytes, and use commit
+    prefixes that survive the 8-char truncation (or stop truncating in
+    `train.pipeline.write_artifact`). Verified 2026-06-02 that training IS
+    content-deterministic; only the gate is wrong.
+
+15. **[NEW 2026-06-02, D57] Validate + tune Tier 3 before enabling in live.**
+    `GAME_SCRIPT_MINUTES_ENABLED` is OFF by default. The constants (blowout ramp
+    soft=8 / hard=18 pts, `starter_trim_fraction`=0.18, `redistribution_rate`
+    =0.70, copula rhos +0.30 / -0.35 / -0.10) are PRIORS. Tune them once (a)
+    historical Vegas spreads are in the corpus and (b) the availability/minutes
+    engine (Tier 2) lands underneath. Tier 3 rides on that engine and currently
+    only moves KNOWN rotation bench players (cold-start darts have no recent
+    minutes so they are untouched, which is why this alone does not fix the
+    2026-06-01 all-longshot bust). To turn on for a live A/B once validated: set
+    `GAME_SCRIPT_MINUTES_ENABLED=true` on cron-job2 (also auto-disables the blunt
+    team-wide blowout penalty). Reverse: unset it.

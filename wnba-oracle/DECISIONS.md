@@ -1318,3 +1318,23 @@ REPLACES the blunt team-wide blowout penalty (game_script.blowout_penalty x0.92
 taxes starters and bench equally) once wired. Not yet wired into job2; wiring
 lands behind `GAME_SCRIPT_MINUTES_ENABLED` (default off) in a later increment.
 Reverse: delete the module + its job2 wiring; the team-wide penalty stays.
+
+Increments 2-3 (commits e8ca16a, 41a2376): (2) regime-switching same-team copula
+correlation in `sample.py`. `PlayerSamplingSpec` gains `is_starter` +
+`blowout_prob` (both defaulted, so the matrix is byte-identical to pre-D57 until
+populated); in a blowout, bench-bench goes positive (+0.30) and starter-bench
+negative (-0.35), interpolated from the close-game -0.25 by the pair's
+blowout_prob. (3) job2 wiring behind `GAME_SCRIPT_MINUTES_ENABLED` (default
+OFF): gathers blowout_prob + role per player, applies the redistribution via the
+per-minute rate, threads role+prob into the specs, and disables the blunt
+team-wide blowout penalty when on (no double-count). Cold-start darts have no
+recent minutes so they are untouched, so this alone does NOT fix the 06-01 bust
+(that needs Tier 2). 167 unit tests pass; mypy src/ + ruff clean. With the flag
+OFF the live freeze is byte-identical.
+
+Determinism note: `make determinism-check` is broken independent of Tier 3 (see
+NEEDS_HUMAN 14). Verified manually that training is deterministic at the
+MODEL-CONTENT level (every artifact array/scalar byte-equal across two runs);
+the pickle SHA differs only because LightGBM Booster serialization is not
+byte-stable. Tier 3 touches no training code, and the freeze path stays
+deterministic (fixed copula seed + pure redistribution).
