@@ -192,3 +192,21 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     (`skipped_anchor_floor`, `effective_min_anchors`). CAVEAT: this forces a
     floor but does not pick the RIGHT ceiling darts (Kosu vs Holmes), which is
     Tier 2 (availability model). Necessary, not sufficient.
+
+17. **[NEW 2026-06-02, D59] Deferred Tier 2 follow-ups (not blocking tonight).**
+    The availability model (P(active), AVAILABILITY_MODEL_ENABLED) shipped;
+    three Tier-2 pieces remain:
+    a. REAL OWNERSHIP INGESTION from the Real Sports Daily Draft Stats panel
+       (the in-app draft counts: 3k / 1k / 384 / 13 ...). Feed true field
+       ownership into the field simulation (draw opponent lineups from real
+       ownership, not a softmax over our own projections) and into a leverage
+       term (ceiling x (1 - ownership)) to replace the flat contrarian penalty.
+       Needs a new job1 scrape + parser; do NOT rush it live (RotoWire-404
+       fragility class).
+    b. WIN-EQUITY OBJECTIVE: optimize an upper-quantile / P(score >= winning
+       threshold) term for the top-heavy payout, not just mean EV.
+    c. MIXTURE-VARIANCE sampling: gate each player's copula draw by a seeded
+       Bernoulli(P(active)) so the bimodal spike-at-zero is modeled, not just
+       the mean (tonight uses the expectation form).
+    North-star to measure all of this: realized leaderboard RANK on the corpus
+    (build the replay harness on scripts/replay_slate.py).

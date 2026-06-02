@@ -1371,3 +1371,45 @@ never-forfeits) + an is_anchor assertion in test_game_script_wired.py.
 CAVEAT: the floor guarantees we stop drafting 5 darts, but WHICH boost longshots
 to pair on the ceiling side (Kosu, not Holmes) still needs the Tier 2
 availability model. The floor is necessary, not sufficient.
+
+### D59: Two-part availability model (Tier 2) [verified]
+2026-06-02. The Tier 2 ROOT-CAUSE fix from the D57 strategy. The pipeline could
+not tell a rotation dart that plays 25 min (Kosu) from a bench-warmer that plays
+0 (Holmes): a no-history player got the boost prior (~1.81) with no availability
+discount. This adds P(active).
+
+WHAT: E[real_score] = P(active) x E[real_score | active]. The D55 minutes model
+gives the active-conditional value; predict/availability.py estimates P(active),
+the probability the player is in tonight's rotation and logs a meaningful shift
+(>= 10 min). Empirical-Bayes, NOT a trained classifier (a logistic on ~500 rows
+would overfit): the within-game minutes-floor probability
+P(min >= 10 | recent_minutes, vol) via a normal approx is shrunk toward a
+neutral 0.60 by sample size (n/(n+4)); a no-history player falls to a 0.30 base
+rate; a RotoWire-confirmed starter/bench sets a 0.92/0.70 floor.
+
+HOW: job2._build_specs multiplies pred_real_score by P(active) (after
+game-script, before contrarian). A cold-start boost-3 dart drops ~1.81 -> ~0.5
+(floored), so its visible_value 0.5*(2+3)=2.5 falls below a boost-0 anchor's
+3.0*2=6.0 and it drops out of the top-N filter + EV ranking. Established
+rotation players (P(active) ~0.9+) are essentially unchanged. Deterministic (no
+RNG), so the freeze stays idempotent.
+
+KILL-SWITCH: AVAILABILITY_MODEL_ENABLED (default OFF, live unchanged). Arm with
+AVAILABILITY_MODEL_ENABLED=true on cron-job2.
+
+SCOPE: Tier 2 ships the availability model ONLY. Deferred with reasons
+(NEEDS_HUMAN 17): (item 6) real ownership ingestion from the Daily Draft Stats
+panel -- job1 already fired at 13:00 UTC so a new scraper cannot help tonight's
+slate, and a fresh Real Sports scrape hours before tip is the RotoWire-404
+fragility class; (item 7) the win-equity/ceiling objective -- held to keep
+tonight's live change set tight. Also a follow-up: the MIXTURE-variance form
+(a Bernoulli availability gate in the copula sampler) -- tonight uses the
+expectation form (multiply the mean), which collapses darts in EV but does not
+yet model the bimodal spike-at-zero variance. The D58 anchor floor backstops
+either way.
+
+TOGETHER (D57 game-script / D58 anchor floor / D59 availability): availability
+collapses the wrong darts, the anchor floor forces >= 2 real-minutes players,
+and game-script reallocates blowout minutes to KNOWN bench. The floor+ceiling
+barbell the slate winners used, by construction. Validated end-to-end with all
+three armed in test_all_tiers_integration.py.
