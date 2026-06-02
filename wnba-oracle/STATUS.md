@@ -33,10 +33,11 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
     drifted 0.3, D53), CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
     CAVEAT_IS_SKIP=true. The D50/D52/D55 knobs OPTIMIZER_DYNAMIC_TEAM_CAP (true),
     SAMPLING_SCORE_OFFSET (2.0), STARTER_SIGNAL_ENABLED (true),
-    MINUTES_MODEL_ENABLED (true), GAME_SCRIPT_MINUTES_ENABLED (false, D57)
-    are NOT set on Railway and run on code defaults; set them on cron-job2 to
-    override (e.g. GAME_SCRIPT_MINUTES_ENABLED=true to A/B Tier 3 once tuned;
-    e.g. MINUTES_MODEL_ENABLED=false
+    MINUTES_MODEL_ENABLED (true), GAME_SCRIPT_MINUTES_ENABLED (false, D57),
+    LINEUP_ANCHOR_FLOOR (0, D58) are NOT set on Railway and run on code
+    defaults; set them on cron-job2 to override (e.g. LINEUP_ANCHOR_FLOOR=2 to
+    arm the Tier 1 anchor-floor seatbelt; GAME_SCRIPT_MINUTES_ENABLED=true to
+    A/B Tier 3 once tuned; e.g. MINUTES_MODEL_ENABLED=false
     to fall back to the boost/EB predictor, SAMPLING_SCORE_OFFSET=10 to revert).
   - cron-job1 now also pulls stats.wnba.com game logs (nba_api) for the D55
     minutes features; a stats.wnba.com outage degrades gracefully (job2 falls

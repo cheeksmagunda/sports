@@ -180,3 +180,15 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     2026-06-01 all-longshot bust). To turn on for a live A/B once validated: set
     `GAME_SCRIPT_MINUTES_ENABLED=true` on cron-job2 (also auto-disables the blunt
     team-wide blowout penalty). Reverse: unset it.
+
+16. **[NEW 2026-06-02, D58] RECOMMENDED: arm the Tier 1 anchor-floor seatbelt.**
+    Set `LINEUP_ANCHOR_FLOOR=2` on the cron-job2 Railway service (env, no
+    redeploy, instant rollback by unsetting). This forces every frozen lineup to
+    contain >= 2 confirmed-minutes anchors, so it can never again be 5 cold-start
+    darts (the 2026-06-01 bust). It can never forfeit a slate (clamps + relaxes
+    if infeasible). Built default-OFF only out of D56 caution (it changes the
+    live optimizer enumeration); validated by unit tests but not yet on a live
+    slate, so watch the first armed fire's `optimizer_stage2` log keys
+    (`skipped_anchor_floor`, `effective_min_anchors`). CAVEAT: this forces a
+    floor but does not pick the RIGHT ceiling darts (Kosu vs Holmes), which is
+    Tier 2 (availability model). Necessary, not sufficient.

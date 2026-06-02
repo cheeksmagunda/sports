@@ -1338,3 +1338,36 @@ MODEL-CONTENT level (every artifact array/scalar byte-equal across two runs);
 the pickle SHA differs only because LightGBM Booster serialization is not
 byte-stable. Tier 3 touches no training code, and the freeze path stays
 deterministic (fixed copula seed + pure redistribution).
+
+### D58: Lineup anchor floor (Tier 1 seatbelt) [verified]
+2026-06-02. The Tier 1 stop-the-bleeding fix from the D57 strategy, built after
+Tier 3 at operator direction. Directly prevents a repeat of the 2026-06-01
+all-longshot bust.
+
+WHAT: an optional optimizer constraint, a lineup must contain >= min_anchors
+confirmed-minutes "anchor" players. An anchor (job2.ANCHOR_MIN_GAMES=3,
+ANCHOR_MIN_MINUTES=20) is an established rotation player (>=3 recent nba_api
+games averaging >=20 min) OR a RotoWire-confirmed starter. Cold-start darts (no
+minutes history, not confirmed) are NOT anchors, which is exactly the boost
+longshots (Holmes 0, McCowan 1.0) that sank 06-01. With min_anchors=2 the
+optimizer is forced into the floor+ceiling BARBELL every slate winner used
+(Williams/Miles chalk floor + minutes-validated boost ceiling).
+
+HOW (mirrors the team cap, D50): a cheap per-combo skip in the C(N,5)
+enumeration (anchor_count(combo) < min_anchors -> skip), plus two safety nets so
+it can NEVER forfeit a slate: (1) clamp the requested floor to the anchors
+actually present in the filtered pool; (2) if still jointly infeasible with the
+team cap (n_evaluated==0), re-scan with the floor relaxed to 0.
+PlayerSamplingSpec gains is_anchor (defaulted False); job2 sets it per player;
+the optimizer enforces only when min_anchors>0.
+
+KILL-SWITCH: LINEUP_ANCHOR_FLOOR (int, default 0 = off, live unchanged). Built
+default-off after the D56 optimizer outage because it changes the live
+enumeration; the operator arms it via env (LINEUP_ANCHOR_FLOOR=2 on cron-job2,
+no redeploy, instant rollback by unsetting). RECOMMENDED to arm: it is the piece
+that would have blocked the 06-01 lineup. Tests: test_anchor_floor.py (binds;
+never-forfeits) + an is_anchor assertion in test_game_script_wired.py.
+
+CAVEAT: the floor guarantees we stop drafting 5 darts, but WHICH boost longshots
+to pair on the ceiling side (Kosu, not Holmes) still needs the Tier 2
+availability model. The floor is necessary, not sufficient.
