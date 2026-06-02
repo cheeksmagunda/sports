@@ -1251,3 +1251,70 @@ normal 13:00 job1 / 21:00 job2 cycle produces named picks. Follow-ups:
   injury-cascade signals were OFF (minutes model fell back to the recency
   baseline). If it persists, the RotoWire URL/scrape needs fixing -- that is
   half the minutes edge (same-day role). See NEEDS_HUMAN.
+
+### D57: Draft-winning strategy + Tier 3 game-script bench-minutes [verified diagnosis; reasoning strategy]
+2026-06-02. Operator reviewed the 2026-06-01 leaderboard (in-app screenshots:
+final standings + the Daily Draft Stats panel) and flagged that our lineup had
+"no shot at winning." Asked for comprehensive, outside-the-box pipeline
+improvements, then chose to build Tier 3 first.
+
+VERIFIED (from the screenshots + code reads):
+- Platform scoring is ADDITIVE: `score = sum over 5 slots of (slot_mult +
+  card_boost) x realized_value`, slot_mult = [2.0,1.8,1.6,1.4,1.2] by draft
+  order. Reconciled to 0.1 on all three top-3 lineups (e.g. winner 51.14:
+  Delaere slot4 1.4 + boost 3.0 = 4.4x x 3.2 = 14.08, etc.). Our `sample.py`
+  already encodes this correctly.
+- Our 06-01 picks (Shepard/Holmes/Siegrist/Horston/McCowan) realized tiny
+  values: Holmes 0, McCowan 1.0, Horston 1.3, Shepard 2.5, Siegrist 2.7. Four
+  of five were high-boost (+2.8 to +3.0) low-minutes longshots. No chalk floor.
+- The slate winners used a BARBELL: chalk floor (Courtney Williams 6.4 value /
+  384 drafts, Olivia Miles 5.2 / 344 drafts) PLUS minutes-validated boost
+  ceiling (Kosu 3.3 x +3.0 = 16.5, Delaere 16.0, Aziaha James 13.8, each < 20
+  drafts).
+- Code: the ONLY availability gate is RotoWire OUT (job2.py:709). A player with
+  < 2 nba_api games gets pure boost prior (blend weight n_games/(n_games+3) = 0
+  at zero games, minutes.py:186). The fallback heuristic `3.16 - 0.45*boost`
+  over-rates boost: visible_value of a boost-3 dart = 1.81 x (2.0+3.0) = 9.05
+  vs a boost-0 anchor 3.16 x 2.0 = 6.32. Contrarian penalty is tiny (max 0.16
+  real-score units), a minor accelerant, not the cause.
+- D56's forward-fix claim ("picks real rotation players, not 11-min darts") did
+  NOT hold on 06-01: RotoWire was 404 (D56), so the one availability gate was
+  dark, and the lineup was again all-longshot.
+
+REASONING (root cause): availability blindness. The model cannot distinguish a
+rotation dart that plays 25 min (Kosu) from a bench-warmer that plays 0
+(Holmes) when neither has recent logs; both get a boost-indexed projection and
+league-median variance. The "boost carries no edge" stat (D54, corr(boost,
+value) = +0.016) is measured on `slate_labels`, i.e. players who were rostered
+and almost all played. It is a survived-sample statistic and does not hold for
+the deep-bench darts the optimizer reaches for, whose value is mostly a spike
+at zero. We applied an active-population fact to a population selected for
+inactivity.
+
+STRATEGY (proposed, full memo in chat / to be distilled to STRATEGY.md): a
+three-tier program. Tier 1 stop-the-bleeding (availability floor as a lineup
+constraint; degraded-mode posture that gets MORE conservative when signals are
+missing; recalibrate/guard-rail the fallback heuristic; backfill 06-01 + wire
+the day-close loop). Tier 2 the real fix (two-part availability/hurdle model
+P(in rotation, >= M min) x E[value|active]; real ownership ingestion from the
+Daily Draft Stats panel for field sim + leverage; win-equity objective). Tier 3
+research (regime-switching copula correlation; game-script bench-minutes).
+North-star metric: realized leaderboard RANK on the 320-row corpus, not CRPS/RBO.
+
+DECISION: operator sequenced Tier 3 FIRST, ahead of Tier 1/2, with the known
+caveat surfaced (Tier 3 rides on the availability engine that is Tier 2, so it
+will not move live results until that lands, and tuning will be revisited).
+Built as isolated modules behind a kill-switch so the later engine plugs in
+underneath; rework is limited to re-tuning constants, not rewriting code.
+
+Tier 3 increment 1 (this commit): `features/game_script_minutes.py` --
+role-aware blowout minutes redistribution. In a projected blowout (smooth ramp
+in abs(spread): 0 below 8 pts, full at 18), starters on both teams are trimmed
+(`minutes_l10 * starter_trim_fraction * blowout_prob`) and the freed pool is
+redistributed to the bench inverse-minutes weighted (deepest bench inherits
+most), per-player capped. Pure, position-agnostic (garbage time empties the
+whole second unit, unlike injury_cascade's cohort sharing), 7 unit tests. This
+REPLACES the blunt team-wide blowout penalty (game_script.blowout_penalty x0.92
+taxes starters and bench equally) once wired. Not yet wired into job2; wiring
+lands behind `GAME_SCRIPT_MINUTES_ENABLED` (default off) in a later increment.
+Reverse: delete the module + its job2 wiring; the team-wide penalty stays.
