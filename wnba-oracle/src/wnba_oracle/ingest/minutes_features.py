@@ -108,16 +108,16 @@ def build_minutes_features(
     out: dict[tuple[str, str, str], MinutesFeatures] = {}
     for (initial, last, team), games in by_player.items():
         games.sort(key=lambda g: g["date"], reverse=True)  # most-recent-first
-        mins = [g["min"] for g in games]
+        min_series = [g["min"] for g in games]
         reals = [g["real"] for g in games]
-        rec_min, _ = _ewma(mins, cfg.half_life)
+        rec_min, _ = _ewma(min_series, cfg.half_life)
         r_mean, _ = _ewma(reals, cfg.half_life)
-        m_mean, _ = _ewma(mins, cfg.half_life)
+        m_mean, _ = _ewma(min_series, cfg.half_life)
         rate = cfg.league_rate if m_mean <= 0 else min(cfg.max_rate, max(cfg.min_rate, r_mean / m_mean))
         feat = MinutesFeatures(
             recent_minutes=rec_min,
             per_min_rate=rate,
-            minutes_vol=_std(mins[:8]),
+            minutes_vol=_std(min_series[:8]),
             n_games=len(games),
         )
         out[(initial, last, team)] = feat
