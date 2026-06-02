@@ -100,6 +100,14 @@ class Settings(BaseSettings):
     # to turn on (also disables the blunt team-wide blowout penalty to avoid
     # double-counting).
     game_script_minutes_enabled: bool = Field(default=False, alias="GAME_SCRIPT_MINUTES_ENABLED")
+    # lineup_anchor_floor (D57, Tier 1 seatbelt): require at least this many
+    # confirmed-minutes "anchor" players in the frozen lineup so it can't be all
+    # cold-start darts (the 2026-06-01 all-longshot bust). 0 disables (default,
+    # current behavior). 2 forces the floor+ceiling barbell the slate winners
+    # used. Clamped to anchors present and relaxed if jointly infeasible with the
+    # team cap, so it never forfeits a slate. Set LINEUP_ANCHOR_FLOOR=2 on
+    # cron-job2 to arm it (env, no redeploy; reverse by unsetting).
+    lineup_anchor_floor: int = Field(default=0, alias="LINEUP_ANCHOR_FLOOR")
 
 
 @lru_cache(maxsize=1)

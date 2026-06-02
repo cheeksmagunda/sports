@@ -42,6 +42,7 @@ class PlayerSamplingSpec:
     boost: float
     is_starter: bool = False  # role tag for regime-switching correlation (D57)
     blowout_prob: float = 0.0  # this player's game blowout propensity in [0, 1]
+    is_anchor: bool = False  # confirmed-minutes floor player for the anchor floor (D57)
 
 
 @dataclass

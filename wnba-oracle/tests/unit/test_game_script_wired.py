@@ -85,6 +85,12 @@ def test_blowout_wiring_sets_role_and_prob_and_shifts_minutes(monkeypatch) -> No
     assert by_id[2].is_starter is True
     assert by_id[3].is_starter is False
     assert by_id[4].is_starter is False
+    # Anchor flag (D57, Tier 1): the 34/30-min, 10-game players clear the floor;
+    # the 12/8-min bench do not (and are not confirmed starters here).
+    assert by_id[1].is_anchor is True
+    assert by_id[2].is_anchor is True
+    assert by_id[3].is_anchor is False
+    assert by_id[4].is_anchor is False
 
     # Baseline with the flag off, same pool.
     monkeypatch.setattr(job2, "get_settings", lambda: _settings(gsm=False))

@@ -53,9 +53,7 @@ DEFAULT_SLOT_MULTIPLIERS = np.array([2.0, 1.8, 1.6, 1.4, 1.2])
 MAX_SLOT_MULT = float(DEFAULT_SLOT_MULTIPLIERS.max())
 
 
-def _exceeds_team_cap(
-    combo: tuple[int, ...], teams: list[str], max_per_team: int
-) -> bool:
+def _exceeds_team_cap(combo: tuple[int, ...], teams: list[str], max_per_team: int) -> bool:
     """True if any team appears more than max_per_team times in combo."""
     counts: dict[str, int] = {}
     for idx in combo:
@@ -86,6 +84,11 @@ def _cap_is_feasible(teams: list[str], max_per_team: int) -> bool:
             sizes[t] = sizes.get(t, 0) + 1
     capacity = n_teamless + sum(min(sz, max_per_team) for sz in sizes.values())
     return capacity >= 5
+
+
+def _anchor_count(combo: tuple[int, ...], is_anchor: list[bool]) -> int:
+    """How many players in combo are confirmed-minutes anchors."""
+    return sum(1 for idx in combo if is_anchor[idx])
 
 
 @dataclass(frozen=True)
@@ -136,6 +139,14 @@ class OptimizeConfig:
     # the caller used to build each spec's mu (job2 reads both from settings).
     # D52 default 2.0 (was 10.0).
     score_offset: float = 2.0
+    # min_anchors (D57, Tier 1 seatbelt): require at least this many
+    # confirmed-minutes "anchor" players (PlayerSamplingSpec.is_anchor) in the
+    # lineup, so it can't be all cold-start darts -- the 2026-06-01 failure mode
+    # (4 of 5 picks were high-boost players who logged ~0 minutes). 0 disables
+    # (default, current behavior). The floor is clamped to the anchors present
+    # in the filtered pool and relaxed if jointly infeasible with the team cap,
+    # so it NEVER forfeits a slate (the D50 lesson). Set via LINEUP_ANCHOR_FLOOR.
+    min_anchors: int = 0
 
 
 def optimize_lineup(
@@ -212,13 +223,12 @@ def optimize_lineup(
     # max_per_team early - counting same-team membership is much cheaper
     # than scoring then rejecting.
     keep_teams = [s.team for s in filtered_sampling]
+    keep_is_anchor = [bool(s.is_anchor) for s in filtered_sampling]
     # If the cap admits no valid 5-combo from the filtered pool (e.g. a
     # 1-game slate with dynamic_team_cap disabled), relax to uncapped so we
     # never ship an empty lineup. n_evaluated==0 below would otherwise leave
     # best_indices=() and freeze a no-player recommendation.
-    if effective_max_per_team < 5 and not _cap_is_feasible(
-        keep_teams, effective_max_per_team
-    ):
+    if effective_max_per_team < 5 and not _cap_is_feasible(keep_teams, effective_max_per_team):
         log.warning(
             "optimizer_cap_infeasible",
             effective_max_per_team=effective_max_per_team,
@@ -226,32 +236,63 @@ def optimize_lineup(
             note="relaxing to uncapped",
         )
         effective_max_per_team = 5
-    best_ev = -np.inf
-    best_indices: tuple[int, ...] = ()
-    best_samples: np.ndarray = np.zeros(cfg.n_samples)
-    n_evaluated = 0
-    n_skipped_team_cap = 0
-    for combo in itertools.combinations(range(len(filtered_sampling)), 5):
-        if effective_max_per_team < 5 and _exceeds_team_cap(
-            combo, keep_teams, effective_max_per_team
-        ):
-            n_skipped_team_cap += 1
-            continue
-        own_samples = lineup_score_samples(
-            real_score_samples, keep_boosts, list(combo), slot_multipliers
+
+    # Anchor floor (D57, Tier 1 seatbelt): clamp the requested floor to the
+    # anchors actually present in the filtered pool so it can never demand more
+    # than exist (the relaxation below is the second safety net).
+    n_anchors_pool = sum(keep_is_anchor)
+    effective_min_anchors = min(cfg.min_anchors, n_anchors_pool)
+    if effective_min_anchors < cfg.min_anchors:
+        log.warning(
+            "optimizer_anchor_floor_clamped",
+            requested=cfg.min_anchors,
+            available=n_anchors_pool,
         )
-        ev = expected_payout(own_samples, field_scores, curve, field_size=cfg.n_field_lineups + 1)
-        n_evaluated += 1
-        if ev > best_ev:
-            best_ev = ev
-            best_indices = combo
-            best_samples = own_samples
+
+    def _scan(min_anchors_req: int) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int]:
+        """Enumerate C(n,5) under the team cap + anchor floor; return the best."""
+        b_ev = -np.inf
+        b_idx: tuple[int, ...] = ()
+        b_samp: np.ndarray = np.zeros(cfg.n_samples)
+        n_eval = n_skip_team = n_skip_anchor = 0
+        for combo in itertools.combinations(range(len(filtered_sampling)), 5):
+            if effective_max_per_team < 5 and _exceeds_team_cap(
+                combo, keep_teams, effective_max_per_team
+            ):
+                n_skip_team += 1
+                continue
+            if min_anchors_req > 0 and _anchor_count(combo, keep_is_anchor) < min_anchors_req:
+                n_skip_anchor += 1
+                continue
+            own_samples = lineup_score_samples(
+                real_score_samples, keep_boosts, list(combo), slot_multipliers
+            )
+            ev = expected_payout(
+                own_samples, field_scores, curve, field_size=cfg.n_field_lineups + 1
+            )
+            n_eval += 1
+            if ev > b_ev:
+                b_ev, b_idx, b_samp = ev, combo, own_samples
+        return b_ev, b_idx, b_samp, n_eval, n_skip_team, n_skip_anchor
+
+    best_ev, best_indices, best_samples, n_evaluated, n_skipped_team_cap, n_skipped_anchor = _scan(
+        effective_min_anchors
+    )
+    if n_evaluated == 0 and effective_min_anchors > 0:
+        # Anchor floor + team cap were jointly infeasible on the filtered pool.
+        # Relax the floor and re-scan so we never freeze an empty lineup.
+        log.warning("optimizer_anchor_floor_infeasible", note="relaxing anchor floor to 0")
+        best_ev, best_indices, best_samples, n_evaluated, n_skipped_team_cap, n_skipped_anchor = (
+            _scan(0)
+        )
     log.info(
         "optimizer_stage2",
         evaluated=n_evaluated,
         skipped_team_cap=n_skipped_team_cap,
+        skipped_anchor_floor=n_skipped_anchor,
         max_per_team=cfg.max_per_team,
         effective_max_per_team=effective_max_per_team,
+        effective_min_anchors=effective_min_anchors,
         n_games=n_games,
     )
 

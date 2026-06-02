@@ -53,6 +53,14 @@ from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
 
+# Anchor definition for the Tier 1 lineup anchor floor (D57): a player we are
+# confident logs real minutes tonight. Either an established rotation player
+# (>= ANCHOR_MIN_GAMES recent games averaging >= ANCHOR_MIN_MINUTES) or a
+# RotoWire-confirmed starter. Cold-start darts (no minutes history) are NOT
+# anchors -- they are exactly the boost longshots that sank 2026-06-01.
+ANCHOR_MIN_GAMES = 3
+ANCHOR_MIN_MINUTES = 20.0
+
 
 @dataclass(frozen=True)
 class Job2Result:
@@ -440,6 +448,7 @@ def _build_specs(
     bonus = injury_bonus_by_pid or {}
     blowout_prob_by_pid: dict[int, float] = {}
     is_starter_by_pid: dict[int, bool] = {}
+    is_anchor_by_pid: dict[int, bool] = {}
     gsm_rows: list[GameScriptInput] = []
     rate_by_pid: dict[int, float] = {}
     n_minutes_predicted = 0
@@ -457,6 +466,17 @@ def _build_specs(
         gs_mult = game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
         f = _features_dict(r.get("features_json"))
         mf = _minutes_features(r.get("features_json")) if settings.minutes_model_enabled else None
+        # Anchor flag (D57, Tier 1) -- computed regardless of the floor setting
+        # so it always rides on the spec; the optimizer only enforces it when
+        # min_anchors > 0.
+        is_anchor_by_pid[pid] = (
+            mf is not None
+            and mf["n_min_games"] >= ANCHOR_MIN_GAMES
+            and mf["recent_minutes"] >= ANCHOR_MIN_MINUTES
+        ) or (
+            bool(int(f.get("rotowire_confirmed", 0) or 0))
+            and bool(int(f.get("is_starter", 0) or 0))
+        )
         if gsm_enabled and total > 0:
             # Blowout context for the regime-switching copula + the minutes
             # redistribution (D57). Only players with known recent minutes can
@@ -575,6 +595,7 @@ def _build_specs(
                 boost=boost,
                 is_starter=is_starter_by_pid.get(pid, False),
                 blowout_prob=blowout_prob_by_pid.get(pid, 0.0),
+                is_anchor=is_anchor_by_pid.get(pid, False),
             )
         )
         fields.append(
@@ -788,6 +809,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         dynamic_team_cap=settings.optimizer_dynamic_team_cap,
         caveat_is_skip=settings.caveat_is_skip,
         score_offset=settings.sampling_score_offset,
+        min_anchors=settings.lineup_anchor_floor,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     log.info(
