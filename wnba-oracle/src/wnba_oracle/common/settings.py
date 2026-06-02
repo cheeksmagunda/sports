@@ -108,6 +108,13 @@ class Settings(BaseSettings):
     # team cap, so it never forfeits a slate. Set LINEUP_ANCHOR_FLOOR=2 on
     # cron-job2 to arm it (env, no redeploy; reverse by unsetting).
     lineup_anchor_floor: int = Field(default=0, alias="LINEUP_ANCHOR_FLOOR")
+    # availability_model_enabled (D57, Tier 2): multiply each player's
+    # active-conditional predicted real_score by P(active) -- the probability
+    # they are in tonight's rotation and log a meaningful shift. Collapses
+    # cold-start darts (no rotation evidence -> low P(active)), the 2026-06-01
+    # failure mode, while leaving established rotation players ~unchanged.
+    # Default OFF; set AVAILABILITY_MODEL_ENABLED=true on cron-job2 to arm.
+    availability_model_enabled: bool = Field(default=False, alias="AVAILABILITY_MODEL_ENABLED")
 
 
 @lru_cache(maxsize=1)

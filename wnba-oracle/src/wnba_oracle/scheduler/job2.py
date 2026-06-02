@@ -47,6 +47,7 @@ from wnba_oracle.picker.popularity import (
     slate_labels_to_popularity,
 )
 from wnba_oracle.picker.sample import PlayerSamplingSpec
+from wnba_oracle.predict.availability import AvailabilityConfig, availability_probability
 from wnba_oracle.predict.form import player_volatility
 from wnba_oracle.predict.minutes import MinutesConfig, blended_real_score
 from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
@@ -446,9 +447,12 @@ def _build_specs(
     gs_cfg = GameScriptConfig(blowout_penalty=1.0) if gsm_enabled else GameScriptConfig()
     mcfg = MinutesConfig()
     bonus = injury_bonus_by_pid or {}
+    avail_enabled = settings.availability_model_enabled
+    avail_cfg = AvailabilityConfig()
     blowout_prob_by_pid: dict[int, float] = {}
     is_starter_by_pid: dict[int, bool] = {}
     is_anchor_by_pid: dict[int, bool] = {}
+    p_active_by_pid: dict[int, float] = {}
     gsm_rows: list[GameScriptInput] = []
     rate_by_pid: dict[int, float] = {}
     n_minutes_predicted = 0
@@ -477,6 +481,15 @@ def _build_specs(
             bool(int(f.get("rotowire_confirmed", 0) or 0))
             and bool(int(f.get("is_starter", 0) or 0))
         )
+        if avail_enabled:
+            p_active_by_pid[pid] = availability_probability(
+                recent_minutes=float(mf["recent_minutes"]) if mf is not None else 0.0,
+                minutes_vol=float(mf["minutes_vol"]) if mf is not None else 0.0,
+                n_min_games=int(mf["n_min_games"]) if mf is not None else 0,
+                rotowire_confirmed=bool(int(f.get("rotowire_confirmed", 0) or 0)),
+                is_starter=bool(int(f.get("is_starter", 0) or 0)),
+                cfg=avail_cfg,
+            )
         if gsm_enabled and total > 0:
             # Blowout context for the regime-switching copula + the minutes
             # redistribution (D57). Only players with known recent minutes can
@@ -558,6 +571,17 @@ def _build_specs(
         n_history_fallback=n_history_fallback,
         n_heuristic_fallback=n_heuristic_fallback,
     )
+
+    if avail_enabled and p_active_by_pid:
+        # Two-part hurdle (D57, Tier 2): scale each active-conditional pred by
+        # P(active). Cold-start darts collapse; established players ~unchanged.
+        n_low = 0
+        for pid_a, p_act in p_active_by_pid.items():
+            if pid_a in pred_real_scores:
+                pred_real_scores[pid_a] = max(0.5, pred_real_scores[pid_a] * p_act)
+                if p_act < 0.5:
+                    n_low += 1
+        log.info("availability_model", n_players=len(p_active_by_pid), n_low_availability=n_low)
 
     # Apply contrarian adjustment
     adjusted = apply_contrarian_adjustment(pred_real_scores, popularity_scores, contrarian_cfg)

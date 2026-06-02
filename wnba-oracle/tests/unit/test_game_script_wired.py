@@ -22,6 +22,7 @@ def _settings(*, gsm: bool) -> SimpleNamespace:
         starter_signal_enabled=True,
         sampling_score_offset=2.0,
         game_script_minutes_enabled=gsm,
+        availability_model_enabled=False,
     )
 
 
