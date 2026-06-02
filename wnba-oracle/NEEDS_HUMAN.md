@@ -169,7 +169,7 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     `train.pipeline.write_artifact`). Verified 2026-06-02 that training IS
     content-deterministic; only the gate is wrong.
 
-15. **[NEW 2026-06-02, D57] Validate + tune Tier 3 before enabling in live.**
+15. **[ARMED 2026-06-02, D57] Tier 3 armed on cron-job2 (GAME_SCRIPT_MINUTES_ENABLED=true). Still tune the priors + validate; monitor the first fire.**
     `GAME_SCRIPT_MINUTES_ENABLED` is OFF by default. The constants (blowout ramp
     soft=8 / hard=18 pts, `starter_trim_fraction`=0.18, `redistribution_rate`
     =0.70, copula rhos +0.30 / -0.35 / -0.10) are PRIORS. Tune them once (a)
@@ -181,7 +181,7 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     `GAME_SCRIPT_MINUTES_ENABLED=true` on cron-job2 (also auto-disables the blunt
     team-wide blowout penalty). Reverse: unset it.
 
-16. **[NEW 2026-06-02, D58] RECOMMENDED: arm the Tier 1 anchor-floor seatbelt.**
+16. **[ARMED 2026-06-02, D58] Tier 1 anchor-floor seatbelt armed on cron-job2 (LINEUP_ANCHOR_FLOOR=2). Monitor the first fire (optimizer_stage2 keys).**
     Set `LINEUP_ANCHOR_FLOOR=2` on the cron-job2 Railway service (env, no
     redeploy, instant rollback by unsetting). This forces every frozen lineup to
     contain >= 2 confirmed-minutes anchors, so it can never again be 5 cold-start

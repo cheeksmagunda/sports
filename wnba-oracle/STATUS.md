@@ -31,14 +31,16 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
     PYTHONUNBUFFERED, TZ, PAYOUT_REGIME=top_20, WNBA_ORACLE_MODEL_ARTIFACT_SHA.
   - cron-job2 scope (optimizer): CONTRARIAN_STRENGTH=0.2 (reconciled from a
     drifted 0.3, D53), CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
-    CAVEAT_IS_SKIP=true. The D50/D52/D55 knobs OPTIMIZER_DYNAMIC_TEAM_CAP (true),
-    SAMPLING_SCORE_OFFSET (2.0), STARTER_SIGNAL_ENABLED (true),
-    MINUTES_MODEL_ENABLED (true), GAME_SCRIPT_MINUTES_ENABLED (false, D57),
-    LINEUP_ANCHOR_FLOOR (0, D58) are NOT set on Railway and run on code
-    defaults; set them on cron-job2 to override (e.g. LINEUP_ANCHOR_FLOOR=2 to
-    arm the Tier 1 anchor-floor seatbelt; GAME_SCRIPT_MINUTES_ENABLED=true to
-    A/B Tier 3 once tuned; e.g. MINUTES_MODEL_ENABLED=false
-    to fall back to the boost/EB predictor, SAMPLING_SCORE_OFFSET=10 to revert).
+    CAVEAT_IS_SKIP=true. OPTIMIZER_DYNAMIC_TEAM_CAP (true), SAMPLING_SCORE_OFFSET
+    (2.0), STARTER_SIGNAL_ENABLED (true), MINUTES_MODEL_ENABLED (true) run on
+    code defaults. ARMED on cron-job2 2026-06-02 for the D57 draft-winning
+    overhaul: GAME_SCRIPT_MINUTES_ENABLED=true (D57 game-script bench-minutes +
+    regime-switching copula), LINEUP_ANCHOR_FLOOR=2 (D58 require >=2
+    confirmed-minutes anchors), AVAILABILITY_MODEL_ENABLED=true (D59 P(active)
+    collapses cold-start darts). All three reverse via env with no redeploy:
+    unset LINEUP_ANCHOR_FLOOR, set the *_ENABLED flags to false (or
+    MINUTES_MODEL_ENABLED=false / SAMPLING_SCORE_OFFSET=10 to revert older
+    knobs).
   - cron-job1 now also pulls stats.wnba.com game logs (nba_api) for the D55
     minutes features; a stats.wnba.com outage degrades gracefully (job2 falls
     back to boost). Watch the job1 log key n_minutes_matched.
