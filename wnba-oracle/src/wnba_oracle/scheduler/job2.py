@@ -28,6 +28,12 @@ from sqlalchemy import text
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine, get_redis
+from wnba_oracle.features.game_script_minutes import (
+    GameScriptInput,
+    GameScriptMinutesConfig,
+    blowout_probability,
+    redistribute_game_script_minutes,
+)
 from wnba_oracle.features.injury_cascade import CascadeInput, redistribute_minutes
 from wnba_oracle.features.spec import cohort_for_position
 from wnba_oracle.picker.field import FieldPlayerSpec
@@ -97,8 +103,12 @@ def _load_player_history() -> dict[int, float]:
         return {}
     try:
         import pandas as pd
+
         df = pd.read_parquet(_CORPUS_PATH, columns=["player_id", "real_score"])
-        return {int(pid): float(score) for pid, score in df.groupby("player_id")["real_score"].mean().items()}
+        return {
+            int(pid): float(score)
+            for pid, score in df.groupby("player_id")["real_score"].mean().items()
+        }
     except Exception:
         return {}
 
@@ -154,9 +164,7 @@ def _load_model_artifact(sha: str) -> PickerArtifact | None:
     return None
 
 
-def _eb_predict_one(
-    art: PickerArtifact | None, player_id: int, position: str
-) -> float | None:
+def _eb_predict_one(art: PickerArtifact | None, player_id: int, position: str) -> float | None:
     """Single-player EB prediction with cohort + player-alpha lookup.
 
     Returns None if (a) no artifact, (b) no EB baseline in artifact, or
@@ -271,17 +279,21 @@ def _cascade_bonuses(enrichment_raw: list[dict]) -> dict[int, float]:
         if mf is None:
             continue
         pid_raw = r.get("real_sports_player_id")
+        if pid_raw is None:
+            continue
         try:
             pid = int(pid_raw)
         except (TypeError, ValueError):
             continue
-        rows.append(CascadeInput(
-            player_id=pid,
-            team=str(r.get("team", "") or ""),
-            position=str(r.get("position", "") or ""),
-            minutes_l10=mf["recent_minutes"],
-            is_out=_is_out_from_features(r.get("features_json")),
-        ))
+        rows.append(
+            CascadeInput(
+                player_id=pid,
+                team=str(r.get("team", "") or ""),
+                position=str(r.get("position", "") or ""),
+                minutes_l10=mf["recent_minutes"],
+                is_out=_is_out_from_features(r.get("features_json")),
+            )
+        )
     return redistribute_minutes(rows) if rows else {}
 
 
@@ -418,9 +430,18 @@ def _build_specs(
     pred_real_scores: dict[int, float] = {}
     rows_by_pid: dict[int, dict] = {}
     minutes_vol_by_pid: dict[int, float] = {}
-    gs_cfg = GameScriptConfig()
+    gsm_enabled = settings.game_script_minutes_enabled
+    gsm_cfg = GameScriptMinutesConfig()
+    # When the role-aware blowout redistribution is on it OWNS the blowout
+    # effect, so disable the blunt team-wide blowout penalty to avoid
+    # double-counting (D57).
+    gs_cfg = GameScriptConfig(blowout_penalty=1.0) if gsm_enabled else GameScriptConfig()
     mcfg = MinutesConfig()
     bonus = injury_bonus_by_pid or {}
+    blowout_prob_by_pid: dict[int, float] = {}
+    is_starter_by_pid: dict[int, bool] = {}
+    gsm_rows: list[GameScriptInput] = []
+    rate_by_pid: dict[int, float] = {}
     n_minutes_predicted = 0
     for r in enrichment:
         pid_raw = r.get("real_sports_player_id")
@@ -433,11 +454,25 @@ def _build_specs(
         boost = float(r.get("card_boost", 0.0) or 0.0)
         position = str(r.get("position", "") or "")
         total, spread = _vegas_from_features(r.get("features_json"))
-        gs_mult = (
-            game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
-        )
+        gs_mult = game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
         f = _features_dict(r.get("features_json"))
         mf = _minutes_features(r.get("features_json")) if settings.minutes_model_enabled else None
+        if gsm_enabled and total > 0:
+            # Blowout context for the regime-switching copula + the minutes
+            # redistribution (D57). Only players with known recent minutes can
+            # donate/receive; cold-start darts have no minutes and so are left
+            # untouched here (the availability engine, not this, gates them).
+            blowout_prob_by_pid[pid] = blowout_probability(abs(spread), gsm_cfg)
+            recent_min_gs = float(mf["recent_minutes"]) if mf is not None else 0.0
+            is_starter_by_pid[pid] = (
+                bool(int(f.get("is_starter", 0) or 0))
+                or recent_min_gs >= gsm_cfg.starter_minutes_floor
+            )
+            if mf is not None and recent_min_gs > 0.0:
+                gsm_rows.append(
+                    GameScriptInput(pid, str(r.get("team", "") or ""), recent_min_gs, abs(spread))
+                )
+                rate_by_pid[pid] = float(mf["per_min_rate"])
         if mf is not None and mf["n_min_games"] >= mcfg.min_obs_for_history:
             # D55 minutes edge: blended_real_score handles the boost<->minutes
             # weighting internally, with same-day role signals. Blowout is left
@@ -481,6 +516,20 @@ def _build_specs(
         pred_real_scores[pid] = max(0.5, base * gs_mult * starter_mult)
         rows_by_pid[pid] = r
 
+    if gsm_enabled and gsm_rows:
+        # Convert the signed minute deltas to real_score via each player's
+        # per-minute rate, then fold into pred_real_score (D57). Bench up,
+        # starters down; floored at 0.5 like every other predictor branch.
+        deltas_min = redistribute_game_script_minutes(gsm_rows, gsm_cfg)
+        n_bumped = sum(1 for d in deltas_min.values() if d > 0)
+        n_trimmed = sum(1 for d in deltas_min.values() if d < 0)
+        for pid_d, dmin in deltas_min.items():
+            rate = rate_by_pid.get(pid_d, mcfg.league_rate)
+            pred_real_scores[pid_d] = max(0.5, pred_real_scores[pid_d] + dmin * rate)
+        log.info(
+            "game_script_minutes", n_bumped=n_bumped, n_trimmed=n_trimmed, n_rows=len(gsm_rows)
+        )
+
     log.info(
         "predictor_mix",
         artifact_sha=settings.model_artifact_sha[:12] if settings.model_artifact_sha else "",
@@ -491,9 +540,7 @@ def _build_specs(
     )
 
     # Apply contrarian adjustment
-    adjusted = apply_contrarian_adjustment(
-        pred_real_scores, popularity_scores, contrarian_cfg
-    )
+    adjusted = apply_contrarian_adjustment(pred_real_scores, popularity_scores, contrarian_cfg)
 
     # Per-player sampling sigma from volatility (D52/D55). A flat sigma priced
     # every player the same; ceiling plays (high game-to-game variance) should
@@ -526,6 +573,8 @@ def _build_specs(
                 mu=mu_log,
                 sigma=sigma_log,
                 boost=boost,
+                is_starter=is_starter_by_pid.get(pid, False),
+                blowout_prob=blowout_prob_by_pid.get(pid, 0.0),
             )
         )
         fields.append(
@@ -560,9 +609,7 @@ FROZEN_INSERT = text(
     """
 )
 
-FROZEN_EXISTS = text(
-    "SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms"
-)
+FROZEN_EXISTS = text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms")
 
 
 def _build_per_player(
@@ -638,9 +685,7 @@ def _freeze(
     """
     eng = get_engine()
     with eng.connect() as conn:
-        existing = conn.execute(
-            FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}
-        ).first()
+        existing = conn.execute(FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}).first()
     if existing:
         log.info("job2_already_frozen", slate_date=slate_date, model_sha=model_sha)
         return False
@@ -702,8 +747,11 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # minutes history.
     injury_bonus = _cascade_bonuses(enrichment_raw)
     if injury_bonus:
-        log.info("job2_injury_cascade", n_recipients=len(injury_bonus),
-                 max_bonus=round(max(injury_bonus.values()), 1))
+        log.info(
+            "job2_injury_cascade",
+            n_recipients=len(injury_bonus),
+            max_bonus=round(max(injury_bonus.values()), 1),
+        )
     # RotoWire OUT players are excluded from the optimizer pool (the binary
     # drop is the other half of the cascade).
     enrichment = [r for r in enrichment_raw if not _is_out_from_features(r.get("features_json"))]
@@ -731,9 +779,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
 
-    curve = load_curve_from_archive(sd) or default_curve_for_regime(
-        settings.payout_regime
-    )
+    curve = load_curve_from_archive(sd) or default_curve_for_regime(settings.payout_regime)
     cfg = OptimizeConfig(
         top_n_filter=settings.optimizer_top_n_filter,
         n_samples=settings.optimizer_n_samples,

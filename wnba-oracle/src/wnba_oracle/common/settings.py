@@ -61,9 +61,7 @@ class Settings(BaseSettings):
     # 2 games -> max(max_per_team, 3), 3+ games -> max_per_team. Default
     # True. Set OPTIMIZER_DYNAMIC_TEAM_CAP=false to restore the old static
     # cap (rolls back under 2 minutes via env, no redeploy).
-    optimizer_dynamic_team_cap: bool = Field(
-        default=True, alias="OPTIMIZER_DYNAMIC_TEAM_CAP"
-    )
+    optimizer_dynamic_team_cap: bool = Field(default=True, alias="OPTIMIZER_DYNAMIC_TEAM_CAP")
     # contrarian_strength: 0.0 disables the anti-popularity penalty; 0.2 is
     # basketball-main's default. Tune up to 0.3 for stronger contrarian tilt
     # in top-1 regime, down to 0.1 for cash games.
@@ -86,17 +84,22 @@ class Settings(BaseSettings):
     # This is the one pre-game signal additive to card_boost (a lagging
     # average can't know tonight's starting five). Default on; set
     # STARTER_SIGNAL_ENABLED=false to disable. See D52.
-    starter_signal_enabled: bool = Field(
-        default=True, alias="STARTER_SIGNAL_ENABLED"
-    )
+    starter_signal_enabled: bool = Field(default=True, alias="STARTER_SIGNAL_ENABLED")
     # minutes_model_enabled: use the D55 minutes x rate blended predictor for
     # players job1 matched to nba_api game logs. The one signal orthogonal to
     # card_boost (corr 0.554 vs boost 0.246 walk-forward). Default on; set
     # MINUTES_MODEL_ENABLED=false to fall back to the EB/heuristic predictor
     # for every player (rolls back via env, no redeploy).
-    minutes_model_enabled: bool = Field(
-        default=True, alias="MINUTES_MODEL_ENABLED"
-    )
+    minutes_model_enabled: bool = Field(default=True, alias="MINUTES_MODEL_ENABLED")
+    # game_script_minutes_enabled: role-aware blowout minutes redistribution
+    # (D57, Tier 3). In a projected blowout, trims starters and pushes the freed
+    # minutes to the bench, and feeds the regime-switching copula correlation.
+    # Default OFF: this rides on top of the per-player minutes baseline and is a
+    # prior to be tuned once the availability engine lands underneath, so it is
+    # not enabled in live until validated. Set GAME_SCRIPT_MINUTES_ENABLED=true
+    # to turn on (also disables the blunt team-wide blowout penalty to avoid
+    # double-counting).
+    game_script_minutes_enabled: bool = Field(default=False, alias="GAME_SCRIPT_MINUTES_ENABLED")
 
 
 @lru_cache(maxsize=1)
