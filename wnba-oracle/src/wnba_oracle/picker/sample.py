@@ -12,6 +12,17 @@ Joint dependence is captured via a block-correlation matrix:
 Defaults: rho_same_team = -0.25 (usage cannibalization);
           rho_opp_team =  +0.20 (shared pace realization).
 These are conservative priors; calibration on the slate corpus tunes them.
+
+Regime-switching (D57, Tier 3): the same-team correlation is not constant. In a
+close game teammates cannibalize each other's usage (rho_same_team). In a likely
+blowout the second unit shares one garbage-time regime, so two bench players
+become positively correlated (either the blowout happens and they both play, or
+it does not and they both sit), while a starter and a bench player substitute
+(the starter sits as the bench plays), pushing their correlation more negative.
+The same-team entry interpolates from rho_same_team toward the role-specific
+blowout target by the pair's blowout_prob. With the spec defaults (is_starter
+False, blowout_prob 0.0) the matrix is identical to the pre-D57 behaviour, so
+nothing changes until a caller populates the blowout context.
 """
 
 from __future__ import annotations
@@ -29,6 +40,8 @@ class PlayerSamplingSpec:
     mu: float  # log-scale mean
     sigma: float  # log-scale std-dev
     boost: float
+    is_starter: bool = False  # role tag for regime-switching correlation (D57)
+    blowout_prob: float = 0.0  # this player's game blowout propensity in [0, 1]
 
 
 @dataclass
@@ -36,6 +49,13 @@ class CopulaConfig:
     rho_same_team: float = -0.25
     rho_opp_team: float = +0.20
     seed: int = 1729
+    # Regime-switching same-team correlation under a likely blowout (D57, Tier 3).
+    # Interpolated from rho_same_team toward these targets by the pair's
+    # blowout_prob. bench-bench positive (shared garbage-time regime),
+    # starter-bench negative (substitution), starter-starter mildly negative.
+    rho_bench_bench_blowout: float = +0.30
+    rho_starter_bench_blowout: float = -0.35
+    rho_starter_starter_blowout: float = -0.10
     # score_offset (K): log-sampling is done on log(real_score + K), then K is
     # subtracted after exp. K must exceed the most-negative real_score (corpus
     # min -0.39) to keep the log positive. D52 recalibrated K from 10 -> 2:
@@ -46,9 +66,28 @@ class CopulaConfig:
     score_offset: float = 2.0
 
 
-def build_correlation_matrix(
-    specs: list[PlayerSamplingSpec], cfg: CopulaConfig
-) -> np.ndarray:
+def _same_team_rho(a: PlayerSamplingSpec, b: PlayerSamplingSpec, cfg: CopulaConfig) -> float:
+    """Same-team correlation, regime-switched by blowout propensity (D57, Tier 3).
+
+    Close game (blowout_prob 0) returns rho_same_team (cannibalization). As the
+    pair's mean blowout_prob rises, interpolate toward a role-specific target:
+    bench-bench positive (shared garbage-time regime), starter-bench negative
+    (substitution), starter-starter mildly negative.
+    """
+    p = 0.5 * (a.blowout_prob + b.blowout_prob)
+    if p <= 0.0:
+        return cfg.rho_same_team
+    p = min(1.0, p)
+    if a.is_starter and b.is_starter:
+        target = cfg.rho_starter_starter_blowout
+    elif a.is_starter != b.is_starter:
+        target = cfg.rho_starter_bench_blowout
+    else:
+        target = cfg.rho_bench_bench_blowout
+    return (1.0 - p) * cfg.rho_same_team + p * target
+
+
+def build_correlation_matrix(specs: list[PlayerSamplingSpec], cfg: CopulaConfig) -> np.ndarray:
     n = len(specs)
     R = np.eye(n)
     for i in range(n):
@@ -57,7 +96,7 @@ def build_correlation_matrix(
             if not a.team or not b.team:
                 continue
             if a.team == b.team and a.opponent == b.opponent:
-                R[i, j] = R[j, i] = cfg.rho_same_team
+                R[i, j] = R[j, i] = _same_team_rho(a, b, cfg)
             elif a.team == b.opponent and b.team == a.opponent:
                 R[i, j] = R[j, i] = cfg.rho_opp_team
     # Ensure PSD by light shrinkage if necessary
@@ -120,7 +159,5 @@ def lineup_score_samples(
         rs_sorted = rs_per_player[s, order]
         boosts_sorted = boosts_lineup[order]
         # slot_multipliers already sorted high to low
-        lineup_samples[s] = float(
-            np.sum(rs_sorted * (boosts_sorted + slot_multipliers))
-        )
+        lineup_samples[s] = float(np.sum(rs_sorted * (boosts_sorted + slot_multipliers)))
     return lineup_samples

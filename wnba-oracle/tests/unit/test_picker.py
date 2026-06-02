@@ -54,11 +54,61 @@ def test_correlation_matrix_same_team_negative() -> None:
     assert R[0, 2] > 0
 
 
-def test_sample_joint_returns_expected_shape() -> None:
-    specs = [
-        PlayerSamplingSpec(i, "LVA", "NYL", mu=2.0, sigma=0.3, boost=0.5)
-        for i in range(5)
+def test_blowout_makes_bench_pair_positively_correlated() -> None:
+    # Two bench players on the same team in a likely blowout share one
+    # garbage-time regime, so their residuals flip from cannibalization to
+    # positive (D57). A 2-player same-team matrix is exactly PSD, so the off-
+    # diagonal equals the regime-switched rho with no shrinkage.
+    cfg = CopulaConfig()
+    bench = [
+        PlayerSamplingSpec(
+            1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=3.0, is_starter=False, blowout_prob=1.0
+        ),
+        PlayerSamplingSpec(
+            2, "LVA", "NYL", mu=0.0, sigma=0.1, boost=3.0, is_starter=False, blowout_prob=1.0
+        ),
     ]
+    R = build_correlation_matrix(bench, cfg)
+    assert R[0, 1] > 0
+    assert abs(R[0, 1] - cfg.rho_bench_bench_blowout) < 1e-9
+
+
+def test_blowout_makes_starter_bench_more_negative() -> None:
+    # Starter sits as the bench plays: substitution pushes their correlation
+    # below the close-game cannibalization baseline.
+    cfg = CopulaConfig()
+    pair = [
+        PlayerSamplingSpec(
+            1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, is_starter=True, blowout_prob=1.0
+        ),
+        PlayerSamplingSpec(
+            2, "LVA", "NYL", mu=0.0, sigma=0.1, boost=3.0, is_starter=False, blowout_prob=1.0
+        ),
+    ]
+    R = build_correlation_matrix(pair, cfg)
+    assert R[0, 1] < cfg.rho_same_team
+    assert abs(R[0, 1] - cfg.rho_starter_bench_blowout) < 1e-9
+
+
+def test_blowout_prob_interpolates_same_team_rho() -> None:
+    # At blowout_prob 0.5 the rho is halfway between the close-game baseline
+    # and the role-specific blowout target.
+    cfg = CopulaConfig()
+    half = [
+        PlayerSamplingSpec(
+            1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=3.0, is_starter=False, blowout_prob=0.5
+        ),
+        PlayerSamplingSpec(
+            2, "LVA", "NYL", mu=0.0, sigma=0.1, boost=3.0, is_starter=False, blowout_prob=0.5
+        ),
+    ]
+    R = build_correlation_matrix(half, cfg)
+    expected = 0.5 * cfg.rho_same_team + 0.5 * cfg.rho_bench_bench_blowout
+    assert abs(R[0, 1] - expected) < 1e-9
+
+
+def test_sample_joint_returns_expected_shape() -> None:
+    specs = [PlayerSamplingSpec(i, "LVA", "NYL", mu=2.0, sigma=0.3, boost=0.5) for i in range(5)]
     samples = sample_joint_real_scores(specs, n_samples=200, cfg=CopulaConfig(seed=42))
     assert samples.shape == (200, 5)
 
