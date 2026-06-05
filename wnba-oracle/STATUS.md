@@ -18,7 +18,14 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - api:       https://api-production-7033.up.railway.app/health -> 200
 - api:       https://api-production-7033.up.railway.app/lineup -> 200 (empty)
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
-- postgres:  internal, alembic head = 20260527_0003 (Railway upgrade applied 2026-06-05 via cron-dayclose pre-deploy `alembic upgrade head`)
+- postgres:  internal + public TCP proxy (TLSv1.3, SSL enabled 2026-06-05 via
+  start-command cert on stock postgres:16-alpine, D61); alembic head =
+  20260527_0003 (applied via cron-dayclose pre-deploy). CANONICAL corpus store:
+  slate_labels + contest_leaderboards now hold all 130 slates (2025-05-16..
+  2026-06-04); were EMPTY before D61. Laptop reads via `oracle_ro` (SELECT-only,
+  sslmode=verify-ca), connection in gitignored .env DATABASE_PUBLIC_URL.
+- cron-backup (GitHub Action `corpus-backup`): `43 6 * * *` UTC, exports the
+  scraped corpus to the off-`main` `backups` branch (D61). 3-2-1 off-site copy.
 - redis:     internal, password-protected
 - cron-job1: `0 13 * * *` UTC, oracle-cron --job job1 (next: 2026-05-27T13:00Z)
 - cron-job2: `*/15 21-23,0-3 * * *` UTC, oracle-cron --job job2 (next: 2026-05-27T21:00Z)

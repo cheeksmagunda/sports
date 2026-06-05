@@ -112,6 +112,19 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     intentionally unset (Postgres canonical; local parquet refreshed
     off-Railway on demand).
 
+11. **[AWARENESS 2026-06-05, D61]** New self-issued credentials + one caveat.
+    - `oracle_ro` Postgres role (SELECT-only) password lives in local `.env`
+      (DATABASE_PUBLIC_URL) only. Rotate at will: `ALTER ROLE oracle_ro
+      PASSWORD '...'` then update .env + the GH secret.
+    - Postgres TLS keypair in `.pgssl/` (gitignored) and Railway env
+      `PG_SSL_CERT_B64` / `PG_SSL_KEY_B64`. Self-signed, 10y.
+    - The nightly `corpus-backup` GitHub Action needs two repo secrets:
+      `BACKUP_DATABASE_URL` (oracle_ro URL, sslmode=verify-ca) and
+      `PG_SSL_ROOT_CERT` (the .pgssl/server.crt contents). Set this session.
+    - CAVEAT: the public TCP proxy host:port (acela.proxy.rlwy.net:NNNNN) can
+      change if the proxy is recreated. If laptop/CI connections start failing,
+      re-read it from Railway and update .env + the `BACKUP_DATABASE_URL` secret.
+
 11. **[NEW 2026-05-27]** Wire the trained model artifact into the
     serving picker. D44 produced a working EB hierarchical baseline
     artifact (`models/picker_cfe5868_1779880756.pkl`, SHA
