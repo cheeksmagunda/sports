@@ -64,7 +64,14 @@ def feature_module_sha() -> str:
     from pathlib import Path
 
     h = hashlib.blake2b(digest_size=16)
-    for name in ("allowlist.py", "build.py", "rolling.py", "spec.py"):
+    for name in (
+        "allowlist.py",
+        "build.py",
+        "rolling.py",
+        "spec.py",
+        "game_features.py",
+        "corpus.py",
+    ):
         p = Path(__file__).parent / name
         if p.exists():
             h.update(p.read_bytes())

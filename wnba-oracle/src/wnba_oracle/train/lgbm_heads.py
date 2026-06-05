@@ -66,6 +66,12 @@ def train_quantile_head(
     """
     if train_df.is_empty():
         raise ValueError(f"empty train_df for head {name}/{cohort}")
+    # Recorded for the artifact, but NOT passed to LightGBM: the quantile
+    # objective is incompatible with monotone_constraints ("Cannot use
+    # ``monotone_constraints`` in quantile objective"). Feature monotonicity on
+    # the quantile heads would need a post-hoc projection or a separate rank
+    # head (mlb-oracle pattern); deferred. Regularization is carried by
+    # num_leaves / min_data_in_leaf / lambda_l2 instead.
     mc_vec = tuple(
         (monotone_constraints or {}).get(c, 0) for c in feature_columns
     )
@@ -91,7 +97,6 @@ def train_quantile_head(
             "bagging_freq": cfg.bagging_freq,
             "lambda_l2": cfg.lambda_l2,
             "min_gain_to_split": cfg.min_gain_to_split,
-            "monotone_constraints": list(mc_vec),
             "deterministic": True,
             "force_col_wise": True,
             "verbosity": -1,

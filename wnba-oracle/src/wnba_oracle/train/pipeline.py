@@ -86,10 +86,23 @@ def train_picker(
     train_df: pl.DataFrame,
     valid_df: pl.DataFrame,
     *,
+    label_train: pl.DataFrame | None = None,
+    label_valid: pl.DataFrame | None = None,
     target_real_score: str = "real_score",
     target_minutes: str = "minutes_played",
 ) -> PickerArtifact:
+    """Train the multi-task ensemble.
+
+    ``train_df``/``valid_df`` are the *heads* frame (the dense per-player-game
+    corpus with the head target columns; see features/corpus.build_gamelog_corpus).
+    ``label_train``/``label_valid`` are the *contest-label* frame the EB baseline
+    fits on (card_boost + real_score per player-slate). When the label frames are
+    omitted they default to the heads frame, preserving the single-corpus
+    behaviour for callers that pass one frame.
+    """
     cfg = _load_config()
+    if label_train is None:
+        label_train = train_df
     seed = int(cfg.get("seeds", {}).get("numpy", 1729))
     _set_seeds(seed)
 
@@ -184,10 +197,10 @@ def train_picker(
                 calib.fit(pred, calib_src.get_column(target).to_numpy())
                 art.calibrators[(head_name, cohort)] = calib
 
-    # EB baseline on real_score column (if present).
-    if target_real_score in train_df.columns:
+    # EB baseline on the contest-label frame's real_score column (if present).
+    if target_real_score in label_train.columns:
         eb = EBHierarchicalBaseline()
-        eb_input = train_df.with_columns(
+        eb_input = label_train.with_columns(
             pl.col("position").map_elements(cohort_for_position, return_dtype=pl.String).alias(
                 "cohort"
             )
