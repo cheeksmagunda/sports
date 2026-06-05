@@ -2,6 +2,18 @@
 
 This is an unattended build. Follow Part 0 of the handoff document.
 
+## Build state (D63, 2026-06-05)
+
+Active work: the decomposed-projection rebuild. The multi-task heads now train
+on a feature+target corpus built from the game-logs (`features/corpus.py`,
+`features/game_features.py`). Production training command is
+`oracle-train --corpus-mode both`. Walk-forward the recompose
+(`PickerArtifact.predict_real_score`) reaches corr 0.554 vs the boost
+heuristic's 0.246. Live `job2` serving is UNCHANGED until Phase 2b wires the
+heads into the fire path. Phase status and the remaining roadmap (2b live
+wiring, then component heads, matchup features, participation prior, CRPS gate)
+are in STATUS.md and DECISIONS.md D63.
+
 ## Autonomy
 
 - Never stop to ask the human a question. Use the Part 0.1 protocol.

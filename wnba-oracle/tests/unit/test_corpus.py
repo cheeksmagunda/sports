@@ -26,7 +26,7 @@ def _logs() -> pl.DataFrame:
                 "fgm": 6.0, "fga": 12.0, "fg3m": 1.0, "ftm": 2.0, "fta": 3.0,
             }
         )
-    for i, d in enumerate(["2026-05-10", "2026-05-13"]):
+    for d in ["2026-05-10", "2026-05-13"]:
         rows.append(
             {
                 "game_date": d, "player_id": 1, "season": "2026",

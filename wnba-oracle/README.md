@@ -47,8 +47,10 @@ make determinism-check
 After the build completes, the 7-day shadow window is operator-started.
 
 ```sh
-# 1. Train a challenger artifact against the latest slate_labels corpus.
-uv run oracle-train --corpus data/processed/training_corpus.parquet \
+# 1. Train a challenger artifact. --corpus-mode both (default) trains the
+#    multi-task heads on the game-log corpus and the EB baseline on the
+#    contest-label corpus; both read from Postgres by default (D63).
+uv run oracle-train --corpus-mode both \
     --commit $(git rev-parse --short HEAD) \
     --metrics-path /tmp/train_metrics.json
 # 2. Inspect the SHA-256 sidecar emitted by oracle-train.
@@ -126,6 +128,20 @@ per-game minutes from stats.wnba.com and blend a minutes prediction with the
 boost prior; `predict/scoring.py` reconstructs real_score from the box line
 (R^2 0.957) so the pipeline is self-contained on nba_api. Kill-switch
 `MINUTES_MODEL_ENABLED`.
+
+**D63 (2026-06-05): the decomposed heads are now trained and validated.**
+Until D63 the multi-task heads were coded but never trained: the 7-column
+training corpus lacked their target columns, so the live picker served the
+boost/minutes heuristic for ~85% of players. `features/corpus.py` now assembles
+a feature+target corpus from the 13,435 game-logs (targets via
+`predict/scoring.box_to_real_score`), the minutes and real_score-per-minute
+heads train on it (`oracle-train --corpus-mode both`), and
+`PickerArtifact.predict_real_score` recomposes `E[real_score] = E[minutes] x
+E[rate]` as a calibrated distribution. Walk-forward (train pre-2026, predict
+2026) the recompose reaches corr 0.554 with P10-P90 coverage 0.81, more than
+double the boost heuristic and at the actual-minutes-x-rate ceiling. Live `job2`
+serving still uses the heuristic ladder; wiring the trained heads into the fire
+path is the tracked follow-up (Phase 2b). See DECISIONS D63.
 
 Three supporting patterns ported from `basketball-main` (the sibling NBA
 Real Sports product the operator used to win late-season drafts):

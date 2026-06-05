@@ -1563,3 +1563,98 @@ Parquet files remain on disk under data/historical/ and data/processed/ as
 archival snapshots. To restore parquet reads: revert the imports in the
 affected scripts and restore the `_CORPUS_PATH` constant in job2.py. The
 migration is additive (new table, new module); no data was deleted.
+
+---
+
+## 2026-06-05: D63 -- decomposed projection activated (corpus keystone + recompose)
+
+The 06-04 slate finished ~6000th of 8317. The root cause was not a bad model
+but a starved one. The full multi-task head pipeline (six quantile heads, EB
+baseline, Mondrian CQR, availability hurdle) was coded but never trained: the
+training corpus was 7 columns from slate_labels with none of the head
+target/feature columns, so train_picker skipped every head and job2 served a
+career-average heuristic for ~85% of players. This entry closes the train/serve
+gap on the OFFLINE side. The live serving wiring is the tracked follow-up
+(Phase 2b); nothing here changes the nightly fire's runtime behavior.
+
+### What changed [verified]
+
+Phase 0 (commit 01a1d15), CV integrity plus a multiple-comparisons guard:
+- eval/cv.py embargo was hard-coded at 3 days while features span an L20 window
+  (~70 calendar days at WNBA's ~3.5 day/game cadence). A 3-day gap left train
+  and eval rows autocorrelated and made every walk-forward number optimistic.
+  The default embargo now derives from the longest rolling window
+  (DEFAULT_EMBARGO_DAYS=70); WalkForwardSplitter.for_rolling_window lets a
+  denser corpus request exact coverage.
+- Removed `categorical_features: [player_id]` from configs/models.yaml and the
+  lgbm_heads default. This was LATENT, not an active bug: player_id is not in
+  features/spec.py `_BASE_FEATURES`, so it never reached the trees. Removed as a
+  footgun before head activation.
+- New eval/multiple_comparisons.py: CombinatorialPurgedCV (purged + embargoed
+  C(n,k) paths) and deflated_edge (Bailey / Lopez de Prado Deflated Sharpe). The
+  rotation gate discounts the acceptance bar by the number of challenger trials,
+  since this build runs ~10 gated comparisons against one noisy harness.
+
+Phase 1 (commit 241b6b5), the feature+target corpus keystone:
+- New features/game_features.py is the train/serve parity anchor:
+  to_nba_api_schema, add_targets (minutes_played, the per-minute rates, and
+  real_score via the locked box_to_real_score formula, vectorized), and
+  add_schedule_features (days_rest, is_back_to_back, season_game_number).
+- New features/corpus.py: build_gamelog_corpus assembles one row per
+  player-game over the 13,435 wnba_game_logs with strictly-causal rolling
+  features (reusing build_rolling_features) plus per-game targets. 12,981 rows
+  after requiring >=1 prior game. build_label_corpus reserves the
+  contest-label frame for the EB baseline.
+- train/pipeline.py train_picker now takes label_train/label_valid so the heads
+  train on the dense game-log frame while the EB baseline fits the
+  contest-label frame. train/cli.py adds --corpus-mode {gamelog,label,both}
+  (default both).
+- Fixed a latent LightGBM crash surfaced by actually training:
+  monotone_constraints is incompatible with the quantile objective. Dropped
+  from the quantile params (kept on the TrainedHead record); regularization
+  stays via num_leaves / min_data_in_leaf / lambda_l2.
+- Result: oracle-train now yields low_data_mode=False with the minutes plus
+  per-minute heads trained, up from 0 heads.
+
+Phase 2a (commit d792127), the recompose:
+- New real_score_per_min target and head (the validated rate term, D55).
+- PickerArtifact.predict_real_score recomposes E[real_score] = E[minutes] x
+  E[real_score_per_min] as a lognormal product (the median is the product of
+  medians; the log-spread adds in quadrature), with a per-row quantile sort to
+  remove crossing.
+
+### Verified result
+
+True walk-forward (train pre-2026, predict 2026, n=1776):
+corr(recomposed P50, actual real_score) = 0.554, MAE 0.887, P10-P90 empirical
+coverage 0.81 (nominal 0.80). This matches the actual-minutes-x-rate ceiling
+(0.554, D55) and more than doubles the boost heuristic (0.246) the live model
+serves. CRPS/PIT remains the formal rotation gate (Phase 6, not yet built).
+
+### Caveats and not-yet-done [reasoned]
+
+- All rows pool into cohort F because game logs lack position. A single pooled
+  cohort is the small-data-safe choice on ~13k rows anyway; G/F/C splitting
+  needs a position source and is deferred.
+- corr is one metric. The formal gate is slate-bootstrapped CRPS, built in
+  Phase 6.
+- LIVE SERVING IS UNCHANGED. job2 still serves the existing heuristic ladder;
+  the trained heads and predict_real_score are dormant until Phase 2b wires
+  them into job2 (which needs job1 to persist the full causal feature row). The
+  deployed artifact (SHA 6182a29d) still has 0 heads, so production behavior is
+  identical until a new artifact is trained AND the serving path is wired.
+
+### Phases remaining
+
+2b live wiring (job1 feature row + job2 Tier-0 path), 3 component heads gated on
+CRPS (Beta-Binomial FG%/TS%, pin 3P%), 4 matchup/pace/DvP ingest (hard-shrunk),
+5 participation prior (survivorship fix for the cold-start-dart busts), 6 CRPS
+rotation gate plus top-1 payout tuning. The operator-approved plan stages the
+full decomposition with a CRPS gate at each step.
+
+### Reverse
+
+All changes are offline training/eval plus one dormant method, so the live path
+is already unaffected. To reproduce the pre-D63 artifact run `oracle-train
+--corpus-mode label` (EB-only). git revert of the three commits removes the
+corpus builder and the recompose entirely.
