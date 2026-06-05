@@ -75,6 +75,14 @@ HEAD_SPECS: dict[str, HeadSpec] = {
         target="minutes_played",
         feature_columns=_BASE_FEATURES,
     ),
+    # The validated rate term: serve recompose is E[min] x E[real_score_per_min]
+    # (predict/minutes.py). Activated in Phase 2; the per-component heads below
+    # are a later, gated decomposition of this rate.
+    "real_score_per_min": HeadSpec(
+        name="real_score_per_min",
+        target="real_score_per_min",
+        feature_columns=_BASE_FEATURES,
+    ),
     "points_per_min": HeadSpec(
         name="points_per_min",
         target="pts_per_min",

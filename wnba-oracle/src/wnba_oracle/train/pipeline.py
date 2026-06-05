@@ -40,6 +40,7 @@ from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
 from wnba_oracle.train.lgbm_heads import (
     LGBMHeadConfig,
     TrainedHead,
+    predict_head,
     train_quantile_head,
 )
 
@@ -48,6 +49,27 @@ log = get_logger("oracle.train.pipeline")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MODELS_DIR = REPO_ROOT / "models"
 CONFIG_PATH = REPO_ROOT / "configs" / "models.yaml"
+
+
+# z-score spread between the P10 and P90 quantiles: norm.ppf(0.9) - norm.ppf(0.1).
+_P10_P90_Z_SPREAD = 2.5631031310892225
+_HALF_Z = _P10_P90_Z_SPREAD / 2.0  # norm.ppf(0.9) = 1.2816
+_MIN_MINUTES_FLOOR = 0.5
+_MIN_RATE_FLOOR = 1e-4
+
+
+def _sorted_quantiles(
+    q: dict[float, np.ndarray], *, floor: float
+) -> dict[float, np.ndarray]:
+    """Per-row monotone (P10<=P50<=P90) quantiles with a positive floor.
+
+    The three quantile boosters are trained independently and can cross
+    (Chernozhukov rearrangement: sorting always restores a valid CDF). The floor
+    keeps the lognormal recompose well-defined (log of a positive number).
+    """
+    stacked = np.sort(np.vstack([q[0.1], q[0.5], q[0.9]]), axis=0)
+    stacked = np.maximum(stacked, floor)
+    return {0.1: stacked[0], 0.5: stacked[1], 0.9: stacked[2]}
 
 
 @dataclass
@@ -61,6 +83,59 @@ class PickerArtifact:
     low_data_mode: bool = False
     cohort_means: dict[str, float] = field(default_factory=dict)
     feature_subset_per_head: dict[tuple[str, Cohort], tuple[str, ...]] = field(default_factory=dict)
+
+    def predict_real_score(self, frame: pl.DataFrame) -> dict[str, np.ndarray] | None:
+        """Recompose E[real_score] = E[minutes] x E[real_score_per_min] per row.
+
+        Routes each row to its G/F/C cohort (via the ``position`` column), runs the
+        trained ``minutes`` and ``real_score_per_min`` quantile heads, and combines
+        them as a lognormal product: the median is the product of medians and the
+        log-spread adds in quadrature (minutes and per-minute efficiency treated as
+        independent). Returns real-space {p10, p50, p90} arrays aligned to ``frame``
+        row order, NaN where a row's cohort lacks both heads. Returns None when no
+        cohort can be served (caller falls back to the heuristic ladder).
+
+        Quantile crossing from the independent boosters is removed by sorting each
+        head's three quantiles per row before recomposition.
+        """
+        from wnba_oracle.features.spec import cohort_for_position
+
+        n = len(frame)
+        if n == 0:
+            return None
+        p10 = np.full(n, np.nan)
+        p50 = np.full(n, np.nan)
+        p90 = np.full(n, np.nan)
+        positions = (
+            frame.get_column("position").to_list()
+            if "position" in frame.columns
+            else [None] * n
+        )
+        cohorts = [cohort_for_position(p) for p in positions]
+        served_any = False
+        for cohort in ("G", "F", "C"):
+            mh = self.heads.get(("minutes", cohort))
+            rh = self.heads.get(("real_score_per_min", cohort))
+            if mh is None or rh is None:
+                continue
+            idx = [i for i, c in enumerate(cohorts) if c == cohort]
+            if not idx:
+                continue
+            sub = frame[idx]
+            mn = _sorted_quantiles(predict_head(mh, sub), floor=_MIN_MINUTES_FLOOR)
+            rt = _sorted_quantiles(predict_head(rh, sub), floor=_MIN_RATE_FLOOR)
+            med = mn[0.5] * rt[0.5]
+            slog_min = (np.log(mn[0.9]) - np.log(mn[0.1])) / _P10_P90_Z_SPREAD
+            slog_rate = (np.log(rt[0.9]) - np.log(rt[0.1])) / _P10_P90_Z_SPREAD
+            slog = np.sqrt(slog_min**2 + slog_rate**2)
+            ix = np.asarray(idx)
+            p50[ix] = med
+            p10[ix] = med * np.exp(-_HALF_Z * slog)
+            p90[ix] = med * np.exp(+_HALF_Z * slog)
+            served_any = True
+        if not served_any:
+            return None
+        return {"p10": p10, "p50": p50, "p90": p90}
 
 
 def _set_seeds(seed: int) -> None:

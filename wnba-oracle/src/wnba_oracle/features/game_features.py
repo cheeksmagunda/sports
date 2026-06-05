@@ -49,8 +49,11 @@ _STORED_TO_NBA_API: dict[str, str] = {
 
 # The per-game head targets produced by add_targets (keep in sync with
 # configs/models.yaml::heads and features/spec.py::HEAD_SPECS targets).
+# real_score_per_min is the validated rate term (predict/minutes.py): the
+# serve-time recompose is E[real_score] = E[minutes] x E[real_score_per_min].
 TARGET_COLUMNS: tuple[str, ...] = (
     "minutes_played",
+    "real_score_per_min",
     "pts_per_min",
     "reb_per_min",
     "ast_per_min",
@@ -65,6 +68,14 @@ def to_nba_api_schema(game_logs: pl.DataFrame) -> pl.DataFrame:
     return game_logs.rename(rename)
 
 
+def _real_score_unaliased() -> pl.Expr:
+    """Vectorized ``box_to_real_score`` (no alias), for reuse in derived columns."""
+    total = pl.lit(REAL_SCORE_INTERCEPT, dtype=pl.Float64)
+    for stat, w in REAL_SCORE_WEIGHTS.items():
+        total = total + pl.col(stat).cast(pl.Float64).fill_null(0.0) * w
+    return pl.max_horizontal(total, pl.lit(0.0, dtype=pl.Float64))
+
+
 def real_score_expr() -> pl.Expr:
     """Vectorized ``box_to_real_score`` over the stored (lowercase) schema.
 
@@ -72,10 +83,7 @@ def real_score_expr() -> pl.Expr:
     same intercept, floored at 0), so the corpus target equals the live rate
     estimator's notion of real_score.
     """
-    total = pl.lit(REAL_SCORE_INTERCEPT, dtype=pl.Float64)
-    for stat, w in REAL_SCORE_WEIGHTS.items():
-        total = total + pl.col(stat).cast(pl.Float64).fill_null(0.0) * w
-    return pl.max_horizontal(total, pl.lit(0.0, dtype=pl.Float64)).alias("real_score")
+    return _real_score_unaliased().alias("real_score")
 
 
 def add_targets(game_logs: pl.DataFrame) -> pl.DataFrame:
@@ -92,9 +100,11 @@ def add_targets(game_logs: pl.DataFrame) -> pl.DataFrame:
     def per_min(num: pl.Expr) -> pl.Expr:
         return pl.when(played).then(num.cast(pl.Float64) / m).otherwise(None)
 
+    rs = _real_score_unaliased()
     return game_logs.with_columns(
         [
             m.alias("minutes_played"),
+            pl.when(played).then(rs / m).otherwise(None).alias("real_score_per_min"),
             per_min(pl.col("pts")).alias("pts_per_min"),
             per_min(pl.col("reb")).alias("reb_per_min"),
             per_min(pl.col("ast")).alias("ast_per_min"),

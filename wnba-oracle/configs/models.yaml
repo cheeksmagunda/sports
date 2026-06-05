@@ -43,6 +43,12 @@ heads:
     objective: quantile
     quantile_alphas: [0.1, 0.5, 0.9]
     target: minutes_played
+  # Validated rate term (Phase 2): serve recompose is E[min] x E[rate].
+  real_score_per_min:
+    objective: quantile
+    quantile_alphas: [0.1, 0.5, 0.9]
+    target: real_score_per_min
+    condition: minutes_played > 0
   points_per_min:
     objective: quantile
     quantile_alphas: [0.1, 0.5, 0.9]
