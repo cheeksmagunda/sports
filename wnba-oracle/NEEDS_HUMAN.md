@@ -85,7 +85,7 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
    must opt in by polling the endpoint or wiring a UptimeRobot
    monitor that watches ``.status != "ok"``. See D37(c).
 
-10. **[CODE DONE 2026-05-27]** Day-close corpus extension. Logic landed
+10. **[DONE 2026-06-05]** Day-close corpus extension. Logic landed
     in `scheduler/job_dayclose.py`, dispatched via
     `oracle-cron --job dayclose` (D41). Smoke-tested locally. **Operator
     action**: on Railway, create a third cron service `cron-dayclose`:
@@ -99,6 +99,18 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     Also apply alembic upgrade head on prod Postgres so migration
     `20260527_0003_contest_leaderboards` lands before the first
     dayclose fires.
+
+    **Wired 2026-06-05** (see D60): created Railway service `cron-dayclose`
+    (id 606d950d) from cheeksmagunda/wnba-oracle, RAILPACK, start
+    `sh -c 'python /app/scripts/seed_storage_state.py && oracle-cron --job
+    dayclose'`, cron `0 6 * * *` UTC, restart NEVER. Secrets set as
+    cross-service references to cron-job1 (DATABASE_URL,
+    REALSPORTS_STORAGE_STATE_B64GZ, REAL_SPORTS_USERNAME/PASSWORD); device
+    + non-secret vars literal. The alembic migration runs via the service
+    pre-deploy command (`alembic upgrade head`, idempotent) so
+    contest_leaderboards lands before the first write. WNBA_CORPUS_PARQUET_DIR
+    intentionally unset (Postgres canonical; local parquet refreshed
+    off-Railway on demand).
 
 11. **[NEW 2026-05-27]** Wire the trained model artifact into the
     serving picker. D44 produced a working EB hierarchical baseline

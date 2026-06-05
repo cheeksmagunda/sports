@@ -18,14 +18,15 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - api:       https://api-production-7033.up.railway.app/health -> 200
 - api:       https://api-production-7033.up.railway.app/lineup -> 200 (empty)
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
-- postgres:  internal, alembic head = 20260527_0003 (local repo; Railway upgrade pending operator deploy)
+- postgres:  internal, alembic head = 20260527_0003 (Railway upgrade applied 2026-06-05 via cron-dayclose pre-deploy `alembic upgrade head`)
 - redis:     internal, password-protected
 - cron-job1: `0 13 * * *` UTC, oracle-cron --job job1 (next: 2026-05-27T13:00Z)
 - cron-job2: `*/15 21-23,0-3 * * *` UTC, oracle-cron --job job2 (next: 2026-05-27T21:00Z)
-- cron-dayclose: `0 6 * * *` UTC, oracle-cron --job dayclose (D41 — local
-  only until operator wires the Railway cron service; corpus is auto-
-  extended each fire by walking back N ids from today's max contest id
-  and skipping anything not `sport=wnba` & finalized)
+- cron-dayclose: `0 6 * * *` UTC, oracle-cron --job dayclose (D41; WIRED
+  2026-06-05, service id 606d950d, see D60). Fires ~1h after the latest
+  plausible WNBA finalization; auto-extends the canonical Postgres corpus
+  each fire by walking back N ids from today's max contest id, skipping
+  anything not `sport=wnba` and any pregame contest (empty draftStats).
 - env-tunable knobs (scope verified 2026-06-01, D53):
   - SHARED (env scope, via ${{shared.KEY}} refs): ENV, LOG_LEVEL,
     PYTHONUNBUFFERED, TZ, PAYOUT_REGIME=top_20, WNBA_ORACLE_MODEL_ARTIFACT_SHA.

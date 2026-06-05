@@ -1413,3 +1413,49 @@ collapses the wrong darts, the anchor floor forces >= 2 real-minutes players,
 and game-script reallocates blowout minutes to KNOWN bench. The floor+ceiling
 barbell the slate winners used, by construction. Validated end-to-end with all
 three armed in test_all_tiers_integration.py.
+
+### D60: Corpus tail backfill (Jun 3/4) + cron-dayclose wired to prod [verified]
+
+Context: the historical corpus had stalled at slate 2026-06-02. Root cause was
+NEEDS_HUMAN #10 -- the day-close cron (D41) was coded and tested but never wired
+on Railway, so nothing auto-extended slate_labels / contest_leaderboards after
+the build paused. Both the local parquet analysis surface and the canonical
+Postgres went stale.
+
+Done 2026-06-05 (~04:00 UTC):
+
+1. VERIFIED the gap + finalization by probing /stats for cids 1861-1872.
+   Anchors: 1861=06-02 (wnba, isFinalized=True), 1863=06-03 (wnba,
+   isFinalized=True), 1867=06-04 (wnba, isFinalized=False at probe time --
+   games had just ended, contest not yet settled). Interleaved nba/mlb/nhl/golf
+   ids correctly rejected by the sport filter. The 2025 single-day gaps and the
+   233-day winter gap are off-days / All-Star break / offseason, not data loss;
+   the 2026 season is contiguous modulo known off-days (05-11, 05-16, 05-26).
+
+2. Backfilled local parquet (data/historical) for 06-03 and 06-04 via
+   run_historical_backfill, plus a re-UPSERT of 06-02. Operator directed
+   capturing 06-04 despite isFinalized=False (finished WNBA box scores are not
+   materially stat-corrected; the UPSERT/overwrite path reconciles if they ever
+   are). Rebuilt training_corpus.parquet (130 slates, 3753 rows, through 06-04)
+   and wnba_game_logs.parquet (nba_api, through 06-04). All *.parquet are
+   gitignored -- the off-Railway analysis surface, refreshed on demand.
+
+3. Wired cron-dayclose on Railway (closes NEEDS_HUMAN #10). New service
+   606d950d from cheeksmagunda/wnba-oracle, RAILPACK, cron `0 6 * * *` UTC,
+   restart NEVER, start `sh -c 'python /app/scripts/seed_storage_state.py &&
+   oracle-cron --job dayclose'`. The pending migration
+   (20260527_0003_contest_leaderboards) is applied via the service pre-deploy
+   command `alembic upgrade head` (idempotent), guaranteeing the table exists
+   before the first write. Secrets set as cross-service references to cron-job1
+   (DATABASE_URL, REALSPORTS_STORAGE_STATE_B64GZ, REAL_SPORTS_USERNAME/PASSWORD)
+   so no credential value was hand-copied and they stay in sync; device +
+   non-secret vars literal. WNBA_CORPUS_PARQUET_DIR left unset (Postgres
+   canonical).
+
+Consequence: prod Postgres now self-extends nightly at 06:00 UTC (~1h after the
+latest plausible WNBA finalization, per D41). The local parquet corpus is NOT
+auto-fed by the cron (no Railway volume / parquet dir); refresh it by re-running
+run_historical_backfill + assemble_training_corpus locally, as done here.
+
+Reverse: delete the cron-dayclose service on Railway. The migration and the
+parquet/Postgres writes are durable and idempotent; no rollback needed.
