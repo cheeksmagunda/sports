@@ -19,9 +19,12 @@ lightgbm:
   min_gain_to_split: 0.01
   num_boost_round: 200
   early_stopping_rounds: 25
-  # categorical_feature: ['player_id'] (Part 6.10)
-  categorical_features:
-    - player_id
+  # No tree categoricals. player_id is deliberately NOT a tree feature (#0b,
+  # D63): a high-cardinality player categorical lets the trees memorize
+  # identity and defeats the EB-baseline shrinkage that is meant to carry
+  # player signal. Identity enters the heads only via the EB-residual target
+  # offset (see train/pipeline.py), never as a split feature.
+  categorical_features: []
 
 # Monotonicity (Part 6.4 + DECISIONS D14).
 monotone_constraints:

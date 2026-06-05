@@ -54,7 +54,7 @@ def train_quantile_head(
     train_df: pl.DataFrame,
     valid_df: pl.DataFrame,
     monotone_constraints: dict[str, int] | None = None,
-    categorical_features: tuple[str, ...] = ("player_id",),
+    categorical_features: tuple[str, ...] = (),
     cfg: LGBMHeadConfig = LGBMHeadConfig(),
     quantiles: tuple[float, ...] = DEFAULT_QUANTILES,
 ) -> TrainedHead:

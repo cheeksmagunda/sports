@@ -5,10 +5,23 @@ Random K-fold leaks. Time is the boundary. Each fold:
     embargo = [t_train_end, t_train_end + embargo_days)
     eval = [t_train_end + embargo_days, t_eval_end)
 
-The embargo gap prevents per-player rolling features that span the
-boundary from leaking the label.
+The embargo must be at least as long as the calendar span of the longest
+per-player rolling feature window, so the validation estimate reflects the
+*forward* prediction distance the picker actually faces (train on the
+season-to-date, predict tonight) rather than near-adjacent games that share a
+player's recent form. The dominant windows live in features/spec.py: L5/L10
+plus an L20 (``mins_l20``, ``coach_rotation_consistency_l20``). Over WNBA's
+sparse schedule one team plays ~every 3.5 calendar days, so an L20 window spans
+~70 days; a 3-day gap (the pre-D63 default) left train and eval rows highly
+autocorrelated and made every walk-forward number optimistic. ``embargo_days``
+now defaults to that window-covering span (see ``DEFAULT_EMBARGO_DAYS`` /
+``for_rolling_window``).
 
-`WalkForwardSplitter.split(df, date_col)` yields (train_idx, eval_idx)
+Note: this enlarged embargo is defense-in-depth. The primary protection is that
+the corpus builder computes rolling features strictly causally per row
+(``game_date < as_of_date``), so no future game ever enters a row's features.
+
+``WalkForwardSplitter.split(df, date_col)`` yields (train_idx, eval_idx)
 tuples. Unit-tested in tests/unit/test_cv_splitter.py:
 
     - No fold has overlap between train and eval index arrays.
@@ -19,17 +32,47 @@ tuples. Unit-tested in tests/unit/test_cv_splitter.py:
 from __future__ import annotations
 
 import datetime as dt
+import math
 from collections.abc import Iterator
 from dataclasses import dataclass
 
 import polars as pl
 
+# Longest per-player rolling-feature window in games (mins_l20,
+# coach_rotation_consistency_l20 in features/spec.py).
+LONGEST_ROLLING_WINDOW_GAMES = 20
+# WNBA single-team game cadence: ~44 games over a ~140-day regular season
+# (2025) => ~3.5 calendar days per game. Translates a game-count window into the
+# calendar embargo that fully separates it.
+WNBA_DAYS_PER_GAME = 3.5
+DEFAULT_EMBARGO_DAYS = math.ceil(LONGEST_ROLLING_WINDOW_GAMES * WNBA_DAYS_PER_GAME)
+
 
 @dataclass(frozen=True)
 class WalkForwardSplitter:
     n_folds: int = 5
-    embargo_days: int = 3
+    embargo_days: int = DEFAULT_EMBARGO_DAYS
     min_train_days: int = 21
+
+    @classmethod
+    def for_rolling_window(
+        cls,
+        window_games: int,
+        *,
+        days_per_game: float = WNBA_DAYS_PER_GAME,
+        n_folds: int = 5,
+        min_train_days: int = 21,
+    ) -> WalkForwardSplitter:
+        """Splitter whose embargo covers a ``window_games``-game feature window.
+
+        Lets a denser corpus (the ~13k game-logs) request full L20 coverage
+        while a caller on a sparser frame can pass a smaller window.
+        """
+        return cls(
+            n_folds=n_folds,
+            embargo_days=math.ceil(window_games * days_per_game),
+            min_train_days=min_train_days,
+        )
 
     def split(
         self,
