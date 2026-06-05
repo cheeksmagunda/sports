@@ -17,13 +17,14 @@ from pathlib import Path
 
 import polars as pl
 
-LB_GLOB = "data/historical/leaderboards/**/data.parquet"
-SL_GLOB = "data/historical/slate_labels/**/data.parquet"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
 def load():
-    lb = pl.read_parquet(LB_GLOB)
-    sl = pl.read_parquet(SL_GLOB)
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+    lb = read_leaderboards()
+    sl = read_slate_labels()
     # Explode lineup_json into per-player rows for easier analysis.
     expanded_rows = []
     for row in lb.iter_rows(named=True):

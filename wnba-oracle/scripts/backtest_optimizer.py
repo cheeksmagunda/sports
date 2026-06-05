@@ -35,12 +35,10 @@ SLATE = "2026-05-25"
 
 
 def main() -> int:
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet").filter(
-        pl.col("slate_date") == SLATE
-    )
-    lb = pl.read_parquet("data/historical/leaderboards/**/data.parquet").filter(
-        pl.col("slate_date") == SLATE
-    )
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+    sl = read_slate_labels().filter(pl.col("slate_date") == SLATE)
+    lb = read_leaderboards().filter(pl.col("slate_date") == SLATE)
 
     print(f"Slate {SLATE}: {sl.height} players, {lb.height} leaderboard entries")
 

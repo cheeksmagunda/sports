@@ -92,11 +92,10 @@ def _heuristic_real_score(card_boost: float) -> float:
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-_CORPUS_PATH = REPO_ROOT / "data" / "processed" / "training_corpus.parquet"
 
 
 def _load_player_history() -> dict[int, float]:
-    """Per-player mean real_score from the training corpus.
+    """Per-player mean real_score from slate_labels in Postgres.
 
     Used as a fallback prediction tier between the EB model and the generic
     heuristic. Players not yet in the EB model (trained before their 2026 data
@@ -108,16 +107,10 @@ def _load_player_history() -> dict[int, float]:
     Returns an empty dict on any read/parse error so the caller degrades
     gracefully to the heuristic.
     """
-    if not _CORPUS_PATH.exists():
-        return {}
     try:
-        import pandas as pd
+        from wnba_oracle.db.reads import read_player_history
 
-        df = pd.read_parquet(_CORPUS_PATH, columns=["player_id", "real_score"])
-        return {
-            int(pid): float(score)
-            for pid, score in df.groupby("player_id")["real_score"].mean().items()
-        }
+        return read_player_history()
     except Exception:
         return {}
 

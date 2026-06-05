@@ -34,6 +34,7 @@ from scipy.stats import spearmanr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from wnba_oracle.db.reads import read_leaderboards, read_slate_labels, read_training_corpus
 from wnba_oracle.predict.form import (
     FormConfig,
     boost_prior,
@@ -41,9 +42,6 @@ from wnba_oracle.predict.form import (
     predict_real_scores,
 )
 from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
-
-CORPUS = "data/processed/training_corpus.parquet"
-LB_GLOB = "data/historical/leaderboards/**/data.parquet"
 
 
 def prior_by_player(history: pd.DataFrame) -> dict[int, list[float]]:
@@ -109,7 +107,7 @@ def predictor_quality(corpus: pd.DataFrame, slates: list[str]) -> None:
 
 
 def _load_drafts_by_slate() -> dict[str, dict[int, int]]:
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet")
+    sl = read_slate_labels()
     out: dict[str, dict[int, int]] = {}
     for r in sl.iter_rows(named=True):
         if r.get("drafts") is None:
@@ -206,8 +204,8 @@ def run_placement(corpus: pd.DataFrame, lb: pl.DataFrame, slates: list[str]) -> 
 
 
 def main() -> int:
-    corpus = pd.read_parquet(CORPUS)
-    lb = pl.read_parquet(LB_GLOB)
+    corpus = read_training_corpus().to_pandas()
+    lb = read_leaderboards()
     slates = sorted(d for d in corpus["slate_date"].unique() if str(d).startswith("2026-"))
     print(f"Walk-forward over {len(slates)} 2026 slates "
           f"(history grows from {corpus['slate_date'].min()})\n")

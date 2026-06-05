@@ -6,7 +6,7 @@ orthogonal to the boost. One PlayerGameLogs call per season returns the entire
 league's per-game box scores with precise MIN, dated, with team abbreviations
 that match the corpus team_key.
 
-Writes data/processed/wnba_game_logs.parquet:
+Writes to Postgres (wnba_game_logs table):
   game_date (YYYY-MM-DD), player_id, player_name, first_initial, last_name,
   team, min, pts, reb, ast, stl, blk, tov, season
 
@@ -14,22 +14,67 @@ Run: uv run python scripts/backfill_minutes.py
 """
 from __future__ import annotations
 
+import sys
 import time
 import unicodedata
+from pathlib import Path
 
 import polars as pl
 from nba_api.stats.endpoints import playergamelogs
+from sqlalchemy import text
 
-OUT = "data/processed/wnba_game_logs.parquet"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from wnba_oracle.db.engine import get_engine  # noqa: E402
+
 SEASONS = ["2024", "2025", "2026"]
 COLS = ["PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION", "GAME_DATE",
         "MIN", "PTS", "REB", "OREB", "DREB", "AST", "STL", "BLK", "TOV",
         "FGM", "FGA", "FG3M", "FTM", "FTA"]
 
+UPSERT_SQL = text(
+    """
+    INSERT INTO wnba_game_logs (
+        game_date, player_id, player_name, first_initial, last_name,
+        team, min, season, pts, reb, oreb, dreb, ast, stl, blk, tov,
+        fgm, fga, fg3m, ftm, fta, ingested_at
+    ) VALUES (
+        :game_date, :player_id, :player_name, :first_initial, :last_name,
+        :team, :min, :season, :pts, :reb, :oreb, :dreb, :ast, :stl, :blk, :tov,
+        :fgm, :fga, :fg3m, :ftm, :fta, now()
+    )
+    ON CONFLICT (game_date, player_id) DO UPDATE SET
+        player_name = EXCLUDED.player_name,
+        first_initial = EXCLUDED.first_initial,
+        last_name = EXCLUDED.last_name,
+        team = EXCLUDED.team,
+        min = EXCLUDED.min,
+        pts = EXCLUDED.pts, reb = EXCLUDED.reb, oreb = EXCLUDED.oreb,
+        dreb = EXCLUDED.dreb, ast = EXCLUDED.ast, stl = EXCLUDED.stl,
+        blk = EXCLUDED.blk, tov = EXCLUDED.tov,
+        fgm = EXCLUDED.fgm, fga = EXCLUDED.fga, fg3m = EXCLUDED.fg3m,
+        ftm = EXCLUDED.ftm, fta = EXCLUDED.fta,
+        ingested_at = now();
+    """
+)
+
+STAT_COLS = ("pts", "reb", "oreb", "dreb", "ast", "stl", "blk", "tov",
+             "fgm", "fga", "fg3m", "ftm", "fta")
+
 
 def _norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
     return s.strip().lower()
+
+
+def _persist_to_postgres(df: pl.DataFrame) -> int:
+    engine = get_engine()
+    n = 0
+    with engine.begin() as conn:
+        for row in df.iter_rows(named=True):
+            conn.execute(UPSERT_SQL, row)
+            n += 1
+    return n
 
 
 def main() -> None:
@@ -69,8 +114,9 @@ def main() -> None:
     for stat in ("PTS", "REB", "OREB", "DREB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "FG3M", "FTM", "FTA"):
         cols[stat.lower()] = raw[stat].astype(float) if stat in raw else 0.0
     out = pl.DataFrame(cols)
-    out.write_parquet(OUT)
-    print(f"\nwrote {OUT}: {out.height} rows, {out['player_id'].n_unique()} players, "
+    n = _persist_to_postgres(out)
+    print(f"\nupserted {n} rows to Postgres wnba_game_logs, "
+          f"{out['player_id'].n_unique()} players, "
           f"teams={sorted(out['team'].unique().to_list())}")
 
 

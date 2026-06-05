@@ -14,9 +14,14 @@ from __future__ import annotations
 
 import unicodedata
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
 def _norm(s: str) -> str:
@@ -39,8 +44,10 @@ def alias(t):
 
 
 def load_joined() -> pd.DataFrame:
-    corpus = pd.read_parquet("data/processed/training_corpus.parquet")
-    logs = pd.read_parquet("data/processed/wnba_game_logs.parquet")
+    from wnba_oracle.db.reads import read_game_logs, read_training_corpus
+
+    corpus = read_training_corpus().to_pandas()
+    logs = read_game_logs().to_pandas()
     corpus = corpus.copy()
     corpus["initial"] = corpus["display_name"].map(lambda s: _norm(s)[:1])
     corpus["last"] = corpus["display_name"].map(lambda s: _norm(str(s).split()[-1]) if str(s).strip() else "")

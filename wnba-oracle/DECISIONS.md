@@ -1525,3 +1525,41 @@ read-only analytics; none are external accounts.
 Reverse: clear the postgres startCommand + remove PG_SSL_* vars (SSL off,
 image unchanged); drop role oracle_ro; delete the TCP proxy and the backups
 branch + workflow. Data in Postgres is unaffected by any of these.
+
+---
+
+## 2026-06-05: D62 -- Postgres single-source-of-truth for all reads
+
+### What changed [verified]
+1. `wnba_game_logs` table created in Postgres (migration 20260605_0004).
+   13,435 rows backfilled from nba_api covering 2024-2026 seasons. SELECT,
+   INSERT, UPDATE granted to oracle_ro.
+2. New module `src/wnba_oracle/db/reads.py` provides five canonical read
+   helpers: `read_training_corpus`, `read_slate_labels`, `read_leaderboards`,
+   `read_game_logs`, `read_player_history`. All accept an optional engine
+   parameter and return polars DataFrames (or dict for player_history).
+3. `oracle-train` (train/cli.py) defaults to reading from Postgres. The
+   `--corpus` flag still accepts a parquet path for backward compat.
+4. job2.py `_load_player_history` now queries Postgres directly instead
+   of reading training_corpus.parquet.
+5. All 13 analysis/backtest scripts switched from parquet glob reads to
+   the db.reads helpers.
+6. Parquet dual-plane retired: `WNBA_CORPUS_PARQUET_DIR` env var removed
+   from job_dayclose.py; `_write_parquet_partitions` function and
+   `--parquet-out-dir` CLI arg removed from backfill.py;
+   backfill_minutes.py writes only to Postgres.
+7. GitHub Actions (backup-corpus.yml) already at checkout@v4 and
+   setup-python@v5 -- no Node 20 deprecation issue.
+
+### Why [reasoned]
+The parquet files were a holdover from before D61 wired Postgres. Local
+modeling scripts (training, backtesting, validation) still read stale local
+parquet, meaning any new corpus data from cron-dayclose was invisible to
+offline analysis until someone re-ran assemble_training_corpus.py. With
+all reads going through Postgres, fresh data is immediately available.
+
+### Reverse
+Parquet files remain on disk under data/historical/ and data/processed/ as
+archival snapshots. To restore parquet reads: revert the imports in the
+affected scripts and restore the `_CORPUS_PATH` constant in job2.py. The
+migration is additive (new table, new module); no data was deleted.

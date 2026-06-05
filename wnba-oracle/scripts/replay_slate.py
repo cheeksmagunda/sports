@@ -84,9 +84,11 @@ def build_and_pick(pool, prior, drafts, *, K, per_player_sigma, dynamic_cap):
 
 def main() -> int:
     sd = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "2026-05-25"
-    corpus = pd.read_parquet("data/processed/training_corpus.parquet")
-    lb = pl.read_parquet("data/historical/leaderboards/**/data.parquet").filter(pl.col("slate_date") == sd).sort("rank")
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet").filter(pl.col("slate_date") == sd)
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels, read_training_corpus
+
+    corpus = read_training_corpus().to_pandas()
+    lb = read_leaderboards().filter(pl.col("slate_date") == sd).sort("rank")
+    sl = read_slate_labels().filter(pl.col("slate_date") == sd)
 
     pool = corpus[corpus["slate_date"] == sd].drop_duplicates("player_id").reset_index(drop=True)
     prior = prior_by_player(corpus[corpus["slate_date"] < sd])

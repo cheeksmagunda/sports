@@ -72,8 +72,10 @@ def score_lineup_against_truth(
 
 
 def main() -> int:
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet")
-    lb = pl.read_parquet("data/historical/leaderboards/**/data.parquet")
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+    sl = read_slate_labels()
+    lb = read_leaderboards()
     test_slates = sorted(
         [d for d in sl["slate_date"].unique().to_list() if d.startswith("2026-")]
     )

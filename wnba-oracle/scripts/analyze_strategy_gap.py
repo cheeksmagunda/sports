@@ -17,31 +17,31 @@ Run: uv run python scripts/analyze_strategy_gap.py
 
 from __future__ import annotations
 
-import glob
 import itertools
 import json
-import re
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import polars as pl
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 SLOTS = np.array([2.0, 1.8, 1.6, 1.4, 1.2])
 
 
-def _year(path: str) -> str:
-    m = re.search(r"slate_date=(\d{4})-", path)
-    return m.group(1) if m else "?"
-
 
 def load_corpus(year_prefix: str = "2026") -> tuple[pd.DataFrame, pd.DataFrame]:
-    sl_parts, lb_parts = [], []
-    for p in sorted(glob.glob("data/historical/slate_labels/slate_date=*/data.parquet")):
-        if _year(p) == year_prefix:
-            sl_parts.append(pd.read_parquet(p))
-    for p in sorted(glob.glob("data/historical/leaderboards/slate_date=*/data.parquet")):
-        if _year(p) == year_prefix:
-            lb_parts.append(pd.read_parquet(p))
-    return pd.concat(sl_parts, ignore_index=True), pd.concat(lb_parts, ignore_index=True)
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+    sl = read_slate_labels().filter(
+        pl.col("slate_date").str.starts_with(year_prefix)
+    ).to_pandas()
+    lb = read_leaderboards().filter(
+        pl.col("slate_date").str.starts_with(year_prefix)
+    ).to_pandas()
+    return sl, lb
 
 
 def best_lineup(pool: pd.DataFrame, max_per_team: int) -> tuple[float, list, int]:

@@ -207,19 +207,13 @@ def run_historical_backfill(
     pause_seconds: float = 1.0,
     dry_run: bool = False,
     with_leaderboards: bool = True,
-    parquet_out_dir: Path | None = None,
 ) -> int:
     """Walk a contest-id range, persist whatever returns 200 and sport=wnba.
 
     For each WNBA contest:
       1. Fetch /stats -> per-player labels (HV/popular/3x sections)
       2. If with_leaderboards: fetch /entries -> top-20 finisher lineups
-      3. If parquet_out_dir: append slate's rows to per-slate parquet files
-      4. If not dry_run and DATABASE_URL is set: UPSERT into Postgres
-
-    `parquet_out_dir` is the parent of two partition trees:
-      {dir}/slate_labels/slate_date=YYYY-MM-DD/data.parquet
-      {dir}/leaderboards/slate_date=YYYY-MM-DD/data.parquet
+      3. If not dry_run and DATABASE_URL is set: UPSERT into Postgres
     """
     device_uuid = os.environ.get("WNBA_DEVICE_UUID", "")
     device_name = os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-backfill-01")
@@ -231,7 +225,7 @@ def run_historical_backfill(
     if persist_to_pg:
         log.info("backfill_persist_target", target="postgres")
     else:
-        log.info("backfill_persist_target", target="parquet_only" if parquet_out_dir else "dry_run")
+        log.info("backfill_persist_target", target="dry_run")
 
     headers = asyncio.run(headers_or_capture(device_uuid, device_name))
     refresh = _force_reauth(device_uuid, device_name)
@@ -277,8 +271,6 @@ def run_historical_backfill(
                 persist_labels(labels)
                 if entries:
                     persist_leaderboard_entries(entries)
-            if parquet_out_dir is not None:
-                _write_parquet_partitions(parquet_out_dir, slate_date, labels, entries)
 
             n_success += 1
             n_lb_entries += len(entries)
@@ -301,55 +293,6 @@ def run_historical_backfill(
     return 0
 
 
-def _write_parquet_partitions(
-    out_dir: Path,
-    slate_date: str,
-    labels: list[ContestLabel],
-    entries: list[LeaderboardEntry],
-) -> None:
-    """Atomic per-slate write: dedupe labels by player, emit one parquet
-    per partition. UPSERT semantics not implemented for parquet (caller's
-    pass overwrites any existing file for the slate)."""
-    import polars as pl
-
-    labels_dir = out_dir / "slate_labels" / f"slate_date={slate_date}"
-    labels_dir.mkdir(parents=True, exist_ok=True)
-    deduped = dedupe_by_player(labels)
-    labels_df = pl.from_dicts([label.__dict__ for label in deduped])
-    labels_path = labels_dir / "data.parquet"
-    tmp = labels_path.with_suffix(".tmp.parquet")
-    labels_df.write_parquet(tmp)
-    tmp.replace(labels_path)
-
-    if entries:
-        lb_dir = out_dir / "leaderboards" / f"slate_date={slate_date}"
-        lb_dir.mkdir(parents=True, exist_ok=True)
-        # Lineup is a list[dict] - polars handles it as a struct list, but
-        # serialize to JSON string to avoid schema fragility across slates.
-        import json as _json
-
-        rows = []
-        for e in entries:
-            rows.append(
-                {
-                    "contest_id": e.contest_id,
-                    "slate_date": e.slate_date,
-                    "entry_id": e.entry_id,
-                    "rank": e.rank,
-                    "paged_rank": e.paged_rank,
-                    "user_id": e.user_id,
-                    "score": e.score,
-                    "lineup_json": _json.dumps(e.lineup),
-                    "num_brawlers": e.num_brawlers,
-                }
-            )
-        lb_df = pl.from_dicts(rows)
-        lb_path = lb_dir / "data.parquet"
-        tmp = lb_path.with_suffix(".tmp.parquet")
-        lb_df.write_parquet(tmp)
-        tmp.replace(lb_path)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=["live", "historical"], required=True)
@@ -361,12 +304,6 @@ def main() -> int:
         "--no-leaderboards",
         action="store_true",
         help="skip /entries fetch (stats only)",
-    )
-    parser.add_argument(
-        "--parquet-out-dir",
-        type=Path,
-        default=None,
-        help="if set, also write per-slate parquet partitions under this dir",
     )
     args = parser.parse_args()
 
@@ -384,7 +321,6 @@ def main() -> int:
             pause_seconds=args.pause_seconds,
             dry_run=args.dry_run,
             with_leaderboards=not args.no_leaderboards,
-            parquet_out_dir=args.parquet_out_dir,
         )
     return 1
 

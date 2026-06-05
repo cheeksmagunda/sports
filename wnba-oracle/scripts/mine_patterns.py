@@ -19,8 +19,11 @@ from __future__ import annotations
 import json
 import sys
 from collections import Counter
+from pathlib import Path
 
 import polars as pl
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
 def section(title: str) -> None:
@@ -54,8 +57,10 @@ def explode_lineups(lb: pl.DataFrame) -> pl.DataFrame:
 
 
 def main() -> int:
-    lb = pl.read_parquet("data/historical/leaderboards/**/data.parquet")
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet")
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+    lb = read_leaderboards()
+    sl = read_slate_labels()
     pp = explode_lineups(lb)
     pp = pp.with_columns(
         pl.when(pl.col("rank") == 1).then(pl.lit("winner"))

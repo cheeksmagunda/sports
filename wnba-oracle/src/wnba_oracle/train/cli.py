@@ -1,14 +1,13 @@
 """Training CLI: oracle-train.
 
-Reads labeled training data from a parquet file (default
-data/processed/training_corpus.parquet), splits by walk-forward, trains
-the multi-task ensemble, runs the determinism + parity gates, and
-writes a pickled artifact to models/.
+Reads labeled training data from Postgres (default) or a parquet file,
+splits by walk-forward, trains the multi-task ensemble, runs the
+determinism + parity gates, and writes a pickled artifact to models/.
 
 Usage:
-    uv run oracle-train --corpus data/processed/training_corpus.parquet \
-        --commit abc1234 \
-        --metrics-path /tmp/train_metrics.json
+    uv run oracle-train                          # reads from Postgres
+    uv run oracle-train --corpus path/to/file.parquet  # reads parquet
+    uv run oracle-train --commit abc1234 --metrics-path /tmp/train_metrics.json
 """
 
 from __future__ import annotations
@@ -42,8 +41,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--corpus",
-        default="data/processed/training_corpus.parquet",
-        help="path to labeled training corpus (parquet)",
+        default=None,
+        help="path to labeled training corpus (parquet). If omitted, reads from Postgres.",
     )
     parser.add_argument("--commit", default=_git_sha())
     parser.add_argument("--metrics-path", default="/tmp/train_metrics.json")
@@ -51,13 +50,18 @@ def main() -> int:
 
     configure_logging("INFO")
 
-    corpus_path = Path(args.corpus)
-    if not corpus_path.exists():
-        log.error("missing_corpus", path=str(corpus_path))
-        return 2
+    if args.corpus:
+        corpus_path = Path(args.corpus)
+        if not corpus_path.exists():
+            log.error("missing_corpus", path=str(corpus_path))
+            return 2
+        df = pl.read_parquet(corpus_path)
+        log.info("corpus_loaded", source="parquet", rows=len(df), cols=len(df.columns))
+    else:
+        from wnba_oracle.db.reads import read_training_corpus
 
-    df = pl.read_parquet(corpus_path)
-    log.info("corpus_loaded", rows=len(df), cols=len(df.columns))
+        df = read_training_corpus()
+        log.info("corpus_loaded", source="postgres", rows=len(df), cols=len(df.columns))
     if df.is_empty():
         log.error("empty_corpus")
         return 2

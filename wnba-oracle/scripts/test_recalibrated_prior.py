@@ -100,11 +100,13 @@ def run(corpus, lb, slates, mode):
 
 
 def main():
-    corpus = pd.read_parquet("data/processed/training_corpus.parquet")
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet")
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels, read_training_corpus
+
+    corpus = read_training_corpus().to_pandas()
+    sl = read_slate_labels()
     drafts_map = {(r["slate_date"], int(r["platform_player_id"])): r["drafts"] for r in sl.iter_rows(named=True)}
     corpus["drafts"] = [drafts_map.get((d, p)) for d, p in zip(corpus["slate_date"], corpus["player_id"])]
-    lb = pl.read_parquet("data/historical/leaderboards/**/data.parquet")
+    lb = read_leaderboards()
     slates = sorted(d for d in corpus["slate_date"].unique() if str(d).startswith("2026-"))
     print(f"Walk-forward placement on {len(slates)} 2026 slates (deltas are the signal)\n")
     for mode in ("boost_prior", "empirical"):

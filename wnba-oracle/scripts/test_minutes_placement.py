@@ -126,9 +126,10 @@ def run(matched, lb, slates, mode):
 def main():
     matched = load_joined()
     matched = matched[matched["min"].notna()].copy()
-    lb = pl.read_parquet("data/historical/leaderboards/**/data.parquet")
-    # drafts onto matched for contrarian
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet")
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+    lb = read_leaderboards()
+    sl = read_slate_labels()
     dm = {(r["slate_date"], int(r["platform_player_id"])): r["drafts"] for r in sl.iter_rows(named=True)}
     matched["drafts"] = [dm.get((d, p)) for d, p in zip(matched["slate_date"], matched["player_id"])]
     slates = sorted(d for d in matched["slate_date"].unique() if str(d).startswith("2026-"))

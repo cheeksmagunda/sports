@@ -20,10 +20,13 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
 - postgres:  internal + public TCP proxy (TLSv1.3, SSL enabled 2026-06-05 via
   start-command cert on stock postgres:16-alpine, D61); alembic head =
-  20260527_0003 (applied via cron-dayclose pre-deploy). CANONICAL corpus store:
-  slate_labels + contest_leaderboards now hold all 130 slates (2025-05-16..
-  2026-06-04); were EMPTY before D61. Laptop reads via `oracle_ro` (SELECT-only,
-  sslmode=verify-ca), connection in gitignored .env DATABASE_PUBLIC_URL.
+  20260605_0004 (adds wnba_game_logs table, D62). CANONICAL corpus store:
+  slate_labels + contest_leaderboards (130 slates, 2025-05-16..2026-06-04) +
+  wnba_game_logs (13,435 player-games, 2024-05-03..2026-06-04). All training,
+  backtest, and analysis scripts now read from Postgres via `db.reads` helpers;
+  local parquet files retained as archival backups only. Laptop reads via
+  `oracle_ro` (SELECT/INSERT/UPDATE on tables, sslmode=verify-ca), connection
+  in gitignored .env DATABASE_PUBLIC_URL.
 - cron-backup (GitHub Action `corpus-backup`): `43 6 * * *` UTC, exports the
   scraped corpus to the off-`main` `backups` branch (D61). 3-2-1 off-site copy.
 - redis:     internal, password-protected
@@ -57,33 +60,37 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
   2026-05-29 per D48; demotes `enter_with_caveat` to `skip` on
   marginal-EV slates). Unset or set to `false` to roll back.
 
-## Historical corpus (added 2026-05-27 09:40 UTC)
+## Historical corpus (updated 2026-06-05)
 
-`data/historical/{slate_labels,leaderboards}/slate_date=*/data.parquet`
-covers the 2026 WNBA season through 2026-05-25:
+All corpus data lives in Postgres (the canonical store). Local parquet
+files under `data/historical/` and `data/processed/` are archival backups
+only and are no longer read by any script.
 
-- 16 finalized slates (cid 1755 = 2026-05-08 .. cid 1831 = 2026-05-25);
-  the 3 off-days for WNBA in that window (5-11, 5-16, 5-26) are absent
-  by design — the platform doesn't surface a WNBA contest on those.
-- 505 player rows in `slate_labels` (HV / popular / 3x sections,
-  deduped by player; first section seen wins).
-- 320 leaderboard rows in `leaderboards` (top-20 finishers per slate),
-  each with the 5-player lineup as `lineup_json` (playerId, chosen
-  multiplier, card boost, per-player realized real_score, computed
-  per-player score).
+- `slate_labels`: 130 finalized slates (2025-05-16..2026-06-04), deduped
+  by player per contest.
+- `contest_leaderboards`: top-20 finisher lineups per slate.
+- `wnba_game_logs`: 13,435 player-games across 2024-2026 seasons (454
+  players), sourced from stats.wnba.com via nba_api.
 
-To re-run / extend:
+All reads go through `src/wnba_oracle/db/reads.py` (D62):
+`read_training_corpus()`, `read_slate_labels()`, `read_leaderboards()`,
+`read_game_logs()`, `read_player_history()`.
+
+To re-run minutes backfill:
+```
+set -a && source .env && set +a
+uv run python scripts/backfill_minutes.py
+```
+
+To re-run contest backfill:
 ```
 set -a && source .env && set +a
 export WNBA_DEVICE_UUID=<uuid matching storage_state>
-uv run oracle-backfill --mode historical --start-id 1755 --stop-id 1840 \
-    --pause-seconds 0.6 --parquet-out-dir data/historical
+uv run oracle-backfill --mode historical --start-id 1755 --stop-id 1900 \
+    --pause-seconds 0.6
 ```
 
-When DATABASE_URL is set (Railway env), the same command UPSERTs into
-Postgres (`slate_labels` + `contest_leaderboards`). See D38/D39/D40.
-A day-close cron that auto-extends the corpus from the prior night's
-finalized contest is **not yet wired** (NEEDS_HUMAN item 10).
+The day-close cron (`0 6 * * *` UTC) auto-extends the corpus nightly.
 
 ## Optimizer correctness (2026-05-27 10:00 UTC)
 

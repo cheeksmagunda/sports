@@ -10,11 +10,7 @@ Pipeline:
      slate_labels / contest_leaderboards mean re-processing an already-
      captured contest is a cheap no-op, so the window can overlap day-
      to-day without drift.
-  3. When DATABASE_URL is set, the labels + leaderboards are written to
-     Postgres (the canonical store). Parquet partitions under
-     `data/historical/` are also refreshed if `WNBA_CORPUS_PARQUET_DIR`
-     is set (otherwise skipped — parquet is the off-Railway analysis
-     surface, not load-bearing for serving).
+  3. Labels + leaderboards are written to Postgres (the canonical store).
 
 Cron schedule: `0 6 * * *` UTC = 01:00 EST / 02:00 EDT = ~1h after the
 latest plausible WNBA contest finalization. Contest 1831 (slate
@@ -26,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from pathlib import Path
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import get_settings
@@ -40,17 +35,12 @@ DEFAULT_WALK_WINDOW = 12  # cover yesterday + the prior day's residue
 
 def main() -> int:
     settings = get_settings()
-    parquet_dir_env = os.environ.get("WNBA_CORPUS_PARQUET_DIR", "").strip()
-    parquet_dir = Path(parquet_dir_env) if parquet_dir_env else None
     walk_window = int(os.environ.get("WNBA_DAYCLOSE_WALK_WINDOW", DEFAULT_WALK_WINDOW))
 
-    if not settings.database_url and parquet_dir is None:
+    if not settings.database_url:
         log.error(
             "dayclose_no_persistence_target",
-            hint=(
-                "Set DATABASE_URL or WNBA_CORPUS_PARQUET_DIR; otherwise the "
-                "backfill would scrape and discard."
-            ),
+            hint="Set DATABASE_URL; Postgres is the canonical store.",
         )
         return 1
 
@@ -70,7 +60,6 @@ def main() -> int:
         top_cid=top_cid,
         start_id=start_id,
         stop_id=stop_id,
-        parquet_dir=str(parquet_dir) if parquet_dir else None,
     )
     return run_historical_backfill(
         start_id=start_id,
@@ -78,7 +67,6 @@ def main() -> int:
         pause_seconds=0.5,
         dry_run=False,
         with_leaderboards=True,
-        parquet_out_dir=parquet_dir,
     )
 
 

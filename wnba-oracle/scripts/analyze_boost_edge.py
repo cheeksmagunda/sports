@@ -15,9 +15,13 @@ WNBA real_score is tight (max ~10) and floor may beat ceiling here.
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
 import numpy as np
 import polars as pl
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 SLOTS = [2.0, 1.8, 1.6, 1.4, 1.2]
 
@@ -27,8 +31,10 @@ def boost_prior(b: float) -> float:
 
 
 def main() -> None:
-    sl = pl.read_parquet("data/historical/slate_labels/**/data.parquet")
-    lb = pl.read_parquet("data/historical/leaderboards/**/data.parquet")
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+    sl = read_slate_labels()
+    lb = read_leaderboards()
 
     df = sl.select(["slate_date", "platform_player_id", "card_boost", "real_score", "drafts"]).filter(
         pl.col("real_score").is_not_null()
