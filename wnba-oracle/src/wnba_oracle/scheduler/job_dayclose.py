@@ -21,6 +21,7 @@ earliest fire time that always catches the prior night.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import os
 
 from wnba_oracle.common.logging import get_logger
@@ -61,13 +62,31 @@ def main() -> int:
         start_id=start_id,
         stop_id=stop_id,
     )
-    return run_historical_backfill(
+    rc = run_historical_backfill(
         start_id=start_id,
         stop_id=stop_id,
         pause_seconds=0.5,
         dry_run=False,
         with_leaderboards=True,
     )
+
+    # Best-effort: refresh the RESULTS.md ledger for the slate that just
+    # finalized (yesterday UTC). Guarded by WNBA_RESULTS_LEDGER so the
+    # default Railway fire is a clean no-op — the cron container's repo is
+    # ephemeral, so the write only matters when the env var points at a
+    # persisted / committed path (operator host or a future GH Action).
+    # A ledger failure never changes the dayclose exit code. See D66.
+    ledger_env = os.environ.get("WNBA_RESULTS_LEDGER", "").strip()
+    if ledger_env:
+        from wnba_oracle.scheduler import results_ledger
+
+        yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+        try:
+            results_ledger.append_for_slate(yesterday, Path(ledger_env))
+        except Exception as exc:
+            log.exception("dayclose_results_append_failed", error=str(exc))
+
+    return rc
 
 
 if __name__ == "__main__":

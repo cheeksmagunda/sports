@@ -1782,3 +1782,66 @@ contests (they will not) or a parallel synthetic-contest construction
 (out of scope; the boost / scoring rules are not publicly documented
 for 2024). For training, the corpus is now feature-complete on every
 day the model could have actually drafted on.
+
+---
+
+## 2026-05-29: Results tracking
+
+### D65: RESULTS.md live performance ledger [verified]
+(Originally numbered D47 in claude/player-picks-tracking; renumbered to D65 on
+merge because main's D47 is the prior Railway env hardening entry.)
+
+Started `RESULTS.md`, a per-slate ledger of actual contest standings, as a
+tracked deliverable alongside STATUS / DECISIONS / NEEDS_HUMAN / README.
+The frozen lineup is written to Redis + Postgres (not git), and eval/ only
+auto-populates model metrics, so there was no human-readable record of how
+the picker is doing in real contests. The ledger closes that gap: it ties
+each slate's standing back to the env knobs and strategy that produced the
+lineup, so we can read EV vs variance over a real sample rather than vibes.
+
+Seeded with the 2026-05-28 slate (the session that generated it errored
+before logging). At observation, 2 of 5 picks had played and the entry sat
+Top 10% / 517th of 8,700. Reconstructed from the operator's in-app
+screenshots and tagged `[screenshot]` until a finalized leaderboard row
+backs the numbers. Notable: C. Parker-Tyus at 23 drafts (near-zero field
+ownership) clearing her line is the anti-popularity contrarian tilt
+(`CONTRARIAN_STRENGTH=0.2`, `picker/popularity.py`) doing exactly its job.
+
+Reverse: delete `RESULTS.md`. No code depends on it.
+
+### D66: oracle-results auto-finalize for the RESULTS.md ledger [verified]
+(Originally numbered D48 in claude/player-picks-tracking; renumbered to D66
+on merge because main's D48 is the prior CAVEAT_IS_SKIP entry.)
+
+2026-05-29. Added `scheduler/results_ledger.py` + the `oracle-results` CLI
+to finalize a slate's RESULTS.md entry from the canonical Postgres store
+(`frozen_lineups` + `slate_labels` + `contest_leaderboards`), so the ledger
+stays current without a screenshot. Realized scoring uses the codebase
+formula `(slot_mult + card_boost) * real_score` (picker/optimize.py,
+scripts/backtest_optimizer.py); per-player real_score comes from
+`slate_labels`, falling back to the per-player `value` in any captured
+leaderboard lineup.
+
+Honest-by-design limitation [verified]: `contest_leaderboards` stores only
+the top-20 finishers per contest, so our exact rank and the field size
+(e.g. "517th of 8.7k") are not recoverable from the DB. The auto entry
+reports the realized total, the gap to the winner, and where the total sits
+relative to the captured top-20; it explicitly labels rank/field-size as
+not-in-DB. Those two numbers are backfilled from a screenshot when wanted.
+
+Wired into dayclose (`job_dayclose.py`) as a best-effort post-backfill step,
+guarded by `WNBA_RESULTS_LEDGER`. The guard exists because the Railway cron
+container's repo is ephemeral: an unguarded write would be lost and
+misleading. With the env var unset (the Railway default) dayclose is a clean
+no-op; the intended persistent path is an operator/local run or a future
+GitHub Action that regenerates the entry and commits it. A ledger failure
+never changes the dayclose exit code.
+
+New entries are inserted below the `<!-- AUTO-APPEND-BELOW -->` sentinel in
+RESULTS.md (newest-first), and re-running a logged slate is an idempotent
+no-op unless `--force` is passed. Covered by `tests/unit/test_results_ledger.py`
+(7 tests: scoring, placement, rendering, insertion, idempotency).
+
+Reverse: drop the `oracle-results` entry point, delete
+`scheduler/results_ledger.py` + its test, and remove the guarded block in
+`job_dayclose.py`. The ledger reverts to manual entries.

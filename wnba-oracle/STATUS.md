@@ -7,6 +7,13 @@ phase: live. 2026-06-05 (D63): decomposed projection ACTIVATED offline. The mult
 Set by the build automation. Allowed values: `IN_PROGRESS`,
 `BLOCKED_NONFATAL`, `BUILD_COMPLETE`.
 
+Live contest performance is tracked in `RESULTS.md`. First logged slate
+(2026-05-28) sat Top 10% / 517th of 8,700 with 2 of 5 picks played.
+Finalize a slate without a screenshot via `oracle-results --slate-date
+YYYY-MM-DD` (reads frozen_lineups + slate_labels + contest_leaderboards).
+DB stores only the top-20, so exact rank / field size still need a
+screenshot. See D48.
+
 The 7-day shadow run + watchdog drill are wall-clock operational phases.
 All code paths are unit-tested; the manual fire path has been exercised
 end-to-end via `scripts/manual_fire.py --fixtures`. The operator starts
