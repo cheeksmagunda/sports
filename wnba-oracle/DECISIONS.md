@@ -1737,3 +1737,48 @@ Migration is additive. `alembic downgrade -1` drops the three columns
 and their indexes (data loss only on those columns). Backfill script
 reverts via `git revert`; PHO/PHX collapse is irreversible by SQL but
 recoverable via re-pull from nba_api against historical season=2024.
+
+### Slate-gap probe + 2025 playoff backfill [verified]
+Two probes (scripts/probe_missing_slates.py + scripts/probe_pre_window.py)
+walked the Real Sports contest_id range to determine which missing
+slates are recoverable:
+
+- cid 1..571 (stride=3, before our corpus floor):
+  Sports seen: nba 62, nhl 45, ncaam 41, mlb 20, nfl 11, ncaaf 4,
+  soccer 3, empty 5. **wnba: 0.** The Real Sports WNBA contest
+  launched at cid=572 on 2025-05-16. The 2024 season (109 game-days)
+  and pre-window 2025 (4 reg-season days: May 9/11/13/15) are NOT
+  recoverable -- the contest did not yet exist.
+- cid 878..1000 (2025 playoff window): 11 wnba hits, all 11 match a
+  missing-slate date (cids 881, 884, 890, 895, 902, 907, 913, 921,
+  927, 936, 944 -> days 2025-09-18..2025-10-10). **All recoverable.**
+- cid 1400..1755 (2026 season-start window): 0 wnba contests. The
+  8 game-days from 2026-04-25..05-03 are preseason and Real Sports
+  correctly did not run a contest. NOT recoverable; not needed.
+
+Backfill via `oracle-backfill --mode historical --start-id 881 --stop-id
+944` persisted all 11 playoff slates: 249 new slate_labels rows + 220
+new contest_leaderboards rows. Coverage went from 130 -> 141 slate-days
+(2025-05-16..2026-06-04). Training corpus row count went from 3,753 ->
+4,002 (+6.6%), distinct trainable players 169 -> 179 (+5.9%). Playoff
+observations are disproportionately useful because they concentrate
+star-player usage on small slates -- the cohort where boost-vs-actual
+divergence is largest.
+
+### Final coverage [verified]
+| Period | game-days w/o slate | Status |
+|---|---|---|
+| 2024 season | 109 | Unrecoverable (contest did not exist) |
+| 2025 pre-window reg-season (May 9/11/13/15) | 4 | Unrecoverable |
+| 2025 preseason | 4 | Not needed (no contest by design) |
+| 2025 All-Star (Jul 19) | 1 | Not needed |
+| 2025 playoffs (Sep 18..Oct 10) | 11 | **Recovered (this commit)** |
+| 2026 preseason | 8 | Not needed |
+| 2024 exhibition (May 11, Jul 20 All-Star) | 2 | Not needed |
+
+The only structurally addressable gap remaining is the 2024 season,
+which would require Real Sports to retroactively publish historical
+contests (they will not) or a parallel synthetic-contest construction
+(out of scope; the boost / scoring rules are not publicly documented
+for 2024). For training, the corpus is now feature-complete on every
+day the model could have actually drafted on.

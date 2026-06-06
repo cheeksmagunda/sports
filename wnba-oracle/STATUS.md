@@ -20,13 +20,18 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
 - postgres:  internal + public TCP proxy (TLSv1.3, SSL enabled 2026-06-05 via
   start-command cert on stock postgres:16-alpine, D61); alembic head =
-  20260605_0004 (adds wnba_game_logs table, D62). CANONICAL corpus store:
-  slate_labels + contest_leaderboards (130 slates, 2025-05-16..2026-06-04) +
-  wnba_game_logs (13,435 player-games, 2024-05-03..2026-06-04). All training,
-  backtest, and analysis scripts now read from Postgres via `db.reads` helpers;
-  local parquet files retained as archival backups only. Laptop reads via
-  `oracle_ro` (SELECT/INSERT/UPDATE on tables, sslmode=verify-ca), connection
-  in gitignored .env DATABASE_PUBLIC_URL.
+  20260605_0005 (D64: adds opponent/home_away/game_id matchup fields to
+  wnba_game_logs). CANONICAL corpus store:
+  slate_labels + contest_leaderboards (141 slates, 2025-05-16..2026-06-04,
+  D64 adds 11 recovered 2025 playoff slates Sep 18..Oct 10) +
+  wnba_game_logs (13,456 player-games, 2024-05-03..2026-06-05, with
+  matchup fields populated at 97.8% -- the 295 NULL-opponent rows are
+  exhibition/All-Star/preseason days where Real Sports correctly ran no
+  contest). All training, backtest, and analysis scripts now read from
+  Postgres via `db.reads` helpers; local parquet files retained as
+  archival backups only. Laptop reads via `oracle_ro` (SELECT/INSERT/UPDATE
+  on tables, sslmode=verify-ca), connection in gitignored .env
+  DATABASE_PUBLIC_URL.
 - cron-backup (GitHub Action `corpus-backup`): `43 6 * * *` UTC, exports the
   scraped corpus to the off-`main` `backups` branch (D61). 3-2-1 off-site copy.
 - redis:     internal, password-protected
