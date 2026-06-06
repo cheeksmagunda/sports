@@ -184,6 +184,94 @@ def test_caveat_is_skip_demotes_marginal_ev_to_skip() -> None:
         assert flipped.entry_flag == base.entry_flag
 
 
+def test_never_skip_defaults_off_in_library_config() -> None:
+    """OptimizeConfig.never_skip defaults to False so a bare config keeps
+    the legacy three-state behavior; production opts in via Settings."""
+    assert OptimizeConfig().never_skip is False
+    assert OptimizeConfig(never_skip=True).never_skip is True
+
+
+def test_never_skip_promotes_skip_to_caveat() -> None:
+    """never_skip=True must never produce entry_flag='skip'. A weak,
+    negative-EV pool that lands in the 'skip' band under the default
+    config must surface as 'enter_with_caveat' instead, with identical
+    player selection and expected_payout (only the flag policy changes)."""
+    rng = np.random.default_rng(7)
+    # Same deliberately weak pool as the caveat_is_skip test so the base
+    # config lands below the cash line.
+    n = 10
+    teams = (["LVA"] * 3) + (["NYL"] * 3) + (["PHO"] * 2) + (["CHI"] * 2)
+    opps = (["NYL"] * 3) + (["LVA"] * 3) + (["CHI"] * 2) + (["PHO"] * 2)
+    samp_specs = [
+        PlayerSamplingSpec(
+            player_id=i,
+            team=teams[i],
+            opponent=opps[i],
+            mu=np.log(1.5 + rng.uniform(-0.3, 0.3) + 10.0),
+            sigma=0.20,
+            boost=0.5,
+        )
+        for i in range(n)
+    ]
+    field_specs = [
+        FieldPlayerSpec(player_id=i, pred_real_score=2.0 + rng.uniform(-0.5, 0.5), card_boost=0.5)
+        for i in range(n)
+    ]
+    curve = default_curve_for_regime("top_20")
+    common = dict(top_n_filter=10, n_samples=300, n_field_lineups=80)
+    base = optimize_lineup(samp_specs, field_specs, curve, cfg=OptimizeConfig(**common))
+    no_skip = optimize_lineup(
+        samp_specs, field_specs, curve, cfg=OptimizeConfig(never_skip=True, **common)
+    )
+    # Pure flag policy: same players, same EV.
+    assert base.player_ids == no_skip.player_ids
+    assert base.expected_payout == no_skip.expected_payout
+    # never_skip never emits 'skip'.
+    assert no_skip.entry_flag != "skip"
+    if base.entry_flag == "skip":
+        assert no_skip.entry_flag == "enter_with_caveat"
+    else:
+        assert no_skip.entry_flag == base.entry_flag
+
+
+def test_never_skip_overrides_caveat_is_skip() -> None:
+    """never_skip wins over caveat_is_skip: a marginal slate that
+    caveat_is_skip would demote to 'skip' is promoted back to caveat."""
+    rng = np.random.default_rng(7)
+    n = 10
+    teams = (["LVA"] * 3) + (["NYL"] * 3) + (["PHO"] * 2) + (["CHI"] * 2)
+    opps = (["NYL"] * 3) + (["LVA"] * 3) + (["CHI"] * 2) + (["PHO"] * 2)
+    samp_specs = [
+        PlayerSamplingSpec(
+            player_id=i,
+            team=teams[i],
+            opponent=opps[i],
+            mu=np.log(1.5 + rng.uniform(-0.3, 0.3) + 10.0),
+            sigma=0.20,
+            boost=0.5,
+        )
+        for i in range(n)
+    ]
+    field_specs = [
+        FieldPlayerSpec(player_id=i, pred_real_score=2.0 + rng.uniform(-0.5, 0.5), card_boost=0.5)
+        for i in range(n)
+    ]
+    curve = default_curve_for_regime("top_20")
+    out = optimize_lineup(
+        samp_specs,
+        field_specs,
+        curve,
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=300,
+            n_field_lineups=80,
+            caveat_is_skip=True,
+            never_skip=True,
+        ),
+    )
+    assert out.entry_flag != "skip"
+
+
 def test_optimizer_returns_lineup_of_size_5() -> None:
     rng = np.random.default_rng(0)
     n = 12

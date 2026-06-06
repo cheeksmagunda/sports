@@ -135,6 +135,16 @@ class OptimizeConfig:
     # CAVEAT_IS_SKIP env var on services that should refuse marginal-EV
     # contests until live-field calibration data is in.
     caveat_is_skip: bool = False
+    # never_skip: when True, the optimizer never emits 'skip'. Any lineup
+    # that would otherwise be flagged 'skip' (below the skip-EV floor, or
+    # demoted by caveat_is_skip) is surfaced as 'enter_with_caveat'
+    # instead. The product runs every slate and always presents the best
+    # available lineup, so it should never tell the operator to sit out;
+    # the marginal-EV signal is preserved via the caveat flag and the
+    # expected_payout value rather than via suppression. Library default
+    # is False so the bare OptimizeConfig() keeps the legacy three-state
+    # behavior; production wires this on through Settings.never_skip.
+    never_skip: bool = False
     # score_offset (K): passed through to the copula sampler. MUST equal the K
     # the caller used to build each spec's mu (job2 reads both from settings).
     # D52 default 2.0 (was 10.0).
@@ -313,6 +323,12 @@ def optimize_lineup(
         flag = "skip" if cfg.caveat_is_skip else "enter_with_caveat"
     else:
         flag = "enter"
+    # never_skip: the product surfaces a playable lineup every slate and
+    # never tells the operator to sit out. Promote any 'skip' to
+    # 'enter_with_caveat' so the marginal-EV signal survives (via the
+    # caveat flag + expected_payout) without suppressing the slate.
+    if cfg.never_skip and flag == "skip":
+        flag = "enter_with_caveat"
 
     return LineupRecommendation(
         player_ids=ordered_pids,

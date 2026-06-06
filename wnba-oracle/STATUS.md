@@ -2,6 +2,9 @@ status: BUILD_COMPLETE
 last_verified: 2026-06-02T00:00:00Z
 phase: live. 2026-06-05 (D63): decomposed projection ACTIVATED offline. The multi-task heads were coded but never trained (the 7-column slate_labels corpus lacked their target columns), so job2 served a career-average heuristic for ~85% of players, the root cause of the 06-04 ~6000th/8317 bust. New features/corpus.py builds a 12,981-row feature+target corpus from the 13,435 game-logs (targets via the locked box_to_real_score); the minutes + per-minute heads now train (low_data_mode cleared, 0 -> trained). New PickerArtifact.predict_real_score recomposes E[real_score]=E[min]xE[rate] as a lognormal product; TRUE walk-forward (train pre-2026, predict 2026, n=1776) corr 0.554 (matches the actual-min ceiling, D55) vs the boost heuristic's 0.246, P10-P90 coverage 0.81. Also Phase 0: CV embargo leak fixed (3d -> window-covering 70d), player_id tree-categorical footgun removed (was latent), eval/multiple_comparisons.py CPCV + deflated-edge guard above the rotation gate. LIVE SERVING UNCHANGED: the deployed artifact (SHA 6182a29d) still has 0 heads and job2 still serves the heuristic ladder; the trained heads are dormant until Phase 2b wires job1 feature persistence + a job2 Tier-0 path. Commits 01a1d15/241b6b5/d792127 on main. Phases 2b-6 remain (see DECISIONS D63). Training command is now `oracle-train --corpus-mode both`. 2026-06-02: Tier 3 built behind GAME_SCRIPT_MINUTES_ENABLED (default OFF, D57) -- role-aware game-script bench-minutes redistribution (features/game_script_minutes.py) + regime-switching same-team copula correlation (picker/sample.py), wired into job2 behind the kill-switch; live freeze byte-identical with the flag off. This is Tier 3 of the D57 draft-winning strategy, built first at operator direction; it rides on the Tier 2 availability engine (not yet built) and currently only moves KNOWN rotation bench players, so it does NOT by itself fix the 06-01 all-longshot bust. 2026-06-01 22:23Z: today's slate frozen with real names + entry=enter (Shepard/Holmes/Siegrist/Horston/McCowan) after fixing a prod OUTAGE (D56): the optimizer's prod defaults (5000 samples x 1000 field x C(30,5)) could not finish in the 15-min cron window, so job2 was killed before freezing every tick -- no picks, and earlier freezes showed "Player <id>" (optimizer picked blank-name boost-3 rookies). Fixed by reducing optimizer knobs to the validated range (~85s). 2026-06-01 build pass also shipped: dynamic team cap (D50); contrarian kept at 0.2 (D51); sampling K=10->2 + per-player sigma (D52); and the MINUTES/ROLE MODEL (D55) -- the real edge (today's freeze matched 48/49 players to nba_api minutes). Proven walk-forward: minutes x rate predicts real_score at corr 0.554 (actual-min ceiling) / 0.355 (recency) vs boost 0.246; real_score is a fixed box formula (R^2 0.957) so the pipeline is self-contained on nba_api. job1 ingests per-player recent_minutes + per_min_rate from stats.wnba.com game logs; job2 uses a boost<->minutes blend with confirmed-starter / injury-cascade / blowout same-day signals. Env kill-switch MINUTES_MODEL_ENABLED. Earlier: CAVEAT_IS_SKIP + stable argsort (D48); recency/EB-over-boost tested and rejected (D52/D54, boost already encodes form). Harnesses: scripts/backtest_walkforward.py, validate_minutes_model.py, test_minutes_placement.py, replay_slate.py.
 
+
+NEVER_SKIP policy active (default on, D67, formerly D49 in the originating PR): optimizer never recommends sitting out a slate; supersedes CAVEAT_IS_SKIP (a slate that would be demoted to 'skip' is promoted back to 'enter_with_caveat', with the EV signal preserved unchanged).
+
 # Build status
 
 Set by the build automation. Allowed values: `IN_PROGRESS`,
@@ -70,7 +73,12 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
   - DATABASE_URL / REDIS_URL are service references; never literals.
 - env-tunable knobs at cron-job2 service: CAVEAT_IS_SKIP=true (set
   2026-05-29 per D48; demotes `enter_with_caveat` to `skip` on
-  marginal-EV slates). Unset or set to `false` to roll back.
+  marginal-EV slates). Now superseded at runtime by NEVER_SKIP (D49):
+  while NEVER_SKIP is on, no slate is demoted to `skip` regardless of
+  CAVEAT_IS_SKIP. Operator may unset CAVEAT_IS_SKIP to avoid confusion.
+- NEVER_SKIP=true is the new code default (D49). The optimizer never
+  emits `skip`; sub-breakeven slates surface as `enter_with_caveat`.
+  Set NEVER_SKIP=false to restore the D48 three-state behavior.
 
 ## Historical corpus (updated 2026-06-05)
 

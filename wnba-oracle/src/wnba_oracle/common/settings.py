@@ -74,6 +74,16 @@ class Settings(BaseSettings):
     # against placement data rather than the leakage-contaminated 16-slate
     # backtest. Default False preserves current behavior.
     caveat_is_skip: bool = Field(default=False, alias="CAVEAT_IS_SKIP")
+    # never_skip: when True (the default), the optimizer never emits a
+    # 'skip' recommendation. The product is designed to run every slate
+    # and always present the best available lineup, so a marginal- or
+    # negative-EV slate is surfaced as 'enter_with_caveat' rather than
+    # 'skip'. This supersedes caveat_is_skip (a slate that would be
+    # demoted to 'skip' is promoted back to 'enter_with_caveat'). The
+    # expected_payout value is still persisted unchanged, so the EV
+    # signal is preserved for anyone reading the lineup. Set NEVER_SKIP
+    # to false to restore the legacy three-state skip behavior. See D67.
+    never_skip: bool = Field(default=True, alias="NEVER_SKIP")
     # sampling_score_offset (K): log(real_score + K) sampling space. D52
     # recalibrated 10 -> 2 so the implied real_score std (~1.1) and right-skew
     # match the corpus. job2 builds mu and the copula un-offsets with this same

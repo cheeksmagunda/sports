@@ -1845,3 +1845,61 @@ no-op unless `--force` is passed. Covered by `tests/unit/test_results_ledger.py`
 Reverse: drop the `oracle-results` entry point, delete
 `scheduler/results_ledger.py` + its test, and remove the guarded block in
 `job_dayclose.py`. The ledger reverts to manual entries.
+
+---
+
+## 2026-05-29: Never-skip policy
+
+### D67: `NEVER_SKIP` — optimizer no longer recommends sitting out [reasoned]
+(Originally numbered D49 in claude/may-29-slate-picks; renumbered to D67 on
+merge because main's D49 is the prior Real Sports displayName fallback.)
+
+Owner directive: the product runs every slate and always presents the
+best available lineup, so it should never tell the operator to skip a
+slate. Reverses the operational default that shipped with D48 (the
+`enter` / `skip` / `enter_with_caveat` three-state recommendation, plus
+the `CAVEAT_IS_SKIP=true` env that was set on cron-job2 to demote
+marginal-EV slates to `skip`).
+
+What changed:
+
+* New `never_skip` field on `OptimizeConfig`
+  (`src/wnba_oracle/picker/optimize.py`). Library default `False` so a
+  bare `OptimizeConfig()` keeps the legacy three-state behavior and the
+  D48 tests still hold.
+* New `NEVER_SKIP` setting (`src/wnba_oracle/common/settings.py`),
+  default `True`. Job 2 wires it into the optimizer config
+  (`src/wnba_oracle/scheduler/job2.py`). So every production fire now
+  runs with never-skip on.
+* When `never_skip` is on, any lineup that the EV thresholds would flag
+  `skip` (including a slate demoted by `caveat_is_skip`) is promoted to
+  `enter_with_caveat`. `never_skip` supersedes `CAVEAT_IS_SKIP`.
+
+What did NOT change, and why this is honest rather than a quality win
+[reasoned]: the recommendation flag is advisory only. It never altered
+which five players the optimizer selects, and the frontend already
+rendered the lineup for all three flag states (verified: no conditional
+suppression in `PickerPage.tsx` / `SlateBand.tsx`). So this does not
+make the model pick better players or "win more"; it removes the
+sit-out advisory. The modeled EV is still persisted unchanged in
+`frozen_lineups.expected_payout`, and a genuinely marginal- or
+negative-EV slate still carries the `enter_with_caveat` flag, so the
+operator keeps the EV signal. Promoting to `enter_with_caveat` rather
+than a bare `enter` is deliberate: a flat `enter` on a sub-breakeven
+slate would hide real downside risk from the operator.
+
+Reverse: set `NEVER_SKIP=false` (env, no deploy of code needed) to
+restore the D48 three-state behavior. Or revert this commit.
+
+Note on the 2026-05-29 cached slate [verified]: the already-frozen
+`2026-05-29` lineup (model_sha `000f54fe…`, `expected_payout=0.6226`,
+`entry_recommendation=skip`, `metadata.frozen_via=job2_first_fire`)
+is immutable (`ON CONFLICT DO NOTHING`) and predates this change, so it
+still reads `skip`. Its five `player_id`s (617, 647, 4322730, 4322904,
+4322873) carry placeholder display names ("Player 617" ...) and do not
+resolve to any real WNBA player in the local fixtures, identity
+overrides, or historical corpus. That freeze appears to be a synthetic
+first-fire, not a real Real Sports pool (uniform card_boost 3.0,
+sub-3.0 pred_real_scores). Real names live only in production
+`job1_enrichment.name`, which is unreachable from a fresh container
+without `DATABASE_URL`. Logged for the operator in NEEDS_HUMAN.md.

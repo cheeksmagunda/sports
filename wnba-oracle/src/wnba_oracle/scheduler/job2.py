@@ -825,6 +825,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         max_per_team=settings.optimizer_max_per_team,
         dynamic_team_cap=settings.optimizer_dynamic_team_cap,
         caveat_is_skip=settings.caveat_is_skip,
+        never_skip=settings.never_skip,
         score_offset=settings.sampling_score_offset,
         min_anchors=settings.lineup_anchor_floor,
     )
