@@ -5,6 +5,8 @@ phase: live. 2026-06-05 (D63): decomposed projection ACTIVATED offline. The mult
 
 NEVER_SKIP policy active (default on, D67, formerly D49 in the originating PR): optimizer never recommends sitting out a slate; supersedes CAVEAT_IS_SKIP (a slate that would be demoted to 'skip' is promoted back to 'enter_with_caveat', with the EV signal preserved unchanged).
 
+Player-name resolution hardened (D68, formerly D50 in the originating PR): slate_labels fallback in the freeze + contest-stats parser fallback, closing D49's two open loops so the frozen lineup never ships "Player <id>" placeholders.
+
 # Build status
 
 Set by the build automation. Allowed values: `IN_PROGRESS`,

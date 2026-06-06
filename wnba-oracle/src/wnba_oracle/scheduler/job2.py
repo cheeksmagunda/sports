@@ -353,6 +353,41 @@ def _load_measured_drafts(slate_date: str) -> dict[int, int]:
     return out
 
 
+def _load_slate_label_names(slate_date: str) -> dict[int, str]:
+    """Pull display names from slate_labels for the slate, keyed by
+    platform_player_id.
+
+    Defense-in-depth name source for the frozen lineup (D50). The primary
+    name path is `job1_enrichment.name` (Real Sports pool, D49). When that
+    is empty for a player, this fallback fills it from the independently
+    populated `slate_labels.display_name` so the freeze never ships a
+    `Player <id>` placeholder when a real name exists anywhere in the DB.
+    Empty / blank names are skipped so they never shadow the final
+    `Player {pid}` fallback. Empty when Job 2 fires before any contest
+    finalized (typical pregame), in which case the enrichment name stands.
+    """
+    try:
+        eng = get_engine()
+    except RuntimeError:
+        return {}
+    q = text(
+        "SELECT DISTINCT ON (platform_player_id) platform_player_id, display_name "
+        "FROM slate_labels WHERE slate_date = :sd "
+        "ORDER BY platform_player_id, id DESC"
+    )
+    with eng.connect() as conn:
+        rows = conn.execute(q, {"sd": slate_date}).fetchall()
+    out: dict[int, str] = {}
+    for r in rows:
+        m = r._mapping
+        pid = m.get("platform_player_id")
+        name = str(m.get("display_name", "") or "").strip()
+        if pid is None or not name:
+            continue
+        out[int(pid)] = name
+    return out
+
+
 def _build_specs(
     enrichment: list[dict],
     *,
@@ -381,6 +416,11 @@ def _build_specs(
         )
     if not enrichment:
         return [], [], {}
+
+    # Defense-in-depth name source (D50): when the Real Sports pool left
+    # `job1_enrichment.name` empty, fill display names from slate_labels so
+    # the frozen lineup never ships a `Player <id>` placeholder.
+    label_names = _load_slate_label_names(slate_date)
 
     # Load trained artifact when WNBA_ORACLE_MODEL_ARTIFACT_SHA matches a
     # picker_*.pkl under models/. EB baseline predictions replace the
@@ -622,8 +662,10 @@ def _build_specs(
                 card_boost=boost,
             )
         )
+        enrichment_name = str(r.get("name", "") or "").strip()
+        display_name = enrichment_name or label_names.get(pid, "") or f"Player {pid}"
         projection_by_pid[pid] = {
-            "display_name": str(r.get("name", "") or f"Player {pid}"),
+            "display_name": display_name,
             "team": team,
             "opponent": opp,
             "position": str(r.get("position", "") or "F"),

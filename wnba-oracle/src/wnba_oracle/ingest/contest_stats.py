@@ -115,6 +115,23 @@ def _parse_real_score(raw: object) -> float | None:
         return None
 
 
+def _player_display_name(pl_obj: dict) -> str:
+    """Resolve a player's display name from a contest `player` object.
+
+    Mirrors the pool parser's D49 fallback: the Real Sports API has been
+    observed to return an empty ``displayName`` while ``firstName`` /
+    ``lastName`` stay populated. Reading ``displayName`` alone here would
+    silently emit empty ``slate_labels.display_name`` rows, which is the
+    fallback source the live freeze leans on. Fall back to
+    ``firstName + lastName`` so the name source stays trustworthy."""
+    dn = str(pl_obj.get("displayName", "") or "").strip()
+    if dn:
+        return dn
+    first = str(pl_obj.get("firstName", "") or "").strip()
+    last = str(pl_obj.get("lastName", "") or "").strip()
+    return f"{first} {last}".strip()
+
+
 def fetch_contest_stats(
     contest_id: int,
     headers: RequestHeaders,
@@ -191,7 +208,7 @@ def fetch_contest_stats(
                     slate_date=slate_date,
                     section=str(sec_name),
                     platform_player_id=int(pid),
-                    display_name=str(pl_obj.get("displayName", "")).strip(),
+                    display_name=_player_display_name(pl_obj),
                     team_key=str(tkey).strip().upper(),
                     card_boost=float(entry.get("multiplierBonus", 0.0)),
                     drafts=_parse_drafts(display_stats.get("Drafts")),

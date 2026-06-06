@@ -1903,3 +1903,68 @@ first-fire, not a real Real Sports pool (uniform card_boost 3.0,
 sub-3.0 pred_real_scores). Real names live only in production
 `job1_enrichment.name`, which is unreachable from a fresh container
 without `DATABASE_URL`. Logged for the operator in NEEDS_HUMAN.md.
+
+---
+
+## 2026-05-30: Player-name hardening
+
+### D68: Name-resolution hardening — close D49's two open loops [verified]
+(Originally numbered D50 in claude/wnba-player-picks; renumbered to D68 on
+merge because main's D50 is the prior Dynamic team cap entry. Internal
+references to D49 in this block still point to main's D49 -- the Real
+Sports displayName fallback -- which is what this work hardens.)
+
+D49 fixed the pool parser but left two gaps that re-surfaced when the
+operator asked why the served lineup still rendered `Player 617` /
+`Player 4322873` placeholders. Both are closed here.
+
+Gap 1 (the visible symptom): D49 claimed the 2026-05-29 placeholder
+freeze row "will overwrite on the next fire because `_freeze` is
+non-idempotent on the UPSERT." That is **wrong** — `FROZEN_INSERT` is
+`INSERT ... ON CONFLICT (slate_date, model_sha) DO NOTHING`
+(`job2.py`), so the first fire's row is permanent for that
+(slate_date, model_sha) key. The 2026-05-29 row never self-healed;
+it still serves placeholder names today. Verified fact, not synthesis:
+`GET /lineup/2026-05-29` against the live API returns
+`display_name="Player 617"` etc. as of 2026-05-30. This is a historical
+row and is left as-is (the slate's `entry_recommendation` was already
+`skip`, so no actionability is lost). The class of bug is what we fix.
+
+Gap 2 (defense-in-depth): the freeze had a single name source
+(`job1_enrichment.name`). If the Real Sports pool ever returns
+`displayName` AND `firstName` AND `lastName` all empty, D49's fallback
+yields `""` and the placeholder ships again. Fix: `_build_specs` now
+resolves `display_name` through a chain — pool name, then
+`slate_labels.display_name` (loaded via `_load_slate_label_names`,
+`DISTINCT ON (platform_player_id) ... ORDER BY id DESC`), then the
+`Player {pid}` placeholder. slate_labels is populated by an independent
+code path (contest draft-stats), so a pool-side regression no longer
+blanks the card when the name exists anywhere in the DB. This fallback
+would have caught 2026-05-29 even before the D49 parser fix landed.
+
+Gap 3 (the source D49 explicitly deferred): `contest_stats` parsed
+draft-stats player names with `displayName` only (the same single-field
+read D49 fixed in the pool). Left unpatched, the slate_labels fallback
+source above could itself go empty under the same API regression.
+Mirrored the D49 fallback into a shared `_player_display_name` helper
+(`displayName` -> `firstName + lastName` -> `""`).
+
+Tests: `test_job2_name_fallback.py::test_build_specs_name_fallback_chain`
+pins the three-tier chain; `test_contest_stats.py::
+test_player_display_name_falls_back_to_first_last` and
+`::test_fetch_contest_stats_empty_display_name_falls_back` pin the
+contest-stats parser.
+
+Reverse: revert this commit. The pool parser (D49) remains the primary
+path; only the secondary slate_labels fallback and the contest-stats
+fallback are removed.
+
+Deploy note (verified reasoning): this is a code fix on the
+`claude/wnba-player-picks-uhOSS` branch. It changes nothing live until
+the running cron-job2 service picks up the new revision. Tonight's
+21:00 UTC freeze for 2026-05-30 will only carry the hardened resolution
+if the deploy lands before the first fire that writes the (date,
+model_sha) row; otherwise 2026-05-30 is fixed at whatever names the
+currently-deployed parser produced and stays that way (ON CONFLICT DO
+NOTHING). The D49 parser fix alone is sufficient for correct 2026-05-30
+names if it is already deployed.

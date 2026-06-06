@@ -9,8 +9,10 @@ from wnba_oracle.ingest.contest_stats import (
     ContestUnavailable,
     _parse_drafts,
     _parse_real_score,
+    _player_display_name,
     dedupe_by_player,
     fetch_contest_entries,
+    fetch_contest_stats,
 )
 from wnba_oracle.ingest.realsports import RequestHeaders
 
@@ -45,6 +47,60 @@ def _stub_headers() -> RequestHeaders:
         user_agent="UA",
         captured_at=0.0,
     )
+
+
+def test_player_display_name_falls_back_to_first_last() -> None:
+    """D50: mirror the pool parser's D49 fallback. An empty ``displayName``
+    must not leak an empty ``slate_labels.display_name`` row, since that
+    table is the live freeze's defense-in-depth name source."""
+    assert _player_display_name({"displayName": "A. Wilson"}) == "A. Wilson"
+    assert (
+        _player_display_name(
+            {"displayName": "", "firstName": "Frieda", "lastName": "Buhner"}
+        )
+        == "Frieda Buhner"
+    )
+    assert (
+        _player_display_name({"firstName": "Naz", "lastName": "Hillmon"})
+        == "Naz Hillmon"
+    )
+    assert _player_display_name({}) == ""
+
+
+def test_fetch_contest_stats_empty_display_name_falls_back() -> None:
+    """End-to-end: an empty ``displayName`` in a draftStats player object
+    is reconstructed from ``firstName``/``lastName`` in the ContestLabel."""
+    payload = {
+        "contest": {"id": 1840, "day": "2026-05-26", "sport": "wnba"},
+        "draftStats": [
+            {
+                "sectionName": "popularPlayers",
+                "players": [
+                    {
+                        "player": {
+                            "id": 4322873,
+                            "displayName": "",
+                            "firstName": "Frieda",
+                            "lastName": "Buhner",
+                        },
+                        "team": {"key": "por"},
+                        "multiplierBonus": 3.0,
+                        "value": "1.71",
+                        "displayStats": [{"label": "Drafts", "value": "120"}],
+                    }
+                ],
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        out = fetch_contest_stats(1840, _stub_headers(), client)
+    assert len(out) == 1
+    assert out[0].platform_player_id == 4322873
+    assert out[0].display_name == "Frieda Buhner"
 
 
 def test_fetch_contest_entries_parses_lineup() -> None:
