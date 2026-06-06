@@ -388,6 +388,82 @@ def _load_slate_label_names(slate_date: str) -> dict[int, str]:
     return out
 
 
+def _predict_heads_for_pool(
+    art: PickerArtifact | None,
+    enrichment: list[dict],
+) -> dict[int, dict[str, float]]:
+    """D69 / Phase 2b Tier-0: run the D63 trained heads over every pool player
+    whose `head_features` row Job 1 persisted into ``features_json``.
+
+    Returns {pid: {"p10", "p50", "p90"}} for matched players. Empty dict on:
+      - artifact None / no minutes head trained (no behavioural change)
+      - no pool player has head_features (cold-start day, fall through to ladder)
+      - any predict failure (logged + skipped, per-player ladder still fires)
+    """
+    if art is None:
+        return {}
+    # Require both heads the recompose uses; otherwise predict_real_score returns
+    # None and we save the import + frame build.
+    minutes_head = art.heads.get(("minutes", "F"))
+    rate_head = art.heads.get(("real_score_per_min", "F"))
+    if minutes_head is None or rate_head is None:
+        return {}
+    feature_cols = minutes_head.feature_columns
+    rate_cols = rate_head.feature_columns
+    # The two heads were trained on identical _BASE_FEATURES (features/spec.py).
+    # Take the union so neither booster sees a missing column at predict time.
+    needed = tuple(dict.fromkeys((*feature_cols, *rate_cols)))
+
+    pids: list[int] = []
+    rows: list[dict] = []
+    for r in enrichment:
+        pid_raw = r.get("real_sports_player_id")
+        if pid_raw is None:
+            continue
+        try:
+            pid = int(pid_raw)
+        except (TypeError, ValueError):
+            continue
+        f = _features_dict(r.get("features_json"))
+        hf = f.get("head_features") if isinstance(f, dict) else None
+        if not isinstance(hf, dict) or not hf:
+            continue
+        # Cohort routing inside predict_real_score reads `position`; pool into "F"
+        # for now (matches features/corpus build_gamelog_corpus, D63 memory).
+        row = {"position": "F"}
+        for c in needed:
+            v = hf.get(c, 0.0)
+            try:
+                row[c] = float(v) if v is not None else 0.0
+            except (TypeError, ValueError):
+                row[c] = 0.0
+        pids.append(pid)
+        rows.append(row)
+    if not rows:
+        return {}
+    try:
+        import polars as pl
+
+        frame = pl.DataFrame(rows)
+        pred = art.predict_real_score(frame)
+    except Exception as exc:
+        log.warning("head_predict_failed", reason=str(exc)[:160])
+        return {}
+    if pred is None:
+        return {}
+    out: dict[int, dict[str, float]] = {}
+    for pid, p10, p50, p90 in zip(pids, pred["p10"], pred["p50"], pred["p90"]):
+        if p50 is None or not np.isfinite(p50):
+            continue
+        out[int(pid)] = {
+            "p10": float(p10) if np.isfinite(p10) else 0.0,
+            "p50": float(p50),
+            "p90": float(p90) if np.isfinite(p90) else float(p50),
+        }
+    log.info("head_predict", n_in=len(rows), n_out=len(out))
+    return out
+
+
 def _build_specs(
     enrichment: list[dict],
     *,
@@ -430,6 +506,13 @@ def _build_specs(
     # D45 wiring. This makes deployment of a new model SHA non-destructive.
     settings = get_settings()
     art = _load_model_artifact(settings.model_artifact_sha)
+    # D69 / Phase 2b Tier-0: batch-predict from the D63 quantile heads up-front.
+    # Empty dict means no head served (no features, no trained heads, or predict
+    # failure) -- the per-player loop falls through to the existing ladder for
+    # every pid not in this map, preserving the byte-identical pre-D69 freeze.
+    head_predictions = _predict_heads_for_pool(art, enrichment)
+    head_quantiles_by_pid: dict[int, dict[str, float]] = {}
+    n_head_predicted = 0
     n_eb_predicted = 0
     n_history_fallback = 0
     n_heuristic_fallback = 0
@@ -539,6 +622,27 @@ def _build_specs(
                     GameScriptInput(pid, str(r.get("team", "") or ""), recent_min_gs, abs(spread))
                 )
                 rate_by_pid[pid] = float(mf["per_min_rate"])
+        # D69 / Phase 2b Tier-0: trained quantile heads (D63). Walk-forward
+        # validated corr 0.554 vs the existing ladder's 0.246. Falls through to
+        # Tier 1 (blended_real_score) for any pid the head didn't score.
+        hp = head_predictions.get(pid)
+        if hp is not None:
+            p10 = hp["p10"]
+            p50 = hp["p50"]
+            p90 = hp["p90"]
+            # Game-script multiplier still applies (Vegas tilt on top of the
+            # head). Floor matches every other Tier so the downstream sampler
+            # never sees a non-positive mean.
+            pred_real_scores[pid] = max(0.5, p50 * gs_mult)
+            # 80% interval (~2.56 sigma) -> additive real_score volatility. Same
+            # semantic as `minutes_vol_by_pid` for the Tier-1 path so the
+            # sampler's delta-method conversion works unchanged.
+            spread = max(0.0, p90 - p10) / 2.56
+            minutes_vol_by_pid[pid] = max(0.5, spread)
+            head_quantiles_by_pid[pid] = {"p10": p10, "p50": p50, "p90": p90}
+            n_head_predicted += 1
+            rows_by_pid[pid] = r
+            continue
         if mf is not None and mf["n_min_games"] >= mcfg.min_obs_for_history:
             # D55 minutes edge: blended_real_score handles the boost<->minutes
             # weighting internally, with same-day role signals. Blowout is left
@@ -599,6 +703,7 @@ def _build_specs(
     log.info(
         "predictor_mix",
         artifact_sha=settings.model_artifact_sha[:12] if settings.model_artifact_sha else "",
+        n_head_predicted=n_head_predicted,
         n_minutes_predicted=n_minutes_predicted,
         n_eb_predicted=n_eb_predicted,
         n_history_fallback=n_history_fallback,
@@ -664,7 +769,7 @@ def _build_specs(
         )
         enrichment_name = str(r.get("name", "") or "").strip()
         display_name = enrichment_name or label_names.get(pid, "") or f"Player {pid}"
-        projection_by_pid[pid] = {
+        proj = {
             "display_name": display_name,
             "team": team,
             "opponent": opp,
@@ -672,6 +777,14 @@ def _build_specs(
             "card_boost": boost,
             "pred_real_score_p50": pred,
         }
+        # D69 / Phase 2b: surface the head quantiles when Tier-0 served this
+        # pid. The frontend (_build_per_player) reads p10/p90 to draw the
+        # real_score interval; absent for ladder-served players (unchanged).
+        hq = head_quantiles_by_pid.get(pid)
+        if hq is not None:
+            proj["pred_real_score_p10"] = float(hq["p10"])
+            proj["pred_real_score_p90"] = float(hq["p90"])
+        projection_by_pid[pid] = proj
     return samps, fields, projection_by_pid
 
 
@@ -718,20 +831,26 @@ def _build_per_player(
         # land here. Symmetric ±4 spread anchors P10/P90 around the
         # observed WNBA starter range.
         p50 = max(22.0, 32.0 - 1.5 * slot_idx)
-        out.append(
-            {
-                "player_id": int(pid),
-                "display_name": proj.get("display_name", f"Player {pid}"),
-                "team": proj.get("team", ""),
-                "opponent": proj.get("opponent", ""),
-                "position": proj.get("position", "F"),
-                "card_boost": float(proj.get("card_boost", 0.0)),
-                "pred_real_score_p50": float(proj.get("pred_real_score_p50", 0.0)),
-                "pred_minutes_p10": p50 - 4.0,
-                "pred_minutes_p50": p50,
-                "pred_minutes_p90": p50 + 4.0,
-            }
-        )
+        entry = {
+            "player_id": int(pid),
+            "display_name": proj.get("display_name", f"Player {pid}"),
+            "team": proj.get("team", ""),
+            "opponent": proj.get("opponent", ""),
+            "position": proj.get("position", "F"),
+            "card_boost": float(proj.get("card_boost", 0.0)),
+            "pred_real_score_p50": float(proj.get("pred_real_score_p50", 0.0)),
+            "pred_minutes_p10": p50 - 4.0,
+            "pred_minutes_p50": p50,
+            "pred_minutes_p90": p50 + 4.0,
+        }
+        # D69 / Phase 2b: pass through the real_score interval when the
+        # trained heads served this player. The synthetic minutes interval
+        # above remains the placeholder until a minutes-quantile passthrough
+        # ships in a follow-up; absent fields are backward-compatible.
+        if "pred_real_score_p10" in proj:
+            entry["pred_real_score_p10"] = float(proj["pred_real_score_p10"])
+            entry["pred_real_score_p90"] = float(proj["pred_real_score_p90"])
+        out.append(entry)
     return out
 
 

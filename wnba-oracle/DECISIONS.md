@@ -1968,3 +1968,67 @@ model_sha) row; otherwise 2026-05-30 is fixed at whatever names the
 currently-deployed parser produced and stays that way (ON CONFLICT DO
 NOTHING). The D49 parser fix alone is sufficient for correct 2026-05-30
 names if it is already deployed.
+
+---
+
+## 2026-06-06: D69 — Phase 2b ships, D63 trained heads now serve live
+
+### D69: Phase 2b — wire the D63 trained quantile heads into job2 [verified]
+
+Closes the D63 build's largest known-EV gap. Walk-forward proven (corr
+0.554 vs heuristic 0.246, P10-P90 coverage 0.81). Per
+`research/internal/03_theoretical_ceiling.md` (the prior round of internal
+forensics): wiring the trained heads alone takes the top-500 rate from 33%
+to 61%.
+
+Touched files:
+- `src/wnba_oracle/features/serving_features.py` (new) — builds the head
+  feature row per pool player AS-OF the slate date. Mirrors
+  `features/corpus.build_gamelog_corpus` so train and serve agree
+  value-for-value: same `to_nba_api_schema`, same `build_rolling_features`,
+  and per-player schedule features (`days_rest`, `is_back_to_back`,
+  `season_game_number`) computed against the player's prior in-season games.
+  Match key `(first_initial, last_name, team)` is identical to
+  `ingest.minutes_features.lookup` so the join surface from the Real Sports
+  pool to the head feature row is shared with the existing minutes path.
+- `src/wnba_oracle/scheduler/job1.py` — after `build_minutes_features`, also
+  build `head_feats = build_head_feature_lookup(...)` from the canonical
+  `wnba_game_logs` corpus (via `db.reads.read_game_logs`), and persist the
+  matched row into `features_json["head_features"]`. Logs the match count
+  via `n_head_features_matched`.
+- `src/wnba_oracle/scheduler/job2.py` — new helper `_predict_heads_for_pool`
+  runs the artifact's `(minutes, F)` + `(real_score_per_min, F)` heads in
+  ONE batch over the pool (single `predict_real_score` call, polars frame).
+  In `_build_specs`, the per-player loop now starts with a Tier-0 check:
+  if the head returned a finite `p50` for this pid, `pred_real_scores[pid]
+  = max(0.5, p50 * gs_mult)` and the sampler sigma comes from the 80%
+  interval (`(p90 - p10) / 2.56`). The legacy ladder
+  (`blended_real_score` -> EB -> corpus history -> heuristic) is byte-
+  identical on the fall-through path: any pid without a head prediction
+  enters the existing branches unchanged.
+- `tests/unit/test_head_tier0.py` (new, 4 tests) — pins the four branches:
+  (a) heads + features present -> Tier-0 fires and p10/p90 surfaces in
+  `projection_by_pid`; (b) artifact without `(minutes, F)+(rate, F)` ->
+  Tier-0 silent, ladder serves; (c) pool player without `head_features` ->
+  Tier-0 silent, predict not called for that row; (d) predict raises ->
+  exception swallowed, ladder serves.
+- `models/picker_bf3c8996_*` — newly trained artifact with 6 heads on
+  cohort F. SHA `2cc953b7fe86e8db8a21f7f9a594a2944c4ce9d98aa21d05a0a0b434d6efd985`.
+  Allowlisted in `.gitignore` so Railway deploy ships it.
+
+Per-player p10/p50/p90 also surfaces in the frozen `per_player` JSONB
+(`pred_real_score_p10/p50/p90`), so the frontend can render a real
+real_score interval bar instead of the synthetic minutes fallback when
+Tier-0 served the pick.
+
+Reverse: revert this commit, or set
+`WNBA_ORACLE_MODEL_ARTIFACT_SHA=2a2fe83627bc54e8` (or any earlier SHA)
+on Railway. The Tier-0 path silently no-ops when the loaded artifact
+has no `(minutes,F)+(rate,F)` heads.
+
+Deploy: bump Railway env
+`WNBA_ORACLE_MODEL_ARTIFACT_SHA=2cc953b7fe86e8db8a21f7f9a594a2944c4ce9d98aa21d05a0a0b434d6efd985`
+after this commit lands. Cron-job1's next 13:00 UTC fire populates
+`head_features` for tonight's slate; cron-job2's 21:00 UTC freeze is the
+first to serve from the trained heads. Watch `head_predict n_in=N
+n_out=N` and `predictor_mix n_head_predicted=N` in the Railway logs.

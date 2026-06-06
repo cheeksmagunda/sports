@@ -25,6 +25,12 @@ from sqlalchemy import text
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine
+from wnba_oracle.features.serving_features import (
+    build_head_feature_lookup,
+)
+from wnba_oracle.features.serving_features import (
+    lookup as head_feature_lookup,
+)
 from wnba_oracle.ingest.minutes_features import build_minutes_features, lookup
 from wnba_oracle.ingest.odds import fetch_odds_for_slate
 from wnba_oracle.ingest.realsports import (
@@ -202,6 +208,23 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         minutes_feats = {}
     n_minutes_matched = 0
 
+    # D69 / Phase 2b: build the full causal head feature row per player from
+    # the canonical wnba_game_logs corpus (same source the heads trained on).
+    # Persisted into features_json["head_features"] so job2 can run the D63
+    # trained heads via PickerArtifact.predict_real_score. Degrades to {} on
+    # any DB / build failure -> job2 falls through to the existing
+    # blended_real_score ladder, preserving the current behaviour byte for byte.
+    head_feats: dict = {}
+    try:
+        from wnba_oracle.db.reads import read_game_logs
+
+        game_logs = read_game_logs()
+        head_feats = build_head_feature_lookup(game_logs, slate_date=sd)
+    except Exception as exc:
+        log.warning("job1_head_features_failed", reason=str(exc)[:120])
+        head_feats = {}
+    n_head_features_matched = 0
+
     rows = []
     for p in pool:
         vegas = team_to_vegas.get(p.team, {})
@@ -241,6 +264,12 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
             features["per_min_rate"] = round(mf.per_min_rate, 5)
             features["minutes_vol"] = round(mf.minutes_vol, 2)
             features["n_min_games"] = mf.n_games
+        # D69 / Phase 2b: full head feature row (one nested dict under
+        # `head_features`). job2 reads this and runs the D63 quantile heads.
+        hf = head_feature_lookup(head_feats, display_name=p.display_name, team=p.team)
+        if hf is not None:
+            features["head_features"] = hf
+            n_head_features_matched += 1
         rows.append(
             {
                 "slate_date": sd,
@@ -262,6 +291,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_matched=n_rotowire_matched,
         n_out=n_rotowire_out,
         n_minutes_matched=n_minutes_matched,
+        n_head_features_matched=n_head_features_matched,
     )
 
     persisted = 0
