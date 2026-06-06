@@ -28,19 +28,50 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from wnba_oracle.db.engine import get_engine  # noqa: E402
 
 SEASONS = ["2024", "2025", "2026"]
-COLS = ["PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION", "GAME_DATE",
-        "MIN", "PTS", "REB", "OREB", "DREB", "AST", "STL", "BLK", "TOV",
-        "FGM", "FGA", "FG3M", "FTM", "FTA"]
+COLS = ["PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION", "GAME_ID", "GAME_DATE",
+        "MATCHUP", "MIN", "PTS", "REB", "OREB", "DREB", "AST", "STL", "BLK",
+        "TOV", "FGM", "FGA", "FG3M", "FTM", "FTA"]
+
+# Phoenix changed abbreviation from PHO (2024) to PHX (2025+). Same franchise;
+# unify so cross-season joins work.
+TEAM_ALIASES = {"PHO": "PHX"}
+
+
+def _normalize_team(t: str | None) -> str:
+    """Return a stable 3-char team code, mapping legacy aliases."""
+    if not t or str(t).lower() == "nan":
+        return ""
+    s = str(t).strip().upper()
+    return TEAM_ALIASES.get(s, s)
+
+
+def _parse_matchup(matchup: str | None) -> tuple[str, str]:
+    """nba_api MATCHUP is ``TEAM vs. OPP`` (home) or ``TEAM @ OPP`` (away).
+
+    Returns (opponent, home_away) where home_away is 'home' or 'away'.
+    Unparseable input yields ('', '').
+    """
+    if not matchup:
+        return "", ""
+    s = str(matchup)
+    if " vs. " in s:
+        return _normalize_team(s.split(" vs. ", 1)[1]), "home"
+    if " @ " in s:
+        return _normalize_team(s.split(" @ ", 1)[1]), "away"
+    return "", ""
+
 
 UPSERT_SQL = text(
     """
     INSERT INTO wnba_game_logs (
         game_date, player_id, player_name, first_initial, last_name,
-        team, min, season, pts, reb, oreb, dreb, ast, stl, blk, tov,
+        team, opponent, home_away, game_id, min, season,
+        pts, reb, oreb, dreb, ast, stl, blk, tov,
         fgm, fga, fg3m, ftm, fta, ingested_at
     ) VALUES (
         :game_date, :player_id, :player_name, :first_initial, :last_name,
-        :team, :min, :season, :pts, :reb, :oreb, :dreb, :ast, :stl, :blk, :tov,
+        :team, :opponent, :home_away, :game_id, :min, :season,
+        :pts, :reb, :oreb, :dreb, :ast, :stl, :blk, :tov,
         :fgm, :fga, :fg3m, :ftm, :fta, now()
     )
     ON CONFLICT (game_date, player_id) DO UPDATE SET
@@ -48,6 +79,9 @@ UPSERT_SQL = text(
         first_initial = EXCLUDED.first_initial,
         last_name = EXCLUDED.last_name,
         team = EXCLUDED.team,
+        opponent = EXCLUDED.opponent,
+        home_away = EXCLUDED.home_away,
+        game_id = EXCLUDED.game_id,
         min = EXCLUDED.min,
         pts = EXCLUDED.pts, reb = EXCLUDED.reb, oreb = EXCLUDED.oreb,
         dreb = EXCLUDED.dreb, ast = EXCLUDED.ast, stl = EXCLUDED.stl,
@@ -101,13 +135,20 @@ def main() -> None:
 
     import pandas as pd
     raw = pd.concat(frames, ignore_index=True)
+    parsed_matchup = [_parse_matchup(m) for m in raw["MATCHUP"]] if "MATCHUP" in raw else [("", "")] * len(raw)
+    opponents = [op for op, _ in parsed_matchup]
+    home_aways = [ha for _, ha in parsed_matchup]
+    game_ids = [str(g) if g is not None and str(g).lower() != "nan" else "" for g in raw["GAME_ID"]] if "GAME_ID" in raw else [""] * len(raw)
     cols = {
         "game_date": [str(d)[:10] for d in raw["GAME_DATE"]],
         "player_id": raw["PLAYER_ID"].astype(int),
         "player_name": raw["PLAYER_NAME"].astype(str),
         "first_initial": [(_norm(n)[:1] if n else "") for n in raw["PLAYER_NAME"]],
         "last_name": [_norm(str(n).split()[-1]) if str(n).strip() else "" for n in raw["PLAYER_NAME"]],
-        "team": raw["TEAM_ABBREVIATION"].astype(str),
+        "team": [_normalize_team(t) for t in raw["TEAM_ABBREVIATION"]],
+        "opponent": opponents,
+        "home_away": home_aways,
+        "game_id": game_ids,
         "min": raw["MIN"].astype(float),
         "season": raw["season"].astype(str),
     }
@@ -117,7 +158,9 @@ def main() -> None:
     n = _persist_to_postgres(out)
     print(f"\nupserted {n} rows to Postgres wnba_game_logs, "
           f"{out['player_id'].n_unique()} players, "
-          f"teams={sorted(out['team'].unique().to_list())}")
+          f"teams={sorted(out['team'].unique().to_list())}, "
+          f"games={out['game_id'].n_unique()}, "
+          f"opponent_filled={int((out['opponent'] != '').sum())}/{len(out)}")
 
 
 if __name__ == "__main__":

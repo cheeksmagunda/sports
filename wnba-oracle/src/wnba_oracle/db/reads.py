@@ -84,7 +84,8 @@ def read_game_logs(engine: sa.Engine | None = None) -> pl.DataFrame:
     eng = engine or get_engine()
     q = text(
         "SELECT game_date, player_id, player_name, first_initial, last_name, "
-        "team, min, season, pts, reb, oreb, dreb, ast, stl, blk, tov, "
+        "team, opponent, home_away, game_id, min, season, "
+        "pts, reb, oreb, dreb, ast, stl, blk, tov, "
         "fgm, fga, fg3m, ftm, fta "
         "FROM wnba_game_logs ORDER BY game_date, player_id"
     )
@@ -95,6 +96,8 @@ def read_game_logs(engine: sa.Engine | None = None) -> pl.DataFrame:
             "game_date": pl.Utf8, "player_id": pl.Int64,
             "player_name": pl.Utf8, "first_initial": pl.Utf8,
             "last_name": pl.Utf8, "team": pl.Utf8,
+            "opponent": pl.Utf8, "home_away": pl.Utf8,
+            "game_id": pl.Utf8,
             "min": pl.Float64, "season": pl.Utf8,
             "pts": pl.Float64, "reb": pl.Float64,
             "oreb": pl.Float64, "dreb": pl.Float64,

@@ -1658,3 +1658,82 @@ All changes are offline training/eval plus one dormant method, so the live path
 is already unaffected. To reproduce the pre-D63 artifact run `oracle-train
 --corpus-mode label` (EB-only). git revert of the three commits removes the
 corpus builder and the recompose entirely.
+
+---
+
+## 2026-06-05: D64 -- historical-data backfill (matchup + team unification)
+
+### Audit [verified]
+The four historical artifacts (wnba_game_logs, slate_labels, leaderboards,
+training_corpus) were audited against the assumption that "every day in
+history has the pre-game env signals plus the actual results." Findings:
+
+1. `wnba_game_logs` (13,435 player-games, 2024-05-03..2026-06-04) was
+   missing the matchup columns (opponent, home_away, game_id). The
+   nba_api PlayerGameLogs endpoint already returns MATCHUP and GAME_ID;
+   the original backfill script dropped them. Without an opponent
+   column the model cannot see who a player faced, blocking any
+   matchup-aware feature (opponent pace, def-rtg, position-vs-opp).
+2. Team abbreviation drift: 2024 used `PHO`, 2025+ used `PHX` for the
+   same Phoenix franchise. 401 rows affected. Same-team rows did not
+   join across seasons.
+3. 12 rows had team='None' (string). Investigation shows these are
+   exhibition rows (2024-05-11 Puerto Rico Nationals scrimmage,
+   2024-07-20 WNBA All-Star Game) where nba_api returned no team
+   abbreviation because the participant was not on a WNBA franchise
+   that day. The Real Sports contest does not run on exhibition days,
+   so these have no slate_labels by design.
+4. Slate-label coverage: 130 slate-days (2025-05-16..2026-06-04).
+   Within that window, 19 game-days have no slate. Of these:
+   - 12 dates align exactly with exhibition / pre-season days
+     (2024-05-11, 2024-07-20, 2025-05-02/04/10/12, 2025-07-19,
+     2026-04-25/26/27/29, 2026-05-02). All 295 opponent-NULL rows
+     are concentrated on these 12 dates -> Real Sports correctly
+     does not run a contest on exhibition days.
+   - 11 dates fall in the 2025 WNBA playoffs (Sept 18..Oct 10 2025);
+     opponent IS filled, so these are real games. Slate gap is
+     either "contest paused for playoffs" or "not scraped at the
+     time" -- needs contest-id probe to disambiguate (T3 below).
+
+### What changed [verified]
+1. Alembic migration 20260605_0005 adds three nullable columns to
+   wnba_game_logs: opponent (VARCHAR(8)), home_away (VARCHAR(4)),
+   game_id (VARCHAR(16)). Indexes on game_id and opponent.
+2. scripts/backfill_minutes.py: pulls MATCHUP + GAME_ID; parses
+   matchup ("TEAM vs. OPP" -> home, "TEAM @ OPP" -> away);
+   normalizes team via a TEAM_ALIASES dict (PHO -> PHX); writes
+   normalized columns through the UPSERT.
+3. db/reads.py read_game_logs() returns the three new columns.
+4. scripts/dump_historical_parquets.py: dumps Postgres ->
+   data/processed/wnba_game_logs.parquet plus per-slate parquet
+   partitions under data/historical/{slate_labels,leaderboards}.
+
+Re-run results (Postgres + dumped parquet match):
+- 13,456 player-games (21 new rows for 2026-06-05 since prior backfill).
+- 694 distinct game_id values.
+- 13,161 / 13,456 (97.8%) opponent-filled. The 295 remaining are the
+  exhibition rows on the 12 known exhibition dates; opponent='' is now
+  the canonical signal for downstream filtering.
+- All 401 prior PHO-2024 rows now PHX. Phoenix joins cross-season.
+- features/corpus.build_gamelog_corpus still builds (13,002 rows) and
+  the new columns pass through to the corpus (verified via smoke
+  test).
+
+### What did not change [reasoned]
+- The rolling player-performance "to that point in time" signal is
+  not "missing data" -- features/corpus.build_gamelog_corpus computes
+  it as_of each game date via build_rolling_features. The 12 missing
+  slates already have corresponding game_log rows; the rolling
+  features for the next slate that DOES have a contest correctly
+  exclude DNP rows via the existing min>0 guard.
+- Series score and weather were explicitly out of scope per operator
+  ("not MLB", "irrelevant for WNBA").
+- Live serving path: unchanged. job1 and job2 still use the existing
+  read paths. The new columns are additive, nullable, and unused by
+  the live picker until Phase 4 ingest wires opponent-aware features.
+
+### Reverse
+Migration is additive. `alembic downgrade -1` drops the three columns
+and their indexes (data loss only on those columns). Backfill script
+reverts via `git revert`; PHO/PHX collapse is irreversible by SQL but
+recoverable via re-pull from nba_api against historical season=2024.
