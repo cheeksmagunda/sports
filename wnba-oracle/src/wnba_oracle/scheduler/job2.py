@@ -630,16 +630,36 @@ def _build_specs(
             p10 = hp["p10"]
             p50 = hp["p50"]
             p90 = hp["p90"]
+            # D71 / R5: apply the RotoWire confirmed-starter signal symmetrically
+            # to all three quantiles. The trained head learned from game logs
+            # only (`features/corpus.build_gamelog_corpus` does NOT compute
+            # `is_confirmed_starter`; `train/pipeline.py:240` drops it because
+            # it's missing from the corpus), so without this nudge the head is
+            # blind to today's confirmed lineup. Mirrors the Tier-3 fallback's
+            # use of `_starter_multiplier`; the Tier-1 blend deliberately omits
+            # the nudge because `blended_real_score` already weighs minutes.
+            # Magnitude is small (1.10 confirmed starter, 0.82 confirmed bench,
+            # 1.0 unknown) so we never overpower the head on the median, but
+            # the symmetric scaling of the 80% interval keeps the sampler's
+            # delta-method sigma in the same units.
+            starter_mult = _starter_multiplier(
+                r.get("features_json"), enabled=settings.starter_signal_enabled
+            )
             # Game-script multiplier still applies (Vegas tilt on top of the
             # head). Floor matches every other Tier so the downstream sampler
             # never sees a non-positive mean.
-            pred_real_scores[pid] = max(0.5, p50 * gs_mult)
+            pred_real_scores[pid] = max(0.5, p50 * gs_mult * starter_mult)
             # 80% interval (~2.56 sigma) -> additive real_score volatility. Same
             # semantic as `minutes_vol_by_pid` for the Tier-1 path so the
-            # sampler's delta-method conversion works unchanged.
-            spread = max(0.0, p90 - p10) / 2.56
+            # sampler's delta-method conversion works unchanged. starter_mult
+            # is applied so the spread stays proportional to the shifted mean.
+            spread = max(0.0, p90 - p10) * starter_mult / 2.56
             minutes_vol_by_pid[pid] = max(0.5, spread)
-            head_quantiles_by_pid[pid] = {"p10": p10, "p50": p50, "p90": p90}
+            head_quantiles_by_pid[pid] = {
+                "p10": p10 * starter_mult,
+                "p50": p50 * starter_mult,
+                "p90": p90 * starter_mult,
+            }
             n_head_predicted += 1
             rows_by_pid[pid] = r
             continue

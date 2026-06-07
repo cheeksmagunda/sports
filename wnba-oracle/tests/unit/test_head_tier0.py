@@ -51,10 +51,20 @@ def _head_feature_row(**overrides: float) -> dict[str, float]:
     return base
 
 
-def _enrich(pid: int, *, with_head_features: bool, boost: float = 2.0) -> dict:
+def _enrich(
+    pid: int,
+    *,
+    with_head_features: bool,
+    boost: float = 2.0,
+    rotowire_confirmed: int = 0,
+    is_starter: int = 0,
+) -> dict:
     features: dict[str, Any] = {}
     if with_head_features:
         features["head_features"] = _head_feature_row()
+    if rotowire_confirmed:
+        features["rotowire_confirmed"] = rotowire_confirmed
+        features["is_starter"] = is_starter
     return {
         "real_sports_player_id": str(pid),
         "name": f"Pool Player {pid}",
@@ -165,3 +175,60 @@ def test_tier0_swallows_predict_failure(monkeypatch) -> None:
     assert art.predict_calls  # was called
     assert "pred_real_score_p10" not in proj[404]
     assert proj[404]["pred_real_score_p50"] > 0
+
+
+# D71 / R5: the head Tier-0 path applies the RotoWire confirmed-starter
+# multiplier symmetrically to all three quantiles, matching the Tier-3
+# fallback's use of `_starter_multiplier`. The trained head learned without
+# `is_confirmed_starter` (it's not in the gamelog corpus), so this nudge
+# restores the same-day starter signal at serve time. Magnitudes:
+#   - confirmed starter (rotowire_confirmed=1, is_starter=1) -> 1.10
+#   - confirmed bench   (rotowire_confirmed=1, is_starter=0) -> 0.82
+#   - unmatched         (rotowire_confirmed=0)               -> 1.00
+# These three tests pin all three magnitudes against the same base p50/p10/p90
+# (7.5 / 3.0 / 14.0 from _FakeArtifact.predict_real_score).
+
+
+def test_tier0_confirmed_starter_scales_quantiles_up(monkeypatch) -> None:
+    art = _FakeArtifact(with_heads=True)
+    _common_patch(monkeypatch, art)
+    enrichment = [_enrich(501, with_head_features=True, rotowire_confirmed=1, is_starter=1)]
+    _samps, _fields, proj = job2._build_specs(
+        enrichment,
+        slate_date="2026-06-06",
+        contrarian_cfg=ContrarianConfig(enabled=False, strength=0.0),
+    )
+    p = proj[501]
+    assert p["pred_real_score_p50"] == 7.5 * 1.10
+    assert p["pred_real_score_p10"] == 3.0 * 1.10
+    assert p["pred_real_score_p90"] == 14.0 * 1.10
+
+
+def test_tier0_confirmed_bench_scales_quantiles_down(monkeypatch) -> None:
+    art = _FakeArtifact(with_heads=True)
+    _common_patch(monkeypatch, art)
+    enrichment = [_enrich(502, with_head_features=True, rotowire_confirmed=1, is_starter=0)]
+    _samps, _fields, proj = job2._build_specs(
+        enrichment,
+        slate_date="2026-06-06",
+        contrarian_cfg=ContrarianConfig(enabled=False, strength=0.0),
+    )
+    p = proj[502]
+    assert p["pred_real_score_p50"] == 7.5 * 0.82
+    assert p["pred_real_score_p10"] == 3.0 * 0.82
+    assert p["pred_real_score_p90"] == 14.0 * 0.82
+
+
+def test_tier0_unmatched_player_unchanged(monkeypatch) -> None:
+    art = _FakeArtifact(with_heads=True)
+    _common_patch(monkeypatch, art)
+    enrichment = [_enrich(503, with_head_features=True)]  # rotowire_confirmed default 0
+    _samps, _fields, proj = job2._build_specs(
+        enrichment,
+        slate_date="2026-06-06",
+        contrarian_cfg=ContrarianConfig(enabled=False, strength=0.0),
+    )
+    p = proj[503]
+    assert p["pred_real_score_p50"] == 7.5
+    assert p["pred_real_score_p10"] == 3.0
+    assert p["pred_real_score_p90"] == 14.0
