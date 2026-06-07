@@ -31,6 +31,7 @@ from wnba_oracle.features.game_features import (
     to_nba_api_schema,
 )
 from wnba_oracle.features.rolling import build_rolling_features
+from wnba_oracle.predict.scoring import REAL_SCORE_INTERCEPT, REAL_SCORE_WEIGHTS
 
 log = get_logger("oracle.features.corpus")
 
@@ -80,6 +81,16 @@ def build_gamelog_corpus(
     # small-data-safe choice anyway (research guardrail: do not over-split).
     corpus = corpus.with_columns(pl.lit("F").alias("position"))
 
+    # D77: inject team_pace / opp_pace / game_pace_implied and opp_dvp from
+    # the corpus itself. These were zero-filled in earlier builds; populating
+    # them here closes the train/serve mismatch introduced by D74.
+    # Notes:
+    # - team_pace uses the current-season nba_api snapshot (season-stable,
+    #   acceptable approximation for historical rows). Degrades to 0 on error.
+    # - opp_dvp is season-wide (not rolling) -- a mild data-leak but the
+    #   per-game noise dwarfs the signal anyway. Rolling DvP deferred.
+    corpus = _enrich_corpus_matchup(corpus, game_logs)
+
     if min_prior_games > 1:
         corpus = corpus.filter(pl.col("season_game_number") > min_prior_games)
     # Defensive: require at least the L5 minutes feature to be present.
@@ -91,6 +102,82 @@ def build_gamelog_corpus(
         n_dates=len(dates),
         targets=list(TARGET_COLUMNS),
     )
+    return corpus
+
+
+def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.DataFrame:
+    """Add team_pace / opp_pace / game_pace_implied / opp_dvp_* to corpus rows.
+
+    Uses nba_api for pace (current-season snapshot) and computes DvP as
+    season-wide mean real_score allowed per opponent from the game_logs. Both
+    degrade gracefully to 0 if the data source is unavailable.
+    """
+    # -- team pace from nba_api --
+    team_pace: dict[str, float] = {}
+    try:
+        from wnba_oracle.ingest.minutes_features import fetch_wnba_team_stats
+        ts = fetch_wnba_team_stats()
+        team_pace = {abbr: float(stats.get("pace", 0.0)) for abbr, stats in ts.items()}
+    except Exception as exc:
+        log.warning("corpus_team_pace_fetch_failed", error=str(exc))
+
+    has_team = "team" in corpus.columns
+    has_opp = "opponent" in corpus.columns
+    if team_pace and has_team and has_opp:
+        corpus = corpus.with_columns(
+            pl.col("team")
+            .map_elements(lambda t: team_pace.get(str(t).upper(), 0.0), return_dtype=pl.Float64)
+            .alias("team_pace"),
+            pl.col("opponent")
+            .map_elements(lambda o: team_pace.get(str(o).upper(), 0.0), return_dtype=pl.Float64)
+            .alias("opp_pace"),
+        ).with_columns(
+            ((pl.col("team_pace") + pl.col("opp_pace")) / 2.0).alias("game_pace_implied"),
+        )
+        log.info("corpus_team_pace_injected", n_teams=len(team_pace))
+    else:
+        for col in ("team_pace", "opp_pace", "game_pace_implied"):
+            if col not in corpus.columns:
+                corpus = corpus.with_columns(pl.lit(0.0).alias(col))
+
+    # -- opp_dvp from game_logs (season-wide mean real_score allowed per opponent) --
+    dvp_map: dict[str, float] = {}
+    needed = list(REAL_SCORE_WEIGHTS.keys()) + ["opponent", "min"]
+    if game_logs is not None and not game_logs.is_empty() and all(
+        c in game_logs.columns for c in needed
+    ):
+        try:
+            score_expr = pl.lit(float(REAL_SCORE_INTERCEPT))
+            for stat, w in REAL_SCORE_WEIGHTS.items():
+                score_expr = score_expr + pl.lit(w) * pl.col(stat).fill_null(0.0)
+            grouped = (
+                game_logs.filter(pl.col("min").fill_null(0.0) >= 5.0)
+                .with_columns(score_expr.alias("_est_rs"))
+                .group_by("opponent")
+                .agg(pl.col("_est_rs").mean().alias("mean_allowed"))
+                .filter(pl.col("opponent").is_not_null() & (pl.col("opponent") != ""))
+            )
+            dvp_map = {
+                row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()
+            }
+            log.info("corpus_dvp_computed", n_teams=len(dvp_map))
+        except Exception as exc:
+            log.warning("corpus_dvp_failed", error=str(exc))
+
+    for col in ("opp_dvp_guard", "opp_dvp_forward", "opp_dvp_center"):
+        if col not in corpus.columns:
+            corpus = corpus.with_columns(pl.lit(0.0).alias(col))
+    if dvp_map and has_opp:
+        dvp_expr = (
+            pl.col("opponent")
+            .map_elements(lambda o: dvp_map.get(str(o).upper(), 0.0), return_dtype=pl.Float64)
+        )
+        corpus = corpus.with_columns(
+            dvp_expr.alias("opp_dvp_guard"),
+            dvp_expr.alias("opp_dvp_forward"),
+            dvp_expr.alias("opp_dvp_center"),
+        )
+
     return corpus
 
 
