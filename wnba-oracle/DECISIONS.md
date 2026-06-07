@@ -2305,3 +2305,89 @@ Artifact: `research/internal/_menu_scrape_gap_pool.csv` (45 rows)
 and `_menu_scrape_gap_labels.csv` (721 rows) committed for the
 historical baseline. Re-run `scripts/research/menu_scrape_gap.py`
 after a week of live data to confirm the row count drops to ~0.
+
+---
+
+## 2026-06-07: R7 negative finding — naive 4-component recompose loses
+
+Measured (`scripts/research/components_vs_single_head.py`, walk-forward
+on the 2026 eval slice, n=1797). The trained `points_per_min`,
+`reb_per_min`, `ast_per_min`, `stl_blk_per_min` heads recomposed via
+`REAL_SCORE_WEIGHTS` plus a per-cohort scalar residual (mean of
+`real_score_per_min - sum_of_weighted_components` over the training
+corpus) do NOT beat the single `real_score_per_min` head:
+
+  label                  corr     mae    rmse    crps   cov80
+  baseline_1head       0.5562   0.888   1.142  0.3512   0.805
+  candidate_components 0.5578   0.900   1.177  1.3265   0.888
+
+Delta: corr +0.0016 (need >= +0.02), CRPS +277.67% (need <= -5%),
+cov80 drift 0.088 (need <= 0.05). The candidate over-covers because
+summing per-component log-spreads in quadrature treats the heads as
+independent; in reality pts/reb/ast/stl_blk per-min are positively
+correlated through minutes and usage, so the quadrature sum
+over-states the joint spread.
+
+R7 as the gap analysis sketched it (Beta-Binomial FG%/TS% with pinned
+3P%) is a fundamentally different formulation that would respect
+shooting volume; it remains open. The naive switch-the-recompose move
+is logged as a dead end so we don't re-attempt it. Artifact:
+`research/internal/_components_vs_single_head.json`.
+
+---
+
+## 2026-06-07: D73 — empirical recalibration of AvailabilityConfig (R9)
+
+Closes the R9 item of `research/00_GAP_ANALYSIS.md`.
+
+### D73 / R9: empirical priors for the two-part availability model [verified]
+
+Background: D59 (two-part availability) shipped with literature-derived
+defaults: `prior_active=0.30` (no-history players), `neutral_prior=0.60`
+(shrinkage target for any-history players). Those numbers were design
+guesses. With 13k rows of game-log corpus we can measure the actual
+P(min >= 10) directly and recalibrate.
+
+Method: `scripts/research/availability_calibration.py` bins the corpus
+by `mins_l5` and measures empirical P(min >= 10) per bin:
+
+  mins_l5 [0,  5):  n=432   P=0.204  (cold/bench)
+  mins_l5 [5, 15):  n=3397  P=0.554  (rotation bench)
+  mins_l5 [15,25):  n=4252  P=0.906  (starter)
+  mins_l5 [25,+):   n=4921  P=0.991  (elite starter)
+
+The previous `prior_active=0.30` was 50% over-optimistic versus the
+cold/bench empirical 0.204; the previous `neutral_prior=0.60` was 9%
+over-optimistic versus the rotation-bench 0.554. Updated defaults to
+the empirical floor of each bucket:
+
+  AvailabilityConfig.prior_active   0.30 -> 0.20
+  AvailabilityConfig.neutral_prior  0.60 -> 0.55
+
+Effect on a cold-start dart with heuristic real_score=8.5 (boost=3):
+  before: 8.5 * 0.30 = 2.55  (still mid-pack vs starters at 10-12)
+  after:  8.5 * 0.20 = 1.70  (clearly below the realistic-starter floor)
+
+This is the structural fix for the 2026-06-04 ~6000th bust class:
+high-boost cards with no recent minutes now collapse harder under
+P(active).
+
+Floors unchanged: `confirmed_starter_active=0.92` and
+`confirmed_bench_active=0.70` -- so when RotoWire confirms a player
+the cold-start prior is overridden, exactly as before.
+
+Tests: all 8 existing `tests/unit/test_availability.py` cases pass
+unchanged because they assert against the config FIELD (e.g.
+`AvailabilityConfig().prior_active`), not literal numbers. No new
+tests needed; the calibration script is the empirical justification.
+
+Reverse: revert this commit. Defaults restore to 0.30 / 0.60. No env
+change required. AVAILABILITY_MODEL_ENABLED stays armed on cron-job2.
+
+Deploy: code-only, next cron-job2 deploy picks it up. First effect is
+tonight's 21:00 UTC freeze. Watch `availability_model n_low_availability=N`
+log line: with the tighter prior, more players should land under the
+0.5 threshold so n_low should rise modestly on cold-start-heavy slates.
+
+Artifact: `research/internal/_availability_calibration.json` snapshot
+for future recalibration runs after another month of data.
