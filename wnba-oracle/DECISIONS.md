@@ -2216,3 +2216,92 @@ Forward link: when the gamelog corpus is upgraded to actually carry
 phases from the D63 roadmap), the heads will eventually internalise
 the starter signal themselves and this nudge becomes redundant. Keep
 the kill-switch wired for that future flip.
+
+---
+
+## 2026-06-07: D72 — close the menu-scrape gap (R6)
+
+Closes the R6 item of `research/00_GAP_ANALYSIS.md`.
+
+### D72 / R6: targeted-search fallback in `fetch_pool_for_date` [verified]
+
+Discovery: the gap-analysis cited "at least 3 of 141 slates affected"
+(`research/internal/03_theoretical_ceiling.md`), but it computed the
+gap against `slate_labels`, which only stores the three highlighted
+Real Sports sections (~30 players per slate) -- the wrong reference
+point. The optimizer's actual universe is the full a..z prefix-iterated
+pool persisted into `job1_enrichment` (~80-100 players per slate). A
+proper audit against that universe (`scripts/research/menu_scrape_gap.py`)
+over the LIVE collector window (2026-05-27..2026-06-06) found:
+
+- 8 of 13 live slates (61.5%) had >= 1 winning-lineup pick missing
+  from the optimizer's pool.
+- 45 missing-pick rows in `research/internal/_menu_scrape_gap_pool.csv`.
+- Recurring victims: A. Stevens (711), S. Sabally (758), J. Jocyte
+  (4322799), M. Akoa Makani (4322738), C. McMahon (4322864), K. Bell
+  (594). All draftable per Real Sports' leaderboards, all silently
+  dropped by our scrape.
+- Two live slates lost a top-1/top-2 pick to this bug:
+  - 2026-06-01 contest 1858 rank-1 used M. Akoa Makani (4322738).
+  - 2026-06-02 contest 1861 rank-2 used C. McMahon (4322864).
+
+Root cause: the a..z prefix sweep in `fetch_pool_for_date` (lines
+431-455) caps results per query (the Real Sports search endpoint
+returns the top N matches per call). Players deep in the alphabetical
+ordering for their matched letter were truncated. Stevens, Sabally,
+Jocyte, etc. all live in dense letters (S, J) with many ranked
+players competing for response slots.
+
+Fix: after a..z, for each player in the per-game `union` not yet in
+`rated_by_id`:
+
+1. Take their last name (fall back to first name if no last name).
+2. ASCII-fold (`unicodedata.NFKD`) so accented surnames (Jocyte vs
+   Jocyteė) hit the same prefix.
+3. Use the first 3 chars, lowercased, as the search query.
+4. Skip if the query is already in `queried_prefixes` (the a..z sweep
+   tracked these, so a..z queries never re-issue).
+5. Hard cap at 50 fallback queries per slate to bound latency.
+6. Merge every new pid -> multiplierBonus into `rated_by_id`.
+
+`fetch_pool_fallback` log line surfaces (`n_unmatched_after_az`,
+`n_queries`, `n_added`, `n_still_missing`, `cap`) so operations can
+see how often the fallback fires and how often it actually adds a
+player. New `oracle.ingest.realsports` log channel.
+
+Two non-fixes by design:
+- We do NOT iterate two-letter combinations (aa, ab, ...zz = 676
+  queries). The targeted lookup is enough; the union already gives
+  us the candidate set, so we only need to enrich it, not re-discover.
+- We do NOT rescue players the per-game roster scrape missed. If a
+  draftable player isn't in `/games/X/sport/wnba/players` for any of
+  the slate's games, the targeted fallback won't help. The audit
+  didn't surface that pattern; if it does later, the per-game roster
+  scrape needs its own fallback.
+
+Tests: `tests/unit/test_realsports_pool_fallback.py` (4 cases) uses
+`httpx.MockTransport` to mock the Real Sports API end-to-end:
+- `test_fallback_recovers_unmatched_player_by_last_name`: Stevens
+  missing from every a..z letter, returned by query 'ste'.
+- `test_fallback_ascii_folds_accented_lastname`: Jocyte recovered
+  by 'joc' after NFKD-normalize-and-fold.
+- `test_fallback_skips_when_no_lastname_or_firstname`: anonymous
+  player skipped without crashing, other players still flow through.
+- `test_fallback_does_not_requery_az_letters`: `queried_prefixes`
+  prevents re-issuing the 26 single-letter queries.
+
+Reverse: revert this commit. The fallback is purely additive (only
+adds pids to `rated_by_id`, never removes), so the pre-D72 behaviour
+is preserved if Real Sports' search endpoint changes shape: the
+fallback queries return empty player lists, `n_added=0`, and the
+overlaid union is identical to the a..z-only version.
+
+Deploy: code-only, no env change. Takes effect on cron-job1's next
+13:00 UTC fire after the deploy lands. Watch the new
+`fetch_pool_fallback n_added=N` log line; expected steady-state is
+1-3 added players per slate based on the audit's per-slate rate.
+
+Artifact: `research/internal/_menu_scrape_gap_pool.csv` (45 rows)
+and `_menu_scrape_gap_labels.csv` (721 rows) committed for the
+historical baseline. Re-run `scripts/research/menu_scrape_gap.py`
+after a week of live data to confirm the row count drops to ~0.
