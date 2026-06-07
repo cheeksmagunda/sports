@@ -2391,3 +2391,68 @@ log line: with the tighter prior, more players should land under the
 
 Artifact: `research/internal/_availability_calibration.json` snapshot
 for future recalibration runs after another month of data.
+
+---
+
+## 2026-06-07: D75 -- Late re-freeze path in job2._freeze(force=True) [verified]
+
+**Decision**: add `LATE_REFREEZE_ENABLED` / `LATE_REFREEZE_AFTER_UTC` settings
+and a `force=True` branch in `_freeze()` that overwrites the existing frozen
+row with FROZEN_UPSERT (ON CONFLICT DO UPDATE) instead of DO NOTHING.
+
+**Reasoning [reasoned]**: The 47-stream research confirmed that the 2.5-hour gap
+between job2's first freeze (21:00 UTC) and first WNBA tip (23:30 UTC) is a
+purely architectural choice, not a platform rule. The WNBA now requires confirmed
+starter announcements 30 min before tip (23:00 UTC). Confirmed starters are the
+single sharpest pre-game signal not captured in any historical feature. The late
+re-freeze fires at 23:00 UTC (configurable), re-runs the full optimizer with the
+latest confirmed-starter data, and overwrites the 21:00 freeze exactly once per
+slate (wnba.late_frozen.{sd} Redis key, NX, 24h TTL prevents subsequent cron
+fires from overwriting again). Armed via LATE_REFREEZE_ENABLED=true on Railway
+cron-job2 after D75 shipped.
+
+**Reverse**: set LATE_REFREEZE_ENABLED=false (or delete env var). The first-fire
+freeze semantics are fully preserved in the force=False branch.
+
+---
+
+## 2026-06-07: D76 -- n_field default 120 -> 500 [verified]
+
+**Decision**: raise `optimizer_n_field_lineups` default from 120 to 500.
+
+**Reasoning [verified]**: Monte Carlo SE analysis for P(top-20) in a 8,989-entry
+field (p=0.0022): SE=sqrt(p*(1-p)/N). At N=120, SE=±1.34% vs signal of 0.22%
+(noise 6x signal -- rank-probability estimates are statistically meaningless).
+At N=500, SE=±0.66% (still 3x, but 2x better than before). Benchmark: laptop
++8.6s for 500 vs 120. Railway 3x VM estimate: +25s (fine within 15-min window).
+Industry benchmarks: Eat the Chalk=50k contest sims/5k field, The Solver=20k
+sims. We're still far below, but 500 is a meaningful step from 120.
+
+**Reverse**: set OPTIMIZER_N_FIELD_LINEUPS=120 on Railway. Default in code
+is 500 (settings.py).
+
+---
+
+## 2026-06-07: D77 -- Enrich training corpus with team_pace and opp_dvp [verified]
+
+**Decision**: add `_enrich_corpus_matchup()` to corpus.py, populating
+team_pace/opp_pace/game_pace_implied (from nba_api) and opp_dvp_guard/forward/
+center (season-wide mean real_score allowed per opponent from game_logs).
+
+**Reasoning [verified]**: D74 injected these features into the serving path
+(job1) but they were zero-filled in training, giving them zero LightGBM
+importance. A zero-importance feature in training causes the model to ignore
+non-zero serving values -- effectively D74's features were invisible to the
+model. D77 closes the train/serve gap by populating these features in
+`build_gamelog_corpus()` before the heads train. Confirmed working: training
+logs show `corpus_team_pace_injected n_teams=13` and `corpus_dvp_computed
+n_teams=15`. New artifact `picker_e2ced9ec_1780873338.pkl`
+(SHA 94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd)
+deployed to Railway cron-job2.
+
+**Known limitation [reasoned]**: DvP is season-wide (not rolling), so future
+rows have a mild data-leak. Rolling DvP deferred; per-game noise dominates
+the DvP signal anyway at WNBA's ~40-game sample sizes.
+
+**Reverse**: revert corpus.py commit. Model continues to use the prior artifact
+(set WNBA_ORACLE_MODEL_ARTIFACT_SHA back to the bf3c8996 SHA).
