@@ -1,0 +1,28 @@
+{
+  "n_eval": 1797,
+  "rows": [
+    {
+      "label": "baseline_1head",
+      "corr": 0.556200319265806,
+      "mae": 0.8878113052702218,
+      "rmse": 1.1420023040317717,
+      "crps": 0.35124087766140777,
+      "p10_p90_coverage": 0.805230940456316
+    },
+    {
+      "label": "candidate_components",
+      "corr": 0.5578385280690772,
+      "mae": 0.9002519255379877,
+      "rmse": 1.1768211757437392,
+      "crps": 1.3265313374170942,
+      "p10_p90_coverage": 0.887590428491931
+    }
+  ],
+  "decision_ship_components": false,
+  "delta_corr": 0.0016382088032711462,
+  "delta_crps_pct": 2.7766997572983385,
+  "candidate_cov80_distance_from_nominal": 0.087590428491931,
+  "residual_by_cohort": {
+    "F": -0.034368244291949096
+  }
+}
