@@ -110,6 +110,13 @@ class Settings(BaseSettings):
     # to turn on (also disables the blunt team-wide blowout penalty to avoid
     # double-counting).
     game_script_minutes_enabled: bool = Field(default=False, alias="GAME_SCRIPT_MINUTES_ENABLED")
+    # late_refreeze_enabled: when True, job2 fires after late_refreeze_after_utc
+    # (HH:MM, default "23:00") will overwrite the earlier freeze with a fresh
+    # optimizer run that reflects late lineup news. The Redis key
+    # wnba.late_frozen.{slate_date} prevents multiple late re-freezes per day.
+    # Default off. See D75.
+    late_refreeze_enabled: bool = Field(default=False, alias="LATE_REFREEZE_ENABLED")
+    late_refreeze_after_utc: str = Field(default="23:00", alias="LATE_REFREEZE_AFTER_UTC")
     # lineup_anchor_floor (D57, Tier 1 seatbelt): require at least this many
     # confirmed-minutes "anchor" players in the frozen lineup so it can't be all
     # cold-start darts (the 2026-06-01 all-longshot bust). 0 disables (default,
