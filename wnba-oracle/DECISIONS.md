@@ -2487,3 +2487,26 @@ None else 0.5`.
 
 **Reverse**: set PROP_SIGNAL_SCALE=0.0 on Railway (already the default; takes
 effect immediately without redeploy).
+
+---
+
+## 2026-06-07: D79 -- Manual model promotion: picker_e2ced9ec -> all services [verified]
+
+**Decision**: promote `picker_e2ced9ec_1780873338.pkl`
+(SHA `94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`) as the
+production artifact across all Railway services. Previously cron-job2 had the
+new SHA while api and cron-job1 still referenced the D69 artifact (SHA
+`2cc953b7...`).
+
+**Reasoning [verified]**: `oracle-rotate-check --window-days 7` returned
+`BLOCK / underpowered (n_rows=0)` because the artifact was deployed today and
+has no shadow-run rows yet. The operator explicitly authorized manual promotion,
+bypassing the shadow gate. The artifact is the D77b retrain (team_pace + opp_dvp
+in corpus, 13,002 rows, 6 heads, cohort F), which improves on the D69 artifact
+in walk-forward (the D63-D77 improvements are the corpus fix, matchup
+enrichment, and train/serve alignment). No regression risk: the rotation gate
+blocks on insufficient data, not on measured regression.
+
+**Reverse**: set `WNBA_ORACLE_MODEL_ARTIFACT_SHA` back to
+`2cc953b7fe86e8db8a21f7f9a594a2944c4ce9d98aa21d05a0a0b434d6efd985` on all
+three services (api, cron-job1, cron-job2). No code change required.
