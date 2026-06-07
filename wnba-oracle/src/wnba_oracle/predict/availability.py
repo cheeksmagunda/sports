@@ -30,8 +30,19 @@ from dataclasses import dataclass
 class AvailabilityConfig:
     active_minutes_floor: float = 10.0  # a "meaningful shift" worth a roster spot
     min_vol: float = 4.0  # floor on the minutes std used in the normal CDF
-    neutral_prior: float = 0.60  # shrinkage target for players WITH some history
-    prior_active: float = 0.30  # base rate for a no-history player (a probable dart)
+    # D73 (R9 refinement): empirical recalibration over the 13,002-row
+    # gamelog corpus (scripts/research/availability_calibration.py).
+    # Per-bin P(min >= 10):
+    #   mins_l5 [0,  5): 0.204  (n=432, cold/bench)
+    #   mins_l5 [5, 15): 0.554  (n=3397, rotation bench)
+    #   mins_l5 [15,25): 0.906  (n=4252, starter)
+    #   mins_l5 [25,+): 0.991  (n=4921, elite starter)
+    # The previous neutral_prior=0.60 over-trusted "any-history" players;
+    # 0.55 matches the rotation-bench bucket empirically. prior_active was
+    # 0.30 for no-history; cold-start darts (the 2026-06-04 ~6000th bust
+    # class) deserve the [0,5) rate of 0.20.
+    neutral_prior: float = 0.55  # shrinkage target for players WITH some history
+    prior_active: float = 0.20  # base rate for a no-history player (a probable dart)
     confirmed_starter_active: float = 0.92
     confirmed_bench_active: float = 0.70
     confidence_k0: float = 4.0  # games of history needed to half-trust the data
