@@ -18,19 +18,12 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
 2. **Pin a stable WNBA_DEVICE_UUID env var on each cron service.** [DONE
    2026-05-27] Pinned to the UUID captured during first login.
 
-3. **Stand up a corpus parquet from cumulative `slate_labels` rows once
-   the live collector has ~30 slates of data** (~2-3 weeks). Then run
-   `oracle-train` against that parquet, set the resulting SHA on
-   `WNBA_ORACLE_MODEL_ARTIFACT_SHA`, and start the shadow window.
-   **[PARTIAL 2026-05-27]** Historical corpus seeded via
-   `oracle-backfill --mode historical --parquet-out-dir data/historical`
-   for the 16 finalized 2026 WNBA slates (cid 1755..1831). Local parquet
-   is ready; still need (a) Railway migration `20260527_0003` applied
-   so the Postgres tables match the local schema and (b) the same
-   backfill run with DATABASE_URL pointed at Railway to UPSERT into
-   `slate_labels` + `contest_leaderboards` on prod. After that, the
-   ~30-slate threshold is still a wall-clock blocker — 16 down, ~14
-   to go at the live collector's accumulation rate. See D38.
+3. **[DONE 2026-06-07]** Stand up corpus + train + deploy. 13,002-row corpus
+   built from wnba_game_logs with team_pace + opp_dvp enrichment (D77).
+   Heads trained on cohort F, artifact picker_e2ced9ec (SHA 94f8e860...) deployed
+   to all three services (D79 manual promotion). `oracle-rotate-check` runs
+   against shadow rows as they accumulate; next retrain when corpus grows
+   materially or a new feature set is validated.
 
 4. **Tune `CONTRARIAN_STRENGTH` env var once you have 7-14 finalized
    slates.** Default 0.2 (basketball-main NBA value). [WIRED 2026-05-27]
@@ -125,60 +118,32 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
       change if the proxy is recreated. If laptop/CI connections start failing,
       re-read it from Railway and update .env + the `BACKUP_DATABASE_URL` secret.
 
-11. **[NEW 2026-05-27]** Wire the trained model artifact into the
-    serving picker. D44 produced a working EB hierarchical baseline
-    artifact (`models/picker_cfe5868_1779880756.pkl`, SHA
-    `db18f6c9...`) trained on 121 slates / 2980 rows. D45 found
-    `job2.run()` only uses `WNBA_ORACLE_MODEL_ARTIFACT_SHA` as a
-    freeze tag, never loading the pickle. To make trained predictions
-    actually serve tonight (or any future night), `_build_specs` needs
-    to call `train.pipeline.load_artifact(...)` and use
-    `art.eb_baseline.predict(player_id, cohort)` in place of
-    `_heuristic_real_score`. The pickle also needs to be shipped with
-    the deploy (currently `models/*.pkl` is gitignored — either
-    un-ignore the production artifact or download from object
-    storage at startup).
+11. **[DONE 2026-06-06, D69]** Wire trained model into serving. job2 Tier-0
+    path batch-runs the LightGBM heads via PickerArtifact.predict_real_score;
+    confirmed-starter multiplier (D71) and prop-signal multiplier (D78) applied
+    on top. Artifact committed by gitignore exception; loaded at startup.
 
-12. **[MINUTES MODEL SHIPPED 2026-06-01, D55] Prediction-quality lever.**
-    The minutes/role edge is built and live: job1 ingests per-player
-    recent_minutes + per_min_rate from stats.wnba.com game logs (real_score
-    reconstructed from the box line, R^2 0.957), job2 blends boost<->minutes
-    with confirmed-starter / injury-cascade / blowout signals. Validated
-    walk-forward: minutes x rate corr 0.554 (actual-min ceiling) vs boost
-    0.246. Kill-switch MINUTES_MODEL_ENABLED.
-    **Remaining to maximise the edge (operator / next build):**
-    a. LIVE CALIBRATION. The big same-day lift (toward the 0.554 ceiling)
-       can't be backtested on the corpus (no historical RotoWire/Vegas).
-       Tune the starter/bench anchors (MinutesConfig.starter_minutes 30 /
-       bench_minutes 13 / confirm_weight 0.6) and the cascade
-       redistribution_rate against live results as they accumulate. Watch
-       the job1 `n_minutes_matched` and job2 `n_minutes_predicted` log keys.
-    b. Field simulator stacks. `picker/field.py` samples opponents by
-       independent ownership picks, so it never produces a stacked opponent;
-       on <=2-game slates the real field stacks heavily, so EV/leverage is
-       mispriced there. Add correlated (game-stack) field lineups.
-    c. Payout regime. "Win a ~9k-entry field" is the convex top_1 shape, not
-       the top_20 (20th-pct cash line) we run. Product decision (numBrawlers
-       is 0 pregame, D48).
-    d. Multi-entry VOLUME. If Real Sports allows >1 entry per contest, a
-       portfolio of differentiated +EV lineups is the single biggest
-       multiplier on the edge (D54). Verify the entry rules first.
-    e. Wire the dayclose cron on Railway (item 10) so the minutes/rate
-       history and slate_labels keep extending without manual backfills.
+12. **[SHIPPED D55/D63-D78] Prediction-quality lever -- live.**
+    Minutes model live (D55), decomposed heads trained and serving Tier-0 (D69),
+    confirmed-starter multiplier (D71), prop-signal multiplier (D78), availability
+    model calibrated (D73). Remaining deferred items:
+    a. LIVE CALIBRATION. Tune MinutesConfig starter/bench anchors against
+       accumulated live results. Watch job1 `n_minutes_matched` + job2
+       `n_minutes_predicted`.
+    b. Real ownership ingestion from the Real Sports Daily Draft Stats panel
+       (true field ownership -> leverage term + field simulation). See D59.
+    c. Multi-entry VOLUME. Verify whether Real Sports allows >1 entry per
+       contest; if so, portfolio of differentiated lineups is the biggest EV
+       multiplier (D54).
+    d. [DONE 2026-06-05, D60] Dayclose cron wired on Railway.
 
-13. **[NEW 2026-06-01, D56] Two follow-ups from the freeze outage:**
-    a. VECTORIZE `picker.payout.expected_payout`. It loops over samples in
-       Python, which forced the emergency knob reduction (n_samples 5000->1000
-       etc.) to fit the 15-min cron window. Vectorizing the rank/payout step
-       (one numpy pass over the (n_field, n_samples) array) would let us
-       restore high sample counts with no window risk. Verify numerical
-       equivalence against the scalar version before shipping.
-    b. RotoWire `wnba-lineups.php` returned 404 on 2026-06-01 (job1
-       `job1_lineups_failed`). job1 degrades gracefully (no OUT filtering, no
-       confirmed-starter signal -> minutes model uses the recency baseline),
-       but that is HALF the minutes edge (same-day role). Check whether the
-       RotoWire URL/markup changed and fix `ingest/rotowire.py`. Watch the
-       job1 `n_matched` (RotoWire) and `n_minutes_matched` (nba_api) keys.
+13. **[PARTIAL, D56] Two follow-ups from the freeze outage:**
+    a. VECTORIZE `picker.payout.expected_payout`. Loops over samples in Python;
+       vectorizing would let n_samples return to 5000 without cron-window risk.
+       Verify numerical equivalence before shipping. (Deferred -- current knobs
+       fit in the 15-min window.)
+    b. **[DONE 2026-06-07, D74]** RotoWire URL fixed (/basketball/ -> /wnba/).
+       Watch job1 `n_matched` to confirm lineup data flows again.
 
 14. **[NEW 2026-06-02, D57] `make determinism-check` is silently broken (pre-
     existing, NOT Tier 3).** Two bugs: (a) `oracle-train` truncates `--commit`
@@ -194,29 +159,16 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     `train.pipeline.write_artifact`). Verified 2026-06-02 that training IS
     content-deterministic; only the gate is wrong.
 
-15. **[ARMED 2026-06-02, D57] Tier 3 armed on cron-job2 (GAME_SCRIPT_MINUTES_ENABLED=true). Still tune the priors + validate; monitor the first fire.**
-    `GAME_SCRIPT_MINUTES_ENABLED` is OFF by default. The constants (blowout ramp
-    soft=8 / hard=18 pts, `starter_trim_fraction`=0.18, `redistribution_rate`
-    =0.70, copula rhos +0.30 / -0.35 / -0.10) are PRIORS. Tune them once (a)
-    historical Vegas spreads are in the corpus and (b) the availability/minutes
-    engine (Tier 2) lands underneath. Tier 3 rides on that engine and currently
-    only moves KNOWN rotation bench players (cold-start darts have no recent
-    minutes so they are untouched, which is why this alone does not fix the
-    2026-06-01 all-longshot bust). To turn on for a live A/B once validated: set
-    `GAME_SCRIPT_MINUTES_ENABLED=true` on cron-job2 (also auto-disables the blunt
-    team-wide blowout penalty). Reverse: unset it.
+15. **[LIVE, D57]** GAME_SCRIPT_MINUTES_ENABLED=true on cron-job2. Role-aware
+    blowout bench-minutes redistribution + regime-switching copula. Priors
+    (blowout ramp soft=8/hard=18 pts, starter_trim_fraction=0.18,
+    redistribution_rate=0.70) are empirical starting points; tune against live
+    results once Vegas spread data accumulates in corpus.
 
-16. **[ARMED 2026-06-02, D58] Tier 1 anchor-floor seatbelt armed on cron-job2 (LINEUP_ANCHOR_FLOOR=2). Monitor the first fire (optimizer_stage2 keys).**
-    Set `LINEUP_ANCHOR_FLOOR=2` on the cron-job2 Railway service (env, no
-    redeploy, instant rollback by unsetting). This forces every frozen lineup to
-    contain >= 2 confirmed-minutes anchors, so it can never again be 5 cold-start
-    darts (the 2026-06-01 bust). It can never forfeit a slate (clamps + relaxes
-    if infeasible). Built default-OFF only out of D56 caution (it changes the
-    live optimizer enumeration); validated by unit tests but not yet on a live
-    slate, so watch the first armed fire's `optimizer_stage2` log keys
-    (`skipped_anchor_floor`, `effective_min_anchors`). CAVEAT: this forces a
-    floor but does not pick the RIGHT ceiling darts (Kosu vs Holmes), which is
-    Tier 2 (availability model). Necessary, not sufficient.
+16. **[LIVE, D57/D58]** LINEUP_ANCHOR_FLOOR=2 on cron-job2. Forces >= 2
+    confirmed-minutes anchors in every frozen lineup. Monitor
+    `optimizer_stage2` keys (`skipped_anchor_floor`, `effective_min_anchors`)
+    in job2 logs.
 
 17. **[NEW 2026-06-02, D59] Deferred Tier 2 follow-ups (not blocking tonight).**
     The availability model (P(active), AVAILABILITY_MODEL_ENABLED) shipped;

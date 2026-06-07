@@ -59,7 +59,7 @@ uv run oracle-train --corpus-mode both \
     --metrics-path /tmp/train_metrics.json
 # 2. Inspect the SHA-256 sidecar emitted by oracle-train.
 ls -la models/picker_*_*.pkl.sha256
-# 3. Set WNBA_ORACLE_MODEL_ARTIFACT_SHA on Railway (api + cron-job2 services)
+# 3. Set WNBA_ORACLE_MODEL_ARTIFACT_SHA on Railway (api, cron-job1, cron-job2)
 #    to the new SHA. cron-job2 will start writing to model_shadow_runs with
 #    that challenger_sha. The incumbent_sha is the prior value of the env var.
 # 4. After >= 7 slate_labels rows accumulate for the challenger, evaluate:

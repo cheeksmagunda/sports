@@ -25,62 +25,56 @@ end-to-end via `scripts/manual_fire.py --fixtures`. The operator starts
 the live shadow window via `oracle-rotate-check --window-days 7` after
 the live collector has accumulated >= 7 slate labels in `slate_labels`.
 
-## Live services (verified 2026-05-27 05:30 UTC)
+## Live services (verified 2026-06-07)
 
 - api:       https://api-production-7033.up.railway.app/health -> 200
-- api:       https://api-production-7033.up.railway.app/lineup -> 200 (empty)
+- api:       https://api-production-7033.up.railway.app/lineup -> 200
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
-- postgres:  internal + public TCP proxy (TLSv1.3, SSL enabled 2026-06-05 via
-  start-command cert on stock postgres:16-alpine, D61); alembic head =
-  20260605_0005 (D64: adds opponent/home_away/game_id matchup fields to
-  wnba_game_logs). CANONICAL corpus store:
-  slate_labels + contest_leaderboards (141 slates, 2025-05-16..2026-06-04,
-  D64 adds 11 recovered 2025 playoff slates Sep 18..Oct 10) +
-  wnba_game_logs (13,456 player-games, 2024-05-03..2026-06-05, with
-  matchup fields populated at 97.8% -- the 295 NULL-opponent rows are
-  exhibition/All-Star/preseason days where Real Sports correctly ran no
-  contest). All training, backtest, and analysis scripts now read from
-  Postgres via `db.reads` helpers; local parquet files retained as
-  archival backups only. Laptop reads via `oracle_ro` (SELECT/INSERT/UPDATE
-  on tables, sslmode=verify-ca), connection in gitignored .env
-  DATABASE_PUBLIC_URL.
-- cron-backup (GitHub Action `corpus-backup`): `43 6 * * *` UTC, exports the
-  scraped corpus to the off-`main` `backups` branch (D61). 3-2-1 off-site copy.
+- postgres:  internal + public TCP proxy (TLSv1.3, SSL via start-command cert,
+  D61). Alembic head = 20260605_0005. CANONICAL corpus store: slate_labels +
+  contest_leaderboards (141+ slates, 2025-05-16..ongoing) + wnba_game_logs
+  (13,456+ player-games, 2024-05-03..ongoing). All reads via `db.reads`
+  helpers; local parquet files are archival backups only.
 - redis:     internal, password-protected
-- cron-job1: `0 13 * * *` UTC, oracle-cron --job job1 (next: 2026-05-27T13:00Z)
-- cron-job2: `*/15 21-23,0-3 * * *` UTC, oracle-cron --job job2 (next: 2026-05-27T21:00Z)
-- cron-dayclose: `0 6 * * *` UTC, oracle-cron --job dayclose (D41; WIRED
-  2026-06-05, service id 606d950d, see D60). Fires ~1h after the latest
-  plausible WNBA finalization; auto-extends the canonical Postgres corpus
-  each fire by walking back N ids from today's max contest id, skipping
-  anything not `sport=wnba` and any pregame contest (empty draftStats).
-- env-tunable knobs (scope verified 2026-06-01, D53):
-  - SHARED (env scope, via ${{shared.KEY}} refs): ENV, LOG_LEVEL,
-    PYTHONUNBUFFERED, TZ, PAYOUT_REGIME=top_20, WNBA_ORACLE_MODEL_ARTIFACT_SHA.
-  - cron-job2 scope (optimizer): CONTRARIAN_STRENGTH=0.2 (reconciled from a
-    drifted 0.3, D53), CONTRARIAN_ENABLED=true, OPTIMIZER_MAX_PER_TEAM=2,
-    CAVEAT_IS_SKIP=true. OPTIMIZER_DYNAMIC_TEAM_CAP (true), SAMPLING_SCORE_OFFSET
-    (2.0), STARTER_SIGNAL_ENABLED (true), MINUTES_MODEL_ENABLED (true) run on
-    code defaults. ARMED on cron-job2 2026-06-02 for the D57 draft-winning
-    overhaul: GAME_SCRIPT_MINUTES_ENABLED=true (D57 game-script bench-minutes +
-    regime-switching copula), LINEUP_ANCHOR_FLOOR=2 (D58 require >=2
-    confirmed-minutes anchors), AVAILABILITY_MODEL_ENABLED=true (D59 P(active)
-    collapses cold-start darts). All three reverse via env with no redeploy:
-    unset LINEUP_ANCHOR_FLOOR, set the *_ENABLED flags to false (or
-    MINUTES_MODEL_ENABLED=false / SAMPLING_SCORE_OFFSET=10 to revert older
-    knobs).
-  - cron-job1 now also pulls stats.wnba.com game logs (nba_api) for the D55
-    minutes features; a stats.wnba.com outage degrades gracefully (job2 falls
-    back to boost). Watch the job1 log key n_minutes_matched.
-  - DATABASE_URL / REDIS_URL are service references; never literals.
-- env-tunable knobs at cron-job2 service: CAVEAT_IS_SKIP=true (set
-  2026-05-29 per D48; demotes `enter_with_caveat` to `skip` on
-  marginal-EV slates). Now superseded at runtime by NEVER_SKIP (D49):
-  while NEVER_SKIP is on, no slate is demoted to `skip` regardless of
-  CAVEAT_IS_SKIP. Operator may unset CAVEAT_IS_SKIP to avoid confusion.
-- NEVER_SKIP=true is the new code default (D49). The optimizer never
-  emits `skip`; sub-breakeven slates surface as `enter_with_caveat`.
-  Set NEVER_SKIP=false to restore the D48 three-state behavior.
+- cron-backup (GitHub Action `corpus-backup`): `43 6 * * *` UTC, exports corpus
+  to off-`main` `backups` branch (D61). 3-2-1 off-site copy.
+- cron-job1: `0 13 * * *` UTC -- scrape Real Sports pool, nba_api minutes,
+  odds, RotoWire lineups, persist features_json enrichment.
+- cron-job2: `*/15 21-23,0-3 * * *` UTC -- run heads + optimizer, freeze lineup
+  to Redis + Postgres. Late re-freeze fires at 23:00 UTC when LATE_REFREEZE_ENABLED
+  (D75).
+- cron-dayclose: `0 6 * * *` UTC -- extend corpus from finalized contest ids
+  (D41/D60, service id 606d950d).
+
+## Active Railway env vars (cron-job2, verified 2026-06-07, D79)
+
+Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
+(picker_e2ced9ec_1780873338.pkl, D77b). Set on api, cron-job1, cron-job2.
+
+| Var | Value | Decision |
+|-----|-------|----------|
+| PAYOUT_REGIME | top_20 | D48 |
+| NEVER_SKIP | true (code default) | D67 |
+| CONTRARIAN_ENABLED | true | D51 |
+| CONTRARIAN_STRENGTH | 0.2 | D51/D53 |
+| OPTIMIZER_MAX_PER_TEAM | 2 | D50 |
+| OPTIMIZER_DYNAMIC_TEAM_CAP | true (code default) | D50 |
+| OPTIMIZER_N_FIELD_LINEUPS | 500 | D76 |
+| OPTIMIZER_BOOST_SUM_CAP | 9.0 | D70/R2 |
+| OPTIMIZER_MAX_SINGLE_BOOST | 2.5 | D70/R2 |
+| OPTIMIZER_GAME_STACK_BONUS | 0.005 | D70/R3 |
+| MINUTES_MODEL_ENABLED | true (code default) | D55 |
+| STARTER_SIGNAL_ENABLED | true (code default) | D71 |
+| AVAILABILITY_MODEL_ENABLED | true | D73 |
+| GAME_SCRIPT_MINUTES_ENABLED | true | D57 |
+| LINEUP_ANCHOR_FLOOR | 2 | D57/D58 |
+| LATE_REFREEZE_ENABLED | true | D75 |
+| PROP_SIGNAL_SCALE | 0.3 | D78 |
+| CAVEAT_IS_SKIP | false | D48 (superseded by NEVER_SKIP) |
+| SAMPLING_SCORE_OFFSET | 2.0 (code default) | D52 |
+
+All flags reverse via env with no redeploy. Set *_ENABLED=false or unset numeric
+knobs to revert to code defaults.
 
 ## Historical corpus (updated 2026-06-05)
 
