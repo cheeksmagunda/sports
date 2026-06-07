@@ -125,6 +125,23 @@ class Settings(BaseSettings):
     # failure mode, while leaving established rotation players ~unchanged.
     # Default OFF; set AVAILABILITY_MODEL_ENABLED=true on cron-job2 to arm.
     availability_model_enabled: bool = Field(default=False, alias="AVAILABILITY_MODEL_ENABLED")
+    # D70 (R2): cap the sum-of-card-boost across the 5 picked players.
+    # Winners' anatomy (research/internal/01_winners_anatomy.md): median rank-1
+    # total boost is 7.5; the 75th percentile is ~10. Our recent freezes hit
+    # 12-15. The 2026-06-04 ~6000th finish was driven by five high-boost
+    # cards with no minutes history. 0.0 disables (default off so the
+    # rollout is reversible via env); set OPTIMIZER_BOOST_SUM_CAP=9.0 to
+    # arm. The optimizer relaxes the cap (with a warning) if no lineup is
+    # jointly feasible with the team cap.
+    optimizer_boost_sum_cap: float = Field(default=0.0, alias="OPTIMIZER_BOOST_SUM_CAP")
+    # D70 (R2): cap the single-pick card_boost. Boost economics
+    # (research/internal/04_boost_economics.md) found the 3.0 bucket has
+    # an 8.2% hit rate and Sharpe 1.21 vs the (2.0, 2.5] bucket at 50.4%
+    # / 2.01 -- a value trap unless used sparingly. 0.0 disables (default
+    # off); set OPTIMIZER_MAX_SINGLE_BOOST=2.5 to refuse the 2.5-3.0 lottery
+    # tier entirely, or 2.75 to allow it but block the 3.0 wall. Relaxed
+    # alongside the sum cap when jointly infeasible.
+    optimizer_max_single_boost: float = Field(default=0.0, alias="OPTIMIZER_MAX_SINGLE_BOOST")
 
 
 @lru_cache(maxsize=1)

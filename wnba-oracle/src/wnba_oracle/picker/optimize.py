@@ -91,6 +91,48 @@ def _anchor_count(combo: tuple[int, ...], is_anchor: list[bool]) -> int:
     return sum(1 for idx in combo if is_anchor[idx])
 
 
+def _exceeds_boost_cap(
+    combo: tuple[int, ...],
+    boosts: np.ndarray,
+    sum_cap: float,
+    max_single: float,
+) -> bool:
+    """True if combo violates either the per-pick max or the sum-of-boost cap.
+
+    D70 (R2). Either threshold at 0.0 means that constraint is disabled.
+    Boost values are added to the slot multiplier in lineup_score; capping
+    them caps the lineup-wide multiplier load on high-variance lottery cards.
+    """
+    if max_single > 0.0:
+        for idx in combo:
+            if boosts[idx] > max_single:
+                return True
+    if sum_cap > 0.0:
+        total = 0.0
+        for idx in combo:
+            total += boosts[idx]
+            if total > sum_cap:
+                return True
+    return False
+
+
+def _boost_cap_is_feasible(
+    boosts: np.ndarray, sum_cap: float, max_single: float
+) -> bool:
+    """True if at least one 5-player lineup respects the boost caps.
+
+    Greedy lower bound: take the five smallest-boost players (after the
+    per-pick max filter) and check their sum. If even that fails, no
+    feasible lineup exists; the optimizer relaxes (with a warning).
+    """
+    eligible = boosts if max_single <= 0.0 else boosts[boosts <= max_single]
+    if len(eligible) < 5:
+        return False
+    if sum_cap <= 0.0:
+        return True
+    return float(np.sort(eligible)[:5].sum()) <= sum_cap
+
+
 @dataclass(frozen=True)
 class LineupRecommendation:
     player_ids: tuple[int, ...]
@@ -157,6 +199,16 @@ class OptimizeConfig:
     # in the filtered pool and relaxed if jointly infeasible with the team cap,
     # so it NEVER forfeits a slate (the D50 lesson). Set via LINEUP_ANCHOR_FLOOR.
     min_anchors: int = 0
+    # D70 (R2): boost caps from research/internal/04_boost_economics.md.
+    # boost_sum_cap is the lineup-wide ceiling on sum of card_boost for the 5
+    # picks; max_single_boost is the per-pick ceiling. 0.0 disables either,
+    # which is the library default so a bare OptimizeConfig() is unchanged
+    # from pre-D70 behaviour. The optimizer's _scan loop skips any combo
+    # that violates either cap; if no combo is jointly feasible with the
+    # team cap, both caps relax to 0.0 (with a warning) so we never forfeit.
+    # Set via Settings.optimizer_boost_sum_cap / optimizer_max_single_boost.
+    boost_sum_cap: float = 0.0
+    max_single_boost: float = 0.0
 
 
 def optimize_lineup(
@@ -259,12 +311,32 @@ def optimize_lineup(
             available=n_anchors_pool,
         )
 
-    def _scan(min_anchors_req: int) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int]:
-        """Enumerate C(n,5) under the team cap + anchor floor; return the best."""
+    # D70 (R2): clamp the boost caps to the filtered pool's reality. If even
+    # the five smallest-boost players in the pool would violate the requested
+    # caps, disable them (with a warning) up front rather than relying on the
+    # post-scan relax. The relax below still catches the cap+team-cap joint
+    # infeasibility.
+    effective_boost_sum_cap = cfg.boost_sum_cap
+    effective_max_single_boost = cfg.max_single_boost
+    if (effective_boost_sum_cap > 0.0 or effective_max_single_boost > 0.0) and not (
+        _boost_cap_is_feasible(keep_boosts, effective_boost_sum_cap, effective_max_single_boost)
+    ):
+        log.warning(
+            "optimizer_boost_cap_infeasible_at_pool",
+            boost_sum_cap=cfg.boost_sum_cap,
+            max_single_boost=cfg.max_single_boost,
+            note="relaxing both caps to 0 (cannot starve the slate)",
+        )
+        effective_boost_sum_cap = 0.0
+        effective_max_single_boost = 0.0
+
+    def _scan(min_anchors_req: int) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
+        """Enumerate C(n,5) under team cap + anchor floor + boost cap; return the best."""
         b_ev = -np.inf
         b_idx: tuple[int, ...] = ()
         b_samp: np.ndarray = np.zeros(cfg.n_samples)
-        n_eval = n_skip_team = n_skip_anchor = 0
+        n_eval = n_skip_team = n_skip_anchor = n_skip_boost = 0
+        boost_cap_on = effective_boost_sum_cap > 0.0 or effective_max_single_boost > 0.0
         for combo in itertools.combinations(range(len(filtered_sampling)), 5):
             if effective_max_per_team < 5 and _exceeds_team_cap(
                 combo, keep_teams, effective_max_per_team
@@ -273,6 +345,11 @@ def optimize_lineup(
                 continue
             if min_anchors_req > 0 and _anchor_count(combo, keep_is_anchor) < min_anchors_req:
                 n_skip_anchor += 1
+                continue
+            if boost_cap_on and _exceeds_boost_cap(
+                combo, keep_boosts, effective_boost_sum_cap, effective_max_single_boost
+            ):
+                n_skip_boost += 1
                 continue
             own_samples = lineup_score_samples(
                 real_score_samples, keep_boosts, list(combo), slot_multipliers
@@ -283,26 +360,61 @@ def optimize_lineup(
             n_eval += 1
             if ev > b_ev:
                 b_ev, b_idx, b_samp = ev, combo, own_samples
-        return b_ev, b_idx, b_samp, n_eval, n_skip_team, n_skip_anchor
+        return b_ev, b_idx, b_samp, n_eval, n_skip_team, n_skip_anchor, n_skip_boost
 
-    best_ev, best_indices, best_samples, n_evaluated, n_skipped_team_cap, n_skipped_anchor = _scan(
-        effective_min_anchors
-    )
+    (
+        best_ev,
+        best_indices,
+        best_samples,
+        n_evaluated,
+        n_skipped_team_cap,
+        n_skipped_anchor,
+        n_skipped_boost,
+    ) = _scan(effective_min_anchors)
     if n_evaluated == 0 and effective_min_anchors > 0:
         # Anchor floor + team cap were jointly infeasible on the filtered pool.
         # Relax the floor and re-scan so we never freeze an empty lineup.
         log.warning("optimizer_anchor_floor_infeasible", note="relaxing anchor floor to 0")
-        best_ev, best_indices, best_samples, n_evaluated, n_skipped_team_cap, n_skipped_anchor = (
-            _scan(0)
+        (
+            best_ev,
+            best_indices,
+            best_samples,
+            n_evaluated,
+            n_skipped_team_cap,
+            n_skipped_anchor,
+            n_skipped_boost,
+        ) = _scan(0)
+    if n_evaluated == 0 and (effective_boost_sum_cap > 0.0 or effective_max_single_boost > 0.0):
+        # D70: boost caps were jointly infeasible with the team cap on the
+        # filtered pool. Drop the boost caps and re-scan; never forfeit.
+        log.warning(
+            "optimizer_boost_cap_infeasible_post_scan",
+            boost_sum_cap=effective_boost_sum_cap,
+            max_single_boost=effective_max_single_boost,
+            note="relaxing both boost caps to 0",
         )
+        effective_boost_sum_cap = 0.0
+        effective_max_single_boost = 0.0
+        (
+            best_ev,
+            best_indices,
+            best_samples,
+            n_evaluated,
+            n_skipped_team_cap,
+            n_skipped_anchor,
+            n_skipped_boost,
+        ) = _scan(effective_min_anchors)
     log.info(
         "optimizer_stage2",
         evaluated=n_evaluated,
         skipped_team_cap=n_skipped_team_cap,
         skipped_anchor_floor=n_skipped_anchor,
+        skipped_boost_cap=n_skipped_boost,
         max_per_team=cfg.max_per_team,
         effective_max_per_team=effective_max_per_team,
         effective_min_anchors=effective_min_anchors,
+        effective_boost_sum_cap=effective_boost_sum_cap,
+        effective_max_single_boost=effective_max_single_boost,
         n_games=n_games,
     )
 

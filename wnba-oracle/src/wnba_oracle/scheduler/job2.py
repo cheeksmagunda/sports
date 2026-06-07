@@ -989,6 +989,8 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         never_skip=settings.never_skip,
         score_offset=settings.sampling_score_offset,
         min_anchors=settings.lineup_anchor_floor,
+        boost_sum_cap=settings.optimizer_boost_sum_cap,
+        max_single_boost=settings.optimizer_max_single_boost,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     log.info(
