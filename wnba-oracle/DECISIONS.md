@@ -2032,3 +2032,106 @@ after this commit lands. Cron-job1's next 13:00 UTC fire populates
 `head_features` for tonight's slate; cron-job2's 21:00 UTC freeze is the
 first to serve from the trained heads. Watch `head_predict n_in=N
 n_out=N` and `predictor_mix n_head_predicted=N` in the Railway logs.
+
+---
+
+## 2026-06-06: D70 — picker hardening (boost caps + game-stack bonus + slot audit)
+
+Three picker-side knobs landed together as the R2/R3/R4 items of
+`research/00_GAP_ANALYSIS.md`. All three default OFF in code (a bare
+`OptimizeConfig()` is unchanged from pre-D70), armed via env on cron-job2.
+Reverse path is environmental: unset the env var, no redeploy required.
+
+### D70 / R2: lineup boost caps (`OPTIMIZER_BOOST_SUM_CAP`, `OPTIMIZER_MAX_SINGLE_BOOST`) [verified]
+
+Source: `research/internal/01_winners_anatomy.md` (median rank-1 lineup
+total boost 7.5; we shipped 12-15 over the past month) and
+`research/internal/04_boost_economics.md` (the 2.5-3.0 boost bucket has
+8.2% hit rate / Sharpe 1.21 vs (2.0, 2.5] at 50.4% / 2.01 — a value trap).
+The 2026-06-04 ~6000th-of-8317 bust was driven by five high-boost cards
+landing simultaneously with no minutes history. Two ceilings:
+
+- `boost_sum_cap` (env `OPTIMIZER_BOOST_SUM_CAP`): sum-of-card_boost
+  across the 5 picks. Armed at 9.0 (winner median 7.5 + 1.5 slack).
+- `max_single_boost` (env `OPTIMIZER_MAX_SINGLE_BOOST`): per-pick
+  card_boost. Armed at 2.5 — refuses the 2.5-3.0 lottery tier entirely.
+
+Both caps are 0.0 in code defaults (disabled). The optimizer's `_scan`
+loop calls a new `_exceeds_boost_cap` next to the existing team-cap and
+anchor-floor checks, so any combo that breaches either cap is skipped
+before scoring. Up-front, `_boost_cap_is_feasible` checks the
+five-smallest-boost slice of the eligible pool — if even that violates
+the requested caps, both relax to 0 with a `optimizer_boost_cap_infeasible_at_pool`
+warning, avoiding a wasted full enumeration. After `_scan`, if the team
+cap + boost caps were jointly infeasible (`n_evaluated == 0`), both caps
+relax with `optimizer_boost_cap_infeasible_post_scan` and the scan
+re-runs. The optimizer NEVER forfeits a slate (the D50 invariant).
+
+Wired via `Settings.optimizer_boost_sum_cap` /
+`Settings.optimizer_max_single_boost` -> `OptimizeConfig` ->
+`optimize.py:_scan`. `job2.py` plumbs them through alongside the existing
+team_cap + min_anchors fields. `optimizer_stage2` log line now includes
+`skipped_boost_cap`, `effective_boost_sum_cap`, `effective_max_single_boost`.
+
+Tests: `tests/unit/test_boost_cap.py` (8 cases): defaults stay off,
+each cap fires standalone, joint constraint, pool-infeasible auto-relax,
+joint-infeasible post-scan relax, never-forfeit invariant.
+
+Reverse: unset both env vars on cron-job2, or revert commit 7386f71.
+
+Deploy: env vars set on cron-job2 (service id
+4a511ed2-10ad-441f-bf9a-3748c1e6b929) via
+`backboard.railway.com/graphql/v2 variableUpsert` against env id
+d57a759e (production). Next 21:00 UTC freeze is the first under the cap.
+
+### D70 / R3: game-stack bonus (`OPTIMIZER_GAME_STACK_BONUS`) [verified]
+
+Source: `research/internal/01_winners_anatomy.md`: 87% of top-20 lineups
+include at least one 2+ pick group from the same game. Our optimizer
+treated combos as independent — the same-team copula `rho` fires only
+within a team, not between opponents in the same game — so we
+under-weighted stacked lineups vs the field.
+
+New `game_stack_bonus` adds a small additive bonus to `expected_payout`
+per "stack pair" in the combo. A stack pair is each pick beyond the
+first from one game (so a 2-stack contributes 1 pair, a 3-stack
+contributes 2). Same-game pairing keys on the unordered `{team,
+opponent}` set, so `LVA vs ATL` matches both sides. Armed at 0.005 (off
+in code default); on a flat slate with equal EVs this is enough to
+prefer the stacked combo, on a slate with real EV separation the bonus
+is tiny relative to a 0.05+ EV gap.
+
+Wired via `Settings.optimizer_game_stack_bonus` -> `OptimizeConfig.game_stack_bonus`
+-> `optimize.py:_scan` (`_game_stack_pairs(combo, keep_teams,
+keep_opponents)`). `job2.py` plumbs it through.
+
+Tests: `tests/unit/test_game_stack.py` (7): `_game_stack_pairs` counts
+2-stacks (1 pair), 3-stacks (2 pairs), non-stacks (0), ignores missing
+team/opp; bonus=0 leaves the optimizer unbiased; bonus>0 on a flat
+slate makes the optimizer pick a stacked combo; slot order follows
+descending real_score (the R4 audit).
+
+Reverse: unset `OPTIMIZER_GAME_STACK_BONUS` on cron-job2, or revert
+commit 5395585.
+
+Deploy: env var set on cron-job2 alongside R2.
+
+### D70 / R4: slot-assignment audit — already optimum [verified, no behaviour change]
+
+`research/internal/01_winners_anatomy.md` observed that rank-1 lineups
+have low mean boost in slot 0 (0.66) and high mean boost in slot 4
+(2.19). The proposed fix was to verify the picker assigns the
+highest-real_score pick to the highest-multiplier slot.
+
+Read of `picker/optimize.py:309-316` (`_assign_to_slots`): the picker
+already sorts picks by median real_score descending and assigns to slots
+0..4 (multipliers [2.0, 1.8, 1.6, 1.4, 1.2] descending). That is the
+rearrangement-inequality optimum for `sum(slot_mult * rs)`. Boost
+contributes `sum(boost * rs)` — invariant under slot permutation — so
+it doesn't shift the optimum.
+
+The winners' low-slot-0 boost is therefore a downstream PLAYER-SELECTION
+effect: chalk players have higher real_score AND lower boost, so they
+naturally land in slot 0 once you select for high real_score. Not a
+slot-assignment bug. No code change; the existing behaviour is pinned
+by `test_game_stack.py::test_slot_assignment_follows_rearrangement_inequality`.
