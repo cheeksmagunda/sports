@@ -2135,3 +2135,84 @@ effect: chalk players have higher real_score AND lower boost, so they
 naturally land in slot 0 once you select for high real_score. Not a
 slot-assignment bug. No code change; the existing behaviour is pinned
 by `test_game_stack.py::test_slot_assignment_follows_rearrangement_inequality`.
+
+---
+
+## 2026-06-07: D71 — RotoWire starter signal in head Tier-0 (R5)
+
+Closes the R5 item of `research/00_GAP_ANALYSIS.md`.
+
+### D71 / R5: apply `_starter_multiplier` to head p10/p50/p90 [verified]
+
+Discovery: the D69 head Tier-0 path (`job2.py:628-645`) applied
+`gs_mult` and the 0.5 floor to the head's quantile output but skipped
+the `_starter_multiplier` that the Tier-3 fallback uses. The trained
+head DID NOT compensate internally: `features/corpus.build_gamelog_corpus`
+does NOT compute `is_confirmed_starter`, and `train/pipeline.py:240`
+explicitly drops features that the corpus does not provide
+(`feat_cols = tuple(c for c in feat_cols if c in c_train.columns)`).
+Verified by loading `models/picker_bf3c8996_*.pkl` and inspecting
+`feature_subset_per_head`: `is_confirmed_starter`, `starter_slot`,
+`is_home`, `card_boost`, and the entire pace/vegas/DvP block are absent
+from every (head, cohort) cell. The 21 features that survive are
+schedule (`days_rest`, `is_back_to_back`, `season_game_number`) and
+rolling lagged metrics (`mins_l5/l10/l20`, `fantasy_pts_l5/l10`, the
+per-min rate rolls, the L10 shooting / usage / plus-minus block, and
+`coach_rotation_consistency_l20`).
+
+So the head learned ONLY from a player's historical game log. It cannot
+distinguish a confirmed starter from a confirmed bench player by today's
+RotoWire feed; both are scored from the same lagged rolling features.
+Without this nudge, RotoWire data (which `job1.py` writes faithfully
+into `features_json["rotowire_confirmed"]` + `features_json["is_starter"]`)
+was silently dropped by the highest-priority Tier whenever a player had
+a `head_features` row.
+
+Fix: `job2.py:628-665` now calls
+
+    starter_mult = _starter_multiplier(
+        r.get("features_json"),
+        enabled=settings.starter_signal_enabled,
+    )
+
+before scaling p10/p50/p90, with the same magnitudes the helper applies
+elsewhere (1.10 confirmed starter, 0.82 confirmed bench, 1.00 unmatched
+/ unknown). The 80% interval `(p90 - p10)` also scales by `starter_mult`
+so the sampler's delta-method sigma derivation
+(`(p90 - p10) * starter_mult / 2.56`) stays consistent with the
+distribution-shifted mean. The surfaced quantiles in
+`head_quantiles_by_pid` are multiplied as well so the frontend
+real_score interval bar matches the predicted mean.
+
+Why this is safe to layer in:
+- The Tier-1 blend (`blended_real_score`) deliberately omits the
+  multiplier because its boost<->minutes blend already handles role
+  signals. Tier-0 has no such internal weighting; it's a pure
+  game-log-feature regression. So the gap was real, not redundant.
+- The multiplier is gated by `settings.starter_signal_enabled`
+  (default True; existing env knob). Setting `STARTER_SIGNAL_ENABLED=false`
+  on cron-job2 disables the nudge across all Tiers atomically.
+- A player RotoWire never matched (`rotowire_confirmed=0`) sees a 1.0
+  multiplier and is unchanged from the pre-D71 behaviour.
+
+Tests: `tests/unit/test_head_tier0.py` grows from 4 to 7. New cases:
+`test_tier0_confirmed_starter_scales_quantiles_up` (1.10),
+`test_tier0_confirmed_bench_scales_quantiles_down` (0.82),
+`test_tier0_unmatched_player_unchanged` (1.0).
+
+Reverse: revert commit aa39806, or set `STARTER_SIGNAL_ENABLED=false`
+on cron-job2 (the same kill-switch the Tier-3 fallback already obeys
+— it disables `_starter_multiplier` everywhere by short-circuit).
+
+Deploy: code-only change. No env change required. Next cron-job2 deploy
+(triggered by the push) picks it up; first effect is tomorrow's 21:00
+UTC freeze (today's already fired). Watch
+`predictor_mix n_head_predicted=N` to confirm the head path is firing
+and observe whether tonight's RotoWire matches shift the per-player
+projections.
+
+Forward link: when the gamelog corpus is upgraded to actually carry
+`is_confirmed_starter` and the per-position DvP/pace block (R7 / R8
+phases from the D63 roadmap), the heads will eventually internalise
+the starter signal themselves and this nudge becomes redundant. Keep
+the kill-switch wired for that future flip.
