@@ -2,17 +2,20 @@
 
 This is an unattended build. Follow Part 0 of the handoff document.
 
-## Build state (D63, 2026-06-05)
+## Build state (D78, 2026-06-07)
 
-Active work: the decomposed-projection rebuild. The multi-task heads now train
-on a feature+target corpus built from the game-logs (`features/corpus.py`,
-`features/game_features.py`). Production training command is
-`oracle-train --corpus-mode both`. Walk-forward the recompose
-(`PickerArtifact.predict_real_score`) reaches corr 0.554 vs the boost
-heuristic's 0.246. Live `job2` serving is UNCHANGED until Phase 2b wires the
-heads into the fire path. Phase status and the remaining roadmap (2b live
-wiring, then component heads, matchup features, participation prior, CRPS gate)
-are in STATUS.md and DECISIONS.md D63.
+The system is fully live. All major phases are wired and deployed on Railway.
+
+Active model: `picker_e2ced9ec_1780873338.pkl` (SHA `94f8e8606dab...`), trained
+on a 13,002-row corpus with team_pace + opponent DvP enrichment (D77). The
+LightGBM multi-task heads (minutes x per-minute-rate, cohort F) are wired into
+the `job2` Tier-0 prediction path (D69), with confirmed-starter multiplier (D71),
+sportsbook prop-signal multiplier (D78, PROP_SIGNAL_SCALE=0.3), late re-freeze
+at 23:00 UTC (D75), availability model (D73), lineup anchor floor of 2 (D57),
+game-stack bonus (D70/R3), boost caps (D70/R2), n_field=500 (D76), and
+targeted pool fallback for unmatched players (D72). Walk-forward corr 0.554 vs
+boost heuristic 0.246. Production training command: `oracle-train --corpus-mode
+both`. See STATUS.md and DECISIONS.md for full roadmap and reverse paths.
 
 ## Autonomy
 

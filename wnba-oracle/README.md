@@ -20,9 +20,13 @@ Two-phase fire:
 Single FastAPI surface exposes the frozen lineup.
 
 Model stack: LightGBM multi-task heads (minutes, per-minute rates,
-residual recompose) + EB-shrunk hierarchical baseline at 70/30 ensemble
-weight. Mondrian conformal prediction by cohort and condition. Joint
-sampling via Gaussian copula on log-residuals feeds the lineup optimizer.
+recompose) trained on a 13k-row game-log corpus with team pace and opponent
+DvP features. Walk-forward corr 0.554, deployed live in job2 Tier-0. Same-day
+signals: confirmed-starter multiplier, sportsbook prop-signal (scale 0.3),
+two-part availability model. EB-shrunk baseline as Tier-1 fallback. Mondrian
+conformal prediction by cohort and condition. Joint sampling via Gaussian copula
+on log-residuals feeds the lineup optimizer with game-stack preference and boost
+caps.
 
 ## Local dev
 
@@ -129,19 +133,28 @@ boost prior; `predict/scoring.py` reconstructs real_score from the box line
 (R^2 0.957) so the pipeline is self-contained on nba_api. Kill-switch
 `MINUTES_MODEL_ENABLED`.
 
-**D63 (2026-06-05): the decomposed heads are now trained and validated.**
+**D63-D78 (2026-06-05..07): decomposed heads trained, validated, and live.**
 Until D63 the multi-task heads were coded but never trained: the 7-column
 training corpus lacked their target columns, so the live picker served the
 boost/minutes heuristic for ~85% of players. `features/corpus.py` now assembles
 a feature+target corpus from the 13,435 game-logs (targets via
-`predict/scoring.box_to_real_score`), the minutes and real_score-per-minute
-heads train on it (`oracle-train --corpus-mode both`), and
-`PickerArtifact.predict_real_score` recomposes `E[real_score] = E[minutes] x
-E[rate]` as a calibrated distribution. Walk-forward (train pre-2026, predict
-2026) the recompose reaches corr 0.554 with P10-P90 coverage 0.81, more than
-double the boost heuristic and at the actual-minutes-x-rate ceiling. Live `job2`
-serving still uses the heuristic ladder; wiring the trained heads into the fire
-path is the tracked follow-up (Phase 2b). See DECISIONS D63.
+`predict/scoring.box_to_real_score`), enriched with team pace and opponent DvP
+(D77). The minutes and real_score-per-minute heads train on it
+(`oracle-train --corpus-mode both`), and `PickerArtifact.predict_real_score`
+recomposes `E[real_score] = E[minutes] x E[rate]` as a calibrated distribution.
+Walk-forward (train pre-2026, predict 2026) the recompose reaches corr 0.554
+with P10-P90 coverage 0.81, more than double the boost heuristic and at the
+actual-minutes-x-rate ceiling.
+
+Live `job2` now serves the trained heads in a Tier-0 path (D69), with a stack
+of same-day signals applied on top: confirmed-starter multiplier (D71),
+sportsbook prop-signal multiplier (D78, PROP_SIGNAL_SCALE=0.3), two-part
+availability model calibrated against the 13k-row corpus (D73), lineup anchor
+floor requiring at least 2 confirmed-minutes players (D57), and a late
+re-freeze at 23:00 UTC that overwrites the tip-off freeze with fresh confirmed
+data (D75). The optimizer adds game-stack preference (D70/R3), boost caps to
+avoid high-risk lottery picks (D70/R2), and runs 500 simulated field lineups
+for stable rank-probability estimates (D76). See DECISIONS D63-D78.
 
 Three supporting patterns ported from `basketball-main` (the sibling NBA
 Real Sports product the operator used to win late-season drafts):
