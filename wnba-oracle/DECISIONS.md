@@ -2456,3 +2456,34 @@ the DvP signal anyway at WNBA's ~40-game sample sizes.
 
 **Reverse**: revert corpus.py commit. Model continues to use the prior artifact
 (set WNBA_ORACLE_MODEL_ARTIFACT_SHA back to the bf3c8996 SHA).
+
+---
+
+## 2026-06-07: D78 -- Sportsbook prop-signal multiplier in job2 [reasoned]
+
+**Decision**: add `_prop_signal_multiplier()` to `job2.py` and wire it into
+the Tier-0 head prediction path. Formula: `pred *= clamp(1 + (over_prob - 0.5)
+* scale, 0.85, 1.15)`. Default `PROP_SIGNAL_SCALE=0.0` (disabled). Prop data
+injected by job1 into `features_json` as `prop_points_line` and
+`prop_points_over_prob` (D74).
+
+**Reasoning [reasoned]**: sportsbook player props are the most liquid real-time
+signal on today's production (injury, minutes, matchup). The over/under
+probability encodes market consensus about single-game output; a player priced
+as a 65% over candidate has a measurably different expected output distribution
+than a 35% candidate. At scale=0.3: over_prob=0.60 -> +3% multiplier,
+over_prob=0.40 -> -3%. The clip bounds (0.85, 1.15) prevent the signal from
+overriding the head prediction when the market is illiquid or extreme.
+
+**Calibration note [reasoned]**: default is 0.0 (off) because the signal
+directionality is unvalidated against historical WNBA placement data. Set
+PROP_SIGNAL_SCALE=0.3 to enable a modest nudge once enough slates accumulate
+with prop data in `features_json`.
+
+**Bug fixed**: initial `_prop_signal_multiplier` used `or 0.5` to null-coalesce
+`over_prob`, which treated `0.0` as falsy and silently returned 1.0 instead of
+0.85 for a team projected as a strong under. Fixed to `float(_op) if _op is not
+None else 0.5`.
+
+**Reverse**: set PROP_SIGNAL_SCALE=0.0 on Railway (already the default; takes
+effect immediately without redeploy).

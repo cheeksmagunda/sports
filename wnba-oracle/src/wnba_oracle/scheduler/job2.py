@@ -257,6 +257,33 @@ def _starter_multiplier(features_json: object, *, enabled: bool) -> float:
     return 1.10 if int(f.get("is_starter", 0) or 0) else 0.82
 
 
+def _prop_signal_multiplier(features_json: object, *, scale: float) -> float:
+    """Real_score multiplier from sportsbook player-prop over/under probabilities (D78).
+
+    Sportsbooks price player props with rotation awareness, injury intel, and
+    matchup modeling that the heads cannot see day-of. When The Odds API shows
+    a player is heavily favored to go over their points line, that is a
+    sharp-money signal layered on top of our projection.
+
+    Formula: multiplier = 1 + (over_prob - 0.5) * scale
+      scale=0.3, over_prob=0.60 -> 1.03 (+3%)
+      scale=0.3, over_prob=0.40 -> 0.97 (-3%)
+    Only activates when a prop line is present (prop_points_line > 0).
+    Clipped to [0.85, 1.15] so a bad prop API response can't crater a player.
+    Returns 1.0 when scale=0 or no prop data.
+    """
+    if scale <= 0.0:
+        return 1.0
+    f = _features_dict(features_json)
+    line = float(f.get("prop_points_line", 0.0) or 0.0)
+    if line <= 0.0:
+        return 1.0
+    raw_prob = f.get("prop_points_over_prob")
+    over_prob = float(raw_prob) if raw_prob is not None else 0.5
+    raw = 1.0 + (over_prob - 0.5) * scale
+    return max(0.85, min(1.15, raw))
+
+
 def _minutes_features(features_json: object) -> dict | None:
     """Pull the D55 minutes features job1 persisted, or None if absent (job1
     couldn't reach stats.wnba.com, or no match) -> caller falls back to boost."""
@@ -648,7 +675,13 @@ def _build_specs(
             # Game-script multiplier still applies (Vegas tilt on top of the
             # head). Floor matches every other Tier so the downstream sampler
             # never sees a non-positive mean.
-            pred_real_scores[pid] = max(0.5, p50 * gs_mult * starter_mult)
+            # D78: sportsbook prop signal (sharp-money pts over/under). Disabled
+            # by default (scale=0); enable via PROP_SIGNAL_SCALE=0.3 once
+            # calibrated against placement data.
+            prop_mult = _prop_signal_multiplier(
+                r.get("features_json"), scale=settings.prop_signal_scale
+            )
+            pred_real_scores[pid] = max(0.5, p50 * gs_mult * starter_mult * prop_mult)
             # 80% interval (~2.56 sigma) -> additive real_score volatility. Same
             # semantic as `minutes_vol_by_pid` for the Tier-1 path so the
             # sampler's delta-method conversion works unchanged. starter_mult

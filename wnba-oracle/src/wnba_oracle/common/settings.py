@@ -121,6 +121,13 @@ class Settings(BaseSettings):
     # Default off. See D75.
     late_refreeze_enabled: bool = Field(default=False, alias="LATE_REFREEZE_ENABLED")
     late_refreeze_after_utc: str = Field(default="23:00", alias="LATE_REFREEZE_AFTER_UTC")
+    # prop_signal_scale: how strongly sportsbook player prop over/under probabilities
+    # adjust the head prediction (D78). Formula: pred *= (1 + (over_prob - 0.5) * scale).
+    # At scale=0.3: over_prob=0.60 -> +3% adjustment; over_prob=0.40 -> -3%.
+    # Only applies when job1 has fetched a prop line for the player. Default 0.0
+    # (disabled) until calibrated against placement data. Set PROP_SIGNAL_SCALE=0.3
+    # to enable modest prop-based prediction nudge. See D78.
+    prop_signal_scale: float = Field(default=0.0, alias="PROP_SIGNAL_SCALE")
     # lineup_anchor_floor (D57, Tier 1 seatbelt): require at least this many
     # confirmed-minutes "anchor" players in the frozen lineup so it can't be all
     # cold-start darts (the 2026-06-01 all-longshot bust). 0 disables (default,
