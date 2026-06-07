@@ -24,6 +24,7 @@ import polars as pl
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.features.game_features import to_nba_api_schema
 from wnba_oracle.features.rolling import build_rolling_features
+from wnba_oracle.predict.scoring import REAL_SCORE_WEIGHTS, REAL_SCORE_INTERCEPT
 
 log = get_logger("oracle.features.serving")
 
@@ -206,3 +207,34 @@ def lookup(
     if key is None:
         return None
     return feats.get(key) or feats.get((key[0], key[1], ""))
+
+
+def build_opp_dvp_lookup(game_logs: pl.DataFrame) -> dict[str, float]:
+    """Compute per-opponent defensive strength: mean real_score allowed per game.
+
+    D74 (R8 first-pass): uses the locked Real Sports scoring formula on
+    historical game_logs to build a team -> mean_real_score_allowed map.
+    Written into opp_dvp_guard/forward/center features in job1 (same value
+    per position; position-specific DvP needs a position column in game_logs
+    which the current schema lacks). Better than zero because model attention
+    on a constant (0) is effectively disabled; any signal helps.
+
+    Filters to games where the player logged >= 5 min to exclude DNP/garbage.
+    """
+    if game_logs.is_empty():
+        return {}
+    needed = list(REAL_SCORE_WEIGHTS.keys()) + ["opponent", "min"]
+    if not all(c in game_logs.columns for c in needed):
+        return {}
+    score_expr = pl.lit(float(REAL_SCORE_INTERCEPT))
+    for stat, w in REAL_SCORE_WEIGHTS.items():
+        score_expr = score_expr + pl.lit(w) * pl.col(stat).fill_null(0.0)
+    grouped = (
+        game_logs
+        .filter(pl.col("min").fill_null(0.0) >= 5.0)
+        .with_columns(score_expr.alias("_est_rs"))
+        .group_by("opponent")
+        .agg(pl.col("_est_rs").mean().alias("mean_allowed"))
+        .filter(pl.col("opponent").is_not_null() & (pl.col("opponent") != ""))
+    )
+    return {row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()}

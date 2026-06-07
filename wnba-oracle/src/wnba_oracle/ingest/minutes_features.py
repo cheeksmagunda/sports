@@ -142,3 +142,78 @@ def lookup(
     if not last:
         return None
     return feats.get((initial, last, team.upper())) or feats.get((initial, last, ""))
+
+
+# D74: static mapping of WNBA full team name (nba_api TEAM_NAME) -> game_logs
+# abbreviation. Keep in sync when new franchises are added (expansion teams
+# are added at the bottom). Verified 2026-06-07 against wnba_game_logs DISTINCT
+# team values: ATL CHI CON DAL GSV IND LAS LVA MIN NYL PDX PHX SEA TOR WAS.
+_WNBA_NAME_TO_ABBR: dict[str, str] = {
+    "atlanta dream": "ATL",
+    "chicago sky": "CHI",
+    "connecticut sun": "CON",
+    "dallas wings": "DAL",
+    "golden state valkyries": "GSV",
+    "indiana fever": "IND",
+    "los angeles sparks": "LAS",
+    "las vegas aces": "LVA",
+    "minnesota lynx": "MIN",
+    "new york liberty": "NYL",
+    "portland thorns": "PDX",
+    "phoenix mercury": "PHX",
+    "seattle storm": "SEA",
+    "toronto tempo": "TOR",
+    "washington mystics": "WAS",
+}
+
+
+def fetch_wnba_team_stats(season: str | None = None) -> dict[str, dict[str, float]]:
+    """Fetch WNBA team pace + ratings from nba_api LeagueDashTeamStats.
+
+    Returns dict keyed by game_logs team abbreviation (e.g. 'ATL') with:
+        pace (float): possessions per 40 min (PACE column)
+        off_rtg (float): offensive rating
+        def_rtg (float): defensive rating
+
+    Degrades gracefully: returns {} on any failure so job1 remains un-blocked.
+    """
+    from nba_api.stats.endpoints import LeagueDashTeamStats
+
+    _yr = int((season or "2025").split("-")[0].strip())
+    _season = str(_yr)
+
+    try:
+        ldt = LeagueDashTeamStats(
+            league_id_nullable="10",
+            season=_season,
+            season_type_all_star="Regular Season",
+            per_mode_detailed="PerGame",
+            measure_type_detailed_defense="Advanced",
+        )
+        rows = ldt.get_data_frames()[0].to_dict(orient="records")
+    except Exception as exc:
+        log.warning("fetch_wnba_team_stats_failed", reason=str(exc)[:120])
+        return {}
+
+    out: dict[str, dict[str, float]] = {}
+    for row in rows:
+        name = str(row.get("TEAM_NAME", "")).lower().strip()
+        abbr = _WNBA_NAME_TO_ABBR.get(name)
+        if not abbr:
+            # Fallback: match by last word of team name (mascot)
+            parts = name.split()
+            if parts:
+                mascot = parts[-1]
+                abbr = next(
+                    (v for k, v in _WNBA_NAME_TO_ABBR.items() if k.split()[-1] == mascot),
+                    None,
+                )
+        if not abbr:
+            continue
+        out[abbr] = {
+            "pace": float(row.get("PACE", 0.0) or 0.0),
+            "off_rtg": float(row.get("OFF_RATING", 0.0) or 0.0),
+            "def_rtg": float(row.get("DEF_RATING", 0.0) or 0.0),
+        }
+    log.info("fetch_wnba_team_stats", n_teams=len(out))
+    return out

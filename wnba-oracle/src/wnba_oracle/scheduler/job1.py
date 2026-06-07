@@ -29,10 +29,11 @@ from wnba_oracle.features.serving_features import (
     build_head_feature_lookup,
 )
 from wnba_oracle.features.serving_features import (
+    build_opp_dvp_lookup,
     lookup as head_feature_lookup,
 )
-from wnba_oracle.ingest.minutes_features import build_minutes_features, lookup
-from wnba_oracle.ingest.odds import fetch_odds_for_slate
+from wnba_oracle.ingest.minutes_features import build_minutes_features, fetch_wnba_team_stats, lookup
+from wnba_oracle.ingest.odds import build_props_lookup, fetch_odds_for_slate, fetch_player_props
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
     capture_live_headers,
@@ -165,6 +166,18 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         log.warning("job1_lineups_failed", reason=str(exc))
         lineups = []
 
+    # D74: player props from The Odds API (player_points/rebounds/assists).
+    # Sportsbook props encode injury news, role, and matchup priced by sharper
+    # analysts. Stored under features_json["props_*"] keys for future training.
+    # Degrades to empty on quota exhaustion (cached 3h so only 1 credit/day).
+    try:
+        raw_props = fetch_player_props()
+        props_lookup = build_props_lookup(raw_props)
+    except Exception as exc:
+        log.warning("job1_props_failed", reason=str(exc)[:120])
+        props_lookup = {}
+    n_props_matched = 0
+
     # Build opponent / team map from odds + per-game roster join. For now
     # the platform pool gives team but not opponent; use the odds map.
     # Game-script-relevant Vegas signals (total, abs(spread)) are written
@@ -215,15 +228,36 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     # any DB / build failure -> job2 falls through to the existing
     # blended_real_score ladder, preserving the current behaviour byte for byte.
     head_feats: dict = {}
+    game_logs_for_dvp = None
     try:
         from wnba_oracle.db.reads import read_game_logs
 
-        game_logs = read_game_logs()
-        head_feats = build_head_feature_lookup(game_logs, slate_date=sd)
+        game_logs_for_dvp = read_game_logs()
+        head_feats = build_head_feature_lookup(game_logs_for_dvp, slate_date=sd)
     except Exception as exc:
         log.warning("job1_head_features_failed", reason=str(exc)[:120])
         head_feats = {}
     n_head_features_matched = 0
+
+    # D74 (R8 first-pass): WNBA team pace + defensive ratings from nba_api.
+    # Injected into head_features per player so the trained heads see non-zero
+    # values (they were trained with real team_pace from the corpus; serving
+    # with zero is a calibration leak). Degrades to {} on any nba_api failure.
+    try:
+        team_stats = fetch_wnba_team_stats(season=str(year))
+    except Exception as exc:
+        log.warning("job1_team_stats_failed", reason=str(exc)[:120])
+        team_stats = {}
+
+    # D74: per-opponent defensive rating from historical game_logs.
+    # Mean real_score allowed per opponent team across all recorded games.
+    # Used for opp_dvp_guard/forward/center (same value per position until
+    # game_logs gains a position column). Degrades to {} if game_logs failed.
+    try:
+        opp_dvp_map = build_opp_dvp_lookup(game_logs_for_dvp) if game_logs_for_dvp is not None else {}
+    except Exception as exc:
+        log.warning("job1_opp_dvp_failed", reason=str(exc)[:120])
+        opp_dvp_map = {}
 
     rows = []
     for p in pool:
@@ -268,8 +302,46 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         # `head_features`). job2 reads this and runs the D63 quantile heads.
         hf = head_feature_lookup(head_feats, display_name=p.display_name, team=p.team)
         if hf is not None:
+            # Copy before mutating so the shared lookup dict is not modified.
+            hf = dict(hf)
+            # D74 (R8 first-pass): inject tonight's matchup context that the
+            # rolling-feature builder cannot know (team_pace, opp_pace,
+            # opponent defensive rating, DvP). The trained heads were calibrated
+            # on real values for team_pace (nba_api via the training corpus);
+            # serving with zero is a calibration leak — override with live values.
+            team_abbr = p.team.upper()
+            opp_abbr = team_to_opp.get(team_abbr, "").upper()
+            ts = team_stats.get(team_abbr, {})
+            os_ = team_stats.get(opp_abbr, {})
+            hf["team_pace"] = ts.get("pace", hf.get("team_pace", 0.0))
+            hf["opp_pace"] = os_.get("pace", hf.get("opp_pace", 0.0))
+            hf["team_off_rtg"] = ts.get("off_rtg", hf.get("team_off_rtg", 0.0))
+            hf["team_def_rtg"] = ts.get("def_rtg", hf.get("team_def_rtg", 0.0))
+            hf["opp_off_rtg"] = os_.get("off_rtg", hf.get("opp_off_rtg", 0.0))
+            hf["opp_def_rtg"] = os_.get("def_rtg", hf.get("opp_def_rtg", 0.0))
+            if hf["team_pace"] and hf["opp_pace"]:
+                hf["game_pace_implied"] = (hf["team_pace"] + hf["opp_pace"]) / 2.0
+            dvp = opp_dvp_map.get(opp_abbr, 0.0)
+            hf["opp_dvp_guard"] = dvp
+            hf["opp_dvp_forward"] = dvp
+            hf["opp_dvp_center"] = dvp
             features["head_features"] = hf
             n_head_features_matched += 1
+        # D74: player prop lines as projection cross-check signals.
+        # Stored under features_json keys for future training; job2 can read
+        # these as a calibration signal (if prop_pts_line > p50 projection,
+        # the market thinks we are under-projecting). Not yet used in the
+        # optimizer objective — stored for corpus enrichment only.
+        norm_name = p.display_name.lower().strip()
+        for market in ("player_points", "player_rebounds", "player_assists"):
+            prop_data = props_lookup.get((norm_name, market))
+            if prop_data:
+                short = market.replace("player_", "prop_")
+                features[f"{short}_line"] = prop_data["line"]
+                features[f"{short}_over_prob"] = prop_data["implied_over_prob"]
+                features[f"{short}_under_prob"] = prop_data["implied_under_prob"]
+                n_props_matched += 1
+                break  # count once per player
         rows.append(
             {
                 "slate_date": sd,
@@ -292,6 +364,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_out=n_rotowire_out,
         n_minutes_matched=n_minutes_matched,
         n_head_features_matched=n_head_features_matched,
+        n_team_stats=len(team_stats),
+        n_opp_dvp=len(opp_dvp_map),
+        n_props_matched=n_props_matched,
     )
 
     persisted = 0

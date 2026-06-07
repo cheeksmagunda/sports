@@ -177,3 +177,161 @@ def _reduce_game(game: dict[str, Any]) -> GameOdds:
 
 def odds_to_polars(odds: list[GameOdds]) -> pl.DataFrame:
     return pl.from_dicts([g.__dict__ for g in odds]) if odds else pl.DataFrame()
+
+
+@dataclass(frozen=True)
+class PlayerProp:
+    player_name: str
+    market: str   # "player_points", "player_rebounds", "player_assists"
+    line: float
+    over_price: float | None
+    under_price: float | None
+
+    @property
+    def implied_over_prob(self) -> float | None:
+        if self.over_price is None:
+            return None
+        if self.over_price >= 1.0:
+            return 1.0 / self.over_price
+        return None
+
+    @property
+    def implied_under_prob(self) -> float | None:
+        if self.under_price is None:
+            return None
+        if self.under_price >= 1.0:
+            return 1.0 / self.under_price
+        return None
+
+
+def fetch_player_props(
+    *,
+    use_cache: bool = True,
+    cache_ttl_s: float = 3 * 3600.0,
+    markets: str = "player_points,player_rebounds,player_assists",
+    bookmakers: tuple[str, ...] = DEFAULT_BOOKMAKERS,
+    regions: str = DEFAULT_REGIONS,
+) -> list[PlayerProp]:
+    """Fetch WNBA player prop O/Us from The Odds API.
+
+    D74: player props encode injury news, role, matchup, and minutes —
+    priced by sharper analysts than any heuristic. Used as additional
+    feature signal in job1 features_json. Budget: 1-2 credits per call.
+    Cache TTL is 3h (shorter than game odds because props move closer to tip).
+
+    Returns an empty list and logs a warning on any failure (API key missing,
+    quota burn, no markets available). Never blocks job1.
+    """
+    settings = get_settings()
+    if not settings.odds_api_key:
+        log.warning("fetch_player_props_no_key")
+        return []
+
+    url = f"{BASE}/sports/{SPORT_KEY}/odds"
+    params: dict[str, Any] = {
+        "apiKey": settings.odds_api_key,
+        "regions": regions,
+        "markets": markets,
+        "oddsFormat": "decimal",
+        "bookmakers": ",".join(bookmakers),
+    }
+    cache_key = f"props::{SPORT_KEY}::{markets}::{','.join(bookmakers)}"
+    if use_cache:
+        cached = cache_get(cache_key, params, ttl_s=cache_ttl_s)
+        if cached is not None:
+            log.info("player_props_cache_hit")
+            return [PlayerProp(**r) for r in cached["rows"]]
+
+    log.info("player_props_fetch", url=url, markets=markets)
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            r = client.get(url, params=params)
+            remaining = r.headers.get("x-requests-remaining")
+            log.info("player_props_quota", remaining=remaining)
+            r.raise_for_status()
+            data = r.json() or []
+    except Exception as exc:
+        log.warning("player_props_fetch_failed", reason=str(exc)[:120])
+        return []
+
+    out: list[PlayerProp] = []
+    for game in data:
+        for bk in game.get("bookmakers", []):
+            for mk in bk.get("markets", []):
+                market_key = mk.get("key", "")
+                if not market_key.startswith("player_"):
+                    continue
+                for outcome in mk.get("outcomes", []):
+                    name = outcome.get("description") or outcome.get("name", "")
+                    point = outcome.get("point")
+                    price = outcome.get("price")
+                    side = (outcome.get("name") or "").lower()
+                    if not name or point is None:
+                        continue
+                    # Collect over and under in two passes; use a simple per-name dict.
+                    # This approach emits one prop per outcome (over/under separately);
+                    # the caller merges by player_name + market + line.
+                    if side == "over":
+                        out.append(PlayerProp(
+                            player_name=str(name),
+                            market=market_key,
+                            line=float(point),
+                            over_price=float(price) if price else None,
+                            under_price=None,
+                        ))
+                    elif side == "under":
+                        out.append(PlayerProp(
+                            player_name=str(name),
+                            market=market_key,
+                            line=float(point),
+                            over_price=None,
+                            under_price=float(price) if price else None,
+                        ))
+
+    if use_cache:
+        cache_put(cache_key, params, {"rows": [p.__dict__ for p in out]})
+    log.info("player_props_fetched", n=len(out))
+    return out
+
+
+def build_props_lookup(props: list[PlayerProp]) -> dict[tuple[str, str], dict[str, float]]:
+    """Build {(normalized_name, market): {line, over_prob, under_prob}} lookup.
+
+    Aggregates over/under sides into a single entry per (player, market, line)
+    by taking the most common line per player per market (simple majority).
+    """
+    from collections import defaultdict
+
+    # Group by (norm_name, market) -> list of (line, over_price, under_price)
+    groups: dict[tuple[str, str], list[PlayerProp]] = defaultdict(list)
+    for p in props:
+        norm = p.player_name.lower().strip()
+        groups[(norm, p.market)].append(p)
+
+    out: dict[tuple[str, str], dict[str, float]] = {}
+    for (norm_name, market), entries in groups.items():
+        # Pick the modal line across bookmakers
+        from collections import Counter
+        line_counts = Counter(e.line for e in entries)
+        modal_line = line_counts.most_common(1)[0][0]
+        relevant = [e for e in entries if e.line == modal_line]
+        over_prices = [e.over_price for e in relevant if e.over_price]
+        under_prices = [e.under_price for e in relevant if e.under_price]
+
+        def _med(xs: list[float]) -> float | None:
+            if not xs:
+                return None
+            xs = sorted(xs)
+            n = len(xs)
+            return xs[n // 2] if n % 2 == 1 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+
+        op = _med(over_prices)
+        up = _med(under_prices)
+        out[(norm_name, market)] = {
+            "line": modal_line,
+            "over_price": op or 0.0,
+            "under_price": up or 0.0,
+            "implied_over_prob": 1.0 / op if op and op > 0 else 0.0,
+            "implied_under_prob": 1.0 / up if up and up > 0 else 0.0,
+        }
+    return out

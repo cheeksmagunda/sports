@@ -8,7 +8,11 @@ The page is a static HTML render so we parse it with BeautifulSoup. We do
 NOT use Playwright here; RotoWire's WNBA page does not require JS to expose
 the data.
 
-Sample URL: https://www.rotowire.com/basketball/wnba-lineups.php
+Sample URL: https://www.rotowire.com/wnba/lineups.php
+
+D74: The old URL https://www.rotowire.com/basketball/wnba-lineups.php returns
+404 as of 2026-06-07. The live URL uses a /wnba/ namespace and the lineup
+boxes carry class 'is-nba' (not 'is-wnba'). Verified by live curl.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from wnba_oracle.ingest.cache import cache_get, cache_put
 
 log = get_logger("oracle.ingest.rotowire")
 
-URL = "https://www.rotowire.com/basketball/wnba-lineups.php"
+URL = "https://www.rotowire.com/wnba/lineups.php"
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) "
@@ -68,7 +72,7 @@ def fetch_lineups(
     soup = BeautifulSoup(r.text, "lxml")
 
     entries: list[LineupEntry] = []
-    for box in soup.select("div.lineup.is-wnba"):
+    for box in soup.select("div.lineup.is-nba"):
         teams = box.select("div.lineup__abbr")
         if len(teams) < 2:
             continue
