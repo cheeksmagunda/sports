@@ -133,6 +133,24 @@ def _boost_cap_is_feasible(
     return float(np.sort(eligible)[:5].sum()) <= sum_cap
 
 
+def _game_stack_pairs(
+    combo: tuple[int, ...], teams: list[str], opponents: list[str]
+) -> int:
+    """Count "stack pairs" in combo. Two picks form a pair iff they are in
+    the same game (unordered {team, opponent} match). A 2-stack contributes
+    1 pair, a 3-stack contributes 2 (k-1 per group, summed).
+    """
+    counts: dict[frozenset[str], int] = {}
+    for idx in combo:
+        t = teams[idx]
+        o = opponents[idx]
+        if not t or not o:
+            continue
+        key = frozenset({t, o})
+        counts[key] = counts.get(key, 0) + 1
+    return sum(max(0, k - 1) for k in counts.values())
+
+
 @dataclass(frozen=True)
 class LineupRecommendation:
     player_ids: tuple[int, ...]
@@ -209,6 +227,15 @@ class OptimizeConfig:
     # Set via Settings.optimizer_boost_sum_cap / optimizer_max_single_boost.
     boost_sum_cap: float = 0.0
     max_single_boost: float = 0.0
+    # D70 (R3): per-stack-pair additive bonus to expected_payout. A "stack
+    # pair" is each pick beyond the first from the same game (so a 2-stack
+    # contributes 1 pair, a 3-stack contributes 2). Same-game pairing uses
+    # the unordered {team, opponent} key. Default 0.0 (off); a tiny value
+    # like 0.005 mildly biases the optimizer toward stacked lineups at
+    # near-equal EV. Source: research/internal/01_winners_anatomy.md (87%
+    # of top-20 lineups stack 2+ from one game; we currently model picks as
+    # independent).
+    game_stack_bonus: float = 0.0
 
 
 def optimize_lineup(
@@ -285,6 +312,7 @@ def optimize_lineup(
     # max_per_team early - counting same-team membership is much cheaper
     # than scoring then rejecting.
     keep_teams = [s.team for s in filtered_sampling]
+    keep_opponents = [s.opponent for s in filtered_sampling]
     keep_is_anchor = [bool(s.is_anchor) for s in filtered_sampling]
     # If the cap admits no valid 5-combo from the filtered pool (e.g. a
     # 1-game slate with dynamic_team_cap disabled), relax to uncapped so we
@@ -357,6 +385,14 @@ def optimize_lineup(
             ev = expected_payout(
                 own_samples, field_scores, curve, field_size=cfg.n_field_lineups + 1
             )
+            # D70 (R3): game-stack bonus. Small additive EV bias per stack
+            # pair so the optimizer mildly prefers stacked lineups when EVs
+            # are near-equal. Bonus is in expected_payout units; tuned via
+            # OPTIMIZER_GAME_STACK_BONUS (default 0.0 = no bias).
+            if cfg.game_stack_bonus > 0.0:
+                pairs = _game_stack_pairs(combo, keep_teams, keep_opponents)
+                if pairs > 0:
+                    ev += cfg.game_stack_bonus * pairs
             n_eval += 1
             if ev > b_ev:
                 b_ev, b_idx, b_samp = ev, combo, own_samples

@@ -142,6 +142,15 @@ class Settings(BaseSettings):
     # tier entirely, or 2.75 to allow it but block the 3.0 wall. Relaxed
     # alongside the sum cap when jointly infeasible.
     optimizer_max_single_boost: float = Field(default=0.0, alias="OPTIMIZER_MAX_SINGLE_BOOST")
+    # D70 (R3): game-stack bonus added to expected_payout per "stack pair"
+    # in the combo. A stack pair is two picks in the same game (matched by
+    # the unordered {team, opponent} pair). Per research/internal/01_winners_anatomy.md,
+    # 87% of top-20 lineups have at least one 2+ same-game pick group; our
+    # optimizer treats outcomes as independent today. Default 0.0 (off);
+    # set OPTIMIZER_GAME_STACK_BONUS=0.005 to mildly prefer stacked lineups
+    # at equal EV (a 2-stack adds 0.005 to ev, a 3-stack adds 0.010). The
+    # cap relax/EV log paths from R2 are unaffected.
+    optimizer_game_stack_bonus: float = Field(default=0.0, alias="OPTIMIZER_GAME_STACK_BONUS")
 
 
 @lru_cache(maxsize=1)

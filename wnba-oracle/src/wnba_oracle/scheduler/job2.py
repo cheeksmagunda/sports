@@ -991,6 +991,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         min_anchors=settings.lineup_anchor_floor,
         boost_sum_cap=settings.optimizer_boost_sum_cap,
         max_single_boost=settings.optimizer_max_single_boost,
+        game_stack_bonus=settings.optimizer_game_stack_bonus,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     log.info(
