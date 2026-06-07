@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+import unicodedata as _ud
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,7 @@ from typing import Any
 
 import httpx
 
+from wnba_oracle.common.logging import get_logger
 from wnba_oracle.scheduler.antibot import (
     asleep_truncated_gaussian,
     full_jitter_backoff,
@@ -48,6 +50,8 @@ DEFAULT_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 SPORT = "wnba"
+
+log = get_logger("oracle.ingest.realsports")
 
 # WNBA position taxonomy. The platform may emit one of these or a hyphenated
 # combination (e.g. "G-F"). Pool parser accepts any nonempty string and lets
@@ -453,6 +457,78 @@ async def fetch_pool_for_date(
                 rated_by_id[rid] = float(mb)
             except (TypeError, ValueError):
                 continue
+
+    # D72 / R6: targeted-search fallback. The single-letter prefix sweep
+    # caps results per query and misses players deep in the alphabetical
+    # ordering. The audit (research/internal/_menu_scrape_gap_pool.csv)
+    # showed 8 of 13 live slates had >= 1 winning-lineup pick that the
+    # optimizer's pool DID NOT have, all draftable players the prefix
+    # sweep silently dropped (A. Stevens, S. Sabally, J. Jocyte, M. Akoa
+    # Makani, C. McMahon, K. Bell, ...). For each player in the per-game
+    # union not yet in rated_by_id, we query their last name (first 3
+    # chars, lowercased + ASCII-folded) as the search query and merge any
+    # multiplierBonus that comes back. Capped at MAX_FALLBACK_QUERIES per
+    # slate to bound latency.
+    MAX_FALLBACK_QUERIES = 50
+    fallback_queried = 0
+    fallback_added = 0
+    fallback_still_missing: list[str] = []
+    unmatched = [(pid, p) for pid, p in union.items() if pid not in rated_by_id]
+    queried_prefixes: set[str] = set(letters)  # don't re-query single letters
+    for pid, p in unmatched:
+        if fallback_queried >= MAX_FALLBACK_QUERIES:
+            fallback_still_missing.append(pid)
+            continue
+        last = str(p.get("lastName") or "").strip()
+        first = str(p.get("firstName") or "").strip()
+        seed = last or first
+        if not seed:
+            fallback_still_missing.append(pid)
+            continue
+        # ASCII-fold to mirror the prefix sweep's behaviour on accented
+        # names (Jocyte vs Jocyteė). 3 chars covers the common case
+        # without over-narrowing.
+        folded = _ud.normalize("NFKD", seed).encode("ascii", "ignore").decode().lower()
+        query = folded[:3].strip()
+        if not query or query in queried_prefixes:
+            if pid not in rated_by_id:
+                fallback_still_missing.append(pid)
+            continue
+        queried_prefixes.add(query)
+        await asleep_truncated_gaussian()
+        try:
+            _status, players = await _search_with_query(slate_date, query, h, client)
+        except PlatformAuthRequired:
+            if refresh_headers is not None and not refreshed_during_overlay:
+                h = _http_headers(await refresh_headers())
+                refreshed_during_overlay = True
+                _status, players = await _search_with_query(slate_date, query, h, client)
+            else:
+                raise
+        fallback_queried += 1
+        added_this_query = 0
+        for rp in players:
+            rid = str(rp.get("id", ""))
+            mb = rp.get("multiplierBonus")
+            if not rid or mb is None or rid in rated_by_id:
+                continue
+            try:
+                rated_by_id[rid] = float(mb)
+                added_this_query += 1
+            except (TypeError, ValueError):
+                continue
+        if pid in rated_by_id:
+            fallback_added += 1
+        else:
+            fallback_still_missing.append(pid)
+    log.info(
+        "fetch_pool_fallback",
+        n_unmatched_after_az=len(unmatched),
+        n_queries=fallback_queried,
+        n_added=fallback_added,
+        n_still_missing=len(fallback_still_missing),
+        cap=MAX_FALLBACK_QUERIES,
+    )
 
     overlaid: list[dict[str, Any]] = []
     for pid, p in union.items():
