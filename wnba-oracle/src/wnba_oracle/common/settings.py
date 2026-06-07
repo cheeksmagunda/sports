@@ -48,9 +48,13 @@ class Settings(BaseSettings):
     # was killed every tick, so NOTHING froze. The backtests that validated the
     # picker used ~300 samples / 50 field / C(20,5), so these reduced defaults
     # are still well above the validated range while completing in ~1-2 min.
+    # D76: n_field raised from 120 to 500 based on Monte Carlo SE analysis.
+    # At n=120, SE on P(top-20) = ±1.34% vs a signal of 0.22% -- noise 6x signal.
+    # At n=500, SE = ±0.66% (3x). Laptop benchmark: +8.6s vs 120. Railway 3x slower
+    # → +25s (still within the 15-min cron window). Raise to 1000 via env if VM allows.
     optimizer_n_samples: int = Field(default=1000, alias="OPTIMIZER_N_SAMPLES")
     optimizer_top_n_filter: int = Field(default=20, alias="OPTIMIZER_TOP_N_FILTER")
-    optimizer_n_field_lineups: int = Field(default=120, alias="OPTIMIZER_N_FIELD_LINEUPS")
+    optimizer_n_field_lineups: int = Field(default=500, alias="OPTIMIZER_N_FIELD_LINEUPS")
     # max_per_team: caps how many players from one team can appear in a
     # lineup ON 3+ GAME SLATES. 2 is the basketball-main default; 5 disables
     # the cap. Small slates are governed by dynamic_team_cap below.
