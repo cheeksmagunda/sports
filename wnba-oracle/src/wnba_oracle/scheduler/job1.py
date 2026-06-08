@@ -27,12 +27,16 @@ from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine
 from wnba_oracle.features.serving_features import (
     build_head_feature_lookup,
+    build_opp_dvp_lookup,
 )
 from wnba_oracle.features.serving_features import (
-    build_opp_dvp_lookup,
     lookup as head_feature_lookup,
 )
-from wnba_oracle.ingest.minutes_features import build_minutes_features, fetch_wnba_team_stats, lookup
+from wnba_oracle.ingest.minutes_features import (
+    build_minutes_features,
+    fetch_wnba_team_stats,
+    lookup,
+)
 from wnba_oracle.ingest.odds import build_props_lookup, fetch_odds_for_slate, fetch_player_props
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
@@ -166,12 +170,12 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         log.warning("job1_lineups_failed", reason=str(exc))
         lineups = []
 
-    # D74: player props from The Odds API (player_points/rebounds/assists).
-    # Sportsbook props encode injury news, role, and matchup priced by sharper
-    # analysts. Stored under features_json["props_*"] keys for future training.
-    # Degrades to empty on quota exhaustion (cached 3h so only 1 credit/day).
+    # D74/D80: player_points props from The Odds API per-event endpoint, scoped
+    # to tonight's slate window. Sportsbook props encode injury news, role, and
+    # matchup priced by sharper analysts; job2 reads features_json["prop_points_*"]
+    # for the D78 multiplier. ~1 credit per game; degrades to empty on any failure.
     try:
-        raw_props = fetch_player_props()
+        raw_props = fetch_player_props(slate_date=sd)
         props_lookup = build_props_lookup(raw_props)
     except Exception as exc:
         log.warning("job1_props_failed", reason=str(exc)[:120])

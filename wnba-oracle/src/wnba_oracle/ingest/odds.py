@@ -18,6 +18,7 @@ betmgm) to dampen single-book noise; the picker reads `vegas_total`,
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 from typing import Any
 
@@ -204,20 +205,105 @@ class PlayerProp:
         return None
 
 
+def fetch_wnba_events(*, timeout_s: float = 20.0) -> list[dict[str, Any]]:
+    """List upcoming WNBA events (id + team names + commence_time).
+
+    The events endpoint is free (0 credits) and is the only way to obtain the
+    per-event ids that the player-prop odds endpoint requires (D80). Raises on
+    HTTP error so the caller can degrade to an empty prop list.
+    """
+    settings = get_settings()
+    if not settings.odds_api_key:
+        return []
+    url = f"{BASE}/sports/{SPORT_KEY}/events"
+    params: dict[str, Any] = {"apiKey": settings.odds_api_key}
+    with httpx.Client(timeout=timeout_s) as client:
+        r = client.get(url, params=params)
+        r.raise_for_status()
+        return r.json() or []
+
+
+def _event_in_slate_window(commence_time: str, slate_date: str) -> bool:
+    """True iff an event's UTC commence_time falls in `slate_date`'s ET evening.
+
+    WNBA games for an ET slate date D tip from ~noon ET (16:00 UTC on D) through
+    late night (up to ~04:00 ET / 08:00 UTC on D+1). Filtering to this window
+    keeps prop fetches to the night's slate: fewer credits and no merging of a
+    player's line across different game days. Unparseable inputs are kept.
+    """
+    try:
+        ct = dt.datetime.fromisoformat(commence_time.replace("Z", "+00:00"))
+        d = dt.date.fromisoformat(slate_date)
+    except (ValueError, AttributeError):
+        return True
+    start = dt.datetime(d.year, d.month, d.day, 16, 0, tzinfo=dt.UTC)
+    end = start + dt.timedelta(hours=16)
+    return start <= ct < end
+
+
+def _parse_event_props(event: dict[str, Any], *, markets: tuple[str, ...]) -> list[PlayerProp]:
+    """Parse a single per-event odds response into PlayerProp rows.
+
+    Pure function (no network) so the parse is unit-testable against a fixture.
+    Emits one PlayerProp per over/under outcome; the caller merges by
+    (player_name, market, line) in ``build_props_lookup``.
+    """
+    out: list[PlayerProp] = []
+    for bk in event.get("bookmakers", []):
+        for mk in bk.get("markets", []):
+            market_key = mk.get("key", "")
+            if market_key not in markets:
+                continue
+            for outcome in mk.get("outcomes", []):
+                # Player-prop outcomes carry the player in `description`; `name`
+                # is the side ("Over" / "Under").
+                name = outcome.get("description") or outcome.get("name", "")
+                point = outcome.get("point")
+                price = outcome.get("price")
+                side = (outcome.get("name") or "").lower()
+                if not name or point is None:
+                    continue
+                if side == "over":
+                    out.append(PlayerProp(
+                        player_name=str(name),
+                        market=market_key,
+                        line=float(point),
+                        over_price=float(price) if price else None,
+                        under_price=None,
+                    ))
+                elif side == "under":
+                    out.append(PlayerProp(
+                        player_name=str(name),
+                        market=market_key,
+                        line=float(point),
+                        over_price=None,
+                        under_price=float(price) if price else None,
+                    ))
+    return out
+
+
 def fetch_player_props(
     *,
+    slate_date: str | None = None,
     use_cache: bool = True,
     cache_ttl_s: float = 3 * 3600.0,
-    markets: str = "player_points,player_rebounds,player_assists",
+    markets: str = "player_points",
     bookmakers: tuple[str, ...] = DEFAULT_BOOKMAKERS,
     regions: str = DEFAULT_REGIONS,
 ) -> list[PlayerProp]:
     """Fetch WNBA player prop O/Us from The Odds API.
 
-    D74: player props encode injury news, role, matchup, and minutes —
-    priced by sharper analysts than any heuristic. Used as additional
-    feature signal in job1 features_json. Budget: 1-2 credits per call.
-    Cache TTL is 3h (shorter than game odds because props move closer to tip).
+    Player props encode injury news, role, matchup, and minutes — priced by
+    sharper analysts than any heuristic. Used as a projection multiplier in
+    job2 (D78) and stored in job1 features_json.
+
+    D80: player props are ONLY available on the per-event endpoint
+    (`/events/{id}/odds`); the aggregate `/odds` endpoint returns HTTP 422 for
+    `player_*` markets. We therefore list events (free) then query each event.
+    Cost is 1 credit per market per event, so the default is `player_points`
+    only — the single market job2's `_prop_signal_multiplier` reads — to stay
+    well inside the 500-credit/month free tier (~3 events x 2 daily runs).
+    Cache TTL is 3h (props move closer to tip than game odds).
 
     Returns an empty list and logs a warning on any failure (API key missing,
     quota burn, no markets available). Never blocks job1.
@@ -227,70 +313,62 @@ def fetch_player_props(
         log.warning("fetch_player_props_no_key")
         return []
 
-    url = f"{BASE}/sports/{SPORT_KEY}/odds"
-    params: dict[str, Any] = {
-        "apiKey": settings.odds_api_key,
-        "regions": regions,
-        "markets": markets,
-        "oddsFormat": "decimal",
-        "bookmakers": ",".join(bookmakers),
-    }
-    cache_key = f"props::{SPORT_KEY}::{markets}::{','.join(bookmakers)}"
+    market_tuple = tuple(m.strip() for m in markets.split(",") if m.strip())
+    cache_key = f"props::{SPORT_KEY}::{markets}::{','.join(bookmakers)}::{slate_date or 'all'}"
+    cache_params = {"markets": markets, "bookmakers": ",".join(bookmakers), "regions": regions}
     if use_cache:
-        cached = cache_get(cache_key, params, ttl_s=cache_ttl_s)
+        cached = cache_get(cache_key, cache_params, ttl_s=cache_ttl_s)
         if cached is not None:
             log.info("player_props_cache_hit")
             return [PlayerProp(**r) for r in cached["rows"]]
 
-    log.info("player_props_fetch", url=url, markets=markets)
+    log.info("player_props_fetch", markets=markets, slate_date=slate_date)
     try:
-        with httpx.Client(timeout=20.0) as client:
-            r = client.get(url, params=params)
-            remaining = r.headers.get("x-requests-remaining")
-            log.info("player_props_quota", remaining=remaining)
-            r.raise_for_status()
-            data = r.json() or []
+        events = fetch_wnba_events()
     except Exception as exc:
-        log.warning("player_props_fetch_failed", reason=str(exc)[:120])
+        log.warning("player_props_events_failed", reason=str(exc)[:120])
         return []
 
-    out: list[PlayerProp] = []
-    for game in data:
-        for bk in game.get("bookmakers", []):
-            for mk in bk.get("markets", []):
-                market_key = mk.get("key", "")
-                if not market_key.startswith("player_"):
-                    continue
-                for outcome in mk.get("outcomes", []):
-                    name = outcome.get("description") or outcome.get("name", "")
-                    point = outcome.get("point")
-                    price = outcome.get("price")
-                    side = (outcome.get("name") or "").lower()
-                    if not name or point is None:
-                        continue
-                    # Collect over and under in two passes; use a simple per-name dict.
-                    # This approach emits one prop per outcome (over/under separately);
-                    # the caller merges by player_name + market + line.
-                    if side == "over":
-                        out.append(PlayerProp(
-                            player_name=str(name),
-                            market=market_key,
-                            line=float(point),
-                            over_price=float(price) if price else None,
-                            under_price=None,
-                        ))
-                    elif side == "under":
-                        out.append(PlayerProp(
-                            player_name=str(name),
-                            market=market_key,
-                            line=float(point),
-                            over_price=None,
-                            under_price=float(price) if price else None,
-                        ))
+    # Restrict to the slate's event window so we spend ~1 credit per game tonight
+    # (not for the whole multi-day schedule) and never merge a player's line
+    # across different game days.
+    if slate_date:
+        events = [e for e in events if _event_in_slate_window(e.get("commence_time", ""), slate_date)]
 
-    if use_cache:
-        cache_put(cache_key, params, {"rows": [p.__dict__ for p in out]})
-    log.info("player_props_fetched", n=len(out))
+    out: list[PlayerProp] = []
+    n_events_ok = 0
+    remaining: str | None = None
+    with httpx.Client(timeout=20.0) as client:
+        for ev in events:
+            eid = ev.get("id")
+            if not eid:
+                continue
+            url = f"{BASE}/sports/{SPORT_KEY}/events/{eid}/odds"
+            params: dict[str, Any] = {
+                "apiKey": settings.odds_api_key,
+                "regions": regions,
+                "markets": markets,
+                "oddsFormat": "decimal",
+                "bookmakers": ",".join(bookmakers),
+            }
+            try:
+                r = client.get(url, params=params)
+                remaining = r.headers.get("x-requests-remaining", remaining)
+                r.raise_for_status()
+                ev_json = r.json() or {}
+            except Exception as exc:
+                # One event's failure must not lose the others' props.
+                log.warning("player_props_event_failed", event_id=str(eid)[:12], reason=str(exc)[:120])
+                continue
+            out.extend(_parse_event_props(ev_json, markets=market_tuple))
+            n_events_ok += 1
+
+    log.info("player_props_quota", remaining=remaining)
+    # Cache only when at least one event responded, so a transient total
+    # failure does not poison the cache with an empty list for 3h.
+    if use_cache and n_events_ok > 0:
+        cache_put(cache_key, cache_params, {"rows": [p.__dict__ for p in out]})
+    log.info("player_props_fetched", n=len(out), n_events_ok=n_events_ok, n_events_total=len(events))
     return out
 
 
