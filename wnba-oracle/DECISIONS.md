@@ -2510,3 +2510,72 @@ blocks on insufficient data, not on measured regression.
 **Reverse**: set `WNBA_ORACLE_MODEL_ARTIFACT_SHA` back to
 `2cc953b7fe86e8db8a21f7f9a594a2944c4ce9d98aa21d05a0a0b434d6efd985` on all
 three services (api, cron-job1, cron-job2). No code change required.
+
+---
+
+## 2026-06-08: D80 -- Player props via per-event endpoint (D78 was dead) [verified]
+
+**Decision**: rewrite `odds.fetch_player_props` to fetch from the per-event
+endpoint `/sports/basketball_wnba/events/{id}/odds` instead of the aggregate
+`/sports/basketball_wnba/odds`. List events first (free), then query each
+event for `player_points`. Scope to the slate's event window via a new
+`slate_date` arg + `_event_in_slate_window`. New `fetch_wnba_events` and
+`_parse_event_props` helpers.
+
+**Root cause [verified]**: the aggregate `/odds` endpoint returns HTTP 422 for
+any `player_*` market -- The Odds API only serves player props per-event. Since
+D74/D78 the call hit `/odds`, so `fetch_player_props` caught the 422 and
+returned `[]` on every run. Confirmed in cron-job1's 2026-06-08 13:06 UTC log
+(`422 Unprocessable Entity`) and in the DB: `prop_points_line` absent from all
+12 recent slates. The D78 multiplier (`PROP_SIGNAL_SCALE=0.3`, armed D79) has
+therefore never had data -- it silently no-ops to 1.0. Verified the per-event
+endpoint live: 50 players with `player_points` lines for tonight's slate
+(A'ja Wilson 26.5, Angel Reese 13.5, ...).
+
+**Budget [verified]**: player props cost 1 credit per market per event. The
+events list returns the whole multi-day schedule (~6 events), so an unscoped
+fetch was ~6 credits/run; on Railway cron the file cache never persists across
+fires (fresh container per fire), so 2 runs/day x ~6 = ~360/mo plus game odds
+threatened the 500-credit free tier. Scoping to tonight's slate (3 games) and
+fetching `player_points` only -- the single market job2 reads -- cuts this to
+~3 credits/run (~180-300/mo). Window also prevents merging a player's line
+across different game days.
+
+**Tests**: 10 in `test_player_props.py` (parse, market filter, side split,
+lookup merge, slate window incl. late tips, unparseable-keep). Full unit suite
+263 pass.
+
+**Reverse**: revert commit `5923854`. `PROP_SIGNAL_SCALE=0.0` disables the
+downstream multiplier without touching ingest.
+
+---
+
+## 2026-06-08: D81 -- cron-job1-late re-run for confirmed starters [verified]
+
+**Decision**: create Railway cron service `cron-job1-late`
+(id `2b0cd5aa-8793-45a5-bca0-e81c6d8455ff`), a clone of cron-job1 (RAILPACK,
+same start command, env via cross-service references to cron-job1) firing at
+`35 22 * * *` UTC. It re-runs the full job1 ingest in the evening so
+`job1_enrichment` carries RotoWire CONFIRMED lineups (and any late scratches +
+props) before the D75 job2 late re-freeze at 23:00 UTC consumes it.
+
+**Root cause [verified]**: D71's confirmed-starter multiplier gates on
+`rotowire_confirmed=1`, but cron-job1 scrapes RotoWire once at 13:00 UTC
+(08:00 ET) when every WNBA lineup still reads "Expected"; the "Confirmed" badge
+appears 30-90 min before tip. Nothing re-scraped RotoWire before the freeze, and
+job2 only reads the stored enrichment -- so the D75 late re-freeze re-optimized
+the SAME stale data. Confirmed in the DB: `rotowire_confirmed=0` on all 12
+recent slates, so D71 has never fired in production. The RotoWire parser itself
+is correct (reads "Expected Lineup" now; will read "Confirmed Lineup" near tip).
+
+**Why a new service, not a job2 change [reasoned]**: the serving job (job2) is
+verified working and must not change before a live freeze. Re-running the
+already-tested job1 via a scheduled clone touches zero serving code and reuses
+100% of the ingest path (RotoWire match + head_features + minutes + props).
+Same pattern as cron-dayclose (D60). At 22:35 UTC the 23:00-tip games are
+confirmed; later games (02:00 UTC tip) remain "Expected" -- a single-shot
+limitation of the one D75 re-freeze, acceptable for now.
+
+**Reverse**: cannot delete services with this token (destructive ops denied);
+to disable, clear the cron schedule on cron-job1-late (set to empty) or pause
+the service in the Railway dashboard.

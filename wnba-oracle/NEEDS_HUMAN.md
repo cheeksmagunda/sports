@@ -187,3 +187,20 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
        the mean (tonight uses the expectation form).
     North-star to measure all of this: realized leaderboard RANK on the corpus
     (build the replay harness on scripts/replay_slate.py).
+
+18. **[NEW 2026-06-08, D81] cron-job1-late service added.** A clone of cron-job1
+    (id `2b0cd5aa-8793-45a5-bca0-e81c6d8455ff`) fires `35 22 * * *` UTC to refresh
+    enrichment with RotoWire CONFIRMED lineups before the 23:00 job2 re-freeze.
+    Env is set via cross-service references to cron-job1, so re-seeding
+    REALSPORTS_STORAGE_STATE_B64GZ on cron-job1 (item 6) automatically covers it.
+    NOTE: destructive Railway ops are denied at the settings layer, so this
+    service cannot be deleted with the project token -- to retire it, clear its
+    cron schedule or pause it in the dashboard. Monitor at 22:35 UTC: job1_done
+    log line + `rotowire_confirmed > 0` in job1_enrichment for the slate.
+
+19. **[NEW 2026-06-08, D80] Player-prop credit budget.** fetch_player_props now
+    spends ~1 Odds API credit per game per run (slate-scoped, player_points
+    only). Two job1 runs/day (13:00 + 22:35) x ~3 games ~= 180-300 credits/mo
+    against the 500 free-tier cap, plus game odds. If the slate grows or a third
+    daily run is added, watch `x-requests-remaining` in job1 `player_props_quota`
+    logs; props degrade to empty (no crash) on quota burn.
