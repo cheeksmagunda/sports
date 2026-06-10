@@ -2579,3 +2579,42 @@ limitation of the one D75 re-freeze, acceptable for now.
 **Reverse**: cannot delete services with this token (destructive ops denied);
 to disable, clear the cron schedule on cron-job1-late (set to empty) or pause
 the service in the Railway dashboard.
+
+---
+
+## 2026-06-10: D82 -- frozen_lineups is append-only [verified]
+
+**Decision**: migration `20260610_0006` drops
+`uq_frozen_lineups_slate_model`, adds `freeze_seq` (per-(slate_date,
+model_sha) sequence) and `frozen_via` (write-path provenance) columns, and
+replaces the key with `(slate_date, model_sha, freeze_seq)`. Both job2 write
+paths now use one FROZEN_APPEND statement that computes
+`COALESCE(MAX(freeze_seq), 0) + 1` in the INSERT's source SELECT with
+`ON CONFLICT ... DO NOTHING` on the new key as the race-safe retry point.
+The D75 late re-freeze appends a second row instead of overwriting the
+first. Serving (`/lineup/{date}`, watchdog, results ledger) reads the max
+`freeze_seq`; a new `/lineup/{date}/history` endpoint returns every row.
+
+**Root cause [verified]**: on 2026-06-08 the late re-freeze's FROZEN_UPSERT
+(`ON CONFLICT (slate_date, model_sha) DO UPDATE`) overwrote the 21:00 UTC
+row the operator had already acted on. The unique constraint guaranteed at
+most one surviving row per slate, so the shipped-at-lock lineup was
+unrecoverable. The only provenance was `metadata_json.frozen_via`, which
+does not say "a different lineup existed before this one".
+
+**Design [reasoned]**: append-only audit rows (never UPDATE, supersede with
+new rows, serve current state from a latest-row query) is the standard
+pattern for state an operator acts on. `freeze_seq` rather than relying on
+`frozen_at` ordering alone because two fires inside one clock second would
+tie; the unique constraint on the sequence makes concurrent appenders
+collide deterministically and retry. The Redis NX keys (`wnba.frozen.{sd}`,
+`wnba.late_frozen.{sd}`) are unchanged: they bound how many appends happen
+per slate, not correctness. Existing rows backfilled `freeze_seq` by
+`frozen_at` order and `frozen_via` from metadata (else `unknown`).
+
+**Ledger row choice [reasoned]**: results_ledger reads the latest row. With
+the D83 lock gate, no append can occur post-lock, so the latest row is the
+last pre-lock freeze, which is what the operator entered.
+
+**Reverse**: `alembic downgrade 20260605_0005` (lossy: keeps only the
+highest freeze_seq per key) and revert the code commits.
