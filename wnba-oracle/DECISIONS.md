@@ -2579,3 +2579,168 @@ limitation of the one D75 re-freeze, acceptable for now.
 **Reverse**: cannot delete services with this token (destructive ops denied);
 to disable, clear the cron schedule on cron-job1-late (set to empty) or pause
 the service in the Railway dashboard.
+
+---
+
+## 2026-06-10: D82 -- frozen_lineups is append-only [verified]
+
+**Decision**: migration `20260610_0006` drops
+`uq_frozen_lineups_slate_model`, adds `freeze_seq` (per-(slate_date,
+model_sha) sequence) and `frozen_via` (write-path provenance) columns, and
+replaces the key with `(slate_date, model_sha, freeze_seq)`. Both job2 write
+paths now use one FROZEN_APPEND statement that computes
+`COALESCE(MAX(freeze_seq), 0) + 1` in the INSERT's source SELECT with
+`ON CONFLICT ... DO NOTHING` on the new key as the race-safe retry point.
+The D75 late re-freeze appends a second row instead of overwriting the
+first. Serving (`/lineup/{date}`, watchdog, results ledger) reads the max
+`freeze_seq`; a new `/lineup/{date}/history` endpoint returns every row.
+
+**Root cause [verified]**: on 2026-06-08 the late re-freeze's FROZEN_UPSERT
+(`ON CONFLICT (slate_date, model_sha) DO UPDATE`) overwrote the 21:00 UTC
+row the operator had already acted on. The unique constraint guaranteed at
+most one surviving row per slate, so the shipped-at-lock lineup was
+unrecoverable. The only provenance was `metadata_json.frozen_via`, which
+does not say "a different lineup existed before this one".
+
+**Design [reasoned]**: append-only audit rows (never UPDATE, supersede with
+new rows, serve current state from a latest-row query) is the standard
+pattern for state an operator acts on. `freeze_seq` rather than relying on
+`frozen_at` ordering alone because two fires inside one clock second would
+tie; the unique constraint on the sequence makes concurrent appenders
+collide deterministically and retry. The Redis NX keys (`wnba.frozen.{sd}`,
+`wnba.late_frozen.{sd}`) are unchanged: they bound how many appends happen
+per slate, not correctness. Existing rows backfilled `freeze_seq` by
+`frozen_at` order and `frozen_via` from metadata (else `unknown`).
+
+**Ledger row choice [reasoned]**: results_ledger reads the latest row. With
+the D83 lock gate, no append can occur post-lock, so the latest row is the
+last pre-lock freeze, which is what the operator entered.
+
+**Reverse**: `alembic downgrade 20260605_0005` (lossy: keeps only the
+highest freeze_seq per key) and revert the code commits.
+
+---
+
+## 2026-06-10: D83 -- late re-freeze gated on contest lock time [verified]
+
+**Decision**: job1 captures per-game tip times from the platform's
+`/home/wnba/next` payload (`latestDayContent.games[].dateTime`) via the new
+`fetch_slate_game_times` and UPSERTs the earliest into
+`slate_meta.first_tip_utc`. job2's late re-freeze path calls
+`_late_refreeze_allowed(now, lock_time, settings)` before forcing: with a
+known lock time it allows the append only strictly before
+`lock - REFREEZE_LOCK_BUFFER_MIN` (default 10 min); with no lock time it
+allows only strictly before `LATE_REFREEZE_DEADLINE_UTC` (default 23:30,
+the earliest typical WNBA tip). A gated skip logs
+`job2_late_refreeze_gated` and persists a warn `late_refreeze_gated`
+watchdog event. Malformed deadline config fails closed.
+
+**Lock-time source [verified]**: probed the captured fixtures. The Real
+Sports contest payload exposes only a live `isLocked` boolean, no lock
+timestamp. The `/home/wnba/next` game objects carry `dateTime` (UTC tip).
+DFS contests lock at first game start, so first tip is the lock proxy;
+`slate_meta.contest_lock_utc` stays NULL until the platform exposes a real
+timestamp. The Odds API `commence_time` was considered and rejected as
+primary: it is a different universe from the platform's own slate.
+
+**Why gate at all when D82 appends [reasoned]**: the append is
+non-destructive, but serving reads the latest row. An append after lock
+would still change what /lineup shows away from the lineup the operator
+entered. Gating pre-lock keeps "latest row" == "what shipped at lock".
+
+**Reverse**: unset LATE_REFREEZE_ENABLED (gate moot), or revert the
+commit. Settings defaults are safe with slate_meta missing (deadline
+fallback).
+
+---
+
+## 2026-06-10: D84 -- degraded job1 pool is a hard error + watchdog runs after job1 [verified]
+
+**Decision**: job1 gates its persisted pool with `pool_sanity(rows)`:
+fail when `n_rows < max(JOB1_MIN_POOL, 3 * n_teams)` (default floor 12) or
+`n_teams < JOB1_MIN_TEAMS` (default 2). Persist happens FIRST so the
+degraded capture stays in job1_enrichment for forensics; then job1 logs
+`job1_pool_degraded` at error level, writes a critical
+`job1_pool_degraded` watchdog event, and main() exits 1 so Railway marks
+the cron run failed. cron.py now runs the watchdog after job1 fires too
+(it previously ran only after job2, so a 13:00 UTC failure stayed
+invisible until 21:00 or later).
+
+**Root cause [verified, from the 2026-06-08 operator audit]**: the 13:06
+UTC cron-job1 fire persisted 1 row / 1 team for the slate while the 22:41
+UTC cron-job1-late fire captured 82 rows / 6 teams. job1 has no minimum-
+pool check anywhere; every sub-step degrades gracefully by design, so the
+1-row capture logged as a normal `job1_done` and `job1_enrichment` looked
+"present" to everything downstream.
+
+**Unresolved discrepancy [reasoned, needs prod forensics]**: job2's
+existing `pool_too_small` gate returns early without freezing when the
+pool has < 5 rows, so a 21:00 UTC freeze against a 1-row pool should have
+been impossible. Either the first freeze actually happened on a later
+cron fire (cron-job2 fires every 15 min) after the 22:41 pool landed, or
+something re-captured between 13:06 and 21:00. The old overwrite-in-place
+schema destroyed the first row's frozen_at, so this cannot be settled
+from the current DB state -- which is itself the D82 motivation. Forensic
+queries are listed in STATUS.md for the next operator session with DB
+access; this environment has no credentials (see NEEDS_HUMAN.md).
+
+**Paging [reasoned]**: watchdog gains an optional dead-man's-switch-style
+ping (WATCHDOG_PING_URL): on any critical event it GETs {url}/fail
+best-effort. External heartbeat monitoring is the standard remedy for
+silent cron failure; provisioning the URL is a human action (account
+creation), logged in NEEDS_HUMAN.md.
+
+**Reverse**: set JOB1_MIN_POOL=0 and JOB1_MIN_TEAMS=0 (gate passes
+everything) or revert the commit.
+
+---
+
+## 2026-06-10: D85 -- full-universe slate labels via leaderboard lineups [verified]
+
+**Decision**: harvest supplemental training labels from the top-20
+finisher lineups already persisted in contest_leaderboards. New
+`labels_from_leaderboard_entries` parses each lineup dict's `playerId` +
+`value` (the same verbatim fields results_ledger has trusted since D66)
+into `section="leaderboard_lineup"` ContestLabel rows; new
+`persist_supplemental_labels` inserts them with
+`ON CONFLICT (contest_id, platform_player_id) DO NOTHING` so a canonical
+three-section row always wins. Wired into `run_historical_backfill` after
+the leaderboard persist, which covers both the dayclose cron and manual
+`oracle-backfill` runs. `fetch_contest_stats` now logs any
+`sectionName` it drops (`contest_stats_unknown_sections`), and the D84
+watchdog gains `_check_label_coverage` (called from dayclose) that diffs
+the slate's job1_enrichment universe against slate_labels and emits
+`label_coverage_gap` (error above 20 percent missing, warn otherwise).
+
+**Root cause [verified]**: slate_labels is built ONLY from the three
+draftStats sections (`highestBoostedValuePlayers`, `popularPlayers`,
+`mostCommon3xPlayers`), roughly 30 highlighted players per slate. J. Loyd
+(pid 726) and A. Boston (pid 627) were in no section for the 2026-06-08
+contest, so they got no row at all. This is not the D72 name-matching
+gap: the dayclose parser never saw them. D72's own discovery notes
+already flagged slate_labels as "the wrong reference point" for the full
+universe.
+
+**card_boost for supplemental rows [reasoned]**: the lineup dicts carry
+`multiplier` (the finisher's chosen slot multiplier), which must never be
+mistaken for card_boost. The parser reads `multiplierBonus` when present
+and otherwise writes 0.0; the section marker makes these rows
+identifiable so training can treat their boost as unreliable. A
+follow-up may join job1_enrichment.card_boost at read time.
+
+**Not done [reasoned]**: deriving labels for players absent from BOTH
+sources via the locked real_score formula over wnba_game_logs. Plausible
+(job1 already reconstructs per-game real_score for minutes features) but
+ships only after validating the formula reproduces platform `value`
+exactly on overlapping players. Until then a leaderboard miss surfaces
+through label_coverage_gap instead of silently losing the label.
+
+**Backfill [needs prod DB]**: re-run
+`oracle-backfill --mode historical --start-id <cid> --stop-id <cid>` for
+the 2026-06-08 contest to recover Loyd (0.8) and Boston (2.94) if any
+top-20 finisher drafted them. This environment has no DATABASE_URL;
+the command is queued in STATUS.md / NEEDS_HUMAN.md.
+
+**Reverse**: revert the commit;
+`DELETE FROM slate_labels WHERE section = 'leaderboard_lineup'` removes
+every supplemental row cleanly.

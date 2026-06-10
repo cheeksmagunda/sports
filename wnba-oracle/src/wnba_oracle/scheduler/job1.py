@@ -42,6 +42,7 @@ from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
     capture_live_headers,
     fetch_pool_for_date,
+    fetch_slate_game_times,
     headers_or_capture,
 )
 from wnba_oracle.ingest.rotowire import LineupEntry, fetch_lineups
@@ -56,6 +57,9 @@ class Job1Result:
     n_odds: int
     n_lineups: int
     persisted_rows: int
+    # D84: non-empty when the persisted pool failed the sanity gate. main()
+    # exits nonzero on it so Railway marks the cron run failed.
+    degraded_reasons: tuple[str, ...] = ()
 
 
 JOB1_UPSERT = text(
@@ -78,6 +82,70 @@ JOB1_UPSERT = text(
         captured_at = now();
     """
 )
+
+
+SLATE_META_UPSERT = text(
+    """
+    INSERT INTO slate_meta (
+        slate_date, first_tip_utc, contest_lock_utc, source, payload_json, updated_at
+    ) VALUES (
+        :slate_date, :first_tip_utc, :contest_lock_utc, :source,
+        CAST(:payload_json AS JSONB), now()
+    )
+    ON CONFLICT (slate_date) DO UPDATE SET
+        first_tip_utc = EXCLUDED.first_tip_utc,
+        contest_lock_utc = EXCLUDED.contest_lock_utc,
+        source = EXCLUDED.source,
+        payload_json = EXCLUDED.payload_json,
+        updated_at = now();
+    """
+)
+
+
+def parse_game_time(raw: str) -> dt.datetime | None:
+    """Parse a Real Sports game `dateTime` ("2026-05-27T23:00:00.000Z")
+    into an aware UTC datetime. None on anything unparseable."""
+    if not raw:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def _persist_slate_meta(slate_date: str, game_times: list[str]) -> None:
+    """UPSERT the slate's timing facts (D83).
+
+    first_tip_utc is the earliest game time, the contest-lock proxy.
+    contest_lock_utc stays NULL until the platform exposes a real lock
+    timestamp (probe 2026-06-10: the contest payload only carries a live
+    `isLocked` boolean). A row with NULL first_tip_utc still gets written
+    so the gate can tell "job1 looked and found nothing" from "job1 never
+    ran" when debugging.
+    """
+    parsed = sorted(t for t in (parse_game_time(g) for g in game_times) if t is not None)
+    first_tip = parsed[0] if parsed else None
+    eng = get_engine()
+    with eng.begin() as conn:
+        conn.execute(
+            SLATE_META_UPSERT,
+            {
+                "slate_date": slate_date,
+                "first_tip_utc": first_tip,
+                "contest_lock_utc": None,
+                "source": "realsports_home_next",
+                "payload_json": json.dumps({"game_times": game_times}),
+            },
+        )
+    log.info(
+        "job1_slate_meta",
+        slate_date=slate_date,
+        first_tip_utc=first_tip.isoformat() if first_tip else None,
+        n_games=len(game_times),
+    )
 
 
 def _device_uuid() -> str:
@@ -120,6 +188,26 @@ def _index_rotowire(entries: list[LineupEntry]) -> dict[tuple[str, str], LineupE
     return index
 
 
+def pool_sanity(rows: list[dict], *, min_pool: int, min_teams: int) -> list[str]:
+    """D84: failure reasons for a degraded pool, empty when healthy.
+
+    The effective row floor scales with slate size (3 rows per distinct
+    team) without needing the game count, floored at `min_pool` so a
+    one-team capture can never pass by shrinking its own expectation.
+    """
+    n_rows = len(rows)
+    teams = {str(r.get("team", "") or "").strip() for r in rows}
+    teams.discard("")
+    n_teams = len(teams)
+    reasons: list[str] = []
+    row_floor = max(min_pool, 3 * n_teams)
+    if n_rows < row_floor:
+        reasons.append(f"n_pool={n_rows} below floor {row_floor}")
+    if n_teams < min_teams:
+        reasons.append(f"n_teams={n_teams} below floor {min_teams}")
+    return reasons
+
+
 def is_out_status(status: str | None) -> bool:
     """True iff RotoWire's status token marks the player as a confirmed
     non-draft. Used by both job1 (when persisting features_json) and job2
@@ -130,7 +218,7 @@ def is_out_status(status: str | None) -> bool:
     return any(tok in upper for tok in _OUT_STATUS_TOKENS)
 
 
-async def _do_pool_fetch(slate_date: str) -> list:
+async def _do_pool_fetch(slate_date: str) -> tuple[list, list[str]]:
     headers = await headers_or_capture(_device_uuid(), _device_name())
 
     async def _refresh():
@@ -147,7 +235,17 @@ async def _do_pool_fetch(slate_date: str) -> list:
             pool = await fetch_pool_for_date(
                 slate_date, headers, client, refresh_headers=_refresh
             )
-    return pool
+        # D83: per-game tip times feed the late-refreeze lock gate. Strictly
+        # best-effort; a slate_meta miss degrades the gate to its deadline
+        # fallback, never the pool fetch.
+        try:
+            game_times = await fetch_slate_game_times(
+                headers, client, refresh_headers=_refresh
+            )
+        except Exception as exc:
+            log.warning("job1_game_times_failed", reason=str(exc)[:120])
+            game_times = []
+    return pool, game_times
 
 
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
@@ -155,8 +253,17 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     sd = slate_date or dt.date.today().isoformat()
     log.info("job1_start", slate_date=sd, dry_run=dry_run)
 
-    pool = asyncio.run(_do_pool_fetch(sd))
+    pool, game_times = asyncio.run(_do_pool_fetch(sd))
     log.info("job1_pool", n=len(pool))
+
+    # D83: persist the slate's first tip (contest-lock proxy) so the job2
+    # late re-freeze can refuse to append after lock. The platform exposes
+    # no lock timestamp, so the earliest game dateTime stands in for it.
+    if not dry_run:
+        try:
+            _persist_slate_meta(sd, game_times)
+        except Exception as exc:
+            log.warning("job1_slate_meta_failed", reason=str(exc)[:120])
 
     try:
         odds = fetch_odds_for_slate()
@@ -385,6 +492,42 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
                 conn.execute(JOB1_UPSERT, row)
                 persisted += 1
 
+    # D84 sanity gate, AFTER persist on purpose: a degraded capture still
+    # lands in job1_enrichment for forensics, but the run is marked failed
+    # so it can never silently masquerade as a healthy fire (the 2026-06-08
+    # morning fire persisted 1 row / 1 team and looked "present").
+    degraded = pool_sanity(
+        rows, min_pool=settings.job1_min_pool, min_teams=settings.job1_min_teams
+    )
+    if degraded:
+        log.error(
+            "job1_pool_degraded",
+            slate_date=sd,
+            reasons=degraded,
+            n_rows=len(rows),
+            persisted=persisted,
+        )
+        if not dry_run and settings.database_url:
+            try:
+                from wnba_oracle.scheduler.watchdog import (
+                    SEVERITY_CRITICAL,
+                    WatchdogEvent,
+                    persist_events,
+                )
+
+                persist_events(
+                    [
+                        WatchdogEvent(
+                            slate_date=sd,
+                            trigger="job1_pool_degraded",
+                            severity=SEVERITY_CRITICAL,
+                            payload={"reasons": degraded, "n_rows": len(rows)},
+                        )
+                    ]
+                )
+            except Exception as exc:
+                log.warning("job1_degraded_event_failed", reason=str(exc)[:120])
+
     log.info(
         "job1_done",
         slate_date=sd,
@@ -393,7 +536,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_lineups=len(lineups),
         persisted=persisted,
     )
-    return Job1Result(sd, len(pool), len(odds), len(lineups), persisted)
+    return Job1Result(
+        sd, len(pool), len(odds), len(lineups), persisted, tuple(degraded)
+    )
 
 
 def main() -> int:
@@ -401,8 +546,11 @@ def main() -> int:
     settings = get_settings()
     sd = dt.date.today().isoformat()
     try:
-        run(sd, dry_run=settings.job1_dry_run)
+        result = run(sd, dry_run=settings.job1_dry_run)
     except Exception as exc:
         log.exception("job1_failed", error=str(exc))
+        return 1
+    if result.degraded_reasons:
+        # Nonzero exit so Railway surfaces the cron run as failed.
         return 1
     return 0

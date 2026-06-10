@@ -841,43 +841,88 @@ def _build_specs(
     return samps, fields, projection_by_pid
 
 
-FROZEN_INSERT = text(
+# D82: frozen_lineups is append-only. Every freeze fire (first 21:00 UTC
+# freeze and D75 late re-freeze alike) inserts a NEW row with the next
+# freeze_seq for (slate_date, model_sha); nothing ever updates a frozen row
+# in place, so the lineup the operator saw at any point stays reconstructable.
+# The seq is computed in the INSERT's source SELECT; if two writers race to
+# the same seq the unique constraint on (slate_date, model_sha, freeze_seq)
+# turns the loser into a clean no-op (empty RETURNING) that _freeze retries.
+FROZEN_APPEND = text(
     """
     INSERT INTO frozen_lineups (
         slate_date, model_sha, payout_regime, frozen_at, lineup,
-        entry_recommendation, expected_payout, metadata_json
-    ) VALUES (
-        :slate_date, :model_sha, :payout_regime, now(), CAST(:lineup AS JSONB),
-        :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB)
+        entry_recommendation, expected_payout, metadata_json,
+        freeze_seq, frozen_via
     )
-    ON CONFLICT (slate_date, model_sha) DO NOTHING
-    RETURNING id;
-    """
-)
-
-# D75: late re-freeze upsert. Same payload as FROZEN_INSERT but overwrites
-# the existing row so a late-news-aware re-optimization replaces the initial
-# freeze. Used only when force=True in _freeze().
-FROZEN_UPSERT = text(
-    """
-    INSERT INTO frozen_lineups (
-        slate_date, model_sha, payout_regime, frozen_at, lineup,
-        entry_recommendation, expected_payout, metadata_json
-    ) VALUES (
+    SELECT
         :slate_date, :model_sha, :payout_regime, now(), CAST(:lineup AS JSONB),
-        :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB)
-    )
-    ON CONFLICT (slate_date, model_sha) DO UPDATE SET
-        lineup = EXCLUDED.lineup,
-        entry_recommendation = EXCLUDED.entry_recommendation,
-        expected_payout = EXCLUDED.expected_payout,
-        frozen_at = now(),
-        metadata_json = EXCLUDED.metadata_json
-    RETURNING id;
+        :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB),
+        COALESCE(MAX(freeze_seq), 0) + 1, :frozen_via
+    FROM frozen_lineups
+    WHERE slate_date = :slate_date AND model_sha = :model_sha
+    ON CONFLICT (slate_date, model_sha, freeze_seq) DO NOTHING
+    RETURNING id, freeze_seq;
     """
 )
 
 FROZEN_EXISTS = text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms")
+
+SLATE_LOCK_Q = text(
+    "SELECT contest_lock_utc, first_tip_utc FROM slate_meta WHERE slate_date = :sd"
+)
+
+
+def _load_slate_lock_time(slate_date: str) -> dt.datetime | None:
+    """The slate's contest lock time from slate_meta (D83).
+
+    Prefers an explicit contest_lock_utc; falls back to first_tip_utc
+    (DFS contests lock at first game start, and the platform exposes no
+    lock timestamp). None when job1 never captured timing for the slate,
+    in which case the gate uses its hard deadline instead.
+    """
+    try:
+        eng = get_engine()
+        with eng.connect() as conn:
+            row = conn.execute(SLATE_LOCK_Q, {"sd": slate_date}).first()
+    except Exception as exc:
+        log.warning("job2_slate_lock_read_failed", reason=str(exc)[:120])
+        return None
+    if row is None:
+        return None
+    lock = row[0] or row[1]
+    if lock is None:
+        return None
+    if lock.tzinfo is None:
+        lock = lock.replace(tzinfo=dt.UTC)
+    return lock.astimezone(dt.UTC)
+
+
+def _late_refreeze_allowed(
+    now_utc: dt.datetime,
+    lock_time_utc: dt.datetime | None,
+    settings,
+) -> tuple[bool, str]:
+    """D83 lock gate for the late re-freeze.
+
+    Lock time known: allow only strictly before lock minus the buffer.
+    Lock time unknown: allow only strictly before the configured hard
+    deadline (HH:MM UTC). A malformed deadline blocks the re-freeze;
+    failing closed is the point of the gate.
+    """
+    if lock_time_utc is not None:
+        buffer = dt.timedelta(minutes=int(settings.refreeze_lock_buffer_min))
+        if now_utc < lock_time_utc - buffer:
+            return True, "pre_lock"
+        return False, "lock_gated"
+    try:
+        h, m = (int(x) for x in settings.late_refreeze_deadline_utc.split(":"))
+        deadline = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
+    except (ValueError, AttributeError):
+        return False, "bad_deadline_config"
+    if now_utc < deadline:
+        return True, "pre_deadline_no_locktime"
+    return False, "deadline_no_locktime"
 
 
 def _build_per_player(
@@ -951,75 +996,53 @@ def _freeze(
        fires every 15 min; without the lock two cron tasks could race
        between the existence-check and the INSERT). On lock-miss treat
        it as "another fire is in flight" and bail without writing.
-    3. Issue an INSERT ... ON CONFLICT DO NOTHING. If a parallel writer
-       won the race we still get a clean no-op return. ``RETURNING id``
-       distinguishes "I wrote this row" from "row already existed".
+    3. Issue FROZEN_APPEND (D82): an INSERT that computes the next
+       freeze_seq for the key and no-ops on a seq collision. ``RETURNING``
+       distinguishes "I wrote this row" from "lost the seq race".
 
     When force=True (late re-freeze, D75): skip the Postgres existence
     check, use the wnba.late_frozen.{slate_date} Redis key (first-fire-wins
-    per day, 24h TTL) to prevent duplicate late re-freezes, and execute
-    FROZEN_UPSERT so the new lineup overwrites the earlier one. This path
-    is only reached when LATE_REFREEZE_ENABLED=true and the current UTC
-    time is past LATE_REFREEZE_AFTER_UTC.
+    per day, 24h TTL) to prevent duplicate late re-freezes, and APPEND a
+    new row (D82) so the earlier freeze stays intact for audit. This path
+    is only reached when LATE_REFREEZE_ENABLED=true, the current UTC time
+    is past LATE_REFREEZE_AFTER_UTC, and the D83 lock gate allows it.
 
-    Returns True iff this invocation wrote or updated the freeze record.
+    Returns True iff this invocation appended a freeze record.
     """
     eng = get_engine()
+    frozen_via = "job2_late_refreeze" if force else "job2_first_fire"
 
     if force:
         # D75 late re-freeze: use a separate Redis key so only the first
-        # late-fire overwrites. Subsequent fires (every 15 min) see the key
-        # already set and bail without touching the frozen row.
+        # late-fire appends. Subsequent fires (every 15 min) see the key
+        # already set and bail without touching frozen_lineups.
         rd = get_redis()
         late_key = f"wnba.late_frozen.{slate_date}"
         lock_acquired = bool(rd.set(late_key, model_sha, nx=True, ex=24 * 3600))
         if not lock_acquired:
             log.info("job2_late_refreeze_already_done", slate_date=slate_date)
             return False
-        payload = {
-            "slate_date": slate_date,
-            "model_sha": model_sha,
-            "payout_regime": payout_regime,
-            "lineup": json.dumps(
-                {
-                    "player_ids": list(rec.player_ids),
-                    "slot_multipliers": list(rec.slot_multipliers),
-                    "lineup_score_p10": rec.lineup_score_p10,
-                    "lineup_score_p50": rec.lineup_score_p50,
-                    "lineup_score_p90": rec.lineup_score_p90,
-                    "per_player": _build_per_player(rec, projection_by_pid),
-                }
-            ),
-            "entry_recommendation": rec.entry_flag,
-            "expected_payout": rec.expected_payout,
-            "metadata_json": json.dumps({"frozen_via": "job2_late_refreeze"}),
-        }
-        with eng.begin() as conn:
-            result = conn.execute(FROZEN_UPSERT, payload).first()
-        if result is None:
-            log.warning("job2_late_refreeze_upsert_no_row", slate_date=slate_date)
+    else:
+        with eng.connect() as conn:
+            existing = conn.execute(
+                FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}
+            ).first()
+        if existing:
+            log.info("job2_already_frozen", slate_date=slate_date, model_sha=model_sha)
             return False
-        log.info("job2_late_refrozen", slate_date=slate_date, row_id=int(result[0]))
-        return True
 
-    with eng.connect() as conn:
-        existing = conn.execute(FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}).first()
-    if existing:
-        log.info("job2_already_frozen", slate_date=slate_date, model_sha=model_sha)
-        return False
-
-    rd = get_redis()
-    key = f"wnba.frozen.{slate_date}"
-    # The 24h TTL covers a full slate window; if the writer crashes the
-    # lock auto-releases for the next fire to retry.
-    lock_acquired = bool(rd.set(key, model_sha, nx=True, ex=24 * 3600))
-    if not lock_acquired:
-        log.info(
-            "job2_freeze_lock_held",
-            slate_date=slate_date,
-            note="another job2 fire is mid-freeze; deferring",
-        )
-        return False
+        rd = get_redis()
+        key = f"wnba.frozen.{slate_date}"
+        # The 24h TTL covers a full slate window; if the writer crashes the
+        # lock auto-releases for the next fire to retry.
+        lock_acquired = bool(rd.set(key, model_sha, nx=True, ex=24 * 3600))
+        if not lock_acquired:
+            log.info(
+                "job2_freeze_lock_held",
+                slate_date=slate_date,
+                note="another job2 fire is mid-freeze; deferring",
+            )
+            return False
 
     payload = {
         "slate_date": slate_date,
@@ -1037,17 +1060,31 @@ def _freeze(
         ),
         "entry_recommendation": rec.entry_flag,
         "expected_payout": rec.expected_payout,
-        "metadata_json": json.dumps({"frozen_via": "job2_first_fire"}),
+        # frozen_via stays duplicated in metadata_json for one release so
+        # existing readers of metadata keep working (drop after frontend
+        # confirms it reads the column).
+        "metadata_json": json.dumps({"frozen_via": frozen_via}),
+        "frozen_via": frozen_via,
     }
-    with eng.begin() as conn:
-        result = conn.execute(FROZEN_INSERT, payload).first()
+    # One retry on an empty RETURNING: a concurrent appender took our seq.
+    # The Redis locks make this near-impossible, but the constraint is the
+    # actual correctness boundary, so honor it.
+    result = None
+    for attempt in (1, 2):
+        with eng.begin() as conn:
+            result = conn.execute(FROZEN_APPEND, payload).first()
+        if result is not None:
+            break
+        log.info("job2_lost_seq_race", slate_date=slate_date, attempt=attempt)
     if result is None:
-        # ON CONFLICT DO NOTHING fired between our existence check and
-        # the INSERT (rare; Redis lock should have prevented it). Treat
-        # as "we lost the race".
-        log.info("job2_lost_insert_race", slate_date=slate_date)
+        log.warning("job2_freeze_append_failed", slate_date=slate_date, via=frozen_via)
         return False
-    log.info("job2_frozen", slate_date=slate_date, row_id=int(result[0]))
+    log.info(
+        "job2_late_refrozen" if force else "job2_frozen",
+        slate_date=slate_date,
+        row_id=int(result[0]),
+        freeze_seq=int(result[1]),
+    )
     return True
 
 
@@ -1123,19 +1160,55 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         return Job2Result(sd, model_sha, rec, False, "dry_run")
 
     # D75: late re-freeze. If enabled and current UTC time is past the
-    # configured cutoff, pass force=True so the existing freeze row is
-    # overwritten with the freshest optimizer output. The Redis key
-    # wnba.late_frozen.{sd} (first-fire-wins, 24h TTL) prevents the next
-    # 15-min cron fires from overwriting again.
+    # configured cutoff, pass force=True so a fresh optimizer run appends
+    # a new freeze (D82). The Redis key wnba.late_frozen.{sd}
+    # (first-fire-wins, 24h TTL) prevents the next 15-min cron fires from
+    # appending again. The D83 lock gate then refuses any append at or
+    # after contest lock: the operator already acted on the served row.
     force_refreeze = False
     if settings.late_refreeze_enabled:
-        now_utc = dt.datetime.now(dt.timezone.utc)
+        now_utc = dt.datetime.now(dt.UTC)
         try:
             h, m = (int(x) for x in settings.late_refreeze_after_utc.split(":"))
             cutoff = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
             force_refreeze = now_utc >= cutoff
         except (ValueError, AttributeError):
             log.warning("job2_late_refreeze_bad_config", val=settings.late_refreeze_after_utc)
+        if force_refreeze:
+            lock_time = _load_slate_lock_time(sd)
+            allowed, gate_reason = _late_refreeze_allowed(now_utc, lock_time, settings)
+            if not allowed:
+                force_refreeze = False
+                log.warning(
+                    "job2_late_refreeze_gated",
+                    slate_date=sd,
+                    reason=gate_reason,
+                    lock_time_utc=lock_time.isoformat() if lock_time else None,
+                )
+                try:
+                    from wnba_oracle.scheduler.watchdog import (
+                        SEVERITY_WARN,
+                        WatchdogEvent,
+                        persist_events,
+                    )
+
+                    persist_events(
+                        [
+                            WatchdogEvent(
+                                slate_date=sd,
+                                trigger="late_refreeze_gated",
+                                severity=SEVERITY_WARN,
+                                payload={
+                                    "reason": gate_reason,
+                                    "lock_time_utc": (
+                                        lock_time.isoformat() if lock_time else None
+                                    ),
+                                },
+                            )
+                        ]
+                    )
+                except Exception as exc:
+                    log.warning("job2_gate_event_failed", reason=str(exc)[:120])
 
     frozen = _freeze(sd, model_sha, rec, curve.regime, projection_by_pid, force=force_refreeze)
     status = "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")

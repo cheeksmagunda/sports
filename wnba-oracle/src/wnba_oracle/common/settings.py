@@ -121,6 +121,25 @@ class Settings(BaseSettings):
     # Default off. See D75.
     late_refreeze_enabled: bool = Field(default=False, alias="LATE_REFREEZE_ENABLED")
     late_refreeze_after_utc: str = Field(default="23:00", alias="LATE_REFREEZE_AFTER_UTC")
+    # D83 lock gate: the late re-freeze must never replace the lineup the
+    # operator acted on after the contest locks. When slate_meta carries a
+    # lock time (or first-tip proxy), the re-freeze is allowed only until
+    # lock minus refreeze_lock_buffer_min minutes. When no lock time is
+    # known, late_refreeze_deadline_utc (HH:MM UTC) is a hard stop instead
+    # of silently proceeding. 23:30 default = earliest typical WNBA tip.
+    refreeze_lock_buffer_min: int = Field(default=10, alias="REFREEZE_LOCK_BUFFER_MIN")
+    late_refreeze_deadline_utc: str = Field(default="23:30", alias="LATE_REFREEZE_DEADLINE_UTC")
+    # D84 job1 pool sanity gate: a persisted pool below these floors is a
+    # hard error (nonzero exit + critical watchdog event), not a quiet log
+    # line. The 2026-06-08 morning fire persisted 1 row / 1 team and nothing
+    # flagged it. A normal WNBA slate has 60+ players across 4+ teams; the
+    # effective row floor is max(JOB1_MIN_POOL, 3 * n_teams).
+    job1_min_pool: int = Field(default=12, alias="JOB1_MIN_POOL")
+    job1_min_teams: int = Field(default=2, alias="JOB1_MIN_TEAMS")
+    # D84 paging: optional healthchecks.io-style URL. When set, any critical
+    # watchdog event triggers a best-effort GET to {url}/fail so the operator
+    # is paged instead of discovering the failure from a screenshot.
+    watchdog_ping_url: str = Field(default="", alias="WATCHDOG_PING_URL")
     # prop_signal_scale: how strongly sportsbook player prop over/under probabilities
     # adjust the head prediction (D78). Formula: pred *= (1 + (over_prob - 0.5) * scale).
     # At scale=0.3: over_prob=0.60 -> +3% adjustment; over_prob=0.40 -> -3%.

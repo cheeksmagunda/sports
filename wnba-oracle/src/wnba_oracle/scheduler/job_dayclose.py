@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import os
+from pathlib import Path
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import get_settings
@@ -70,6 +71,22 @@ def main() -> int:
         with_leaderboards=True,
     )
 
+    # D85: audit yesterday's label coverage against the pool universe so a
+    # player silently absent from slate_labels (the 2026-06-08 Loyd/Boston
+    # gap) pages instead of permanently losing training labels. Best-effort;
+    # never changes the dayclose exit code.
+    yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+    try:
+        from wnba_oracle.scheduler.watchdog import _check_label_coverage, persist_events
+
+        coverage_events = _check_label_coverage(yesterday)
+        if coverage_events:
+            persist_events(coverage_events)
+        else:
+            log.info("dayclose_label_coverage_clean", slate_date=yesterday)
+    except Exception as exc:
+        log.exception("dayclose_label_coverage_failed", error=str(exc))
+
     # Best-effort: refresh the RESULTS.md ledger for the slate that just
     # finalized (yesterday UTC). Guarded by WNBA_RESULTS_LEDGER so the
     # default Railway fire is a clean no-op — the cron container's repo is
@@ -80,7 +97,6 @@ def main() -> int:
     if ledger_env:
         from wnba_oracle.scheduler import results_ledger
 
-        yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
         try:
             results_ledger.append_for_slate(yesterday, Path(ledger_env))
         except Exception as exc:

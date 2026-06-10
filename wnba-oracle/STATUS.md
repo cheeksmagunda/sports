@@ -1,6 +1,43 @@
 status: BUILD_COMPLETE
-last_verified: 2026-06-08T20:00:00Z
-phase: live. 2026-06-08 (D80/D81): Pre-slate pipeline audit. Verified core
+last_verified: 2026-06-10T00:00:00Z
+phase: live. 2026-06-10 (D82-D85): Incident remediation for the 2026-06-08
+late-refreeze overwrite, on branch claude/frozen-lineups-audit-refreeze-a3obw3
+(PENDING DEPLOY: migration 20260610_0006 must apply before the new code
+serves; deploy all services from one commit in the 06:30-12:30 UTC quiet
+window; see deploy checklist below). D82: frozen_lineups is append-only --
+freeze_seq + frozen_via columns, key now (slate_date, model_sha, freeze_seq),
+FROZEN_APPEND replaces both FROZEN_INSERT and FROZEN_UPSERT, the late
+re-freeze appends instead of overwriting, /lineup/{date} serves max
+freeze_seq with provenance (freeze_seq, frozen_via, n_freezes), new
+/lineup/{date}/history audit endpoint. D83: late re-freeze gated on contest
+lock -- job1 captures first tip into new slate_meta table
+(realsports fetch_slate_game_times; platform exposes no lock timestamp, only
+isLocked), gate blocks the forced append within REFREEZE_LOCK_BUFFER_MIN of
+lock or past LATE_REFREEZE_DEADLINE_UTC when lock unknown, fails closed.
+D84: degraded job1 pool is a hard error -- pool_sanity gate
+(JOB1_MIN_POOL=12, JOB1_MIN_TEAMS=2, row floor max(min,3*teams)), critical
+job1_pool_degraded watchdog event, exit 1; watchdog now runs after job1
+fires too; pool_too_small escalated to error; new pool_degenerate_teams
+(critical) + enrichment_stale (warn) checks; optional WATCHDOG_PING_URL
+dead-man's-switch ping on critical. D85: full-universe labels -- root cause
+of the Loyd(726)/Boston(627) gap is slate_labels only storing the three
+draftStats sections; new leaderboard_lineup supplemental labels harvested
+from top-20 finisher lineups (DO NOTHING insert, canonical rows win),
+unknown-section logging, label_coverage_gap watchdog check wired into
+dayclose. 315 unit tests pass (was 263). DEPLOY CHECKLIST (needs prod
+creds, absent in this build env): (1) merge + deploy all services from the
+branch commit in the quiet window; API boot applies migration 20260610_0006;
+(2) verify alembic_version, \d frozen_lineups shows
+uq_frozen_lineups_slate_model_seq, /lineup/<date> returns freeze_seq;
+(3) forensics for D84: SELECT date_trunc('minute',captured_at),COUNT(*),
+COUNT(DISTINCT team) FROM job1_enrichment WHERE slate_date='2026-06-08'
+GROUP BY 1; and the frozen row's frozen_at/metadata -- resolve how a freeze
+existed when the 21:00 pool reportedly had 1 row (job2 pool_too_small gates
+at <5); (4) D85 backfill: oracle-backfill --mode historical --start-id <cid>
+--stop-id <cid> for the 2026-06-08 contest, then verify pids 726 (0.8) and
+627 (2.94) carry section='leaderboard_lineup' rows; (5) set
+WATCHDOG_PING_URL once the human provisions a monitor (NEEDS_HUMAN 20).
+Earlier 2026-06-08 (D80/D81): Pre-slate pipeline audit. Verified core
 serving healthy via job2 dry-run (heads fire 71/73, optimizer converges, valid
 lineup). Found + fixed two dead "improvements": D80 player props were hitting
 the aggregate /odds endpoint (HTTP 422 -> always empty since D78); repointed to

@@ -1,0 +1,65 @@
+"""D84: degraded job1 pool is a hard error, not a quiet log line.
+
+pool_sanity returns failure reasons; run() persists first (forensics),
+then writes a critical watchdog event and main() exits nonzero so the
+Railway cron run shows failed. The 2026-06-08 morning capture
+(1 row, 1 team) trips both checks.
+"""
+
+from __future__ import annotations
+
+from unittest.mock import patch
+
+from wnba_oracle.scheduler import job1
+from wnba_oracle.scheduler.job1 import Job1Result, pool_sanity
+
+
+def _rows(n: int, teams: list[str]) -> list[dict]:
+    return [{"team": teams[i % len(teams)]} for i in range(n)]
+
+
+def test_incident_shape_one_row_one_team_fails_both() -> None:
+    reasons = pool_sanity(_rows(1, ["LVA"]), min_pool=12, min_teams=2)
+    assert len(reasons) == 2
+    assert any("n_pool=1" in r for r in reasons)
+    assert any("n_teams=1" in r for r in reasons)
+
+
+def test_empty_pool_fails() -> None:
+    reasons = pool_sanity([], min_pool=12, min_teams=2)
+    assert len(reasons) == 2
+
+
+def test_healthy_slate_passes() -> None:
+    teams = [f"T{i}" for i in range(12)]
+    assert pool_sanity(_rows(60, teams), min_pool=12, min_teams=2) == []
+
+
+def test_row_floor_scales_with_team_count() -> None:
+    # 6 teams demand 18 rows even though min_pool is 12.
+    teams = [f"T{i}" for i in range(6)]
+    reasons = pool_sanity(_rows(14, teams), min_pool=12, min_teams=2)
+    assert len(reasons) == 1
+    assert "floor 18" in reasons[0]
+
+
+def test_two_team_minimum_edge_passes() -> None:
+    assert pool_sanity(_rows(12, ["AAA", "BBB"]), min_pool=12, min_teams=2) == []
+
+
+def test_blank_teams_do_not_count() -> None:
+    rows = [{"team": ""} for _ in range(20)]
+    reasons = pool_sanity(rows, min_pool=12, min_teams=2)
+    assert any("n_teams=0" in r for r in reasons)
+
+
+def test_main_exits_nonzero_on_degraded_pool() -> None:
+    degraded = Job1Result("2026-06-08", 1, 0, 0, 1, ("n_pool=1 below floor 12",))
+    with patch.object(job1, "run", return_value=degraded):
+        assert job1.main() == 1
+
+
+def test_main_exits_zero_on_healthy_pool() -> None:
+    healthy = Job1Result("2026-06-08", 60, 3, 30, 60)
+    with patch.object(job1, "run", return_value=healthy):
+        assert job1.main() == 0

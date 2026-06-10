@@ -13,8 +13,15 @@ Triggers implemented (post-MVP, expand as the eval bundle grows):
 - ``no_job1_pool`` (critical) — slate_date has zero job1_enrichment rows
   by the time the watchdog runs. Either cron-job1 failed or hasn't
   fired. The frontend will keep showing the countdown.
-- ``pool_too_small`` (warn) — fewer than 10 enrichment rows (a normal
-  WNBA slate has 60+ players). Indicates an ingest partial failure.
+- ``pool_too_small`` (error, escalated from warn in D84) — fewer than 10
+  enrichment rows (a normal WNBA slate has 60+ players). Indicates an
+  ingest partial failure.
+- ``pool_degenerate_teams`` (critical, D84) — enrichment rows exist but
+  span fewer than 2 distinct teams. No valid slate has one team; a raw
+  row count can miss this shape.
+- ``enrichment_stale`` (warn, D84) — after 20:00 UTC the newest capture
+  for today's slate predates the 13:00 UTC job1 fire window; job2 is
+  about to freeze on yesterday's universe.
 - ``no_frozen_lineup`` (critical) — after 22:00 UTC there's still no
   frozen row. cron-job2 has had at least 4 attempts (21:00, 21:15,
   21:30, 21:45) and failed every one. Manual fire likely needed.
@@ -26,6 +33,13 @@ Triggers implemented (post-MVP, expand as the eval bundle grows):
   ``expected_payout = 0``. Optimizer either returned a degenerate
   solution or the payout curve was misconfigured. Operator should
   skip the contest.
+
+Other writers reuse persist_events for out-of-run triggers:
+``job1_pool_degraded`` (critical, job1's D84 sanity gate) and
+``late_refreeze_gated`` (warn, job2's D83 lock gate).
+
+When WATCHDOG_PING_URL is set, any critical event also fires a
+best-effort GET to ``{url}/fail`` (dead-man's-switch paging, D84).
 
 Each trigger writes at most once per (slate_date, trigger) tuple per
 run to avoid log spam; persistence dedup is enforced by querying for
@@ -125,14 +139,16 @@ def persist_events(events: list[WatchdogEvent]) -> int:
 # Per-check SQL kept here (not embedded in the run loop) for grep-ability.
 
 POOL_SIZE_Q = text(
-    "SELECT COUNT(*)::int AS n FROM job1_enrichment WHERE slate_date = :sd"
+    "SELECT COUNT(*)::int AS n, COUNT(DISTINCT team)::int AS n_teams, "
+    "MAX(captured_at) AS last_captured "
+    "FROM job1_enrichment WHERE slate_date = :sd"
 )
 
 FROZEN_Q = text(
     "SELECT lineup, expected_payout, frozen_at "
     "FROM frozen_lineups "
     "WHERE slate_date = :sd "
-    "ORDER BY frozen_at DESC LIMIT 1"
+    "ORDER BY freeze_seq DESC, frozen_at DESC LIMIT 1"
 )
 
 
@@ -140,7 +156,8 @@ def _check_pool(slate_date: str) -> list[WatchdogEvent]:
     eng = get_engine()
     with eng.connect() as conn:
         row = conn.execute(POOL_SIZE_Q, {"sd": slate_date}).first()
-    n = int(row[0]) if row else 0
+    n = int(row[0]) if row and row[0] is not None else 0
+    n_teams = int(row[1]) if row and row[1] is not None else 0
     if n == 0:
         return [
             WatchdogEvent(
@@ -150,16 +167,158 @@ def _check_pool(slate_date: str) -> list[WatchdogEvent]:
                 payload={"pool_size": 0},
             )
         ]
+    out: list[WatchdogEvent] = []
     if n < 10:
-        return [
+        # D84: escalated from warn. A sub-10 pool means the ingest
+        # partially failed and the 21:00 freeze would optimize over a
+        # broken universe (the 2026-06-08 incident shape).
+        out.append(
             WatchdogEvent(
                 slate_date=slate_date,
                 trigger="pool_too_small",
-                severity=SEVERITY_WARN,
+                severity=SEVERITY_ERROR,
                 payload={"pool_size": n, "threshold": 10},
             )
+        )
+    if n_teams < 2:
+        # Rows exist but from a single team: a degenerate capture that a
+        # raw row count can miss. No valid slate has one team.
+        out.append(
+            WatchdogEvent(
+                slate_date=slate_date,
+                trigger="pool_degenerate_teams",
+                severity=SEVERITY_CRITICAL,
+                payload={"pool_size": n, "n_teams": n_teams},
+            )
+        )
+    return out
+
+
+def _check_enrichment_freshness(
+    slate_date: str, *, now_utc: dt.datetime | None = None
+) -> list[WatchdogEvent]:
+    """D84: warn when the slate's enrichment is stale near freeze time.
+
+    After 20:00 UTC (an hour before the 21:00 freeze) the newest
+    job1_enrichment capture should be from today's 13:00 UTC fire or
+    later. An older capture means job1 silently never refreshed and job2
+    is about to freeze on yesterday's universe.
+    """
+    now_utc = now_utc or dt.datetime.now(dt.UTC)
+    if now_utc.strftime("%Y-%m-%d") != slate_date or now_utc.hour < 20:
+        return []
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(POOL_SIZE_Q, {"sd": slate_date}).first()
+    last_captured = row[2] if row else None
+    if last_captured is None:
+        return []  # no_job1_pool already covers the empty case
+    if last_captured.tzinfo is None:
+        last_captured = last_captured.replace(tzinfo=dt.UTC)
+    fresh_floor = now_utc.replace(hour=13, minute=30, second=0, microsecond=0)
+    if last_captured >= fresh_floor:
+        return []
+    return [
+        WatchdogEvent(
+            slate_date=slate_date,
+            trigger="enrichment_stale",
+            severity=SEVERITY_WARN,
+            payload={
+                "last_captured_utc": last_captured.isoformat(),
+                "fresh_floor_utc": fresh_floor.isoformat(),
+            },
+        )
+    ]
+
+
+LABEL_COVERAGE_Q = text(
+    """
+    SELECT
+        (SELECT COUNT(*)::int FROM job1_enrichment e
+         WHERE e.slate_date = :sd) AS n_pool,
+        (SELECT COUNT(*)::int FROM job1_enrichment e
+         WHERE e.slate_date = :sd
+           AND NOT EXISTS (
+               SELECT 1 FROM slate_labels l
+               WHERE l.slate_date = :sd
+                 AND l.platform_player_id = e.player_id
+           )) AS n_missing
+    """
+)
+
+LABEL_MISSING_SAMPLE_Q = text(
+    """
+    SELECT e.player_id, e.name FROM job1_enrichment e
+    WHERE e.slate_date = :sd
+      AND NOT EXISTS (
+          SELECT 1 FROM slate_labels l
+          WHERE l.slate_date = :sd
+            AND l.platform_player_id = e.player_id
+      )
+    ORDER BY e.player_id
+    LIMIT 10
+    """
+)
+
+
+def _check_label_coverage(slate_date: str) -> list[WatchdogEvent]:
+    """D85: pool players missing from slate_labels lose training labels
+    permanently (the Loyd/Boston gap on 2026-06-08).
+
+    Compares the slate's job1_enrichment universe against slate_labels
+    after dayclose finalizes the contest. Error above 20% missing, warn
+    on any gap. Called from the dayclose path, not the cron loop: labels
+    only exist after contest finalization.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(LABEL_COVERAGE_Q, {"sd": slate_date}).first()
+        n_pool = int(row[0]) if row and row[0] is not None else 0
+        n_missing = int(row[1]) if row and row[1] is not None else 0
+        if n_pool == 0 or n_missing == 0:
+            return []
+        sample = [
+            {"player_id": int(r[0]), "name": str(r[1])}
+            for r in conn.execute(LABEL_MISSING_SAMPLE_Q, {"sd": slate_date})
         ]
-    return []
+    frac = n_missing / n_pool
+    return [
+        WatchdogEvent(
+            slate_date=slate_date,
+            trigger="label_coverage_gap",
+            severity=SEVERITY_ERROR if frac > 0.20 else SEVERITY_WARN,
+            payload={
+                "n_pool": n_pool,
+                "n_missing": n_missing,
+                "missing_frac": round(frac, 3),
+                "sample": sample,
+            },
+        )
+    ]
+
+
+def _ping_on_critical(events: list[WatchdogEvent]) -> None:
+    """D84: best-effort dead-man's-switch ping when anything critical fired.
+
+    GETs {WATCHDOG_PING_URL}/fail so an external monitor (healthchecks.io
+    style) pages the operator. Never raises; paging must not break the
+    pipeline it watches. No-op until the operator provisions the URL
+    (see NEEDS_HUMAN.md).
+    """
+    from wnba_oracle.common.settings import get_settings
+
+    url = get_settings().watchdog_ping_url.strip().rstrip("/")
+    if not url:
+        return
+    if not any(ev.severity == SEVERITY_CRITICAL for ev in events):
+        return
+    try:
+        import httpx
+
+        httpx.get(f"{url}/fail", timeout=5.0)
+        log.info("watchdog_ping_sent", url_suffix="/fail")
+    except Exception as exc:
+        log.warning("watchdog_ping_failed", reason=str(exc)[:120])
 
 
 def _check_freeze(slate_date: str, *, now_utc: dt.datetime | None = None) -> list[WatchdogEvent]:
@@ -225,9 +384,11 @@ def run_watchdog(
     log.info("watchdog_run", slate_date=slate_date)
     events: list[WatchdogEvent] = []
     events.extend(_check_pool(slate_date))
+    events.extend(_check_enrichment_freshness(slate_date, now_utc=now_utc))
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
     if events:
         persist_events(events)
+        _ping_on_critical(events)
     else:
         log.info("watchdog_clean", slate_date=slate_date)
     return events

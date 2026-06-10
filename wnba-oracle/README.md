@@ -15,9 +15,19 @@ Two-phase fire:
 - **Job 1 (morning):** scrape Real Sports player pool, headless re-auth,
   pull odds + RotoWire lineups, build features, persist enrichment.
 - **Job 2 (near tip):** run models, run picker, freeze output to Redis +
-  Postgres. Once frozen the lineup never re-rolls intra-day.
+  Postgres. Freezes are append-only (D82): every fire writes a new
+  `frozen_lineups` row keyed on `(slate_date, model_sha, freeze_seq)` with
+  `frozen_via` provenance; nothing overwrites a row the operator may have
+  acted on. The D75 late re-freeze appends and is gated on contest lock
+  time (D83).
 
-Single FastAPI surface exposes the frozen lineup.
+Single FastAPI surface exposes the frozen lineup:
+
+- `GET /lineup/{date}` serves the latest freeze and includes `freeze_seq`,
+  `frozen_via`, and `n_freezes` so a re-frozen slate is visible at a glance.
+- `GET /lineup/{date}/history` returns every freeze for the slate,
+  oldest first (audit surface).
+- `GET /lineup` lists recent slates, one entry per `(slate_date, model_sha)`.
 
 Model stack: LightGBM multi-task heads (minutes, per-minute rates,
 recompose) trained on a 13k-row game-log corpus with team pace and opponent

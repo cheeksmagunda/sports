@@ -56,7 +56,7 @@ def _fake_engine(existing_row: bool, insert_returns_row: bool = True) -> MagicMo
     # `.begin()` returns a context manager whose conn.execute(FROZEN_INSERT)
     # returns a result with `.first()` returning the inserted row id or None.
     insert_result = MagicMock()
-    insert_result.first.return_value = (42,) if insert_returns_row else None
+    insert_result.first.return_value = (42, 1) if insert_returns_row else None
     insert_conn = MagicMock()
     insert_conn.execute.return_value = insert_result
     eng.begin.return_value.__enter__.return_value = insert_conn
