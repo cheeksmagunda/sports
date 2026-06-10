@@ -204,3 +204,24 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     against the 500 free-tier cap, plus game odds. If the slate grows or a third
     daily run is added, watch `x-requests-remaining` in job1 `player_props_quota`
     logs; props degrade to empty (no crash) on quota burn.
+
+20. **[NEW 2026-06-10, D84] Provision an external watchdog monitor.** The
+    watchdog now fires a best-effort GET to `{WATCHDOG_PING_URL}/fail` on any
+    critical event (job1_pool_degraded, no_job1_pool, pool_degenerate_teams,
+    no_frozen_lineup). Creating the monitoring account (healthchecks.io or
+    similar) is a human action; once you have the ping URL, say the word and
+    the build can set WATCHDOG_PING_URL on api/cron-job1/cron-job1-late/
+    cron-job2 via the Railway GraphQL API. Until then the new checks still
+    persist to watchdog_events and surface on /watchdog/today.
+
+21. **[NEW 2026-06-10, D82-D85] Deploy + prod follow-ups need credentials.**
+    This remediation branch was built in an environment without `.env`
+    (no DATABASE_URL / RAILWAY_TOKEN), so four steps remain for a session
+    with prod access; the full ordered checklist with exact SQL lives at the
+    top of STATUS.md: apply migration 20260610_0006 by deploying all
+    services from one commit in the 06:30-12:30 UTC quiet window (old code
+    breaks on the new schema and vice versa -- never leave a job2 fire
+    between the two); run the D84 forensic queries for 2026-06-08; run the
+    D85 backfill to recover the Loyd/Boston labels; decide whether RESULTS.md
+    should annotate the 2026-06-08 entry, given the lineup the operator
+    entered was overwritten and is unrecoverable under the old schema.
