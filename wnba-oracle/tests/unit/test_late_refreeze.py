@@ -3,8 +3,8 @@
 When LATE_REFREEZE_ENABLED=true and the current UTC time is past
 LATE_REFREEZE_AFTER_UTC, _freeze() is called with force=True. The force
 path skips the Postgres existence check, uses the wnba.late_frozen.{sd}
-Redis key (first-fire-wins, 24h TTL), and executes FROZEN_UPSERT to
-overwrite the existing frozen row.
+Redis key (first-fire-wins, 24h TTL), and (since D82) APPENDS a new
+frozen row via FROZEN_APPEND so the 21:00 UTC freeze stays intact.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def _fake_engine_for_force(upsert_returns_row: bool = True) -> MagicMock:
     """Engine mock for force=True path: begin() fires (no connect() needed)."""
     eng = MagicMock()
     upsert_result = MagicMock()
-    upsert_result.first.return_value = (99,) if upsert_returns_row else None
+    upsert_result.first.return_value = (99, 2) if upsert_returns_row else None
     upsert_conn = MagicMock()
     upsert_conn.execute.return_value = upsert_result
     eng.begin.return_value.__enter__.return_value = upsert_conn
@@ -99,8 +99,9 @@ def test_force_second_fire_bails_on_late_frozen_key() -> None:
     eng.begin.assert_not_called()
 
 
-def test_force_upsert_payload_frozen_via_late_refreeze() -> None:
-    """The metadata_json in the upsert marks the row as a late re-freeze."""
+def test_force_append_payload_frozen_via_late_refreeze() -> None:
+    """Both the frozen_via column and the metadata_json copy mark the row
+    as a late re-freeze."""
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=True)
     with patch.object(job2, "get_engine", return_value=eng), patch.object(
@@ -109,8 +110,25 @@ def test_force_upsert_payload_frozen_via_late_refreeze() -> None:
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     call_args = eng.begin.return_value.__enter__.return_value.execute.call_args
     payload = call_args.args[1]
+    assert payload["frozen_via"] == "job2_late_refreeze"
     meta = json.loads(payload["metadata_json"])
     assert meta["frozen_via"] == "job2_late_refreeze"
+
+
+def test_force_uses_append_statement_not_update() -> None:
+    """D82: the force path appends a new row; the SQL must not contain an
+    ON CONFLICT ... DO UPDATE clause that could touch the earlier freeze."""
+    eng = _fake_engine_for_force()
+    rd = _fake_redis(lock_wins=True)
+    with patch.object(job2, "get_engine", return_value=eng), patch.object(
+        job2, "get_redis", return_value=rd
+    ):
+        job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
+    call_args = eng.begin.return_value.__enter__.return_value.execute.call_args
+    sql = str(call_args.args[0])
+    assert "DO UPDATE" not in sql
+    assert "DO NOTHING" in sql
+    assert "freeze_seq" in sql
 
 
 def test_force_false_preserves_normal_flow() -> None:
