@@ -371,6 +371,37 @@ async def _search_with_query(
     return 200, (r.json() or {}).get("players", []) or []
 
 
+async def fetch_slate_game_times(
+    headers: RequestHeaders,
+    client: httpx.AsyncClient,
+    *,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
+) -> list[str]:
+    """Per-game tip times for the current slate from /home/wnba/next.
+
+    Returns the raw `dateTime` ISO strings of `latestDayContent.games`
+    (UTC, e.g. "2026-05-27T23:00:00.000Z"). The platform exposes no
+    contest lock timestamp (only a live `isLocked` boolean on the contest
+    payload), so the earliest game time is the contest-lock proxy the D83
+    late-refreeze gate uses. Empty list on a payload without games.
+    """
+    h = _http_headers(headers)
+    r = await _real_sports_get_with_retry(
+        client,
+        f"{BASE}/home/{SPORT}/next",
+        headers=h,
+        params={"cohort": 0},
+        refresh_headers=refresh_headers,
+    )
+    games = (r.json().get("latestDayContent") or {}).get("games") or []
+    out: list[str] = []
+    for g in games:
+        t = str(g.get("dateTime") or "").strip()
+        if t:
+            out.append(t)
+    return out
+
+
 async def fetch_pool_for_date(
     slate_date: str,
     headers: RequestHeaders,

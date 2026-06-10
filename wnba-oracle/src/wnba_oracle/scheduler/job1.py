@@ -42,6 +42,7 @@ from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
     capture_live_headers,
     fetch_pool_for_date,
+    fetch_slate_game_times,
     headers_or_capture,
 )
 from wnba_oracle.ingest.rotowire import LineupEntry, fetch_lineups
@@ -78,6 +79,70 @@ JOB1_UPSERT = text(
         captured_at = now();
     """
 )
+
+
+SLATE_META_UPSERT = text(
+    """
+    INSERT INTO slate_meta (
+        slate_date, first_tip_utc, contest_lock_utc, source, payload_json, updated_at
+    ) VALUES (
+        :slate_date, :first_tip_utc, :contest_lock_utc, :source,
+        CAST(:payload_json AS JSONB), now()
+    )
+    ON CONFLICT (slate_date) DO UPDATE SET
+        first_tip_utc = EXCLUDED.first_tip_utc,
+        contest_lock_utc = EXCLUDED.contest_lock_utc,
+        source = EXCLUDED.source,
+        payload_json = EXCLUDED.payload_json,
+        updated_at = now();
+    """
+)
+
+
+def parse_game_time(raw: str) -> dt.datetime | None:
+    """Parse a Real Sports game `dateTime` ("2026-05-27T23:00:00.000Z")
+    into an aware UTC datetime. None on anything unparseable."""
+    if not raw:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def _persist_slate_meta(slate_date: str, game_times: list[str]) -> None:
+    """UPSERT the slate's timing facts (D83).
+
+    first_tip_utc is the earliest game time, the contest-lock proxy.
+    contest_lock_utc stays NULL until the platform exposes a real lock
+    timestamp (probe 2026-06-10: the contest payload only carries a live
+    `isLocked` boolean). A row with NULL first_tip_utc still gets written
+    so the gate can tell "job1 looked and found nothing" from "job1 never
+    ran" when debugging.
+    """
+    parsed = sorted(t for t in (parse_game_time(g) for g in game_times) if t is not None)
+    first_tip = parsed[0] if parsed else None
+    eng = get_engine()
+    with eng.begin() as conn:
+        conn.execute(
+            SLATE_META_UPSERT,
+            {
+                "slate_date": slate_date,
+                "first_tip_utc": first_tip,
+                "contest_lock_utc": None,
+                "source": "realsports_home_next",
+                "payload_json": json.dumps({"game_times": game_times}),
+            },
+        )
+    log.info(
+        "job1_slate_meta",
+        slate_date=slate_date,
+        first_tip_utc=first_tip.isoformat() if first_tip else None,
+        n_games=len(game_times),
+    )
 
 
 def _device_uuid() -> str:
@@ -130,7 +195,7 @@ def is_out_status(status: str | None) -> bool:
     return any(tok in upper for tok in _OUT_STATUS_TOKENS)
 
 
-async def _do_pool_fetch(slate_date: str) -> list:
+async def _do_pool_fetch(slate_date: str) -> tuple[list, list[str]]:
     headers = await headers_or_capture(_device_uuid(), _device_name())
 
     async def _refresh():
@@ -147,7 +212,17 @@ async def _do_pool_fetch(slate_date: str) -> list:
             pool = await fetch_pool_for_date(
                 slate_date, headers, client, refresh_headers=_refresh
             )
-    return pool
+        # D83: per-game tip times feed the late-refreeze lock gate. Strictly
+        # best-effort; a slate_meta miss degrades the gate to its deadline
+        # fallback, never the pool fetch.
+        try:
+            game_times = await fetch_slate_game_times(
+                headers, client, refresh_headers=_refresh
+            )
+        except Exception as exc:
+            log.warning("job1_game_times_failed", reason=str(exc)[:120])
+            game_times = []
+    return pool, game_times
 
 
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
@@ -155,8 +230,17 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     sd = slate_date or dt.date.today().isoformat()
     log.info("job1_start", slate_date=sd, dry_run=dry_run)
 
-    pool = asyncio.run(_do_pool_fetch(sd))
+    pool, game_times = asyncio.run(_do_pool_fetch(sd))
     log.info("job1_pool", n=len(pool))
+
+    # D83: persist the slate's first tip (contest-lock proxy) so the job2
+    # late re-freeze can refuse to append after lock. The platform exposes
+    # no lock timestamp, so the earliest game dateTime stands in for it.
+    if not dry_run:
+        try:
+            _persist_slate_meta(sd, game_times)
+        except Exception as exc:
+            log.warning("job1_slate_meta_failed", reason=str(exc)[:120])
 
     try:
         odds = fetch_odds_for_slate()
