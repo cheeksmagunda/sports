@@ -95,6 +95,50 @@ def test_enrichment_freshness_quiet_before_20utc() -> None:
     assert events == []
 
 
+def _engine_with_coverage(
+    n_pool: int, n_missing: int, sample: list[tuple] | None = None
+) -> MagicMock:
+    eng = MagicMock()
+    cov_result = MagicMock()
+    cov_result.first.return_value = (n_pool, n_missing)
+    sample_result = iter(sample or [])
+    conn = MagicMock()
+    conn.execute.side_effect = [cov_result, sample_result]
+    eng.connect.return_value.__enter__.return_value = conn
+    return eng
+
+
+def test_label_coverage_gap_warn_on_small_gap() -> None:
+    eng = _engine_with_coverage(80, 2, [(726, "J. Loyd"), (627, "A. Boston")])
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        events = watchdog._check_label_coverage("2026-06-08")
+    assert len(events) == 1
+    assert events[0].trigger == "label_coverage_gap"
+    assert events[0].severity == "warn"
+    assert events[0].payload["n_missing"] == 2
+    assert {s["player_id"] for s in events[0].payload["sample"]} == {726, 627}
+
+
+def test_label_coverage_gap_error_above_20pct() -> None:
+    eng = _engine_with_coverage(80, 40, [(1, "P1")])
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        events = watchdog._check_label_coverage("2026-06-08")
+    assert events[0].severity == "error"
+
+
+def test_label_coverage_clean_no_event() -> None:
+    eng = _engine_with_coverage(80, 0)
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        assert watchdog._check_label_coverage("2026-06-08") == []
+
+
+def test_label_coverage_quiet_on_empty_pool() -> None:
+    """no_job1_pool owns the empty-pool signal; coverage stays silent."""
+    eng = _engine_with_coverage(0, 0)
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        assert watchdog._check_label_coverage("2026-06-08") == []
+
+
 def _ev(severity: str) -> watchdog.WatchdogEvent:
     return watchdog.WatchdogEvent(
         slate_date="2026-05-27", trigger="t", severity=severity, payload={}
