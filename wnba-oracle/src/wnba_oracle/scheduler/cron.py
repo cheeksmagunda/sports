@@ -39,9 +39,21 @@ def main() -> int:
     )
 
     if args.job == "job1":
-        from wnba_oracle.scheduler import job1
+        import datetime as dt
 
-        return job1.main()
+        from wnba_oracle.scheduler import job1
+        from wnba_oracle.scheduler.watchdog import run_watchdog
+
+        rc = job1.main()
+        # D84: run the watchdog after job1 too, so a degraded or absent
+        # morning pool pages at 13:00 UTC instead of being discovered by
+        # the 21:00 job2 fire (or the operator's screenshot). Wrapped so a
+        # watchdog crash never masks job1's exit code.
+        try:
+            run_watchdog(dt.date.today().isoformat())
+        except Exception as exc:
+            log.exception("watchdog_failed", error=str(exc))
+        return rc
     if args.job == "job2":
         import datetime as dt
 

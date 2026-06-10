@@ -2651,3 +2651,44 @@ entered. Gating pre-lock keeps "latest row" == "what shipped at lock".
 **Reverse**: unset LATE_REFREEZE_ENABLED (gate moot), or revert the
 commit. Settings defaults are safe with slate_meta missing (deadline
 fallback).
+
+---
+
+## 2026-06-10: D84 -- degraded job1 pool is a hard error + watchdog runs after job1 [verified]
+
+**Decision**: job1 gates its persisted pool with `pool_sanity(rows)`:
+fail when `n_rows < max(JOB1_MIN_POOL, 3 * n_teams)` (default floor 12) or
+`n_teams < JOB1_MIN_TEAMS` (default 2). Persist happens FIRST so the
+degraded capture stays in job1_enrichment for forensics; then job1 logs
+`job1_pool_degraded` at error level, writes a critical
+`job1_pool_degraded` watchdog event, and main() exits 1 so Railway marks
+the cron run failed. cron.py now runs the watchdog after job1 fires too
+(it previously ran only after job2, so a 13:00 UTC failure stayed
+invisible until 21:00 or later).
+
+**Root cause [verified, from the 2026-06-08 operator audit]**: the 13:06
+UTC cron-job1 fire persisted 1 row / 1 team for the slate while the 22:41
+UTC cron-job1-late fire captured 82 rows / 6 teams. job1 has no minimum-
+pool check anywhere; every sub-step degrades gracefully by design, so the
+1-row capture logged as a normal `job1_done` and `job1_enrichment` looked
+"present" to everything downstream.
+
+**Unresolved discrepancy [reasoned, needs prod forensics]**: job2's
+existing `pool_too_small` gate returns early without freezing when the
+pool has < 5 rows, so a 21:00 UTC freeze against a 1-row pool should have
+been impossible. Either the first freeze actually happened on a later
+cron fire (cron-job2 fires every 15 min) after the 22:41 pool landed, or
+something re-captured between 13:06 and 21:00. The old overwrite-in-place
+schema destroyed the first row's frozen_at, so this cannot be settled
+from the current DB state -- which is itself the D82 motivation. Forensic
+queries are listed in STATUS.md for the next operator session with DB
+access; this environment has no credentials (see NEEDS_HUMAN.md).
+
+**Paging [reasoned]**: watchdog gains an optional dead-man's-switch-style
+ping (WATCHDOG_PING_URL): on any critical event it GETs {url}/fail
+best-effort. External heartbeat monitoring is the standard remedy for
+silent cron failure; provisioning the URL is a human action (account
+creation), logged in NEEDS_HUMAN.md.
+
+**Reverse**: set JOB1_MIN_POOL=0 and JOB1_MIN_TEAMS=0 (gate passes
+everything) or revert the commit.

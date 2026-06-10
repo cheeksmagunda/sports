@@ -57,6 +57,9 @@ class Job1Result:
     n_odds: int
     n_lineups: int
     persisted_rows: int
+    # D84: non-empty when the persisted pool failed the sanity gate. main()
+    # exits nonzero on it so Railway marks the cron run failed.
+    degraded_reasons: tuple[str, ...] = ()
 
 
 JOB1_UPSERT = text(
@@ -183,6 +186,26 @@ def _index_rotowire(entries: list[LineupEntry]) -> dict[tuple[str, str], LineupE
         key = (e.team.upper(), _normalize_name(e.player_name))
         index[key] = e
     return index
+
+
+def pool_sanity(rows: list[dict], *, min_pool: int, min_teams: int) -> list[str]:
+    """D84: failure reasons for a degraded pool, empty when healthy.
+
+    The effective row floor scales with slate size (3 rows per distinct
+    team) without needing the game count, floored at `min_pool` so a
+    one-team capture can never pass by shrinking its own expectation.
+    """
+    n_rows = len(rows)
+    teams = {str(r.get("team", "") or "").strip() for r in rows}
+    teams.discard("")
+    n_teams = len(teams)
+    reasons: list[str] = []
+    row_floor = max(min_pool, 3 * n_teams)
+    if n_rows < row_floor:
+        reasons.append(f"n_pool={n_rows} below floor {row_floor}")
+    if n_teams < min_teams:
+        reasons.append(f"n_teams={n_teams} below floor {min_teams}")
+    return reasons
 
 
 def is_out_status(status: str | None) -> bool:
@@ -469,6 +492,42 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
                 conn.execute(JOB1_UPSERT, row)
                 persisted += 1
 
+    # D84 sanity gate, AFTER persist on purpose: a degraded capture still
+    # lands in job1_enrichment for forensics, but the run is marked failed
+    # so it can never silently masquerade as a healthy fire (the 2026-06-08
+    # morning fire persisted 1 row / 1 team and looked "present").
+    degraded = pool_sanity(
+        rows, min_pool=settings.job1_min_pool, min_teams=settings.job1_min_teams
+    )
+    if degraded:
+        log.error(
+            "job1_pool_degraded",
+            slate_date=sd,
+            reasons=degraded,
+            n_rows=len(rows),
+            persisted=persisted,
+        )
+        if not dry_run and settings.database_url:
+            try:
+                from wnba_oracle.scheduler.watchdog import (
+                    SEVERITY_CRITICAL,
+                    WatchdogEvent,
+                    persist_events,
+                )
+
+                persist_events(
+                    [
+                        WatchdogEvent(
+                            slate_date=sd,
+                            trigger="job1_pool_degraded",
+                            severity=SEVERITY_CRITICAL,
+                            payload={"reasons": degraded, "n_rows": len(rows)},
+                        )
+                    ]
+                )
+            except Exception as exc:
+                log.warning("job1_degraded_event_failed", reason=str(exc)[:120])
+
     log.info(
         "job1_done",
         slate_date=sd,
@@ -477,7 +536,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_lineups=len(lineups),
         persisted=persisted,
     )
-    return Job1Result(sd, len(pool), len(odds), len(lineups), persisted)
+    return Job1Result(
+        sd, len(pool), len(odds), len(lineups), persisted, tuple(degraded)
+    )
 
 
 def main() -> int:
@@ -485,8 +546,11 @@ def main() -> int:
     settings = get_settings()
     sd = dt.date.today().isoformat()
     try:
-        run(sd, dry_run=settings.job1_dry_run)
+        result = run(sd, dry_run=settings.job1_dry_run)
     except Exception as exc:
         log.exception("job1_failed", error=str(exc))
+        return 1
+    if result.degraded_reasons:
+        # Nonzero exit so Railway surfaces the cron run as failed.
         return 1
     return 0
