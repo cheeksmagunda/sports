@@ -43,6 +43,7 @@ from wnba_oracle.ingest.contest_stats import (
     dedupe_by_player,
     fetch_contest_entries,
     fetch_contest_stats,
+    labels_from_leaderboard_entries,
 )
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
@@ -93,6 +94,38 @@ def persist_labels(labels: list[ContestLabel]) -> int:
         for label in dedupe_by_player(labels):
             conn.execute(UPSERT_SQL, label.__dict__)
             n += 1
+    return n
+
+
+# D85: supplemental labels (leaderboard-derived) must never clobber a
+# canonical three-section row, so they insert with DO NOTHING instead of
+# the UPSERT above.
+SUPPLEMENT_SQL = text(
+    """
+    INSERT INTO slate_labels (
+        contest_id, slate_date, section, platform_player_id, display_name,
+        team_key, card_boost, drafts, real_score, ingested_at
+    )
+    VALUES (
+        :contest_id, :slate_date, :section, :platform_player_id, :display_name,
+        :team_key, :card_boost, :drafts, :real_score, now()
+    )
+    ON CONFLICT (contest_id, platform_player_id) DO NOTHING;
+    """
+)
+
+
+def persist_supplemental_labels(labels: list[ContestLabel]) -> int:
+    """Insert leaderboard-derived labels, skipping players that already
+    have a canonical row. Returns the number actually inserted."""
+    if not labels:
+        return 0
+    engine = _engine()
+    n = 0
+    with engine.begin() as conn:
+        for label in dedupe_by_player(labels):
+            result = conn.execute(SUPPLEMENT_SQL, label.__dict__)
+            n += int(result.rowcount or 0)
     return n
 
 
@@ -267,10 +300,16 @@ def run_historical_backfill(
                     log.warning("auth_required_entries", contest_id=cid)
                     n_auth_failed += 1
 
+            n_supplemental = 0
             if persist_to_pg:
                 persist_labels(labels)
                 if entries:
                     persist_leaderboard_entries(entries)
+                    # D85: harvest finisher-lineup labels for pool players
+                    # the three draftStats sections never covered.
+                    n_supplemental = persist_supplemental_labels(
+                        labels_from_leaderboard_entries(entries)
+                    )
 
             n_success += 1
             n_lb_entries += len(entries)
@@ -280,6 +319,7 @@ def run_historical_backfill(
                 slate_date=slate_date,
                 n_labels=len(labels),
                 n_entries=len(entries),
+                n_supplemental=n_supplemental,
             )
             time.sleep(pause_seconds)
 

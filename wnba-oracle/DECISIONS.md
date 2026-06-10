@@ -2692,3 +2692,55 @@ creation), logged in NEEDS_HUMAN.md.
 
 **Reverse**: set JOB1_MIN_POOL=0 and JOB1_MIN_TEAMS=0 (gate passes
 everything) or revert the commit.
+
+---
+
+## 2026-06-10: D85 -- full-universe slate labels via leaderboard lineups [verified]
+
+**Decision**: harvest supplemental training labels from the top-20
+finisher lineups already persisted in contest_leaderboards. New
+`labels_from_leaderboard_entries` parses each lineup dict's `playerId` +
+`value` (the same verbatim fields results_ledger has trusted since D66)
+into `section="leaderboard_lineup"` ContestLabel rows; new
+`persist_supplemental_labels` inserts them with
+`ON CONFLICT (contest_id, platform_player_id) DO NOTHING` so a canonical
+three-section row always wins. Wired into `run_historical_backfill` after
+the leaderboard persist, which covers both the dayclose cron and manual
+`oracle-backfill` runs. `fetch_contest_stats` now logs any
+`sectionName` it drops (`contest_stats_unknown_sections`), and the D84
+watchdog gains `_check_label_coverage` (called from dayclose) that diffs
+the slate's job1_enrichment universe against slate_labels and emits
+`label_coverage_gap` (error above 20 percent missing, warn otherwise).
+
+**Root cause [verified]**: slate_labels is built ONLY from the three
+draftStats sections (`highestBoostedValuePlayers`, `popularPlayers`,
+`mostCommon3xPlayers`), roughly 30 highlighted players per slate. J. Loyd
+(pid 726) and A. Boston (pid 627) were in no section for the 2026-06-08
+contest, so they got no row at all. This is not the D72 name-matching
+gap: the dayclose parser never saw them. D72's own discovery notes
+already flagged slate_labels as "the wrong reference point" for the full
+universe.
+
+**card_boost for supplemental rows [reasoned]**: the lineup dicts carry
+`multiplier` (the finisher's chosen slot multiplier), which must never be
+mistaken for card_boost. The parser reads `multiplierBonus` when present
+and otherwise writes 0.0; the section marker makes these rows
+identifiable so training can treat their boost as unreliable. A
+follow-up may join job1_enrichment.card_boost at read time.
+
+**Not done [reasoned]**: deriving labels for players absent from BOTH
+sources via the locked real_score formula over wnba_game_logs. Plausible
+(job1 already reconstructs per-game real_score for minutes features) but
+ships only after validating the formula reproduces platform `value`
+exactly on overlapping players. Until then a leaderboard miss surfaces
+through label_coverage_gap instead of silently losing the label.
+
+**Backfill [needs prod DB]**: re-run
+`oracle-backfill --mode historical --start-id <cid> --stop-id <cid>` for
+the 2026-06-08 contest to recover Loyd (0.8) and Boston (2.94) if any
+top-20 finisher drafted them. This environment has no DATABASE_URL;
+the command is queued in STATUS.md / NEEDS_HUMAN.md.
+
+**Reverse**: revert the commit;
+`DELETE FROM slate_labels WHERE section = 'leaderboard_lineup'` removes
+every supplemental row cleanly.

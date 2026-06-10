@@ -187,6 +187,19 @@ def fetch_contest_stats(
         )
     slate_date = str(contest.get("day", ""))
     sections = body.get("draftStats") or []
+    # D85: surface sections we silently drop. slate_labels only covers the
+    # three known sections (~30 players/slate); if the platform ever ships
+    # a fuller section this log line is how we find out.
+    unknown_sections = [
+        str(s.get("sectionName")) for s in sections
+        if s.get("sectionName") not in DRAFT_STATS_SECTIONS
+    ]
+    if unknown_sections:
+        log.info(
+            "contest_stats_unknown_sections",
+            contest_id=contest_id,
+            sections=unknown_sections,
+        )
     out: list[ContestLabel] = []
     for sec in sections:
         sec_name = sec.get("sectionName")
@@ -321,6 +334,58 @@ def fetch_contest_entries(
             )
         )
     return out
+
+
+def labels_from_leaderboard_entries(
+    entries: list[LeaderboardEntry],
+) -> list[ContestLabel]:
+    """D85: supplemental labels from top-20 finisher lineups.
+
+    The /stats draftStats sections cover only ~30 highlighted players per
+    slate; any pool player outside them (Loyd/Boston on 2026-06-08) loses
+    their realized real_score forever. Leaderboard lineups carry the same
+    per-player `value` verbatim from the platform (results_ledger already
+    trusts the field), so harvest them as `section="leaderboard_lineup"`
+    rows. Persistence uses DO NOTHING so these never clobber a canonical
+    three-section row.
+
+    card_boost reads `multiplierBonus` when the lineup dict carries it and
+    falls back to 0.0; the section marker keeps the provenance explicit so
+    training can treat the boost as unreliable for these rows. `multiplier`
+    is the finisher's chosen slot multiplier, never a boost; it is ignored.
+    """
+    out: list[ContestLabel] = []
+    for entry in entries:
+        for p in entry.lineup:
+            if not isinstance(p, dict):
+                continue
+            pid = p.get("playerId")
+            if pid is None:
+                continue
+            team_obj = p.get("team")
+            team_raw = p.get("teamKey") or (
+                team_obj.get("key") if isinstance(team_obj, dict) else None
+            )
+            team_key = str(team_raw or "UNK").strip().upper() or "UNK"
+            name = _player_display_name(p)
+            try:
+                boost = float(p.get("multiplierBonus", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                boost = 0.0
+            out.append(
+                ContestLabel(
+                    contest_id=entry.contest_id,
+                    slate_date=entry.slate_date,
+                    section="leaderboard_lineup",
+                    platform_player_id=int(pid),
+                    display_name=name or f"Player {pid}",
+                    team_key=team_key[:8],
+                    card_boost=boost,
+                    drafts=None,
+                    real_score=_parse_real_score(p.get("value")),
+                )
+            )
+    return dedupe_by_player(out)
 
 
 def labels_to_polars(labels: list[ContestLabel]) -> pl.DataFrame:
