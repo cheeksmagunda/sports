@@ -121,6 +121,14 @@ class Settings(BaseSettings):
     # Default off. See D75.
     late_refreeze_enabled: bool = Field(default=False, alias="LATE_REFREEZE_ENABLED")
     late_refreeze_after_utc: str = Field(default="23:00", alias="LATE_REFREEZE_AFTER_UTC")
+    # D83 lock gate: the late re-freeze must never replace the lineup the
+    # operator acted on after the contest locks. When slate_meta carries a
+    # lock time (or first-tip proxy), the re-freeze is allowed only until
+    # lock minus refreeze_lock_buffer_min minutes. When no lock time is
+    # known, late_refreeze_deadline_utc (HH:MM UTC) is a hard stop instead
+    # of silently proceeding. 23:30 default = earliest typical WNBA tip.
+    refreeze_lock_buffer_min: int = Field(default=10, alias="REFREEZE_LOCK_BUFFER_MIN")
+    late_refreeze_deadline_utc: str = Field(default="23:30", alias="LATE_REFREEZE_DEADLINE_UTC")
     # prop_signal_scale: how strongly sportsbook player prop over/under probabilities
     # adjust the head prediction (D78). Formula: pred *= (1 + (over_prob - 0.5) * scale).
     # At scale=0.3: over_prob=0.60 -> +3% adjustment; over_prob=0.40 -> -3%.

@@ -868,6 +868,62 @@ FROZEN_APPEND = text(
 
 FROZEN_EXISTS = text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms")
 
+SLATE_LOCK_Q = text(
+    "SELECT contest_lock_utc, first_tip_utc FROM slate_meta WHERE slate_date = :sd"
+)
+
+
+def _load_slate_lock_time(slate_date: str) -> dt.datetime | None:
+    """The slate's contest lock time from slate_meta (D83).
+
+    Prefers an explicit contest_lock_utc; falls back to first_tip_utc
+    (DFS contests lock at first game start, and the platform exposes no
+    lock timestamp). None when job1 never captured timing for the slate,
+    in which case the gate uses its hard deadline instead.
+    """
+    try:
+        eng = get_engine()
+        with eng.connect() as conn:
+            row = conn.execute(SLATE_LOCK_Q, {"sd": slate_date}).first()
+    except Exception as exc:
+        log.warning("job2_slate_lock_read_failed", reason=str(exc)[:120])
+        return None
+    if row is None:
+        return None
+    lock = row[0] or row[1]
+    if lock is None:
+        return None
+    if lock.tzinfo is None:
+        lock = lock.replace(tzinfo=dt.UTC)
+    return lock.astimezone(dt.UTC)
+
+
+def _late_refreeze_allowed(
+    now_utc: dt.datetime,
+    lock_time_utc: dt.datetime | None,
+    settings,
+) -> tuple[bool, str]:
+    """D83 lock gate for the late re-freeze.
+
+    Lock time known: allow only strictly before lock minus the buffer.
+    Lock time unknown: allow only strictly before the configured hard
+    deadline (HH:MM UTC). A malformed deadline blocks the re-freeze;
+    failing closed is the point of the gate.
+    """
+    if lock_time_utc is not None:
+        buffer = dt.timedelta(minutes=int(settings.refreeze_lock_buffer_min))
+        if now_utc < lock_time_utc - buffer:
+            return True, "pre_lock"
+        return False, "lock_gated"
+    try:
+        h, m = (int(x) for x in settings.late_refreeze_deadline_utc.split(":"))
+        deadline = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
+    except (ValueError, AttributeError):
+        return False, "bad_deadline_config"
+    if now_utc < deadline:
+        return True, "pre_deadline_no_locktime"
+    return False, "deadline_no_locktime"
+
 
 def _build_per_player(
     rec: LineupRecommendation,
@@ -1104,10 +1160,11 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         return Job2Result(sd, model_sha, rec, False, "dry_run")
 
     # D75: late re-freeze. If enabled and current UTC time is past the
-    # configured cutoff, pass force=True so the existing freeze row is
-    # overwritten with the freshest optimizer output. The Redis key
-    # wnba.late_frozen.{sd} (first-fire-wins, 24h TTL) prevents the next
-    # 15-min cron fires from overwriting again.
+    # configured cutoff, pass force=True so a fresh optimizer run appends
+    # a new freeze (D82). The Redis key wnba.late_frozen.{sd}
+    # (first-fire-wins, 24h TTL) prevents the next 15-min cron fires from
+    # appending again. The D83 lock gate then refuses any append at or
+    # after contest lock: the operator already acted on the served row.
     force_refreeze = False
     if settings.late_refreeze_enabled:
         now_utc = dt.datetime.now(dt.UTC)
@@ -1117,6 +1174,41 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
             force_refreeze = now_utc >= cutoff
         except (ValueError, AttributeError):
             log.warning("job2_late_refreeze_bad_config", val=settings.late_refreeze_after_utc)
+        if force_refreeze:
+            lock_time = _load_slate_lock_time(sd)
+            allowed, gate_reason = _late_refreeze_allowed(now_utc, lock_time, settings)
+            if not allowed:
+                force_refreeze = False
+                log.warning(
+                    "job2_late_refreeze_gated",
+                    slate_date=sd,
+                    reason=gate_reason,
+                    lock_time_utc=lock_time.isoformat() if lock_time else None,
+                )
+                try:
+                    from wnba_oracle.scheduler.watchdog import (
+                        SEVERITY_WARN,
+                        WatchdogEvent,
+                        persist_events,
+                    )
+
+                    persist_events(
+                        [
+                            WatchdogEvent(
+                                slate_date=sd,
+                                trigger="late_refreeze_gated",
+                                severity=SEVERITY_WARN,
+                                payload={
+                                    "reason": gate_reason,
+                                    "lock_time_utc": (
+                                        lock_time.isoformat() if lock_time else None
+                                    ),
+                                },
+                            )
+                        ]
+                    )
+                except Exception as exc:
+                    log.warning("job2_gate_event_failed", reason=str(exc)[:120])
 
     frozen = _freeze(sd, model_sha, rec, curve.regime, projection_by_pid, force=force_refreeze)
     status = "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")

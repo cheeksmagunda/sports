@@ -2618,3 +2618,36 @@ last pre-lock freeze, which is what the operator entered.
 
 **Reverse**: `alembic downgrade 20260605_0005` (lossy: keeps only the
 highest freeze_seq per key) and revert the code commits.
+
+---
+
+## 2026-06-10: D83 -- late re-freeze gated on contest lock time [verified]
+
+**Decision**: job1 captures per-game tip times from the platform's
+`/home/wnba/next` payload (`latestDayContent.games[].dateTime`) via the new
+`fetch_slate_game_times` and UPSERTs the earliest into
+`slate_meta.first_tip_utc`. job2's late re-freeze path calls
+`_late_refreeze_allowed(now, lock_time, settings)` before forcing: with a
+known lock time it allows the append only strictly before
+`lock - REFREEZE_LOCK_BUFFER_MIN` (default 10 min); with no lock time it
+allows only strictly before `LATE_REFREEZE_DEADLINE_UTC` (default 23:30,
+the earliest typical WNBA tip). A gated skip logs
+`job2_late_refreeze_gated` and persists a warn `late_refreeze_gated`
+watchdog event. Malformed deadline config fails closed.
+
+**Lock-time source [verified]**: probed the captured fixtures. The Real
+Sports contest payload exposes only a live `isLocked` boolean, no lock
+timestamp. The `/home/wnba/next` game objects carry `dateTime` (UTC tip).
+DFS contests lock at first game start, so first tip is the lock proxy;
+`slate_meta.contest_lock_utc` stays NULL until the platform exposes a real
+timestamp. The Odds API `commence_time` was considered and rejected as
+primary: it is a different universe from the platform's own slate.
+
+**Why gate at all when D82 appends [reasoned]**: the append is
+non-destructive, but serving reads the latest row. An append after lock
+would still change what /lineup shows away from the lineup the operator
+entered. Gating pre-lock keeps "latest row" == "what shipped at lock".
+
+**Reverse**: unset LATE_REFREEZE_ENABLED (gate moot), or revert the
+commit. Settings defaults are safe with slate_meta missing (deadline
+fallback).
