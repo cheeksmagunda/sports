@@ -1110,7 +1110,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # 15-min cron fires from overwriting again.
     force_refreeze = False
     if settings.late_refreeze_enabled:
-        now_utc = dt.datetime.now(dt.timezone.utc)
+        now_utc = dt.datetime.now(dt.UTC)
         try:
             h, m = (int(x) for x in settings.late_refreeze_after_utc.split(":"))
             cutoff = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)

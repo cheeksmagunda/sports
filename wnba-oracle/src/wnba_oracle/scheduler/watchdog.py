@@ -132,7 +132,7 @@ FROZEN_Q = text(
     "SELECT lineup, expected_payout, frozen_at "
     "FROM frozen_lineups "
     "WHERE slate_date = :sd "
-    "ORDER BY frozen_at DESC LIMIT 1"
+    "ORDER BY freeze_seq DESC, frozen_at DESC LIMIT 1"
 )
 
 

@@ -91,6 +91,10 @@ class SlateResult:
     expected_payout: float | None
     players: list[PlayerLine]
     leaderboard_scores: list[float] = field(default_factory=list)
+    # D82 provenance: which freeze produced this row. freeze_seq > 1 means
+    # the slate was re-frozen and deserves a closer read.
+    freeze_seq: int = 1
+    frozen_via: str = "unknown"
 
     @property
     def total(self) -> float:
@@ -193,6 +197,7 @@ posted a real_score). Scoring: `(slot_mult + card_boost) * real_score`.
 - `payout_regime={result.payout_regime}` (from the frozen row) `[verified]`
 - `entry_recommendation={result.entry_recommendation}`, expected_payout {exp} `[verified]`
 - `model_sha={result.model_sha}` `[verified]`
+- `freeze_seq={result.freeze_seq}`, `frozen_via={result.frozen_via}` (D82 provenance) `[verified]`
 - serving config at report time: {knob_str} `[verified]`
 
 ### Read-through
@@ -204,12 +209,15 @@ posted a real_score). Scoring: `(slot_mult + card_boost) * real_score`.
 # --------------------------------------------------------------------------
 # DB layer
 # --------------------------------------------------------------------------
+# D82: frozen_lineups is append-only; the latest freeze_seq is the lineup
+# the operator acted on (the D83 lock gate guarantees no post-lock appends).
 FROZEN_SELECT = text(
     """
-    SELECT model_sha, payout_regime, entry_recommendation, expected_payout, lineup
+    SELECT model_sha, payout_regime, entry_recommendation, expected_payout,
+           lineup, freeze_seq, frozen_via
     FROM frozen_lineups
     WHERE slate_date = :sd
-    ORDER BY frozen_at DESC
+    ORDER BY freeze_seq DESC, frozen_at DESC
     LIMIT 1
     """
 )
@@ -275,6 +283,8 @@ def load_slate_result(conn: Connection, slate_date: str) -> SlateResult | None:
         ),
         players=build_player_lines(lineup_json, real_score_by_pid),
         leaderboard_scores=leaderboard_scores,
+        freeze_seq=int(frozen.freeze_seq),
+        frozen_via=str(frozen.frozen_via),
     )
 
 
