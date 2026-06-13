@@ -29,10 +29,105 @@ from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.ingest.backfill import run_historical_backfill
 from wnba_oracle.ingest.realsports import discover_wnba_contest_id
+from wnba_oracle.picker.optimize import DEFAULT_SLOT_MULTIPLIERS
 
 log = get_logger("oracle.dayclose")
 
 DEFAULT_WALK_WINDOW = 12  # cover yesterday + the prior day's residue
+
+
+def _auto_record_placement(slate_date: str) -> None:
+    """Score yesterday's frozen lineup against the captured leaderboard and
+    append a row to contest_placements. Entry count is not stored (we only
+    have the top-20 capture, not the full field size), so finish_percentile
+    is NULL until the operator supplies the real total via the CLI. This
+    still records the lineup score, relative rank in the top-20, and the
+    freeze snapshot for calibration purposes.
+    """
+    import json as _json
+
+    import polars as _pl
+    from sqlalchemy import create_engine, text
+
+    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+    from wnba_oracle.scheduler.placements import auto_record_from_dayclose
+
+    settings = get_settings()
+    if not settings.database_url:
+        return
+
+    sl = read_slate_labels().filter(_pl.col("slate_date") == slate_date)
+    lb = read_leaderboards().filter(_pl.col("slate_date") == slate_date)
+    if sl.height == 0 or lb.height == 0:
+        log.info("auto_placement_no_data", slate_date=slate_date)
+        return
+
+    # Build real-score lookup from finalized slate_labels
+    rs_by_pid: dict[int, float] = {}
+    boost_by_pid: dict[int, float] = {}
+    for r in sl.iter_rows(named=True):
+        pid = int(r["platform_player_id"])
+        rs = r["real_score"]
+        rs_by_pid[pid] = float(rs) if rs is not None else 0.0
+        boost_by_pid[pid] = float(r["card_boost"])
+
+    engine = create_engine(settings.database_url, future=True)
+    with engine.connect() as conn:
+        # Pull the most-recent frozen lineup for this slate
+        row = conn.execute(
+            text("SELECT lineup FROM frozen_lineups WHERE slate_date = :sd ORDER BY id DESC LIMIT 1"),
+            {"sd": slate_date},
+        ).first()
+        if row is None:
+            log.info("auto_placement_no_frozen_lineup", slate_date=slate_date)
+            return
+
+        lineup_json = row[0] if isinstance(row[0], dict) else _json.loads(row[0])
+        player_ids = [int(p) for p in lineup_json.get("player_ids", [])]
+        if not player_ids:
+            return
+
+        # Compute our realized lineup score via rearrangement
+        members = sorted(
+            ((pid, rs_by_pid.get(pid, 0.0)) for pid in player_ids),
+            key=lambda x: -x[1],
+        )
+        our_score = sum(
+            (DEFAULT_SLOT_MULTIPLIERS[i] + boost_by_pid.get(pid, 0.0)) * rs
+            for i, (pid, rs) in enumerate(members)
+        )
+
+        lb_scores = lb["score"].to_list()
+        contest_ids = lb["contest_id"].unique().to_list()
+        contest_id = int(contest_ids[0]) if contest_ids else 0
+
+        actual_own: dict[int, float] | None = None
+        total_drafts = sum(r["drafts"] or 0 for r in sl.iter_rows(named=True) if r.get("drafts"))
+        if total_drafts > 0:
+            actual_own = {
+                int(r["platform_player_id"]): float(r["drafts"] or 0) / total_drafts
+                for r in sl.iter_rows(named=True)
+            }
+
+        result = auto_record_from_dayclose(
+            conn,
+            slate_date=slate_date,
+            entry_score=our_score,
+            leaderboard_scores=lb_scores,
+            contest_id=contest_id,
+            actual_ownership=actual_own,
+        )
+        if result is None:
+            log.info("auto_placement_skipped", slate_date=slate_date, reason="no_frozen_lineup")
+        else:
+            log.info(
+                "auto_placement_recorded",
+                slate_date=slate_date,
+                our_score=round(our_score, 3),
+                relative_rank=result.get("entry_rank"),
+                n_lb_entries=len(lb_scores),
+            )
+        conn.commit()
 
 
 def main() -> int:
@@ -86,6 +181,14 @@ def main() -> int:
             log.info("dayclose_label_coverage_clean", slate_date=yesterday)
     except Exception as exc:
         log.exception("dayclose_label_coverage_failed", error=str(exc))
+
+    # D90 / D91: auto-record placement against the captured top-20 leaderboard.
+    # Best-effort; never changes the dayclose exit code.
+    if settings.database_url:
+        try:
+            _auto_record_placement(yesterday)
+        except Exception as exc:
+            log.exception("dayclose_auto_placement_failed", error=str(exc))
 
     # Best-effort: refresh the RESULTS.md ledger for the slate that just
     # finalized (yesterday UTC). Guarded by WNBA_RESULTS_LEDGER so the

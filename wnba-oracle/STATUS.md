@@ -81,16 +81,17 @@ end-to-end via `scripts/manual_fire.py --fixtures`. The operator starts
 the live shadow window via `oracle-rotate-check --window-days 7` after
 the live collector has accumulated >= 7 slate labels in `slate_labels`.
 
-## Live services (verified 2026-06-07)
+## Live services (verified 2026-06-13)
 
 - api:       https://api-production-7033.up.railway.app/health -> 200
 - api:       https://api-production-7033.up.railway.app/lineup -> 200
 - frontend:  https://frontend-production-a739.up.railway.app/ -> 200
 - postgres:  internal + public TCP proxy (TLSv1.3, SSL via start-command cert,
-  D61). Alembic head = 20260605_0005. CANONICAL corpus store: slate_labels +
-  contest_leaderboards (141+ slates, 2025-05-16..ongoing) + wnba_game_logs
-  (13,456+ player-games, 2024-05-03..ongoing). All reads via `db.reads`
-  helpers; local parquet files are archival backups only.
+  D61). Alembic head = 20260613_0007 (D90: contest_placements + player_slate_ownership
+  applied 2026-06-13). CANONICAL corpus store: slate_labels + contest_leaderboards
+  (141+ slates, 2025-05-16..ongoing) + wnba_game_logs (13,456+ player-games,
+  2024-05-03..ongoing). All reads via `db.reads` helpers; local parquet files
+  are archival backups only.
 - redis:     internal, password-protected
 - cron-backup (GitHub Action `corpus-backup`): `43 6 * * *` UTC, exports corpus
   to off-`main` `backups` branch (D61). 3-2-1 off-site copy.
@@ -106,7 +107,7 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
 - cron-dayclose: `0 6 * * *` UTC -- extend corpus from finalized contest ids
   (D41/D60, service id 606d950d).
 
-## Active Railway env vars (cron-job2, verified 2026-06-07, D79)
+## Active Railway env vars (cron-job2, verified 2026-06-13, D91)
 
 Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
 (picker_e2ced9ec_1780873338.pkl, D77b). Set on api, cron-job1, cron-job2.
@@ -133,6 +134,14 @@ Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
 | FIELD_MEASURED_OWNERSHIP_ENABLED | true (code default) | D86 |
 | CAVEAT_IS_SKIP | false | D48 (superseded by NEVER_SKIP) |
 | SAMPLING_SCORE_OFFSET | 2.0 (code default) | D52 |
+| FIELD_SAME_GAME_BOOST | calibrated 2026-06-13 -- see D91 | D88 |
+| FIELD_SAME_TEAM_BOOST | calibrated 2026-06-13 -- see D91 | D88 |
+| OPTIMIZER_DUPLICATION_AWARE_PAYOUT | calibrated 2026-06-13 -- see D91 | D88 |
+| OPTIMIZER_LEVERAGE_WEIGHT | 0.0 (code default, synthesis: double-counts) | D87 |
+| OPTIMIZER_CEILING_WEIGHT | 0.0 (code default, arm post-placement loop) | D87 |
+| OPTIMIZER_DUPLICATION_WEIGHT | 0.0 (code default, arm post-placement loop) | D87 |
+| OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST | 0.0 (code default, arm when blowout signal armed) | D89 |
+| OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST | 0.0 (code default, arm post-calibration) | D89 |
 
 All flags reverse via env with no redeploy. Set *_ENABLED=false or unset numeric
 knobs to revert to code defaults.

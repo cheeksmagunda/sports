@@ -313,8 +313,8 @@ def record_placement(
     *,
     slate_date: str,
     contest_id: int,
-    entry_rank: int,
-    entry_count: int,
+    entry_rank: int | None,
+    entry_count: int | None,
     entry_score: float | None = None,
     payout_received_cents: int | None = None,
     entry_fee_cents: int | None = None,
@@ -442,6 +442,52 @@ def record_placement(
         "freeze_model_sha": freeze_model_sha,
         "expected_payout": expected_payout,
     }
+
+
+def auto_record_from_dayclose(
+    conn: Connection,
+    *,
+    slate_date: str,
+    entry_score: float,
+    leaderboard_scores: list[float],
+    contest_id: int,
+    actual_ownership: dict[int, float] | None = None,
+) -> dict[str, Any] | None:
+    """Record placement automatically after day-close ingestion.
+
+    Called by `job_dayclose.py` once real scores are in `slate_labels`
+    and the frozen lineup exists. Computes relative rank within the
+    captured leaderboard (top-20 captures). Sets entry_count=None because
+    the total contest field size is not stored -- finish_percentile will be
+    NULL until the operator runs `oracle-placements record` with the real
+    total. The auto record still surfaces `entry_score`, the frozen lineup
+    snapshot, and the beat-top-N booleans.
+
+    Returns None if there is no frozen lineup for `slate_date` (non-contest
+    slate or lineup never frozen) or if a placement was already recorded
+    today.
+    """
+    frozen = conn.execute(FROZEN_SNAPSHOT_SELECT_LATEST, {"sd": slate_date}).first()
+    if frozen is None:
+        return None
+
+    lb_sorted = sorted(leaderboard_scores, reverse=True)
+    n_above = sum(1 for s in lb_sorted if s > entry_score)
+    relative_rank = n_above + 1
+
+    return record_placement(
+        conn,
+        slate_date=slate_date,
+        contest_id=contest_id,
+        entry_rank=relative_rank,
+        entry_count=None,
+        entry_score=entry_score,
+        payout_received_cents=None,
+        entry_fee_cents=None,
+        source="auto_dayclose",
+        actual_ownership=actual_ownership,
+        freeze_seq=None,
+    )
 
 
 def summarize_placements(conn: Connection, *, window: int = 50) -> dict[str, Any]:

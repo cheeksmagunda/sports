@@ -225,3 +225,19 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     D85 backfill to recover the Loyd/Boston labels; decide whether RESULTS.md
     should annotate the 2026-06-08 entry, given the lineup the operator
     entered was overwritten and is unrecoverable under the old schema.
+
+22. **[NEW 2026-06-13, D90] Record real placement totals for completed slates.**
+    The day-close job now auto-records relative rank within the captured top-20
+    leaderboard (source="auto_dayclose"), but finish_percentile requires the
+    actual total contest entries which is not available from the top-20 capture.
+    After each contest, run:
+    ```
+    oracle-placements record \
+      --slate-date YYYY-MM-DD --contest-id <id> \
+      --rank <your_rank> --count <total_entries> \
+      --score <your_lineup_score> \
+      --payout-cents 0 --entry-fee-cents 100
+    ```
+    The total_entries and your actual rank are visible on the Real Sports
+    contest results page. These numbers unlock the finish_percentile column and
+    PIT calibration histogram (needs 30+ slates).

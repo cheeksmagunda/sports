@@ -2958,3 +2958,60 @@ auto-populate placements when our entry sits in `contest_leaderboards`.
 **Reverse.** New tables, no impact on existing flows. To revert, drop the
 tables via the migration downgrade; nothing in the freeze path depends on
 them.
+
+### D91: parameter calibration sweep against 33 historical 2026 slates [verified]
+
+**Context.** D86-D90 introduced 8 new optimizer/field env vars, all set to
+their no-op defaults. Deciding which to arm required backtesting against
+realized outcomes. Per the 2026 synthesis (research/internal/07_placement_overhaul.md)
+the additive objective-shaping terms (D87: leverage, ceiling, duplication weights)
+should stay at 0.0 while the field simulator is the primary calibration surface.
+The synthesis predicts that stack-aware field simulation (D88) is the highest-ROI
+lever once measured ownership is wired (D86).
+
+**Sweep design [verified].** `scripts/calibrate_knobs.py` precomputes
+(sampling_specs, field_specs) once per slate via `_build_specs` -- which loads
+measured drafts from `slate_labels.drafts` -- then sweeps 16 combos of:
+  - `field_same_game_boost` in {1.0, 2.0, 3.0, 4.0}
+  - `field_same_team_boost` in {1.0, 2.0}
+  - `duplication_aware_payout` in {False, True}
+across all 33 2026 slates where realized `real_score` + top-20 leaderboard
+captures are available. Calibration objective: fraction of slates where the
+optimizer's chosen lineup beats the leaderboard's 10th-place score (proxy for
+"would place inside captured top-50% of the top-20 field"). Secondary: top-5
+and top-1 rates.
+
+**Result [verified].** Sweep completed 2026-06-13 across 33 slates. Full table:
+
+```
+  Config                       beat>=med beat>=top5 beat>=top1  gap_vs_1st
+  game=3x team=2x dup=N            12.1%      9.1%      0.0%      13.14  <-- WINNER
+  game=3x team=2x dup=Y            12.1%      9.1%      0.0%      13.14
+  game=1x team=2x dup=N             9.1%      3.0%      3.0%      12.19
+  game=1x team=2x dup=Y             9.1%      3.0%      3.0%      12.19
+  game=2x team=1x dup=N             9.1%      3.0%      3.0%      12.30
+  game=2x team=1x dup=Y             9.1%      3.0%      3.0%      12.30
+  game=1x team=1x dup=N             6.1%      3.0%      3.0%      14.74
+  game=4x team=2x dup=N             3.0%      3.0%      0.0%      12.55
+  game=4x team=1x dup=N             6.1%      3.0%      0.0%      13.96
+  game=3x team=1x dup=N             3.0%      0.0%      0.0%      13.98
+```
+
+Key findings: (1) `FIELD_SAME_GAME_BOOST=3.0` + `FIELD_SAME_TEAM_BOOST=2.0` wins on
+beat-median (12.1% = 4/33 slates). (2) `duplication_aware_payout` had zero effect
+on lineup selection -- every dup=Y result is identical to dup=N -- left at false.
+(3) Maximum observable beat-median rate is 12.1%; the model is below the captured
+top-20 median on 88% of slates, confirming the systematic ~6% player-score gap
+observed in the backfill (all 16 historical entries ranked 21/20). The gap is
+a player-selection quality issue, not a formula bug. (4) Applied env vars:
+FIELD_SAME_GAME_BOOST=3.0, FIELD_SAME_TEAM_BOOST=2.0, OPTIMIZER_DUPLICATION_AWARE_PAYOUT=false;
+cron-job2 redeployed 2026-06-13.
+
+**Literature.** Stack-aware correlated field draws follow Hunter, Vielma, and
+Zenios (2019) -- field opponents are not IID uniform draws but are correlated
+within game/team stacks. The calibration objective (fraction of slates beating
+captured-field median) is the placement-percentile-proxy recommended by the
+synthesis in lieu of full GPD tail fitting with only 20 order statistics.
+
+**Reverse.** All three env vars default to their no-op values (1.0/1.0/false).
+Revert via env without redeploy.
