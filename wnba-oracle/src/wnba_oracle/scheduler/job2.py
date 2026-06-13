@@ -813,11 +813,24 @@ def _build_specs(
                 is_anchor=is_anchor_by_pid.get(pid, False),
             )
         )
+        # D86: when enabled, attach the real measured draft count so the field
+        # simulation samples opponent lineups from observed ownership instead of
+        # a softmax of our own projections. measured_drafts was loaded above for
+        # the contrarian penalty; here it also grounds the EV/leverage math.
+        md = (
+            float(measured_drafts[pid])
+            if (
+                getattr(settings, "field_measured_ownership_enabled", True)
+                and pid in measured_drafts
+            )
+            else None
+        )
         fields.append(
             FieldPlayerSpec(
                 player_id=pid,
                 pred_real_score=pred,
                 card_boost=boost,
+                measured_drafts=md,
             )
         )
         enrichment_name = str(r.get("name", "") or "").strip()

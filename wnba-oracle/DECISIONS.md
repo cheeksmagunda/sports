@@ -2744,3 +2744,60 @@ the command is queued in STATUS.md / NEEDS_HUMAN.md.
 **Reverse**: revert the commit;
 `DELETE FROM slate_labels WHERE section = 'leaderboard_lineup'` removes
 every supplemental row cleanly.
+
+### D86: feed real measured ownership into the field model (`FIELD_MEASURED_OWNERSHIP_ENABLED`) [verified]
+
+**Context.** The 2026-06-12 entry finished 4,253rd of 8,300 (median) despite
+every one of the five picks beating its projection [screenshot]. The two best
+cards were the two lowest-owned (Allemand 4% own -> 3.8x, Onyenwere 6% -> 3.5x);
+the three chalk cards (Austin/Johnson/Fam, 20-35% owned) merely met projection
+and dragged the entry to the middle. Diagnosis in
+`research/internal/07_placement_overhaul.md`.
+
+**Root cause [verified].** `picker/field.py:project_ownership` derived the
+simulated opponents' ownership from a softmax of OUR OWN `pred_real_score *
+(1+card_boost)`, and `optimize.py` scored those opponents with our own copula
+samples. The EV/rank engine therefore played against a strawman field that
+drafts exactly what our value model likes, never concentrating the way the real
+field does (35% of entries on one player). With no real duplication signal the
+convex payout curve had nothing to bite on, so the optimizer could not price
+leverage and shipped chalk. The real ownership is observed (the in-app draft
+counts, captured by job1 into `slate_labels.drafts`); job2 loaded it at line 551
+but spent it only on the small scalar contrarian penalty and discarded it before
+the field simulation. `FieldPlayerSpec` had no field for it.
+
+**Literature [literature].** Hunter/Vielma/Zaman, *Picking Winners* (INFORMS,
+arXiv 1604.01455): in top-heavy contests optimize the probability of a top
+finish (ceiling + diversity), not the mean, and model correlation. Haugh &
+Singal (Columbia): opponents' lineups are a strategic variable, so model
+ownership explicitly and maximize payout GIVEN the field. Practitioner consensus
+for single-entry large-field GPPs (Stokastic/4for4/dfsbuild, 2024-2026): core of
+3 stable plays + 2 leverage plays, ~20-30% average ownership, leverage =
+ceiling x (1 - ownership), ceiling beats floor as the field grows. The
+screenshot confirms all of it.
+
+**Decision [verified].** Phase 0 of the overhaul. `FieldPlayerSpec` gains
+`measured_drafts`. `project_ownership` uses the real draft counts as the
+ownership marginal when present, back-filling unobserved late entrants from the
+old estimator rescaled to the measured median; byte-identical to pre-D86 when no
+counts are attached. `job2._build_specs` attaches the already-loaded
+`measured_drafts` to each `FieldPlayerSpec`, gated by
+`FIELD_MEASURED_OWNERSHIP_ENABLED` (default on). No model retrain. 4 tests in
+`tests/unit/test_field_measured_ownership.py`.
+
+**Expected effect [reasoned].** The frozen lineup should de-chalk: 1-2 picks
+move from >25% to <10% projected ownership while 2-3 high-floor anchors remain,
+matching the literature's 20-30% average. The field math now rewards leverage
+directly instead of via a 0.16 nudge.
+
+**Phases 1-4 (proposed, not in this PR).** (1) Ingest the live payout curve from
+`info.rankDisplayInfos` so we stop optimizing a guessed top_20 cash curve; add an
+explicit leverage term. (2) Close the measurement loop: record realized rank /
+field size / ownership per slate into a `placements` table + RESULTS.md (the
+instrument; everything else is tuned against it). (3) Stack-aware field sampling
++ duplication penalty. (4) Ceiling-tilted upper-slot selection from the p90
+head. See `research/internal/07_placement_overhaul.md`.
+
+**Reverse.** `FIELD_MEASURED_OWNERSHIP_ENABLED=false` (no redeploy), or revert
+the commit. With no measured drafts on a slate the code auto-falls-back to the
+prior estimator.

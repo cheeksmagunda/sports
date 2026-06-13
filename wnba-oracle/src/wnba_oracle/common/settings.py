@@ -188,6 +188,16 @@ class Settings(BaseSettings):
     # at equal EV (a 2-stack adds 0.005 to ev, a 3-stack adds 0.010). The
     # cap relax/EV log paths from R2 are unaffected.
     optimizer_game_stack_bonus: float = Field(default=0.0, alias="OPTIMIZER_GAME_STACK_BONUS")
+    # D86: feed the real measured draft counts (slate_labels.drafts) into the
+    # field-ownership simulation instead of re-deriving the field from our own
+    # projections. The estimator builds a strawman field that drafts exactly
+    # what our value model likes, so the optimizer cannot see real duplication
+    # and underprices leverage (it ships chalk the live field also owns).
+    # Default on; FIELD_MEASURED_OWNERSHIP_ENABLED=false reverts to the
+    # pre-D86 estimator-only field with no redeploy.
+    field_measured_ownership_enabled: bool = Field(
+        default=True, alias="FIELD_MEASURED_OWNERSHIP_ENABLED"
+    )
 
 
 @lru_cache(maxsize=1)
