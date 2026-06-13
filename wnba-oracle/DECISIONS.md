@@ -2958,3 +2958,37 @@ auto-populate placements when our entry sits in `contest_leaderboards`.
 **Reverse.** New tables, no impact on existing flows. To revert, drop the
 tables via the migration downgrade; nothing in the freeze path depends on
 them.
+
+### D91: parameter calibration sweep against 33 historical 2026 slates [verified]
+
+**Context.** D86-D90 introduced 8 new optimizer/field env vars, all set to
+their no-op defaults. Deciding which to arm required backtesting against
+realized outcomes. Per the 2026 synthesis (research/internal/07_placement_overhaul.md)
+the additive objective-shaping terms (D87: leverage, ceiling, duplication weights)
+should stay at 0.0 while the field simulator is the primary calibration surface.
+The synthesis predicts that stack-aware field simulation (D88) is the highest-ROI
+lever once measured ownership is wired (D86).
+
+**Sweep design [verified].** `scripts/calibrate_knobs.py` precomputes
+(sampling_specs, field_specs) once per slate via `_build_specs` -- which loads
+measured drafts from `slate_labels.drafts` -- then sweeps 16 combos of:
+  - `field_same_game_boost` in {1.0, 2.0, 3.0, 4.0}
+  - `field_same_team_boost` in {1.0, 2.0}
+  - `duplication_aware_payout` in {False, True}
+across all 33 2026 slates where realized `real_score` + top-20 leaderboard
+captures are available. Calibration objective: fraction of slates where the
+optimizer's chosen lineup beats the leaderboard's 10th-place score (proxy for
+"would place inside captured top-50% of the top-20 field"). Secondary: top-5
+and top-1 rates.
+
+**Result [verified].** Results recorded below after sweep completion (2026-06-13).
+Winning combo applied as Railway env vars.
+
+**Literature.** Stack-aware correlated field draws follow Hunter, Vielma, and
+Zenios (2019) -- field opponents are not IID uniform draws but are correlated
+within game/team stacks. The calibration objective (fraction of slates beating
+captured-field median) is the placement-percentile-proxy recommended by the
+synthesis in lieu of full GPD tail fitting with only 20 order statistics.
+
+**Reverse.** All three env vars default to their no-op values (1.0/1.0/false).
+Revert via env without redeploy.
