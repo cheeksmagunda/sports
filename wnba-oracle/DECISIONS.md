@@ -2744,3 +2744,217 @@ the command is queued in STATUS.md / NEEDS_HUMAN.md.
 **Reverse**: revert the commit;
 `DELETE FROM slate_labels WHERE section = 'leaderboard_lineup'` removes
 every supplemental row cleanly.
+
+### D86: feed real measured ownership into the field model (`FIELD_MEASURED_OWNERSHIP_ENABLED`) [verified]
+
+**Context.** The 2026-06-12 entry finished 4,253rd of 8,300 (median) despite
+every one of the five picks beating its projection [screenshot]. The two best
+cards were the two lowest-owned (Allemand 4% own -> 3.8x, Onyenwere 6% -> 3.5x);
+the three chalk cards (Austin/Johnson/Fam, 20-35% owned) merely met projection
+and dragged the entry to the middle. Diagnosis in
+`research/internal/07_placement_overhaul.md`.
+
+**Root cause [verified].** `picker/field.py:project_ownership` derived the
+simulated opponents' ownership from a softmax of OUR OWN `pred_real_score *
+(1+card_boost)`, and `optimize.py` scored those opponents with our own copula
+samples. The EV/rank engine therefore played against a strawman field that
+drafts exactly what our value model likes, never concentrating the way the real
+field does (35% of entries on one player). With no real duplication signal the
+convex payout curve had nothing to bite on, so the optimizer could not price
+leverage and shipped chalk. The real ownership is observed (the in-app draft
+counts, captured by job1 into `slate_labels.drafts`); job2 loaded it at line 551
+but spent it only on the small scalar contrarian penalty and discarded it before
+the field simulation. `FieldPlayerSpec` had no field for it.
+
+**Literature [literature].** Hunter/Vielma/Zaman, *Picking Winners* (INFORMS,
+arXiv 1604.01455): in top-heavy contests optimize the probability of a top
+finish (ceiling + diversity), not the mean, and model correlation. Haugh &
+Singal (Columbia): opponents' lineups are a strategic variable, so model
+ownership explicitly and maximize payout GIVEN the field. Practitioner consensus
+for single-entry large-field GPPs (Stokastic/4for4/dfsbuild, 2024-2026): core of
+3 stable plays + 2 leverage plays, ~20-30% average ownership, leverage =
+ceiling x (1 - ownership), ceiling beats floor as the field grows. The
+screenshot confirms all of it.
+
+**Decision [verified].** Phase 0 of the overhaul. `FieldPlayerSpec` gains
+`measured_drafts`. `project_ownership` uses the real draft counts as the
+ownership marginal when present, back-filling unobserved late entrants from the
+old estimator rescaled to the measured median; byte-identical to pre-D86 when no
+counts are attached. `job2._build_specs` attaches the already-loaded
+`measured_drafts` to each `FieldPlayerSpec`, gated by
+`FIELD_MEASURED_OWNERSHIP_ENABLED` (default on). No model retrain. 4 tests in
+`tests/unit/test_field_measured_ownership.py`.
+
+**Expected effect [reasoned].** The frozen lineup should de-chalk: 1-2 picks
+move from >25% to <10% projected ownership while 2-3 high-floor anchors remain,
+matching the literature's 20-30% average. The field math now rewards leverage
+directly instead of via a 0.16 nudge.
+
+**Phases 1-4 (proposed, not in this PR).** (1) Ingest the live payout curve from
+`info.rankDisplayInfos` so we stop optimizing a guessed top_20 cash curve; add an
+explicit leverage term. (2) Close the measurement loop: record realized rank /
+field size / ownership per slate into a `placements` table + RESULTS.md (the
+instrument; everything else is tuned against it). (3) Stack-aware field sampling
++ duplication penalty. (4) Ceiling-tilted upper-slot selection from the p90
+head. See `research/internal/07_placement_overhaul.md`.
+
+**Reverse.** `FIELD_MEASURED_OWNERSHIP_ENABLED=false` (no redeploy), or revert
+the commit. With no measured drafts on a slate the code auto-falls-back to the
+prior estimator.
+
+### D87: explicit objective-shaping terms in the optimizer (`OPTIMIZER_LEVERAGE_WEIGHT`, `_CEILING_WEIGHT`, `_DUPLICATION_WEIGHT`) [verified]
+
+**Context.** Phase 1 of the placement overhaul. D86 plumbed real ownership
+into the field model but the EV objective itself was still pure
+`E[payout(rank))]` against the simulated field. The 2026 deep-research
+synthesis (4-agent workflow, Hunter/Vielma/Zaman + Haugh & Singal + 2024-2026
+industry consensus) confirms three correctives the rank-EV alone underprices:
+explicit leverage, upper-tail ceiling, duplicate-lineup risk.
+
+**Literature [literature].** Hunter/Vielma/Zaman 2016/2019 canonical objective
+for top-heavy contests = max P(top finish), which decomposes into ceiling +
+diversification + low-correlation field. Stokastic/4for4/Awesemo (2024-2026)
+all use `mean(-log own_i)` as the working leverage scalar and a duplication
+penalty proportional to `prod(own_i) * field_size`.
+
+**Decision [verified].** Add three additive terms to the EV inside
+`picker/optimize.py:_scan`, each gated by a weight defaulting to 0.0:
+
+- `leverage_weight * mean(-log own_i)` over the 5 picks (clipped at 1e-4).
+- `ceiling_weight * (p90 - p50) / p50` of the candidate's own lineup-score
+  samples (with the p50 > 1e-6 guard).
+- `duplication_weight * prod(own_i) * field_size` (deducted from EV).
+
+Default 0.0 is byte-identical to D86. Defining the knobs now -- but leaving
+them dormant -- gives the operator a calibration lever for the period after
+the D90 feedback loop has data but before Phases 3+4 are tuned to the live
+field. Settings: `OPTIMIZER_LEVERAGE_WEIGHT`, `OPTIMIZER_CEILING_WEIGHT`,
+`OPTIMIZER_DUPLICATION_WEIGHT`. 4 tests in
+`tests/unit/test_objective_shaping.py`.
+
+**Anti-pattern (per synthesis) [reasoned].** Arming these as the FINAL
+objective double-counts signal that Phases 3+4 produce naturally. They are
+calibration lift, not the live objective. Once the simulator and per-player
+marginals are tuned to the field these are expected to stay at 0.0.
+
+**Reverse.** Default 0.0 is the no-op; unset / set to 0.0 via env, no redeploy.
+
+### D88: stack-aware (correlated) field simulation + duplication-aware payout (`FIELD_SAME_GAME_BOOST`, `FIELD_SAME_TEAM_BOOST`, `OPTIMIZER_DUPLICATION_AWARE_PAYOUT`) [verified]
+
+**Context.** Phase 3 of the overhaul. The pre-D88 field sampler drew opponent
+lineups via `rng.choice(n, size=5, replace=False, p=ownership)` -- independent
+picks. The project's own research (`research/internal/01_winners_anatomy.md`)
+notes 87% of top-20 finishers stack 2+ picks from one game; the 2026 synthesis
+agrees the field stacks at empirically-observed rates that the iid sampler
+cannot reproduce.
+
+**Decision [verified].** Add `simulate_field_lineups_correlated` to
+`picker/field.py`: sequential weighted draw-without-replacement; after each
+pick the remaining-pool weights are multiplied by `same_team_boost` on
+teammates of the pick and by `same_game_boost` on opposite-team players in the
+same game (boosts compound across picks). When both boosts are 1.0 the
+function early-returns to the independent sampler with the same seed --
+byte-identical.
+
+Plus a duplication-aware payout mode in `optimize.py:_scan`: when armed, the
+combo's EV is divided by `(1 + n_clones_in_field)` where `n_clones` is the
+count of frozensets matching the combo. Mathematically equivalent (for a
+frozen combo, clone count is constant across samples) to the synthesis
+prescription of `E[payout(rank) / dup_count]`.
+
+The D87 additive `duplication_weight` and the D88 `duplication_aware_payout`
+are ALTERNATIVES, not complements; arm one or the other.
+
+Settings (all default to no-op): `FIELD_SAME_GAME_BOOST=1.0`,
+`FIELD_SAME_TEAM_BOOST=1.0`, `OPTIMIZER_DUPLICATION_AWARE_PAYOUT=false`.
+Synthesis suggested starting values: same_game=1.4, same_team=1.15. 5 tests
+in `tests/unit/test_field_stack_aware.py`.
+
+**Reverse.** Defaults are the no-op; revert via env, no redeploy.
+
+### D89: per-player ceiling sigma scaling (`OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST`, `_LOW_HISTORY_BOOST`) [verified]
+
+**Context.** Phase 4 of the overhaul. The 2026 synthesis names per-player
+variance scaling -- not the mean -- as the primary upper-tail signal for
+top-heavy contests. The codebase already samples on
+`log(real_score + K)` (lognormal-shaped, right-skewed); the operative
+widening lever is the per-player sigma.
+
+**Decision [verified].** Add `ceiling_adjusted_sigma_log` to
+`picker/sample.py`. Called from `job2._build_specs` after the existing
+band-clamped sigma is computed. Two additive multiplicative contributions:
+
+- `sigma *= 1 + blowout_boost * blowout_prob` -- widens sigma for games likely
+  to swing wide (garbage-time role volatility).
+- `sigma *= 1 + low_history_boost * (1 - n_games / 25)` -- widens sigma for
+  players with limited recent samples (sample-size shrinkage). The 25-game
+  target matches the existing minutes-model n_min_games convention.
+
+Result is clamped at sigma_log_cap=0.9 so stacked extremes cannot blow up the
+percentile bias. Both boosts default to 0.0 -- byte-identical to D86. Synthesis
+suggested starting values: blowout 0.15, low_history 0.20. 6 tests in
+`tests/unit/test_ceiling_sigma.py`.
+
+**Distribution-family swap deferred [reasoned].** The synthesis's full
+prescription is gamma marginals with method-of-moments fits + hierarchical
+archetype shrinkage. That is a larger surgery and the lognormal path is already
+right-skewed; sigma scaling captures the dominant upper-tail effect now. The
+swap is deferred until Phase 2 (D90) produces calibration evidence that the
+upper tail is structurally mis-shaped vs the lognormal family.
+
+**Reverse.** Defaults are the no-op; revert via env, no redeploy.
+
+### D90: closed-loop placement / calibration tracking (`oracle-placements`, contest_placements + player_slate_ownership) [verified]
+
+**Context.** Phase 2 of the overhaul, and the keystone instrument. Through
+D86 the project had one live-results entry in RESULTS.md and no schema for
+tracking where the entered lineup actually finished. Every optimizer tune was
+driven by offline projection accuracy. The 2026 synthesis flags this as the
+load-bearing fix: no later objective change (D87 weights, D88 stack boosts,
+D89 sigma scaling, future model SHAs) can be calibrated without the feedback
+loop.
+
+**Decision [verified].** Migration `20260613_0007_contest_placements.py` adds
+two append-only tables:
+
+- `contest_placements` -- one row per (slate_date, contest_id, recorded_at).
+  Captures realized outcome (rank, count, score, payout, ROI) plus the
+  forecast snapshot at freeze (model_sha, expected_payout, lineup-score
+  percentiles, payout curve, serving knobs, projected ownership). PK on the
+  three-tuple keeps re-records as history; readers take the latest by
+  recorded_at DESC.
+- `player_slate_ownership` -- per (slate_date, player_id) projected vs actual
+  ownership for the calibration loop.
+
+`scheduler/placements.py` is the pure-function-first writer/reader module:
+
+- `record_placement` writes a row, joining the freeze snapshot from
+  `frozen_lineups`.
+- `summarize_placements` emits rolling KPIs (median finish percentile, cash
+  rate, top-10%/top-1% rates, ROI). The synthesis display thresholds are
+  enforced: ROI hidden until 500 slates; tuning warning emitted below 100.
+- `compute_pit_value` + `pit_histogram` + `chi2_uniformity_pvalue` --
+  Probability-Integral-Transform diagnostics on the predicted finish CDF.
+  U-shape signals simulator under-dispersion; dome shape over-dispersion. The
+  chi2 uses Wilson-Hilferty + Abramowitz-Stegun to avoid the scipy dep.
+- `ownership_log_loss_by_decile` -- per-bucket binary cross-entropy on
+  projected vs actual ownership, localizing miscalibration regimes.
+
+CLI registered as `oracle-placements` in `pyproject.toml`:
+
+    oracle-placements record --slate-date YYYY-MM-DD --contest-id N \\
+        --rank R --count C --score S --payout-cents P --entry-fee-cents F
+    oracle-placements summary --window 50 --format markdown
+
+14 tests in `tests/unit/test_placements.py` covering PIT computation, chi-square
+underpower handling, log-loss bucketing, placement-row derivations, and summary
+markdown rendering.
+
+**Out of scope (deferred) [reasoned].** Automatic placement ingest from
+`job_dayclose` is a small follow-on; the CLI works standalone now. Once we
+confirm manual recording surfaces the metrics correctly, the dayclose hook can
+auto-populate placements when our entry sits in `contest_leaderboards`.
+
+**Reverse.** New tables, no impact on existing flows. To revert, drop the
+tables via the migration downgrade; nothing in the freeze path depends on
+them.

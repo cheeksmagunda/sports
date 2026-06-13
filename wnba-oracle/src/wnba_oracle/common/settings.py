@@ -188,6 +188,72 @@ class Settings(BaseSettings):
     # at equal EV (a 2-stack adds 0.005 to ev, a 3-stack adds 0.010). The
     # cap relax/EV log paths from R2 are unaffected.
     optimizer_game_stack_bonus: float = Field(default=0.0, alias="OPTIMIZER_GAME_STACK_BONUS")
+    # D86: feed the real measured draft counts (slate_labels.drafts) into the
+    # field-ownership simulation instead of re-deriving the field from our own
+    # projections. The estimator builds a strawman field that drafts exactly
+    # what our value model likes, so the optimizer cannot see real duplication
+    # and underprices leverage (it ships chalk the live field also owns).
+    # Default on; FIELD_MEASURED_OWNERSHIP_ENABLED=false reverts to the
+    # pre-D86 estimator-only field with no redeploy.
+    field_measured_ownership_enabled: bool = Field(
+        default=True, alias="FIELD_MEASURED_OWNERSHIP_ENABLED"
+    )
+    # D87 (Phase 1, objective shaping). Explicit additive corrective terms on
+    # top of the rank-based E[payout] objective, each in expected_payout units.
+    # All default 0.0 so the optimizer is byte-identical to pre-D87 until armed
+    # against placement data (D88). See research/internal/07_placement_overhaul.md.
+    #
+    #  - LEVERAGE_WEIGHT       : rewards mean(-log own_i) over the 5 picks
+    #                            (log-form penalises chalk asymmetrically).
+    #  - CEILING_WEIGHT        : rewards (p90 - p50)/p50 of the candidate's
+    #                            own lineup-score samples (top-heavy payouts).
+    #  - DUPLICATION_WEIGHT    : penalises prod(own_i)*field_size, the expected
+    #                            number of mirror entries against our 5-stack.
+    optimizer_leverage_weight: float = Field(default=0.0, alias="OPTIMIZER_LEVERAGE_WEIGHT")
+    optimizer_ceiling_weight: float = Field(default=0.0, alias="OPTIMIZER_CEILING_WEIGHT")
+    optimizer_duplication_weight: float = Field(
+        default=0.0, alias="OPTIMIZER_DUPLICATION_WEIGHT"
+    )
+    # D88 (Phase 3, stack-aware field). Multiplicative boost on the marginal
+    # weight of remaining-pool players that share a game (same-game) or team
+    # (same-team) with already-picked field players. Captures the empirical
+    # field-stack rate (per research/internal/01_winners_anatomy.md, 87% of
+    # top-20 lineups stack 2+ from one game). Defaults of 1.0 leave the
+    # independent-pick sampler in place byte-for-byte. Recommended starting
+    # values per the 2026 synthesis: same_game=1.4, same_team=1.15.
+    field_same_game_boost: float = Field(default=1.0, alias="FIELD_SAME_GAME_BOOST")
+    field_same_team_boost: float = Field(default=1.0, alias="FIELD_SAME_TEAM_BOOST")
+    # D88 (Phase 3, continued). When True, the optimizer prices duplication
+    # directly inside the EV via E[payout(rank) / (1 + dup_count)], the
+    # research-preferred treatment over the additive duplication_weight in
+    # D87. Default False; arm via OPTIMIZER_DUPLICATION_AWARE_PAYOUT=true.
+    optimizer_duplication_aware_payout: bool = Field(
+        default=False, alias="OPTIMIZER_DUPLICATION_AWARE_PAYOUT"
+    )
+    # D89 (Phase 4, ceiling/variance modeling). Environment-conditioned
+    # sigma scaling for the per-player lognormal marginal in the copula
+    # sampler. The synthesis recommends widening sigma -- not just nudging
+    # the mean -- to price upper-tail upside in top-heavy contests. Two
+    # additive contributions:
+    #
+    #  - SIGMA_BLOWOUT_BOOST  : sigma *= (1 + boost * blowout_prob)
+    #                           Adds upper-tail mass for games likely to swing
+    #                           wide (garbage time, late substitutions).
+    #
+    #  - SIGMA_LOW_HISTORY_BOOST : sigma *= (1 + boost * (1 - n_games / 25))
+    #                              Widens sigma for players with limited
+    #                              recent samples so the optimizer's
+    #                              percentile math reflects real uncertainty,
+    #                              not a tight noisy-mean band.
+    #
+    # Defaults of 0.0 leave the existing per-player sigma untouched. Recommended
+    # starting values from the synthesis: blowout 0.15, low_history 0.20.
+    ceiling_sigma_blowout_boost: float = Field(
+        default=0.0, alias="OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST"
+    )
+    ceiling_sigma_low_history_boost: float = Field(
+        default=0.0, alias="OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST"
+    )
 
 
 @lru_cache(maxsize=1)

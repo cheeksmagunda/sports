@@ -132,6 +132,59 @@ def sample_joint_real_scores(
     return np.exp(log_samples) - cfg.score_offset
 
 
+def ceiling_adjusted_sigma_log(
+    base_sigma_log: float,
+    *,
+    blowout_prob: float = 0.0,
+    n_history_games: int = 25,
+    high_history_target: int = 25,
+    blowout_boost: float = 0.0,
+    low_history_boost: float = 0.0,
+    sigma_log_cap: float = 0.9,
+) -> float:
+    """Environment-conditioned sigma scaling for the per-player marginal (D89,
+    Phase 4 ceiling modeling).
+
+    The 2026 GPP-modelling synthesis (research/internal/07_placement_overhaul.md)
+    names per-player variance scaling -- not just mean -- as the primary
+    upper-tail signal for top-heavy contests. The codebase already samples
+    real_score from a lognormal on log(real_score + K); the calibrated band
+    width feeds `base_sigma_log`. This helper widens that sigma when:
+
+    - `blowout_prob` is non-trivial. Blowout games create role-uncertainty
+      mass that the per-player band (fit on close-game samples) under-prices.
+      `blowout_boost * blowout_prob` is added to the sigma multiplier.
+
+    - `n_history_games` is well below `high_history_target` (default 25). Low
+      observation count means the empirical sigma is noisy AND the per-player
+      mean is shrunk; the synthesis prescription is to widen sigma so the
+      optimizer's upper tail reflects the genuine uncertainty rather than the
+      narrow sample band. `low_history_boost * (1 - n / target)` is added.
+
+    Defaults of 0.0 leave `base_sigma_log` untouched, preserving byte-identical
+    behaviour for callers that don't arm the boosts. The cap of 0.9 keeps the
+    log-scale sigma below the calibration band's outer edge so a single
+    outlier-feature player can't blow up the percentile bias.
+    """
+    if blowout_boost <= 0.0 and low_history_boost <= 0.0:
+        return base_sigma_log
+    # NaN-safe: a NaN from upstream (blowout_probability returning NaN on a
+    # degenerate spread) would otherwise propagate into sigma_log -> sample
+    # NaNs -> all-NaN EV -> silent forfeit. Treat NaN/inf as "no blowout
+    # signal" so the boost path stays inert in the degenerate case.
+    if not np.isfinite(blowout_prob):
+        blowout_prob = 0.0
+    bp = max(0.0, min(1.0, float(blowout_prob)))
+    blowout_term = blowout_boost * bp
+    n_clamped = max(0, min(high_history_target, n_history_games))
+    if high_history_target <= 0:
+        low_hist_term = 0.0
+    else:
+        low_hist_term = low_history_boost * (1.0 - n_clamped / high_history_target)
+    scaled = base_sigma_log * (1.0 + blowout_term + low_hist_term)
+    return min(sigma_log_cap, scaled)
+
+
 def lineup_score_samples(
     real_score_samples: np.ndarray,
     boosts: np.ndarray,

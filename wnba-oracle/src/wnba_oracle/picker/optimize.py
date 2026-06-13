@@ -22,12 +22,17 @@ See D42.
 from __future__ import annotations
 
 import itertools
+from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
 
 from wnba_oracle.common.logging import get_logger
-from wnba_oracle.picker.field import FieldPlayerSpec, project_ownership, simulate_field_lineups
+from wnba_oracle.picker.field import (
+    FieldPlayerSpec,
+    project_ownership,
+    simulate_field_lineups_correlated,
+)
 from wnba_oracle.picker.payout import PayoutCurve, expected_payout
 from wnba_oracle.picker.sample import (
     CopulaConfig,
@@ -236,6 +241,42 @@ class OptimizeConfig:
     # of top-20 lineups stack 2+ from one game; we currently model picks as
     # independent).
     game_stack_bonus: float = 0.0
+    # D87 (Phase 1 / objective shaping). Explicit additive terms on top of
+    # E[payout]. The 2026 research synthesis (research/internal/07*.md) warns
+    # that the THEORETICALLY clean target is duplication-penalized E[payout]
+    # alone, because leverage / ceiling / duplication are all emergent
+    # properties of a correctly calibrated field sim (Phase 3) + per-player
+    # ceiling marginals (Phase 4). Bolting additive correctives on top
+    # double-counts signal already in the simulator, and the weights are
+    # unpublished folklore unless calibrated against placement data.
+    #
+    # These knobs are kept as DORMANT calibration levers (default 0.0 -> the
+    # bare OptimizeConfig() is byte-identical to pre-D87 behaviour) so the
+    # operator can dial in a corrective during the period AFTER placement
+    # data exists (D88) but BEFORE the simulator + marginals are recalibrated
+    # to the live field. Once Phases 3 + 4 land and prove out, these are
+    # expected to stay at 0.0.
+    #
+    #  - leverage_weight    : reward mean(-log own_i) over the 5 picks.
+    #  - ceiling_weight     : reward (p90 - p50)/p50 of own lineup samples.
+    #  - duplication_weight : penalise prod(own_i)*field_size (expected
+    #                         mirror entries against our 5-stack).
+    leverage_weight: float = 0.0
+    ceiling_weight: float = 0.0
+    duplication_weight: float = 0.0
+    # D88 (Phase 3 / stack-aware field). When either boost is != 1.0, the
+    # field simulator generates correlated opponent lineups (same-game and
+    # same-team affinity after each pick). Default 1.0 leaves the
+    # independent-pick sampler in place byte-for-byte. Game / team keys are
+    # derived from the filtered pool's `team` and `opponent` fields.
+    field_same_game_boost: float = 1.0
+    field_same_team_boost: float = 1.0
+    # D88 (Phase 3, continued). When True, EV deducts an expected duplicate
+    # penalty inside expected_payout itself (per-sample rank weighted by
+    # 1/dup_count). This is the research-preferred way to price duplication,
+    # equivalent to the synthesis prescription of E[payout(rank)/dup_count].
+    # Default False so the math change is opt-in and byte-reversible.
+    duplication_aware_payout: bool = False
 
 
 def optimize_lineup(
@@ -292,8 +333,21 @@ def optimize_lineup(
     )
     # Project field ownership + sample opponent lineups.
     ownership = project_ownership(filtered_field)
-    field_lineup_idx = simulate_field_lineups(
+    # D88 (Phase 3): stack-aware field. When either boost is != 1.0 the
+    # sampler conditions each draw on prior picks. The correlated helper
+    # delegates back to the independent sampler when both boosts are 1.0, so
+    # the default config is byte-identical to pre-D88.
+    keep_teams_pre = [s.team or "" for s in filtered_sampling]
+    keep_opponents_pre = [s.opponent or "" for s in filtered_sampling]
+    keep_game_keys = [
+        "|".join(sorted([t, o])) if t and o else "" for t, o in zip(keep_teams_pre, keep_opponents_pre)
+    ]
+    field_lineup_idx = simulate_field_lineups_correlated(
         ownership,
+        game_keys=keep_game_keys,
+        team_keys=keep_teams_pre,
+        same_game_boost=cfg.field_same_game_boost,
+        same_team_boost=cfg.field_same_team_boost,
         n_lineups=cfg.n_field_lineups,
         lineup_size=5,
         seed=cfg.seed + 1,
@@ -358,6 +412,24 @@ def optimize_lineup(
         effective_boost_sum_cap = 0.0
         effective_max_single_boost = 0.0
 
+    # D87 (Phase 1): pre-compute log-ownership over the filtered pool once so
+    # the per-combo leverage term is a 5-element gather, not a per-call np call.
+    # Clip at 1e-4 to bound the -log term (very-rare players don't earn
+    # unbounded leverage credit). Identity vector when leverage_weight==0.
+    keep_log_own = np.log(np.clip(ownership, 1e-4, 1.0))
+    field_size_total = cfg.n_field_lineups + 1
+    # D88 (Phase 3): pre-tabulate field lineup sets as a Counter so the
+    # per-combo duplicate count is an O(1) dictionary hit instead of an O(n_field)
+    # scan. With n_field=500 and C(30,5)~142k combos the scan path would burn
+    # ~70M frozenset-equality checks per slate, breaching the 30s budget noted
+    # in the module docstring. Only built when duplication_aware_payout is on
+    # so the default path skips the allocation entirely.
+    field_lineup_counter: Counter[frozenset[int]] | None = (
+        Counter(frozenset(int(j) for j in row) for row in field_lineup_idx)
+        if cfg.duplication_aware_payout
+        else None
+    )
+
     def _scan(min_anchors_req: int) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
         """Enumerate C(n,5) under team cap + anchor floor + boost cap; return the best."""
         b_ev = -np.inf
@@ -365,6 +437,9 @@ def optimize_lineup(
         b_samp: np.ndarray = np.zeros(cfg.n_samples)
         n_eval = n_skip_team = n_skip_anchor = n_skip_boost = 0
         boost_cap_on = effective_boost_sum_cap > 0.0 or effective_max_single_boost > 0.0
+        leverage_on = cfg.leverage_weight > 0.0
+        ceiling_on = cfg.ceiling_weight > 0.0
+        dup_on = cfg.duplication_weight > 0.0
         for combo in itertools.combinations(range(len(filtered_sampling)), 5):
             if effective_max_per_team < 5 and _exceeds_team_cap(
                 combo, keep_teams, effective_max_per_team
@@ -383,8 +458,22 @@ def optimize_lineup(
                 real_score_samples, keep_boosts, list(combo), slot_multipliers
             )
             ev = expected_payout(
-                own_samples, field_scores, curve, field_size=cfg.n_field_lineups + 1
+                own_samples, field_scores, curve, field_size=field_size_total
             )
+            # D88 (Phase 3): research-preferred duplication treatment.
+            # `lineup_score_samples` reads the global `real_score_samples`
+            # matrix by player index, so any field lineup with the SAME 5
+            # players as `combo` produces an identical lineup_score per
+            # sample. `expected_payout` uses strict > for rank, so these
+            # clones tie us (do not beat us). The actual contest pays the
+            # tied rank's prize split across (1 + n_clones) entries.
+            # Dividing the post-MC EV by (1 + n_clones) is therefore the
+            # correct, unbiased tie-share treatment -- E[payout(rank)] is
+            # constant across the tied entries, so the divide is exact.
+            if field_lineup_counter is not None:
+                clones = field_lineup_counter.get(frozenset(combo), 0)
+                if clones > 0:
+                    ev /= float(1 + clones)
             # D70 (R3): game-stack bonus. Small additive EV bias per stack
             # pair so the optimizer mildly prefers stacked lineups when EVs
             # are near-equal. Bonus is in expected_payout units; tuned via
@@ -393,6 +482,30 @@ def optimize_lineup(
                 pairs = _game_stack_pairs(combo, keep_teams, keep_opponents)
                 if pairs > 0:
                     ev += cfg.game_stack_bonus * pairs
+            # D87 (Phase 1) objective-shaping terms. Each gated by a weight; all
+            # default 0.0 so the loop is byte-identical to pre-D87 when off.
+            if leverage_on:
+                # Mean of -log(own_i) over the 5 chosen players. A 50% owned
+                # chalk player contributes 0.69; a 5% contrarian play 3.0.
+                leverage = float(-keep_log_own[list(combo)].mean())
+                ev += cfg.leverage_weight * leverage
+            if ceiling_on:
+                # Upper-tail width on a stable denominator. Earlier draft used
+                # (p90 - p50)/p50, but lineup_score_samples can sit at or below
+                # zero on punt combos (D52 K=2 makes real_score - K naturally
+                # negative for cold-starts), and dividing by a p50 near or
+                # below zero either silently dropped the term or blew up to
+                # +inf. Anchor on max(|p50|, 1.0) so the ratio stays in a
+                # bounded, dimensionless band that is comparable across pools.
+                p50, p90 = np.quantile(own_samples, [0.5, 0.9])
+                denom = max(abs(float(p50)), 1.0)
+                ev += cfg.ceiling_weight * float((p90 - p50) / denom)
+            if dup_on:
+                # Probability another single random opponent draws the SAME 5
+                # players under independence = prod of ownerships. Multiply by
+                # field size for expected mirror entries.
+                dup_prob = float(np.prod(ownership[list(combo)]))
+                ev -= cfg.duplication_weight * dup_prob * float(field_size_total)
             n_eval += 1
             if ev > b_ev:
                 b_ev, b_idx, b_samp = ev, combo, own_samples

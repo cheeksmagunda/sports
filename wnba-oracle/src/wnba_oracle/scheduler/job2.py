@@ -46,7 +46,7 @@ from wnba_oracle.picker.popularity import (
     estimate_draft_popularity,
     slate_labels_to_popularity,
 )
-from wnba_oracle.picker.sample import PlayerSamplingSpec
+from wnba_oracle.picker.sample import PlayerSamplingSpec, ceiling_adjusted_sigma_log
 from wnba_oracle.predict.availability import AvailabilityConfig, availability_probability
 from wnba_oracle.predict.form import player_volatility
 from wnba_oracle.predict.minutes import MinutesConfig, blended_real_score
@@ -800,6 +800,19 @@ def _build_specs(
         # band so a single outlier game can't blow up the percentile bias.
         vol = minutes_vol_by_pid.get(int(pid)) or volatility.get(int(pid), 1.17)
         sigma_log = min(0.6, max(0.12, vol / max(pred + K, 1e-6)))
+        # D89 (Phase 4): environment-conditioned ceiling sigma boost. Widens
+        # the per-player marginal sigma when the game has blowout
+        # uncertainty (role volatility) and/or the player has limited
+        # recent history (sample-size shrinkage). Both default to 0.0 so
+        # the path is byte-identical until armed via env var.
+        n_min_games = int(mf["n_min_games"]) if mf is not None else 0
+        sigma_log = ceiling_adjusted_sigma_log(
+            sigma_log,
+            blowout_prob=blowout_prob_by_pid.get(pid, 0.0),
+            n_history_games=n_min_games,
+            blowout_boost=getattr(settings, "ceiling_sigma_blowout_boost", 0.0),
+            low_history_boost=getattr(settings, "ceiling_sigma_low_history_boost", 0.0),
+        )
         samps.append(
             PlayerSamplingSpec(
                 player_id=pid,
@@ -813,11 +826,24 @@ def _build_specs(
                 is_anchor=is_anchor_by_pid.get(pid, False),
             )
         )
+        # D86: when enabled, attach the real measured draft count so the field
+        # simulation samples opponent lineups from observed ownership instead of
+        # a softmax of our own projections. measured_drafts was loaded above for
+        # the contrarian penalty; here it also grounds the EV/leverage math.
+        md = (
+            float(measured_drafts[pid])
+            if (
+                getattr(settings, "field_measured_ownership_enabled", True)
+                and pid in measured_drafts
+            )
+            else None
+        )
         fields.append(
             FieldPlayerSpec(
                 player_id=pid,
                 pred_real_score=pred,
                 card_boost=boost,
+                measured_drafts=md,
             )
         )
         enrichment_name = str(r.get("name", "") or "").strip()
@@ -982,6 +1008,8 @@ def _freeze(
     projection_by_pid: dict[int, dict],
     *,
     force: bool = False,
+    payout_curve: dict | None = None,
+    serving_knobs: dict | None = None,
 ) -> bool:
     """Idempotent freeze: first job2 fire writes, subsequent fires no-op.
 
@@ -1044,20 +1072,28 @@ def _freeze(
             )
             return False
 
+    # D90 calibration fields: payout_curve + serving_knobs persist in the
+    # lineup JSONB so the placement reader can join the freeze-time forecast
+    # to the realized contest outcome. None payloads are dropped to keep the
+    # JSONB compact when callers (older test fixtures) do not supply them.
+    lineup_payload: dict = {
+        "player_ids": list(rec.player_ids),
+        "slot_multipliers": list(rec.slot_multipliers),
+        "lineup_score_p10": rec.lineup_score_p10,
+        "lineup_score_p50": rec.lineup_score_p50,
+        "lineup_score_p90": rec.lineup_score_p90,
+        "per_player": _build_per_player(rec, projection_by_pid),
+    }
+    if payout_curve is not None:
+        lineup_payload["payout_curve"] = payout_curve
+    if serving_knobs is not None:
+        lineup_payload["serving_knobs"] = serving_knobs
+
     payload = {
         "slate_date": slate_date,
         "model_sha": model_sha,
         "payout_regime": payout_regime,
-        "lineup": json.dumps(
-            {
-                "player_ids": list(rec.player_ids),
-                "slot_multipliers": list(rec.slot_multipliers),
-                "lineup_score_p10": rec.lineup_score_p10,
-                "lineup_score_p50": rec.lineup_score_p50,
-                "lineup_score_p90": rec.lineup_score_p90,
-                "per_player": _build_per_player(rec, projection_by_pid),
-            }
-        ),
+        "lineup": json.dumps(lineup_payload),
         "entry_recommendation": rec.entry_flag,
         "expected_payout": rec.expected_payout,
         # frozen_via stays duplicated in metadata_json for one release so
@@ -1148,6 +1184,14 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         boost_sum_cap=settings.optimizer_boost_sum_cap,
         max_single_boost=settings.optimizer_max_single_boost,
         game_stack_bonus=settings.optimizer_game_stack_bonus,
+        leverage_weight=getattr(settings, "optimizer_leverage_weight", 0.0),
+        ceiling_weight=getattr(settings, "optimizer_ceiling_weight", 0.0),
+        duplication_weight=getattr(settings, "optimizer_duplication_weight", 0.0),
+        field_same_game_boost=getattr(settings, "field_same_game_boost", 1.0),
+        field_same_team_boost=getattr(settings, "field_same_team_boost", 1.0),
+        duplication_aware_payout=getattr(
+            settings, "optimizer_duplication_aware_payout", False
+        ),
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     log.info(
@@ -1210,7 +1254,45 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
                 except Exception as exc:
                     log.warning("job2_gate_event_failed", reason=str(exc)[:120])
 
-    frozen = _freeze(sd, model_sha, rec, curve.regime, projection_by_pid, force=force_refreeze)
+    # D90: capture the curve + serving knobs the optimizer used so the
+    # placement reader can later join the freeze-time forecast to the
+    # realized outcome. Strings/floats only (no Decimal/NaN) so the JSONB
+    # column round-trips cleanly.
+    payout_curve_payload = {
+        "regime": curve.regime,
+        "cash_line_percentile": curve.cash_line_percentile,
+        "percentile_to_payout": {
+            str(k): float(v) for k, v in curve.percentile_to_payout.items()
+        },
+    }
+    serving_knobs_payload = {
+        "n_samples": cfg.n_samples,
+        "n_field_lineups": cfg.n_field_lineups,
+        "top_n_filter": cfg.top_n_filter,
+        "max_per_team": cfg.max_per_team,
+        "min_anchors": cfg.min_anchors,
+        "boost_sum_cap": cfg.boost_sum_cap,
+        "max_single_boost": cfg.max_single_boost,
+        "game_stack_bonus": cfg.game_stack_bonus,
+        "leverage_weight": cfg.leverage_weight,
+        "ceiling_weight": cfg.ceiling_weight,
+        "duplication_weight": cfg.duplication_weight,
+        "field_same_game_boost": cfg.field_same_game_boost,
+        "field_same_team_boost": cfg.field_same_team_boost,
+        "duplication_aware_payout": cfg.duplication_aware_payout,
+        "never_skip": cfg.never_skip,
+        "caveat_is_skip": cfg.caveat_is_skip,
+    }
+    frozen = _freeze(
+        sd,
+        model_sha,
+        rec,
+        curve.regime,
+        projection_by_pid,
+        force=force_refreeze,
+        payout_curve=payout_curve_payload,
+        serving_knobs=serving_knobs_payload,
+    )
     status = "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")
     return Job2Result(sd, model_sha, rec, frozen, status)
 

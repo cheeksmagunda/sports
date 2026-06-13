@@ -83,6 +83,7 @@ oracle-train = "wnba_oracle.train.cli:main"
 oracle-rotate-check = "wnba_oracle.audit.rotation_cli:main"
 oracle-backfill = "wnba_oracle.ingest.backfill:main"
 oracle-results = "wnba_oracle.scheduler.results_ledger:main"
+oracle-placements = "wnba_oracle.scheduler.placements:main"
 
 [build-system]
 requires = ["hatchling"]

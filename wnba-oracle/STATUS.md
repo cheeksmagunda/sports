@@ -1,6 +1,17 @@
 status: BUILD_COMPLETE
 last_verified: 2026-06-10T00:00:00Z
-phase: live. 2026-06-10 (D82-D85): Incident remediation for the 2026-06-08
+phase: live. 2026-06-13 (D86): Placement overhaul Phase 0. Root-caused the
+2026-06-12 median finish (4,253rd/8,300 with all five picks beating projection)
+to a strawman field model: project_ownership derived opponents from our own
+projections and discarded the real, observed in-app draft counts, so the EV
+engine could not price duplication or leverage and shipped chalk. Fix: feed
+slate_labels.drafts into FieldPlayerSpec.measured_drafts so the field simulation
+uses real ownership marginals (gated FIELD_MEASURED_OWNERSHIP_ENABLED, default
+on; auto-falls-back to the estimator when no counts present). 4 new tests. Full
+diagnosis + phased roadmap (payout-curve ingestion, results feedback loop,
+stack-aware field, ceiling-tilted slots) in research/internal/07_placement_overhaul.md.
+Phase 0 needs no retrain; takes effect on cron-job2's next fire once deployed.
+2026-06-10 (D82-D85): Incident remediation for the 2026-06-08
 late-refreeze overwrite, on branch claude/frozen-lineups-audit-refreeze-a3obw3
 (PENDING DEPLOY: migration 20260610_0006 must apply before the new code
 serves; deploy all services from one commit in the 06:30-12:30 UTC quiet
@@ -119,6 +130,7 @@ Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
 | LINEUP_ANCHOR_FLOOR | 2 | D57/D58 |
 | LATE_REFREEZE_ENABLED | true | D75 |
 | PROP_SIGNAL_SCALE | 0.3 | D78 |
+| FIELD_MEASURED_OWNERSHIP_ENABLED | true (code default) | D86 |
 | CAVEAT_IS_SKIP | false | D48 (superseded by NEVER_SKIP) |
 | SAMPLING_SCORE_OFFSET | 2.0 (code default) | D52 |
 
