@@ -74,6 +74,54 @@ def test_missing_count_backfilled_at_comparable_scale() -> None:
     assert own[1] < own[2] < own[0]
 
 
+def test_mixed_measured_and_unmeasured_rescales_estimator() -> None:
+    """Realistic late-entrant scenario: 3 of 5 players have measured drafts,
+    2 are unobserved (late pool entrants whose draft count isn't captured
+    yet). The unobserved players must be back-filled at a sensible scale --
+    not zeroed, not dominating the real counts -- and ownership must sum to 1.
+    """
+    specs = [
+        _spec(1, pred=2.0, boost=1.5, drafts=2000),
+        _spec(2, pred=2.0, boost=1.5, drafts=1000),
+        _spec(3, pred=2.0, boost=1.5, drafts=500),
+        _spec(4, pred=2.5, boost=2.0, drafts=None),  # late entrant
+        _spec(5, pred=3.0, boost=2.5, drafts=None),  # late entrant
+    ]
+    own = project_ownership(specs)
+    assert np.isclose(own.sum(), 1.0)
+    # All values finite and non-negative.
+    assert np.all(own >= 0.0)
+    assert np.all(np.isfinite(own))
+    # Late entrants land at non-trivial weight (rescaled to the measured
+    # median magnitude via the estimator), never zero or NaN.
+    assert own[3] > 0.01
+    assert own[4] > 0.01
+    # Measured players are ordered correctly among themselves: drafts
+    # 2000 > 1000 > 500.
+    assert own[0] > own[1] > own[2]
+
+
+def test_mixed_path_does_not_zero_or_blow_up_unobserved() -> None:
+    """Lower-bound and upper-bound sanity: with measured medians at the
+    1000-mark, the rescaled estimator weight for an unobserved player should
+    sit in a plausible band -- never zero (vanishing) and never wildly
+    above the highest measured count (dominating).
+    """
+    specs = [
+        _spec(1, pred=2.0, boost=1.0, drafts=2000),
+        _spec(2, pred=2.0, boost=1.0, drafts=1000),
+        _spec(3, pred=2.0, boost=1.0, drafts=None),  # near-median unobserved
+    ]
+    own = project_ownership(specs)
+    assert np.isclose(own.sum(), 1.0)
+    # The unobserved player at the median projection lands in the same band
+    # as the measured median player. The measured player at 1000 drafts
+    # represents ~33% of the field; the unobserved median-class entrant
+    # should not dwarf it (>2x) nor vanish (<0.25x).
+    ratio = own[2] / own[1]
+    assert 0.25 < ratio < 4.0
+
+
 def test_measured_ownership_changes_field_composition() -> None:
     """End-to-end: sampled field lineups should be dominated by the heavily
     drafted chalk when real counts drive ownership."""

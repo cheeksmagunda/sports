@@ -138,8 +138,8 @@ def simulate_field_lineups(
 
     Returns an (n_lineups, lineup_size) integer index array. Same player
     can appear at most once per lineup. The independence assumption is a
-    deliberate simplification; correlated public picks (stacks) are
-    revisited in Step 8 once we have post-slate leaderboard scrapes.
+    deliberate simplification; the stack-aware sampler below (D88) lifts it
+    when game/team keys are wired through the optimizer.
     """
     rng = np.random.default_rng(seed)
     n = len(ownership)
@@ -148,4 +148,80 @@ def simulate_field_lineups(
     out = np.empty((n_lineups, lineup_size), dtype=int)
     for i in range(n_lineups):
         out[i] = rng.choice(n, size=lineup_size, replace=False, p=ownership)
+    return out
+
+
+def simulate_field_lineups_correlated(
+    ownership: np.ndarray,
+    *,
+    game_keys: list[str],
+    team_keys: list[str],
+    same_game_boost: float = 1.0,
+    same_team_boost: float = 1.0,
+    n_lineups: int = 1000,
+    lineup_size: int = 5,
+    seed: int = 1729,
+) -> np.ndarray:
+    """Sample correlated opponent lineups (D88 / Phase 3).
+
+    The independent-pick sampler treats every roster slot as an iid draw from
+    the marginal ownership. Real GPP fields stack: the project's
+    `research/internal/01_winners_anatomy.md` records 87% of top-20 lineups
+    carrying at least one 2+ same-game group. Modeling that correlation tightens
+    the rank distribution at the top (where chalk concentrates) and is the
+    second half of the keystone D86 fix -- without it our EV/rank math still
+    assumes the field is uncorrelated even when its marginals are right.
+
+    Sampling algorithm: sequential weighted draw-without-replacement. After
+    each pick, the remaining-weight vector is multiplied by `same_team_boost`
+    on the picked player's teammates and by `same_game_boost` on the
+    opposite-team players in the same game (boosts compound across picks).
+    Default boosts are 1.0 so without callers this is identical in expectation
+    to the independent sampler. game_keys are typically the unordered
+    `{team, opponent}` pair; team_keys is the player's own team.
+
+    Returns an (n_lineups, lineup_size) integer index array.
+    """
+    if same_game_boost == 1.0 and same_team_boost == 1.0:
+        return simulate_field_lineups(
+            ownership, n_lineups=n_lineups, lineup_size=lineup_size, seed=seed
+        )
+    rng = np.random.default_rng(seed)
+    n = len(ownership)
+    if n < lineup_size:
+        raise ValueError(f"player pool too small ({n}) for lineup_size={lineup_size}")
+    if len(game_keys) != n or len(team_keys) != n:
+        raise ValueError("game_keys / team_keys must match ownership length")
+    # Build same-game / same-team boolean masks once; the per-pick work is then
+    # an O(n) gather + multiply rather than an O(n) string comparison.
+    game_idx: dict[str, np.ndarray] = {}
+    team_idx: dict[str, np.ndarray] = {}
+    for k in set(game_keys):
+        if k:
+            game_idx[k] = np.array([g == k for g in game_keys])
+    for k in set(team_keys):
+        if k:
+            team_idx[k] = np.array([t == k for t in team_keys])
+    out = np.empty((n_lineups, lineup_size), dtype=int)
+    base = np.asarray(ownership, dtype=float)
+    for i in range(n_lineups):
+        w = base.copy()
+        for slot in range(lineup_size):
+            tot = w.sum()
+            if tot <= 0.0:
+                # All remaining weight evaporated. Fall back to uniform on the
+                # players not yet picked so we never crash a sample mid-lineup.
+                picked = set(out[i, :slot])
+                w = np.array([0.0 if j in picked else 1.0 for j in range(n)])
+                tot = w.sum()
+            p = w / tot
+            chosen = int(rng.choice(n, p=p))
+            out[i, slot] = chosen
+            w[chosen] = 0.0
+            tk = team_keys[chosen]
+            gk = game_keys[chosen]
+            if tk and same_team_boost != 1.0:
+                w = np.where(team_idx[tk], w * same_team_boost, w)
+            if gk and same_game_boost != 1.0:
+                w = np.where(game_idx[gk], w * same_game_boost, w)
     return out
