@@ -3015,3 +3015,57 @@ synthesis in lieu of full GPD tail fitting with only 20 order statistics.
 
 **Reverse.** All three env vars default to their no-op values (1.0/1.0/false).
 Revert via env without redeploy.
+
+### D92: Redis-resilient freeze gate + D89 sigma knobs armed [verified]
+
+**Context.** 2026-06-13 post-production audit. The 21:00 UTC cron-job2 run
+(deployment 062bd554) crashed with exit code 1 after the optimizer completed
+(~70 seconds). The Railway log API returned empty message bodies for runtime
+logs, so the error text was not directly recoverable. Diagnosis: the crash
+timing (~70s into execution, matching optimizer stage2 completion) and the
+absence of a frozen_lineups row despite a watchdog `enrichment_stale` event
+at 21:01:44 UTC (written AFTER job2.main() returned) pointed to an exception
+in `_freeze()` during the Redis SETNX call. Redis is only reachable within
+the Railway private network; a transient connection error during the redeployment
+window caused the exception to propagate uncaught through `run()` into
+`main()`, which returned 1. The 21:15 UTC tick succeeded (exit 0) in only
+38 seconds because it found the Redis NX lock held (key `wnba.frozen.2026-06-13`
+was set by the crashed run), bailed from `_freeze()` before the optimizer, and
+the Postgres FROZEN_EXISTS check at the top of `_freeze()` was thus never
+reached. Result: no frozen lineup for the most recent slate.
+
+**Immediate fix.** Manually ran the optimizer locally (dry_run=True), captured
+the LineupRecommendation, and inserted the frozen lineup directly into
+`frozen_lineups` via the TCP proxy (id=24, freeze_seq=1, frozen_at 21:26 UTC).
+The API began serving the 2026-06-13 lineup immediately.
+
+**Code fix [verified].** Wrapped BOTH Redis `rd.set()` calls in `_freeze()` in
+try/except. On Redis exception: log `job2_redis_unavailable` at WARN, treat
+`lock_acquired = True` and proceed to the Postgres FROZEN_APPEND. The Postgres
+`ON CONFLICT (slate_date, model_sha, freeze_seq) DO NOTHING` is the canonical
+correctness boundary; Redis is a fast-path hint to prevent concurrent inserts,
+not the authoritative gate. This change makes the freeze Redis-resilient:
+a Redis outage causes one duplicate-insert attempt at worst (harmless), not a
+missed freeze.
+
+**D89 sigma knobs armed [verified].** Conditions satisfied:
+- `OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST`: armed when blowout signal active
+  (GAME_SCRIPT_MINUTES_ENABLED=true since D57). Set to 0.15 (synthesis starting
+  value from D89).
+- `OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST`: armed post-calibration. D91
+  calibration completed 2026-06-13. Set to 0.20 (synthesis starting value).
+
+Both values set as Railway env vars on cron-job2. Effective on the next
+container start (next cron fire). No redeploy needed.
+
+**Why D87 knobs remain at 0.0.** `OPTIMIZER_CEILING_WEIGHT` and
+`OPTIMIZER_DUPLICATION_WEIGHT` were described in D87 as potentially
+double-counting with D88's stack-aware field simulation, which was just
+calibrated (D91). The D89 sigma scaling achieves the same upper-tail objective
+without the double-count risk. If D89 alone is insufficient after more
+placement data accumulates, the D87 weights can be added in a separate
+calibration sweep.
+
+**Reverse.** Unset `OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST` and
+`OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST` to revert to 0.0 (no redeploy).
+The Redis resilience fix has no reverse path (it is a strict improvement).

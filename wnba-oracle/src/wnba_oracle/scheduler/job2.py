@@ -1044,9 +1044,13 @@ def _freeze(
         # D75 late re-freeze: use a separate Redis key so only the first
         # late-fire appends. Subsequent fires (every 15 min) see the key
         # already set and bail without touching frozen_lineups.
-        rd = get_redis()
-        late_key = f"wnba.late_frozen.{slate_date}"
-        lock_acquired = bool(rd.set(late_key, model_sha, nx=True, ex=24 * 3600))
+        try:
+            rd = get_redis()
+            late_key = f"wnba.late_frozen.{slate_date}"
+            lock_acquired = bool(rd.set(late_key, model_sha, nx=True, ex=24 * 3600))
+        except Exception as redis_exc:
+            log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
+            lock_acquired = True  # proceed; Postgres UPSERT is the canonical guard
         if not lock_acquired:
             log.info("job2_late_refreeze_already_done", slate_date=slate_date)
             return False
@@ -1059,11 +1063,15 @@ def _freeze(
             log.info("job2_already_frozen", slate_date=slate_date, model_sha=model_sha)
             return False
 
-        rd = get_redis()
-        key = f"wnba.frozen.{slate_date}"
-        # The 24h TTL covers a full slate window; if the writer crashes the
-        # lock auto-releases for the next fire to retry.
-        lock_acquired = bool(rd.set(key, model_sha, nx=True, ex=24 * 3600))
+        try:
+            rd = get_redis()
+            key = f"wnba.frozen.{slate_date}"
+            # The 24h TTL covers a full slate window; if the writer crashes the
+            # lock auto-releases for the next fire to retry.
+            lock_acquired = bool(rd.set(key, model_sha, nx=True, ex=24 * 3600))
+        except Exception as redis_exc:
+            log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
+            lock_acquired = True  # proceed; Postgres ON CONFLICT guards correctness
         if not lock_acquired:
             log.info(
                 "job2_freeze_lock_held",

@@ -140,8 +140,8 @@ Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
 | OPTIMIZER_LEVERAGE_WEIGHT | 0.0 (code default, synthesis: double-counts) | D87 |
 | OPTIMIZER_CEILING_WEIGHT | 0.0 (code default, arm post-placement loop) | D87 |
 | OPTIMIZER_DUPLICATION_WEIGHT | 0.0 (code default, arm post-placement loop) | D87 |
-| OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST | 0.0 (code default, arm when blowout signal armed) | D89 |
-| OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST | 0.0 (code default, arm post-calibration) | D89 |
+| OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST | 0.15 (D89/D92, synthesis starting value, blowout signal active) | D89 |
+| OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST | 0.20 (D89/D92, synthesis starting value, post-D91 calibration) | D89 |
 
 All flags reverse via env with no redeploy. Set *_ENABLED=false or unset numeric
 knobs to revert to code defaults.
