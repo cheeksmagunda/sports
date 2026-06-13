@@ -134,9 +134,9 @@ Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
 | FIELD_MEASURED_OWNERSHIP_ENABLED | true (code default) | D86 |
 | CAVEAT_IS_SKIP | false | D48 (superseded by NEVER_SKIP) |
 | SAMPLING_SCORE_OFFSET | 2.0 (code default) | D52 |
-| FIELD_SAME_GAME_BOOST | calibrated 2026-06-13 -- see D91 | D88 |
-| FIELD_SAME_TEAM_BOOST | calibrated 2026-06-13 -- see D91 | D88 |
-| OPTIMIZER_DUPLICATION_AWARE_PAYOUT | calibrated 2026-06-13 -- see D91 | D88 |
+| FIELD_SAME_GAME_BOOST | 3.0 (D91 calibration, 12.1% beat-median) | D88 |
+| FIELD_SAME_TEAM_BOOST | 2.0 (D91 calibration) | D88 |
+| OPTIMIZER_DUPLICATION_AWARE_PAYOUT | false (no effect found, D91) | D88 |
 | OPTIMIZER_LEVERAGE_WEIGHT | 0.0 (code default, synthesis: double-counts) | D87 |
 | OPTIMIZER_CEILING_WEIGHT | 0.0 (code default, arm post-placement loop) | D87 |
 | OPTIMIZER_DUPLICATION_WEIGHT | 0.0 (code default, arm post-placement loop) | D87 |
