@@ -243,3 +243,140 @@ We were optimizing a real, accurate projection against a fake field and a
 guessed payout curve, with no record of where we actually finished. Phase 0
 makes the field real. Phases 1-4 make the objective and the feedback loop real.
 The projections were never the problem.
+
+---
+
+## Appendix A. Phases 1-4 as shipped (D87-D90)
+
+A 2026-06-13 follow-on session, anchored to a four-agent deep-research synthesis
+(Hunter/Vielma/Zaman canonical formulations, Haugh & Singal portfolio
+construction, plus current Stokastic / 4for4 / DFS-academy industry consensus),
+shipped infrastructure for Phases 1-4 alongside the Phase 0 fix. Every knob is
+**default-off / default-byte-identical** so the rollout is reversible via env
+var with no redeploy. The synthesis explicitly warned against bolting additive
+correctives onto E[payout] without calibration data; the implementation honours
+that by leaving the new knobs at 0.0 until the D90 placement feedback loop has
+50-200 logged slates to drive parameter selection.
+
+### D87 -- Phase 1, objective shaping (calibration knobs)
+
+`picker/optimize.py` gains three additive terms in the per-combo `_scan` loop,
+each gated by a weight defaulting to 0.0:
+
+  - `OPTIMIZER_LEVERAGE_WEIGHT` -- `mean(-log own_i)` over the 5 chosen picks
+    (clipped at 1e-4). Log form penalises chalk asymmetrically.
+  - `OPTIMIZER_CEILING_WEIGHT` -- `(p90 - p50) / p50` of the candidate's own
+    lineup-score samples. Rewards upper-tail upside in top-heavy payouts.
+  - `OPTIMIZER_DUPLICATION_WEIGHT` -- penalises `prod(own_i) * field_size`,
+    the expected number of mirror entries against our 5-stack.
+
+The synthesis warns these are folk-wisdom knobs unless calibrated against real
+results. We expose them as DORMANT calibration levers for the transition window
+after placement data exists but before Phases 3+4 are tuned to the live field.
+Once the simulator and per-player marginals are recalibrated, the synthesis
+says these can stay at 0.0.
+
+### D88 -- Phase 3, stack-aware (correlated) field simulation
+
+`picker/field.py` gains `simulate_field_lineups_correlated`. Sampling algorithm:
+sequential weighted draw-without-replacement; after each pick, remaining-pool
+weights are multiplied by `same_team_boost` on the pick's teammates and by
+`same_game_boost` on the opposing-team players in the same game (boosts
+compound across picks). Default boosts of 1.0 cause the function to delegate
+back to `simulate_field_lineups` with the same seed -- byte-identical.
+
+Knobs:
+  - `FIELD_SAME_GAME_BOOST` (default 1.0; synthesis suggests 1.4 to start).
+  - `FIELD_SAME_TEAM_BOOST` (default 1.0; synthesis suggests 1.15 to start).
+
+Plus a duplication-aware payout mode `OPTIMIZER_DUPLICATION_AWARE_PAYOUT`
+(default False) that prices duplication directly inside the EV via
+`E[payout(rank) / (1 + n_field_clones)]` -- the research-preferred treatment
+over the D87 additive `duplication_weight`. The two are alternatives, not
+complements; arm one or the other.
+
+### D89 -- Phase 4, per-player ceiling sigma
+
+`picker/sample.py` gains `ceiling_adjusted_sigma_log`, called from `job2._build_specs`.
+The 2026 synthesis names sigma -- not mu -- as the operative upper-tail signal
+for top-heavy contests. Two additive multiplicative contributions:
+
+  - `OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST` -- widens sigma when `blowout_prob`
+    is high (role volatility in projected blowouts).
+  - `OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST` -- widens sigma for players with
+    limited recent samples (sample-size shrinkage). The 25-game high-history
+    target matches the existing minutes-model n_min_games convention.
+
+Both default to 0.0 -- byte-identical to D78. Synthesis suggested starting
+values: blowout 0.15, low_history 0.20. The result is clamped at sigma_log_cap
+0.9 so stacked extremes can't blow up the percentile bias.
+
+The synthesis's full prescription is gamma marginals with method-of-moments
+fits + hierarchical archetype shrinkage. The codebase currently samples on
+log(real_score + K) (lognormal-shaped, right-skewed), so the operative WIDENING
+lever is sigma. The distribution-family swap is left for a future phase; the
+sigma scaling captures the dominant upper-tail effect now.
+
+### D90 -- Phase 2, placement feedback loop (the keystone)
+
+`migrations/versions/20260613_0007_contest_placements.py` adds:
+  - `contest_placements` -- one row per (slate_date, contest_id, recorded_at).
+    Captures realized outcome (rank, count, score, payout, ROI) plus the
+    forecast snapshot at freeze (expected_payout, lineup-score percentiles,
+    payout curve, serving knobs, projected ownership) plus actual ownership.
+    Append-only via the (slate_date, contest_id, recorded_at) PK.
+  - `player_slate_ownership` -- per (slate_date, player_id) projected vs actual
+    ownership for the calibration loop.
+
+`scheduler/placements.py` exposes:
+  - `record_placement` -- writes a placement row, joining the freeze snapshot.
+  - `summarize_placements` -- rolling KPIs (median finish percentile, cash /
+    top-10 / top-1 rates). ROI hidden until 500 slates per the synthesis
+    threshold. Tuning warning emitted below 100 slates.
+  - `compute_pit_value` + `pit_histogram` + `chi2_uniformity_pvalue` --
+    Probability-Integral-Transform diagnostics on the predicted finish CDF.
+    U-shape signals simulator under-dispersion; dome shape over-dispersion.
+  - `ownership_log_loss_by_decile` -- per-bucket binary cross-entropy on
+    projected vs actual ownership, localizing miscalibration regimes.
+
+CLI:
+    oracle-placements record --slate-date 2026-06-12 --contest-id ... \\
+        --rank 4253 --count 8300 --score 32.4 --payout-cents 0 --entry-fee-cents 100
+    oracle-placements summary --window 50 --format markdown
+
+Synthesis anti-patterns enforced:
+  - ROI gated at SHOW_ROI_AFTER_SLATES=500.
+  - Tuning warning under TUNE_WEIGHTS_AFTER_SLATES=100.
+  - PIT / chi2 underpowered below 30 PIT values -> chi2 returns None.
+  - Append-only PK; re-records keep history.
+
+### What we did NOT ship (and why)
+
+  - Gamma per-player marginals + archetype shrinkage (Phase 4 full): big surgery
+    on the sampling distribution; the lognormal-on-(real_score+K) path is
+    already right-skewed and sigma scaling captures the dominant upper-tail
+    effect. Distribution-family swap is left for after Phase 2 produces
+    calibration evidence.
+  - Automatic placement ingest from job_dayclose: the CLI works standalone now;
+    auto-ingest is a small follow-on once we confirm the manual path is enough
+    to populate the metrics surface.
+  - The 50-slate-shadow-mode promotion gate from the synthesis (60% trailing
+    win-rate vs incumbent): there is no incumbent shadow runner; we'll
+    layer this on once the placement loop has data.
+
+### Rollout plan
+
+1. Ship D86-D90 schema + code. Defaults are no-ops. Cron-job2 behaviour
+   identical to D86.
+2. Operator manually records past placements via `oracle-placements record`
+   so the analytics surface has seed data.
+3. Watch median finish percentile + PIT histogram for 10-15 slates. If the
+   simulator is severely under-dispersed (PIT histogram is U-shaped) the
+   first knob to arm is `FIELD_SAME_GAME_BOOST=1.4` (more correlated field
+   -> wider rank distribution).
+4. After 50+ placements with the D86 fix active, calibrate the leverage /
+   ceiling / duplication weights one at a time. Each move is reversible via
+   env var.
+5. After 100+ placements, evaluate whether the gamma distribution-family swap
+   is worth the surgery cost. If sigma scaling alone closed the upper-tail
+   gap (per PIT calibration), it isn't.
