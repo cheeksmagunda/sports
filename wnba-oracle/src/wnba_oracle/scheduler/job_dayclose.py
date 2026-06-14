@@ -101,6 +101,17 @@ def _auto_record_placement(slate_date: str) -> None:
         contest_ids = lb["contest_id"].unique().to_list()
         contest_id = int(contest_ids[0]) if contest_ids else 0
 
+        # num_brawlers is the full contest entry count (the field-size
+        # denominator); it is persisted per leaderboard row and identical
+        # across them. max() ignores any nulls. With it, finish_percentile
+        # auto-populates exactly on slates where our entry cracked the
+        # captured top-20 (see scheduler/placements.auto_record_from_dayclose).
+        field_size: int | None = None
+        if "num_brawlers" in lb.columns:
+            nb = lb["num_brawlers"].max()
+            if isinstance(nb, (int, float)):
+                field_size = int(nb)
+
         actual_own: dict[int, float] | None = None
         total_drafts = sum(r["drafts"] or 0 for r in sl.iter_rows(named=True) if r.get("drafts"))
         if total_drafts > 0:
@@ -116,6 +127,7 @@ def _auto_record_placement(slate_date: str) -> None:
             leaderboard_scores=lb_scores,
             contest_id=contest_id,
             actual_ownership=actual_own,
+            field_size=field_size,
         )
         if result is None:
             log.info("auto_placement_skipped", slate_date=slate_date, reason="no_frozen_lineup")

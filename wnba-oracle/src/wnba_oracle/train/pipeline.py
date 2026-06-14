@@ -161,12 +161,15 @@ def artifact_content_equal(a: PickerArtifact, b: PickerArtifact) -> tuple[bool, 
             if ha.quantile_models[q].model_to_string() != hb.quantile_models[q].model_to_string():
                 return False, f"head {key} quantile {q} booster content differs"
     ea, eb = a.eb_baseline, b.eb_baseline
-    if ea.cohort_means != eb.cohort_means:
-        return False, "eb_baseline cohort_means differ"
-    if ea.player_alpha != eb.player_alpha:
-        return False, "eb_baseline player_alpha differ"
-    if (ea.pace_beta, ea.league_pace) != (eb.pace_beta, eb.league_pace):
-        return False, "eb_baseline pace/league params differ"
+    if (ea is None) != (eb is None):
+        return False, "eb_baseline presence differs"
+    if ea is not None and eb is not None:
+        if ea.cohort_means != eb.cohort_means:
+            return False, "eb_baseline cohort_means differ"
+        if ea.player_alpha != eb.player_alpha:
+            return False, "eb_baseline player_alpha differ"
+        if (ea.pace_beta, ea.league_pace) != (eb.pace_beta, eb.league_pace):
+            return False, "eb_baseline pace/league params differ"
     if a.cohort_means != b.cohort_means:
         return False, "artifact cohort_means differ"
     return True, "content-identical"
