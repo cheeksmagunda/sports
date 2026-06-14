@@ -457,7 +457,7 @@ def _predict_heads_for_pool(
             continue
         # Cohort routing inside predict_real_score reads `position`; pool into "F"
         # for now (matches features/corpus build_gamelog_corpus, D63 memory).
-        row = {"position": "F"}
+        row: dict[str, object] = {"position": "F"}
         for c in needed:
             v = hf.get(c, 0.0)
             try:

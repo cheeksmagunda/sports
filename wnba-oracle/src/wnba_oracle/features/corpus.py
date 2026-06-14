@@ -142,7 +142,7 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
 
     # -- opp_dvp from game_logs (season-wide mean real_score allowed per opponent) --
     dvp_map: dict[str, float] = {}
-    needed = list(REAL_SCORE_WEIGHTS.keys()) + ["opponent", "min"]
+    needed = [*REAL_SCORE_WEIGHTS, "opponent", "min"]
     if game_logs is not None and not game_logs.is_empty() and all(
         c in game_logs.columns for c in needed
     ):
