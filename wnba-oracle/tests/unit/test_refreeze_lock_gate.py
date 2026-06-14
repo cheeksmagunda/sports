@@ -22,6 +22,34 @@ def _settings(buffer_min: int = 10, deadline: str = "23:30") -> SimpleNamespace:
     )
 
 
+# --------------------------------------------------------------------------
+# E: tip-relative freeze deadline (first_tip - freeze_lead_minutes)
+# --------------------------------------------------------------------------
+def test_freeze_deadline_subtracts_lead_from_tip() -> None:
+    tip = dt.datetime(2026, 6, 14, 23, 30, tzinfo=dt.UTC)
+    s = SimpleNamespace(freeze_lead_minutes=90)
+    assert job2._freeze_deadline_utc(tip, s) == dt.datetime(2026, 6, 14, 22, 0, tzinfo=dt.UTC)
+
+
+def test_freeze_deadline_tracks_an_afternoon_tip() -> None:
+    # A matinee slate that tips at 17:00 UTC has a 15:30 deadline -- hours
+    # before the static evening cutoff would ever look.
+    tip = dt.datetime(2026, 6, 14, 17, 0, tzinfo=dt.UTC)
+    s = SimpleNamespace(freeze_lead_minutes=90)
+    assert job2._freeze_deadline_utc(tip, s) == dt.datetime(2026, 6, 14, 15, 30, tzinfo=dt.UTC)
+
+
+def test_freeze_deadline_none_when_no_tip() -> None:
+    s = SimpleNamespace(freeze_lead_minutes=90)
+    assert job2._freeze_deadline_utc(None, s) is None
+
+
+def test_freeze_deadline_default_lead_when_unset() -> None:
+    tip = dt.datetime(2026, 6, 14, 23, 30, tzinfo=dt.UTC)
+    out = job2._freeze_deadline_utc(tip, SimpleNamespace())
+    assert out == dt.datetime(2026, 6, 14, 22, 0, tzinfo=dt.UTC)
+
+
 LOCK = dt.datetime(2026, 6, 8, 23, 30, tzinfo=dt.UTC)
 
 

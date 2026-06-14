@@ -924,6 +924,24 @@ def _load_slate_lock_time(slate_date: str) -> dt.datetime | None:
     return lock.astimezone(dt.UTC)
 
 
+def _freeze_deadline_utc(
+    lock_time_utc: dt.datetime | None,
+    settings,
+) -> dt.datetime | None:
+    """The tip-relative freeze deadline = lock/first-tip minus freeze_lead_minutes.
+
+    WNBA slates tip at different clock times each day, so a static UTC cutoff
+    (late_refreeze_after_utc) misses an afternoon slate that locks before the
+    evening cron window. The deadline anchors freeze timing to the slate's own
+    first tip. None when slate_meta has no timing (callers fall back to their
+    static behaviour). See deep-dive E.
+    """
+    if lock_time_utc is None:
+        return None
+    lead = int(getattr(settings, "freeze_lead_minutes", 90))
+    return lock_time_utc - dt.timedelta(minutes=lead)
+
+
 def _late_refreeze_allowed(
     now_utc: dt.datetime,
     lock_time_utc: dt.datetime | None,
@@ -1220,14 +1238,32 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     force_refreeze = False
     if settings.late_refreeze_enabled:
         now_utc = dt.datetime.now(dt.UTC)
-        try:
-            h, m = (int(x) for x in settings.late_refreeze_after_utc.split(":"))
-            cutoff = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
-            force_refreeze = now_utc >= cutoff
-        except (ValueError, AttributeError):
-            log.warning("job2_late_refreeze_bad_config", val=settings.late_refreeze_after_utc)
+        # Load the slate's lock / first-tip once; reuse for both the trigger
+        # and the D83 lock gate.
+        lock_time = _load_slate_lock_time(sd)
+        deadline = _freeze_deadline_utc(lock_time, settings)
+        if deadline is not None:
+            # E: tip-relative trigger. Fire the late re-freeze once we reach
+            # first_tip - freeze_lead_minutes so the final freeze lands ~T-lead,
+            # regardless of the slate's clock time. The Redis late_frozen key
+            # ensures only the first qualifying fire appends.
+            force_refreeze = now_utc >= deadline
+            if force_refreeze:
+                log.info(
+                    "job2_late_refreeze_trigger",
+                    slate_date=sd,
+                    mode="tip_relative",
+                    deadline_utc=deadline.isoformat(),
+                )
+        else:
+            # Fallback: no tip time captured -> static UTC cutoff (D75 behaviour).
+            try:
+                h, m = (int(x) for x in settings.late_refreeze_after_utc.split(":"))
+                cutoff = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
+                force_refreeze = now_utc >= cutoff
+            except (ValueError, AttributeError):
+                log.warning("job2_late_refreeze_bad_config", val=settings.late_refreeze_after_utc)
         if force_refreeze:
-            lock_time = _load_slate_lock_time(sd)
             allowed, gate_reason = _late_refreeze_allowed(now_utc, lock_time, settings)
             if not allowed:
                 force_refreeze = False

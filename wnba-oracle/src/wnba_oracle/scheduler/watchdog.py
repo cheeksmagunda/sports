@@ -22,9 +22,11 @@ Triggers implemented (post-MVP, expand as the eval bundle grows):
 - ``enrichment_stale`` (warn, D84) — after 20:00 UTC the newest capture
   for today's slate predates the 13:00 UTC job1 fire window; job2 is
   about to freeze on yesterday's universe.
-- ``no_frozen_lineup`` (critical) — after 22:00 UTC there's still no
-  frozen row. cron-job2 has had at least 4 attempts (21:00, 21:15,
-  21:30, 21:45) and failed every one. Manual fire likely needed.
+- ``no_frozen_lineup`` (critical) — no frozen row by the slate's freeze
+  deadline (first_tip - freeze_lead_minutes when slate_meta has a tip,
+  else the legacy 22:00 UTC fallback). The tip-relative form catches an
+  afternoon slate that would lock before the evening cron window. Manual
+  fire likely needed.
 - ``missing_per_player`` (error) — frozen JSONB lacks the per_player
   block. The frontend will render placeholder cards. Should be
   impossible after D36, but the check is cheap and protects against
@@ -321,6 +323,19 @@ def _ping_on_critical(events: list[WatchdogEvent]) -> None:
         log.warning("watchdog_ping_failed", reason=str(exc)[:120])
 
 
+def _slate_freeze_deadline(slate_date: str, settings: object) -> dt.datetime | None:
+    """The tip-relative freeze deadline (first_tip - freeze_lead_minutes) for a
+    slate, or None when slate_meta has no tip time. Best-effort; a failure
+    degrades the freeze check to its static 22:00 UTC fallback."""
+    try:
+        from wnba_oracle.scheduler.job2 import _freeze_deadline_utc, _load_slate_lock_time
+
+        return _freeze_deadline_utc(_load_slate_lock_time(slate_date), settings)
+    except Exception as exc:
+        log.warning("watchdog_freeze_deadline_failed", reason=str(exc)[:120])
+        return None
+
+
 def _check_freeze(slate_date: str, *, now_utc: dt.datetime | None = None) -> list[WatchdogEvent]:
     now_utc = now_utc or dt.datetime.now(dt.UTC)
     eng = get_engine()
@@ -328,11 +343,22 @@ def _check_freeze(slate_date: str, *, now_utc: dt.datetime | None = None) -> lis
         row = conn.execute(FROZEN_Q, {"sd": slate_date}).first()
     out: list[WatchdogEvent] = []
     if row is None:
-        # cron-job2 schedule fires at 21:00, 21:15, 21:30, 21:45 UTC; by
-        # 22:00 UTC at least one fire should have succeeded. Critical
-        # signal if the slate is the current UTC date and we're past
-        # 22:00.
-        if now_utc.strftime("%Y-%m-%d") == slate_date and now_utc.hour >= 22:
+        # E: escalate relative to the slate's own tip. A static 22:00 UTC
+        # threshold is blind to afternoon slates that lock before the evening
+        # cron window -- those would miss the freeze entirely and stay silent
+        # until 22:00. When slate_meta carries a first-tip, fire CRITICAL once
+        # we pass first_tip - freeze_lead_minutes; otherwise fall back to the
+        # legacy today + 22:00 UTC rule.
+        from wnba_oracle.common.settings import get_settings
+
+        deadline = _slate_freeze_deadline(slate_date, get_settings())
+        if deadline is not None:
+            overdue = now_utc >= deadline
+            note = f"no frozen row by tip-relative deadline {deadline.isoformat()}"
+        else:
+            overdue = now_utc.strftime("%Y-%m-%d") == slate_date and now_utc.hour >= 22
+            note = "no frozen row after 22:00 UTC (no tip time captured)"
+        if overdue:
             out.append(
                 WatchdogEvent(
                     slate_date=slate_date,
@@ -340,7 +366,8 @@ def _check_freeze(slate_date: str, *, now_utc: dt.datetime | None = None) -> lis
                     severity=SEVERITY_CRITICAL,
                     payload={
                         "checked_at_utc": now_utc.isoformat(),
-                        "note": "no frozen row after 22:00 UTC",
+                        "freeze_deadline_utc": deadline.isoformat() if deadline else None,
+                        "note": note,
                     },
                 )
             )
