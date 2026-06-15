@@ -1,6 +1,22 @@
 status: BUILD_COMPLETE
-last_verified: 2026-06-10T00:00:00Z
-phase: live. 2026-06-13 (D86): Placement overhaul Phase 0. Root-caused the
+last_verified: 2026-06-15T00:00:00Z
+phase: live. 2026-06-15 (D93): Deep-dive work session (branch
+claude/app-deep-dive-2026-rhwfn0). (A) Root-caused the corr-0.554-vs-"21/20"
+paradox to a CENSORED benchmark, not a projection deficit: contest_leaderboards
+stores only the top 20 of ~8,300 entries, so "below the captured top-20 median"
+means "not top ~0.12%", not "below-median placement"; cohort routing ruled out
+(model is F-only, train/serve consistent). Full write-up in
+research/internal/08_projection_paradox.md. (B) Auto-placement now records the
+real finish_percentile from num_brawlers (field size, already in
+contest_leaderboards) whenever our entry cracks the captured top-20; a floor
+bound otherwise. (C+E) FREEZE_LEAD_MINUTES (default 40): the freeze is now
+anchored to first_tip - 40min (T-40), tip-relative not clock-relative -- job2
+skips fires before T-40 and freezes once at/after it, and the watchdog escalates
+a missing freeze at the same deadline (catches matinee slates the static 22:00
+rule missed). REQUIRES widening cron-job2 to fire across the day (NEEDS_HUMAN).
+(D) ruff + mypy on src/ clean again; make determinism-check repaired
+(content-equality, not pickle SHA). Full suite 365 tests.
+2026-06-13 (D86): Placement overhaul Phase 0. Root-caused the
 2026-06-12 median finish (4,253rd/8,300 with all five picks beating projection)
 to a strawman field model: project_ownership derived opponents from our own
 projections and discarded the real, observed in-app draft counts, so the EV
@@ -142,6 +158,7 @@ Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
 | OPTIMIZER_DUPLICATION_WEIGHT | 0.0 (code default, arm post-placement loop) | D87 |
 | OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST | 0.15 (D89/D92, synthesis starting value, blowout signal active) | D89 |
 | OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST | 0.20 (D89/D92, synthesis starting value, post-D91 calibration) | D89 |
+| FREEZE_LEAD_MINUTES | 40 (code default, D93) -- freeze at first_tip - 40min, tip-relative | D93 |
 
 All flags reverse via env with no redeploy. Set *_ENABLED=false or unset numeric
 knobs to revert to code defaults.
@@ -303,10 +320,14 @@ tomorrow's first frozen lineup.
 
 ## Quality gates
 
-- 81 unit tests pass (was 77; added 4 in `test_per_player_frozen.py`).
-- ruff + mypy on `src/` clean (project config; `--strict` flagged
-  pre-existing dict-type-args lint, non-blocking).
-- 57 source files in `src/wnba_oracle/`.
+- 365 unit tests pass (D93; was 350). `uv run --extra dev python -m pytest -q`.
+  Note: the global `uv run pytest` tool lacks the project deps -- use
+  `--extra dev python -m pytest`.
+- ruff + mypy on `src/` clean (D93 fixed pre-existing drift the docs had
+  claimed clean: 3 ruff + 6 mypy).
+- `make determinism-check` repaired (D93 / NEEDS_HUMAN #14): compares model
+  CONTENT via `pipeline.artifact_content_equal`, not pickle SHA.
+- 72 source files in `src/wnba_oracle/`.
 - 6 basketball-main patterns ported with zero new external dependencies.
 - Frontend bundle: 209KB / 66KB gz, builds in ~470ms.
 

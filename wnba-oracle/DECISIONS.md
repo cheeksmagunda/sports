@@ -3069,3 +3069,77 @@ calibration sweep.
 **Reverse.** Unset `OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST` and
 `OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST` to revert to 0.0 (no redeploy).
 The Redis resilience fix has no reverse path (it is a strict improvement).
+
+### D93: deep-dive session -- projection-paradox finding, placement instrument, T-40 freeze gate, quality cleanup [verified]
+
+**Context.** Operator asked for an objective deep dive plus a work session.
+Five threads: A (resolve the corr-0.554-vs-21/20 paradox), B (close the
+placement feedback loop), C (ops hardening), D (quality + docs), E (dynamic
+tip-relative freeze timing). All shipped on branch
+`claude/app-deep-dive-2026-rhwfn0`.
+
+**A -- the projection paradox is mostly a censored-benchmark artifact
+[verified].** Full write-up in `research/internal/08_projection_paradox.md`.
+Two findings: (1) cohort routing is NOT a serving bug -- the corpus pools every
+row into a single cohort "F" (`features/corpus.py:82`, game logs carry no
+position), the active artifact `picker_e2ced9ec` has only F heads, so serving's
+hardcoded `position:"F"` (`job2.py:460`) is consistent with training. (2) The
+D91 conclusion ("below the captured top-20 median on 88% of slates -> ~6%
+player-selection deficit") rests on a right-censored benchmark.
+`contest_leaderboards` stores only the top 20 of ~8,300 entries
+(`contest_stats.py:264`), so `backfill_placements.py:110` "rank 21/20" means
+"not in the top ~0.24%", and "beat the top-20 median" means "top ~0.12%". The
+benchmark cannot see anything between rank 21 and rank 8,300, so it cannot
+measure placement percentile and the 6% "deficit" is not established. The walk-
+forward corr 0.554 is rank correlation on the game-log corpus, a different task.
+Conclusion: projections are neither proven good nor proven 6% bad; the
+instrument was wrong. This reframes the D86-D92 field/objective tuning -- it was
+calibrated against a proxy blind to 99.76% of the field.
+
+**B -- make placement observable from data we already hold [verified].** The
+field-size denominator `num_brawlers` is parsed (`contest_stats.py:311`) and
+persisted in `contest_leaderboards` (`db/reads.py:66`) but
+`auto_record_from_dayclose` discarded it (`entry_count=None` -> finish_percentile
+always NULL). Now: when our entry cracks the captured top-20, `relative_rank`
+IS the true field rank, so `finish_percentile = rank / num_brawlers` is recorded
+exactly -- precisely the contending slates we most want measured. Below the
+board, rank/percentile stay NULL (no false "21/8300") and metadata carries a
+`finish_percentile_floor` bound plus the field size. `record_placement` gained a
+`metadata` param; `job_dayclose` + `backfill_placements` pass `field_size`; the
+censored "beat top-20 median" output was relabeled as an elite-finish threshold.
+NOTE: auto-placement was already wired into `job_dayclose.main()` in D91 (the
+STATUS/NEEDS_HUMAN claims that it was "deferred" were stale).
+
+**C+E -- T-40 tip-relative freeze gate [verified].** WNBA slates tip at
+different clock times; the static UTC freeze timing (late_refreeze_after_utc
+23:00, watchdog no_frozen_lineup at 22:00) is blind to an afternoon slate that
+locks before the evening cron window -- it would miss the freeze and stay silent
+until 22:00. New `FREEZE_LEAD_MINUTES` (default 40) defines the freeze deadline
+= first_tip - lead. job2 now skips fires before T-40 (`_in_pre_freeze_window`)
+and freezes once at/after it via the idempotent first-freeze path, so a noon-tip
+slate freezes in the morning and an evening slate at night with no clock-time
+assumption. The watchdog escalates a missing freeze relative to the same T-40
+deadline (critical hours earlier for matinees; dead-man's-switch ping rides
+along). The forced late re-freeze (D75) is now only the tip-UNKNOWN fallback.
+Operator chose lead=40 over 90 because T-40 lands just after the 22:35
+cron-job1-late confirmed-lineup refresh, so the single freeze keeps D81's
+confirmed-starter benefit while staying tip-relative. REQUIRES a Railway cron
+change: cron-job2 (and ideally cron-job1-late) must fire across the day, not
+just the evening window, so a tick exists near T-40 for any tip (NEEDS_HUMAN).
+
+**D -- quality + docs [verified].** ruff + mypy on `src/` were not clean despite
+the docs claiming so: fixed 3 ruff (RUF005 + import sort) and 6 mypy
+(annotations / object-coercions); both now clean. Repaired
+`make determinism-check` (NEEDS_HUMAN #14): it matched `picker_*dev_determ_1*`
+but `oracle-train` truncates `--commit` to 8 chars (both -> `dev_dete`, find
+matched nothing) and compared pickle SHAs, which are not byte-stable for
+LightGBM Boosters. New `pipeline.artifact_content_equal` compares canonical
+model serialization + EB params; `scripts/compare_artifacts.py` CLI; the
+Makefile uses truncation-safe commit prefixes `determ01`/`determ02`.
+
+**Tests.** Full suite 350 -> 365 (B: 8, C+E: 5+, D: 3). ruff + mypy clean.
+
+**Reverse.** A and the A write-up are analysis (no behaviour change). B is
+additive (NULL-safe when field size absent). E reverses via env: set
+`FREEZE_LEAD_MINUTES` back toward the tip, or rely on the tip-unknown fallback;
+the D75 static path is unchanged. D is strictly cleanup.

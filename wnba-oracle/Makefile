@@ -14,7 +14,7 @@ help:
 	@echo "  make dev                  - uvicorn on :8000 with reload"
 	@echo "  make migrate              - alembic upgrade head"
 	@echo "  make deploy               - emit deploy hint (go via use-railway skill)"
-	@echo "  make determinism-check    - train twice, assert pickle SHA byte-equal"
+	@echo "  make determinism-check    - train twice, assert model CONTENT byte-equal"
 	@echo "  make rotation-check-help  - print oracle-rotate-check usage"
 
 install:
