@@ -44,10 +44,27 @@ def test_freeze_deadline_none_when_no_tip() -> None:
     assert job2._freeze_deadline_utc(None, s) is None
 
 
+def test_pre_freeze_window_skips_before_deadline() -> None:
+    deadline = dt.datetime(2026, 6, 14, 22, 50, tzinfo=dt.UTC)
+    before = dt.datetime(2026, 6, 14, 21, 0, tzinfo=dt.UTC)
+    at = dt.datetime(2026, 6, 14, 22, 50, tzinfo=dt.UTC)
+    after = dt.datetime(2026, 6, 14, 23, 0, tzinfo=dt.UTC)
+    assert job2._in_pre_freeze_window(before, deadline) is True
+    assert job2._in_pre_freeze_window(at, deadline) is False  # freeze opens AT T-40
+    assert job2._in_pre_freeze_window(after, deadline) is False
+
+
+def test_pre_freeze_window_never_skips_when_tip_unknown() -> None:
+    # None deadline -> static fallback path owns timing; never skip here.
+    now = dt.datetime(2026, 6, 14, 12, 0, tzinfo=dt.UTC)
+    assert job2._in_pre_freeze_window(now, None) is False
+
+
 def test_freeze_deadline_default_lead_when_unset() -> None:
+    # getattr fallback (40) matches the FREEZE_LEAD_MINUTES setting default.
     tip = dt.datetime(2026, 6, 14, 23, 30, tzinfo=dt.UTC)
     out = job2._freeze_deadline_utc(tip, SimpleNamespace())
-    assert out == dt.datetime(2026, 6, 14, 22, 0, tzinfo=dt.UTC)
+    assert out == dt.datetime(2026, 6, 14, 22, 50, tzinfo=dt.UTC)
 
 
 LOCK = dt.datetime(2026, 6, 8, 23, 30, tzinfo=dt.UTC)

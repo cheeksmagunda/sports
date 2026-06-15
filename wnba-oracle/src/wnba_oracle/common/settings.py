@@ -129,15 +129,17 @@ class Settings(BaseSettings):
     # of silently proceeding. 23:30 default = earliest typical WNBA tip.
     refreeze_lock_buffer_min: int = Field(default=10, alias="REFREEZE_LOCK_BUFFER_MIN")
     late_refreeze_deadline_utc: str = Field(default="23:30", alias="LATE_REFREEZE_DEADLINE_UTC")
-    # Dynamic freeze deadline (deep-dive E). WNBA slates tip at different times
-    # each day, so a static UTC cutoff (late_refreeze_after_utc) misses an
-    # afternoon slate that locks before the evening cron window. The freeze
-    # deadline is first_tip_utc minus freeze_lead_minutes: the late re-freeze is
-    # triggered tip-relative, and the watchdog escalates a missing freeze
-    # relative to it. Falls back to the static cutoff when slate_meta has no
-    # tip time. Tune down (e.g. 40) to finalize closer to tip and capture more
-    # confirmed-lineup news, at the cost of less margin before lock.
-    freeze_lead_minutes: int = Field(default=90, alias="FREEZE_LEAD_MINUTES")
+    # Dynamic freeze gate (deep-dive E). WNBA slates tip at different clock
+    # times each day, so the freeze is anchored to the slate's own first tip,
+    # not a static UTC slot. job2 freezes at first_tip - freeze_lead_minutes
+    # (T-40 by default): it skips fires before that and freezes once at/after
+    # it. T-40 lands just after the confirmed-lineup refresh, so the single
+    # freeze carries the latest news with ~40 min of margin before lock. The
+    # watchdog also escalates a missing freeze relative to this deadline. Falls
+    # back to the static late-refreeze cutoff only when slate_meta has no tip.
+    # Requires cron-job2 to fire across the day (not just the evening window)
+    # so a tick exists near T-40 for any tip time.
+    freeze_lead_minutes: int = Field(default=40, alias="FREEZE_LEAD_MINUTES")
     # D84 job1 pool sanity gate: a persisted pool below these floors is a
     # hard error (nonzero exit + critical watchdog event), not a quiet log
     # line. The 2026-06-08 morning fire persisted 1 row / 1 team and nothing
