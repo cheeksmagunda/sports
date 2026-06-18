@@ -8,6 +8,47 @@ proceeds with everything that does not depend on the blocked item.
 
 ---
 
+## URGENT (2026-06-18): live job2 not freezing; no picks served since 2026-06-13
+
+**Symptom.** `/lineup/2026-06-18` returns "no frozen lineup for slate";
+`/watchdog/today` is `critical` with `no_frozen_lineup` ("no frozen row after
+22:00 UTC"). Last successful prod freeze is 2026-06-13. Today's slate is a single
+game (Atlanta @ Indiana, tip 23:30 UTC); job1 enrichment ran (captured 13:06
+UTC) but job2 has frozen nothing across the whole evening cron window.
+
+**Likely cause (ranked).** (1) Stuck Redis freeze lock: an early cron fire
+acquired `wnba.frozen.2026-06-18` (NX, 24h TTL) but the FROZEN_APPEND insert
+returned empty/failed, so every later fire logs `job2_freeze_lock_held` and
+bails -- consistent with "fires happen, no row." (2) Uncaught job2 crash
+(`job2_failed` in logs) in the model/optimizer step. (3) Recurrence of the D92
+Redis-crash if that fix is not actually deployed.
+
+**Why I could not fix it from the web session.** The Railway/DB/Redis
+credentials that CLAUDE.md places in `.env` were absent from the container
+(no `.env`, nothing in env or `/run/secrets`, no Railway CLI). Only git push
+and read-only public API calls were available.
+
+**Fastest remediation (run on the cron-job2 Railway service shell, which has
+DATABASE_URL/REDIS_URL, or locally with prod creds sourced):**
+
+```
+redis-cli -u "$REDIS_URL" del wnba.frozen.$(date -u +%F) wnba.late_frozen.$(date -u +%F)
+oracle-job2                 # re-attempt freeze; watch for job2_failed / traceback
+curl -s https://api-production-7033.up.railway.app/lineup/$(date -u +%F)
+```
+
+If `oracle-job2` still errors, the stdout traceback is the real bug. Last-resort
+manual insert into `frozen_lineups` is what was done on 2026-06-13 (row id=24).
+
+**Recurring fix already in flight.** PR #7 (branch
+`claude/app-deep-dive-2026-rhwfn0`) makes the freeze tip-relative
+(`FREEZE_LEAD_MINUTES`, default 40) so afternoon/early slates are served on
+their own clock, and requires widening cron-job2 to fire across the day (item
+23 below). That addresses the schedule-awareness requirement but does NOT by
+itself fix tonight's crash/lock -- that needs the live run above.
+
+---
+
 ## Operator action items
 
 These are not strict NEEDS_HUMAN entries - the build works without them.
