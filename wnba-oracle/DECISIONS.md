@@ -3143,3 +3143,57 @@ Makefile uses truncation-safe commit prefixes `determ01`/`determ02`.
 additive (NULL-safe when field size absent). E reverses via env: set
 `FREEZE_LEAD_MINUTES` back toward the tip, or rely on the tip-unknown fallback;
 the D75 static path is unchanged. D is strictly cleanup.
+
+### D94: the 2026-06-13 freeze outage -- root cause and live remediation [verified]
+
+**Symptom.** No frozen lineup served from 2026-06-13 to 2026-06-18; the
+frontend went stale and no picks reached the user. `/watchdog/today` was
+`critical` (no_frozen_lineup) every day; job1 enrichment ran fine.
+
+**Root cause (verified from live cron-job2 logs).** job2 computed lineups
+correctly (optimizer_done, valid expected_payout) but every freeze threw at the
+INSERT:
+
+    psycopg.errors.AmbiguousParameter: inconsistent types deduced for
+    parameter $2  DETAIL: text versus character varying  [SQL: INSERT INTO
+    frozen_lineups ...]
+
+`FROZEN_APPEND` references the `:model_sha` bind param twice (the SELECT value
+and the `WHERE model_sha = :model_sha`). Migration 0008 (`1a94139`) widened
+`freeze_model_sha` to `varchar(64)`; from then on Postgres deduced conflicting
+types for the reused param and raised on every append. That is the exact
+2026-06-13 start date. Fix: `CAST(:model_sha AS varchar)` in both positions so
+the parameter unifies to one type.
+
+**Secondary fault that turned a bug into an outage.** The Redis freeze lock
+(`wnba.frozen.{sd}`, NX, 24h TTL) is taken *before* the append. When the append
+threw, the lock stayed set, so every later cron fire logged
+`job2_freeze_lock_held` and deferred for the full 24h -- the slate was wedged
+even on days the underlying error might have cleared. Fix: `_release_freeze_lock()`
+drops the lock on append failure/exception so the next fire retries
+immediately. The freeze path is now self-healing.
+
+**Deployment finding.** The Railway cron services were pinned to commit
+`7f1d78a` (2026-06-13) and were NOT auto-deploying from `main`;
+`serviceInstanceRedeploy` re-runs the pinned commit, so a push to main does not
+update them. The fix had to be shipped with
+`serviceInstanceDeploy(commitSha=...)` against the latest commit. This is why
+the system ran 5 days of stale code. (Operator follow-up: re-enable auto-deploy
+on the cron services, or deploy by explicit commit each release.)
+
+**Tip-relative gate status.** Live logs showed `lock_time_utc=null`
+(`deadline_no_locktime`): `slate_meta.first_tip_utc` was not populated for the
+slate, so the D93 T-40 gate could not engage and the freeze used the legacy
+fallback. job1 *does* write first_tip_utc (`job1.py:_persist_slate_meta`) when
+it can extract game times, but the deployed job1 was stale (`7f1d78a`) /
+extracted none. Until tip times populate reliably, cron-job2 stays on the
+evening window `*/15 21-23,0-3`; an all-day schedule would otherwise freeze on
+the first post-enrichment fire (~13:15 UTC), far too early. Path to full
+afternoon-slate coverage: deploy current job1, confirm first_tip_utc populates,
+then widen cron-job2 to all-day so the T-40 gate holds each slate to its own tip.
+
+**Tests.** `test_freeze_append_fix.py` (5): the double CAST in FROZEN_APPEND,
+`_release_freeze_lock` key selection for both paths, Redis-error tolerance, and
+that a raising append releases the lock and returns False. Suite 365 -> 370.
+
+**Reverse.** The CAST and lock-release are strict correctness fixes (no reverse).
