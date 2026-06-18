@@ -874,6 +874,13 @@ def _build_specs(
 # The seq is computed in the INSERT's source SELECT; if two writers race to
 # the same seq the unique constraint on (slate_date, model_sha, freeze_seq)
 # turns the loser into a clean no-op (empty RETURNING) that _freeze retries.
+#
+# :model_sha is CAST to varchar explicitly. It is referenced twice (the SELECT
+# value and the WHERE filter); after migration 0008 widened the column to
+# varchar(64), Postgres deduced inconsistent types for the reused bind param
+# ("text versus character varying") and raised AmbiguousParameter on every
+# append, which silently blocked all freezes from 2026-06-13 onward. The cast
+# pins a single type so the parameter unifies.
 FROZEN_APPEND = text(
     """
     INSERT INTO frozen_lineups (
@@ -882,11 +889,12 @@ FROZEN_APPEND = text(
         freeze_seq, frozen_via
     )
     SELECT
-        :slate_date, :model_sha, :payout_regime, now(), CAST(:lineup AS JSONB),
+        :slate_date, CAST(:model_sha AS varchar), :payout_regime, now(),
+        CAST(:lineup AS JSONB),
         :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB),
         COALESCE(MAX(freeze_seq), 0) + 1, :frozen_via
     FROM frozen_lineups
-    WHERE slate_date = :slate_date AND model_sha = :model_sha
+    WHERE slate_date = :slate_date AND model_sha = CAST(:model_sha AS varchar)
     ON CONFLICT (slate_date, model_sha, freeze_seq) DO NOTHING
     RETURNING id, freeze_seq;
     """
@@ -1027,6 +1035,23 @@ def _build_per_player(
     return out
 
 
+def _release_freeze_lock(slate_date: str, force: bool) -> None:
+    """Drop the Redis freeze lock for a slate so the next fire can retry.
+
+    The lock (wnba.frozen.{sd} / wnba.late_frozen.{sd}) is taken with a 24h
+    TTL before the Postgres append. If the append then fails, leaving the lock
+    set would defer every later fire for the full TTL and wedge the slate (the
+    2026-06-13 outage). Releasing it on failure makes the lock self-healing:
+    a transient append error costs one fire, not a day. Best-effort; a Redis
+    error here is irrelevant because the lock auto-expires anyway.
+    """
+    key = f"wnba.late_frozen.{slate_date}" if force else f"wnba.frozen.{slate_date}"
+    try:
+        get_redis().delete(key)
+    except Exception as exc:
+        log.warning("job2_freeze_lock_release_failed", slate_date=slate_date, error=str(exc)[:120])
+
+
 def _freeze(
     slate_date: str,
     model_sha: str,
@@ -1141,13 +1166,24 @@ def _freeze(
     # The Redis locks make this near-impossible, but the constraint is the
     # actual correctness boundary, so honor it.
     result = None
-    for attempt in (1, 2):
-        with eng.begin() as conn:
-            result = conn.execute(FROZEN_APPEND, payload).first()
-        if result is not None:
-            break
-        log.info("job2_lost_seq_race", slate_date=slate_date, attempt=attempt)
+    try:
+        for attempt in (1, 2):
+            with eng.begin() as conn:
+                result = conn.execute(FROZEN_APPEND, payload).first()
+            if result is not None:
+                break
+            log.info("job2_lost_seq_race", slate_date=slate_date, attempt=attempt)
+    except Exception as append_exc:
+        # The append raised (e.g. a SQL/parameter error). Release the freeze
+        # lock so the next fire retries immediately instead of deferring for
+        # the 24h TTL, then surface the error to the caller.
+        _release_freeze_lock(slate_date, force)
+        log.exception(
+            "job2_freeze_append_error", slate_date=slate_date, error=str(append_exc)[:200]
+        )
+        return False
     if result is None:
+        _release_freeze_lock(slate_date, force)
         log.warning("job2_freeze_append_failed", slate_date=slate_date, via=frozen_via)
         return False
     log.info(
