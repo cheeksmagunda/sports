@@ -138,6 +138,43 @@ class PickerArtifact:
         return {"p10": p10, "p50": p50, "p90": p90}
 
 
+def artifact_content_equal(a: PickerArtifact, b: PickerArtifact) -> tuple[bool, str]:
+    """Compare two artifacts by trained-model CONTENT, not pickle bytes.
+
+    The determinism gate (``make determinism-check``) trains twice and asserts
+    the two artifacts are identical. Comparing pickle SHAs is wrong: LightGBM
+    ``Booster`` pickles are not byte-stable even when the trained model is
+    identical (they carry process-specific buffers), so a content-deterministic
+    training run would still FAIL a pickle-byte check. This compares the
+    canonical model serialization (``Booster.model_to_string``) plus the EB
+    baseline parameters, which ARE stable under identical training.
+
+    Returns ``(equal, reason)``; ``reason`` names the first divergence found.
+    """
+    if set(a.heads) != set(b.heads):
+        return False, f"head keys differ: {sorted(map(str, a.heads))} vs {sorted(map(str, b.heads))}"
+    for key in a.heads:
+        ha, hb = a.heads[key], b.heads[key]
+        if set(ha.quantile_models) != set(hb.quantile_models):
+            return False, f"head {key} quantile set differs"
+        for q in ha.quantile_models:
+            if ha.quantile_models[q].model_to_string() != hb.quantile_models[q].model_to_string():
+                return False, f"head {key} quantile {q} booster content differs"
+    ea, eb = a.eb_baseline, b.eb_baseline
+    if (ea is None) != (eb is None):
+        return False, "eb_baseline presence differs"
+    if ea is not None and eb is not None:
+        if ea.cohort_means != eb.cohort_means:
+            return False, "eb_baseline cohort_means differ"
+        if ea.player_alpha != eb.player_alpha:
+            return False, "eb_baseline player_alpha differ"
+        if (ea.pace_beta, ea.league_pace) != (eb.pace_beta, eb.league_pace):
+            return False, "eb_baseline pace/league params differ"
+    if a.cohort_means != b.cohort_means:
+        return False, "artifact cohort_means differ"
+    return True, "content-identical"
+
+
 def _set_seeds(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)

@@ -8,6 +8,47 @@ proceeds with everything that does not depend on the blocked item.
 
 ---
 
+## URGENT (2026-06-18): live job2 not freezing; no picks served since 2026-06-13
+
+**Symptom.** `/lineup/2026-06-18` returns "no frozen lineup for slate";
+`/watchdog/today` is `critical` with `no_frozen_lineup` ("no frozen row after
+22:00 UTC"). Last successful prod freeze is 2026-06-13. Today's slate is a single
+game (Atlanta @ Indiana, tip 23:30 UTC); job1 enrichment ran (captured 13:06
+UTC) but job2 has frozen nothing across the whole evening cron window.
+
+**Likely cause (ranked).** (1) Stuck Redis freeze lock: an early cron fire
+acquired `wnba.frozen.2026-06-18` (NX, 24h TTL) but the FROZEN_APPEND insert
+returned empty/failed, so every later fire logs `job2_freeze_lock_held` and
+bails -- consistent with "fires happen, no row." (2) Uncaught job2 crash
+(`job2_failed` in logs) in the model/optimizer step. (3) Recurrence of the D92
+Redis-crash if that fix is not actually deployed.
+
+**Why I could not fix it from the web session.** The Railway/DB/Redis
+credentials that CLAUDE.md places in `.env` were absent from the container
+(no `.env`, nothing in env or `/run/secrets`, no Railway CLI). Only git push
+and read-only public API calls were available.
+
+**Fastest remediation (run on the cron-job2 Railway service shell, which has
+DATABASE_URL/REDIS_URL, or locally with prod creds sourced):**
+
+```
+redis-cli -u "$REDIS_URL" del wnba.frozen.$(date -u +%F) wnba.late_frozen.$(date -u +%F)
+oracle-job2                 # re-attempt freeze; watch for job2_failed / traceback
+curl -s https://api-production-7033.up.railway.app/lineup/$(date -u +%F)
+```
+
+If `oracle-job2` still errors, the stdout traceback is the real bug. Last-resort
+manual insert into `frozen_lineups` is what was done on 2026-06-13 (row id=24).
+
+**Recurring fix already in flight.** PR #7 (branch
+`claude/app-deep-dive-2026-rhwfn0`) makes the freeze tip-relative
+(`FREEZE_LEAD_MINUTES`, default 40) so afternoon/early slates are served on
+their own clock, and requires widening cron-job2 to fire across the day (item
+23 below). That addresses the schedule-awareness requirement but does NOT by
+itself fix tonight's crash/lock -- that needs the live run above.
+
+---
+
 ## Operator action items
 
 These are not strict NEEDS_HUMAN entries - the build works without them.
@@ -145,7 +186,12 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     b. **[DONE 2026-06-07, D74]** RotoWire URL fixed (/basketball/ -> /wnba/).
        Watch job1 `n_matched` to confirm lineup data flows again.
 
-14. **[NEW 2026-06-02, D57] `make determinism-check` is silently broken (pre-
+14. **[DONE 2026-06-15, D93] `make determinism-check` repaired.** The gate now
+    trains with truncation-safe commit prefixes `determ01`/`determ02` and
+    compares model CONTENT via `pipeline.artifact_content_equal` (canonical
+    LightGBM serialization + EB params) through `scripts/compare_artifacts.py`,
+    not pickle SHAs. 3 tests in `test_determinism_compare.py`. Original report:
+    **[NEW 2026-06-02, D57] `make determinism-check` is silently broken (pre-
     existing, NOT Tier 3).** Two bugs: (a) `oracle-train` truncates `--commit`
     to 8 chars in the artifact filename (`dev_determ_1` -> `picker_dev_dete_*`),
     but the Makefile `find ... picker_*dev_determ_1*.pkl` looks for the full
@@ -241,3 +287,30 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     The total_entries and your actual rank are visible on the Real Sports
     contest results page. These numbers unlock the finish_percentile column and
     PIT calibration histogram (needs 30+ slates).
+
+    **[UPDATE 2026-06-15, D93]** The field-size denominator is now recorded
+    automatically: `num_brawlers` (already in `contest_leaderboards`) flows into
+    `auto_record_from_dayclose`, so on slates where our recommended lineup
+    cracks the captured top-20, `finish_percentile` auto-populates EXACTLY with
+    no manual entry. Manual `oracle-placements record --rank --count` is now
+    only needed for the (common) slates where our entry finished below the
+    captured top-20, since the platform truncates the leaderboard capture there.
+    The complete fix is the full-leaderboard scrape (open question 7 in
+    research/00_GAP_ANALYSIS.md; Real Sports paginates via `pagedRank`), deferred
+    until it can be tested against the live endpoint.
+
+23. **[NEW 2026-06-15, D93] Make cron-job2 fire across the day for tip-relative
+    freezing.** The freeze is now anchored to T-40 (first_tip - FREEZE_LEAD_MINUTES,
+    default 40), so the freeze and the watchdog trigger relative to each slate's
+    own tip. For an evening slate this falls inside the current
+    `*/15 21-23,0-3 * * *` window and behaves correctly today. But a matinee /
+    afternoon slate (e.g. noon EST tip = 16:00 UTC, T-40 = 15:20 UTC) has no
+    cron tick near T-40, so no fire happens and the lineup is missed. To make
+    the pipeline truly tip-agnostic, widen cron-job2 to fire across the day,
+    e.g. `*/15 * * * *` (every 15 min, all day) or at least `*/15 14-23,0-3`.
+    The code is already correct and harmless under the narrow window (it just
+    can't cover early tips without the wider schedule). Ideally also shift /
+    widen cron-job1-late so confirmed-lineup enrichment lands before T-40 for
+    early slates. Railway-config change (GraphQL or dashboard); no creds in this
+    session. FREEZE_LEAD_MINUTES is env-tunable on cron-job2 (default 40; raise
+    for more margin, lower to finalize closer to tip).

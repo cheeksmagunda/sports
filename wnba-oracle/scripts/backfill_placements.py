@@ -87,6 +87,12 @@ def main() -> int:
             contest_ids = lb_s["contest_id"].unique().to_list()
             contest_id = int(contest_ids[0]) if contest_ids else 0
 
+            field_size: int | None = None
+            if "num_brawlers" in lb_s.columns:
+                nb = lb_s["num_brawlers"].max()
+                if nb is not None:
+                    field_size = int(nb)
+
             total_drafts = sum(r["drafts"] or 0 for r in sl_s.iter_rows(named=True) if r.get("drafts"))
             actual_own: dict[int, float] | None = None
             if total_drafts > 0:
@@ -102,14 +108,25 @@ def main() -> int:
                 leaderboard_scores=lb_scores,
                 contest_id=contest_id,
                 actual_ownership=actual_own,
+                field_size=field_size,
             )
 
             if result is None:
                 print(f"  {sd}: skipped (no frozen lineup snapshot)")
             else:
+                # NOTE: the captured board is the top ~20 of thousands, so
+                # "cracked top-20" is a top-~0.24% threshold, NOT a placement
+                # percentile. Do not read a 21/20 as "below median" (see
+                # research/internal/08_projection_paradox.md).
                 n_above = sum(1 for s in lb_scores if s > our_score)
-                rank_str = f"rank {n_above + 1}/{len(lb_scores)} in top-20"
-                print(f"  {sd}: score={our_score:.2f}  {rank_str}  contest={contest_id}")
+                cracked = n_above < len(lb_scores)
+                fs = f"/{field_size}" if field_size else ""
+                tag = (
+                    f"field rank {n_above + 1}{fs}"
+                    if cracked
+                    else f"below captured top-{len(lb_scores)}{fs}"
+                )
+                print(f"  {sd}: score={our_score:.2f}  {tag}  contest={contest_id}")
                 results.append({"date": sd, "our_score": our_score, "rank_in_top20": n_above + 1})
 
         conn.commit()
@@ -122,10 +139,15 @@ def main() -> int:
         n_beats_median = sum(1 for r in ranks if r <= 10)
         n_beats_top5 = sum(1 for r in ranks if r <= 5)
         n_beats_top1 = sum(1 for r in ranks if r == 1)
-        print(f"\nRelative placement in captured top-20 ({len(results)} slates):")
-        print(f"  Beat top-20 median (<=10): {n_beats_median}/{len(results)} ({100*n_beats_median/len(results):.0f}%)")
-        print(f"  Beat top-5:                {n_beats_top5}/{len(results)} ({100*n_beats_top5/len(results):.0f}%)")
-        print(f"  Beat top-1 (won contest):  {n_beats_top1}/{len(results)} ({100*n_beats_top1/len(results):.0f}%)")
+        # The captured board is the top ~20 of thousands. "Cracked top-20" is a
+        # top-~0.24% threshold, so these rates measure ELITE finishes only -- a
+        # 0% top-1 rate does NOT mean below-median placement. The full finish
+        # distribution below rank 20 is not captured (see
+        # research/internal/08_projection_paradox.md).
+        print(f"\nElite-finish rates vs the captured top-20 ({len(results)} slates):")
+        print(f"  Cracked field top-10 (<=10): {n_beats_median}/{len(results)} ({100*n_beats_median/len(results):.0f}%)")
+        print(f"  Cracked field top-5:         {n_beats_top5}/{len(results)} ({100*n_beats_top5/len(results):.0f}%)")
+        print(f"  Won the contest (rank 1):    {n_beats_top1}/{len(results)} ({100*n_beats_top1/len(results):.0f}%)")
         print(f"  Median lineup score:       {np.median(scores):.2f}")
         print(f"  Mean rank in top-20:       {np.mean(ranks):.1f}")
 

@@ -321,6 +321,7 @@ def record_placement(
     source: str = "manual",
     actual_ownership: dict[int, float] | None = None,
     freeze_seq: int | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Write one placement row. Joins forecast snapshot from frozen_lineups.
 
@@ -420,7 +421,7 @@ def record_placement(
         "freeze_config_json": freeze_config_json,
         "predicted_ownership_json": predicted_ownership_json,
         "actual_ownership_json": actual_ownership_json,
-        "metadata_json": None,
+        "metadata_json": json.dumps(metadata) if metadata else None,
     }
     conn.execute(PLACEMENT_INSERT, params)
     log.info(
@@ -452,41 +453,72 @@ def auto_record_from_dayclose(
     leaderboard_scores: list[float],
     contest_id: int,
     actual_ownership: dict[int, float] | None = None,
+    field_size: int | None = None,
 ) -> dict[str, Any] | None:
     """Record placement automatically after day-close ingestion.
 
-    Called by `job_dayclose.py` once real scores are in `slate_labels`
-    and the frozen lineup exists. Computes relative rank within the
-    captured leaderboard (top-20 captures). Sets entry_count=None because
-    the total contest field size is not stored -- finish_percentile will be
-    NULL until the operator runs `oracle-placements record` with the real
-    total. The auto record still surfaces `entry_score`, the frozen lineup
-    snapshot, and the beat-top-N booleans.
+    Called by `job_dayclose.py` once real scores are in `slate_labels` and the
+    frozen lineup exists. `leaderboard_scores` is the CAPTURED top-N (the
+    platform truncates to top 20); `field_size` is the full contest entry count
+    (`num_brawlers`, persisted in `contest_leaderboards`).
 
-    Returns None if there is no frozen lineup for `slate_date` (non-contest
-    slate or lineup never frozen) or if a placement was already recorded
-    today.
+    Two regimes, because the capture is right-censored (research/internal/
+    08_projection_paradox.md):
+
+    - **Inside the captured board** (our score beats at least one captured
+      finisher): the captured finishers ARE the true top-N of the field, so
+      `relative_rank` is our exact field rank. With `field_size` known,
+      `finish_percentile = rank / field_size` is exact and meaningful -- this
+      is the slate where our recommended lineup actually contended, the one we
+      most want measured.
+    - **Below the captured board** (our score is under all captured finishers):
+      we only know rank > N. `entry_rank` is left NULL (a "rank 21/20" is not a
+      real rank), `finish_percentile` stays NULL, and the metadata carries a
+      `finish_percentile_floor = (N + 1) / field_size` bound plus the field
+      size, so the denominator and the lower bound are still on record.
+
+    Returns None if there is no frozen lineup for `slate_date`.
     """
     frozen = conn.execute(FROZEN_SNAPSHOT_SELECT_LATEST, {"sd": slate_date}).first()
     if frozen is None:
         return None
 
     lb_sorted = sorted(leaderboard_scores, reverse=True)
+    n_captured = len(lb_sorted)
     n_above = sum(1 for s in lb_sorted if s > entry_score)
-    relative_rank = n_above + 1
+    in_board = n_above < n_captured  # at least one captured finisher at/below us
+
+    meta: dict[str, Any] = {
+        "measurement": "auto_dayclose",
+        "captured_board_size": n_captured,
+        "relative_rank_in_captured": n_above + 1,
+        "cracked_captured_board": in_board,
+    }
+    if field_size:
+        meta["field_size"] = int(field_size)
+
+    if in_board:
+        entry_rank: int | None = n_above + 1
+        entry_count = int(field_size) if field_size else None
+    else:
+        entry_rank = None
+        entry_count = None
+        if field_size:
+            meta["finish_percentile_floor"] = round((n_captured + 1) / float(field_size), 6)
 
     return record_placement(
         conn,
         slate_date=slate_date,
         contest_id=contest_id,
-        entry_rank=relative_rank,
-        entry_count=None,
+        entry_rank=entry_rank,
+        entry_count=entry_count,
         entry_score=entry_score,
         payout_received_cents=None,
         entry_fee_cents=None,
         source="auto_dayclose",
         actual_ownership=actual_ownership,
         freeze_seq=None,
+        metadata=meta,
     )
 
 

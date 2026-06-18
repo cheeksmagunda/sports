@@ -15,11 +15,14 @@ Two-phase fire:
 - **Job 1 (morning):** scrape Real Sports player pool, headless re-auth,
   pull odds + RotoWire lineups, build features, persist enrichment.
 - **Job 2 (near tip):** run models, run picker, freeze output to Redis +
-  Postgres. Freezes are append-only (D82): every fire writes a new
-  `frozen_lineups` row keyed on `(slate_date, model_sha, freeze_seq)` with
-  `frozen_via` provenance; nothing overwrites a row the operator may have
-  acted on. The D75 late re-freeze appends and is gated on contest lock
-  time (D83).
+  Postgres. The freeze is anchored to the slate's own tip: job2 freezes at
+  `first_tip - FREEZE_LEAD_MINUTES` (T-40 default, D93), skipping earlier fires,
+  so a noon-tip slate freezes in the morning and an evening slate at night with
+  no hardcoded clock time (requires cron-job2 to fire across the day). Freezes
+  are append-only (D82): every fire writes a new `frozen_lineups` row keyed on
+  `(slate_date, model_sha, freeze_seq)` with `frozen_via` provenance; nothing
+  overwrites a row the operator may have acted on. When the tip time is unknown,
+  the D75 late re-freeze appends and is gated on contest lock time (D83).
 
 Single FastAPI surface exposes the frozen lineup:
 

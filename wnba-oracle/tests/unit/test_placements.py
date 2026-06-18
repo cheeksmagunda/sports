@@ -13,10 +13,14 @@ layer is exercised in integration tests; here we pin:
 
 from __future__ import annotations
 
+import json
 import math
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from wnba_oracle.scheduler.placements import (
     PlacementRow,
+    auto_record_from_dayclose,
     chi2_uniformity_pvalue,
     compute_pit_value,
     ownership_log_loss_by_decile,
@@ -163,3 +167,106 @@ def test_render_summary_markdown_includes_warning_below_threshold() -> None:
 
 def test_render_summary_markdown_empty() -> None:
     assert "No placements" in render_summary_markdown({"n_placements": 0})
+
+
+# --------------------------------------------------------------------------
+# auto_record_from_dayclose: field-size denominator wiring (B / deep-dive)
+# --------------------------------------------------------------------------
+_FROZEN_ROW = SimpleNamespace(
+    model_sha="deadbeef",
+    expected_payout=1.0,
+    lineup={"lineup_score_p10": 1.0, "lineup_score_p50": 2.0, "lineup_score_p90": 3.0},
+    payout_regime="top_20",
+    metadata_json=None,
+    freeze_seq=1,
+)
+
+
+def _mock_conn(frozen_row: object) -> tuple[MagicMock, dict]:
+    """Mock a Connection: FROZEN_SNAPSHOT selects return `frozen_row`,
+    the PLACEMENT_INSERT captures its bound params and returns no row."""
+    captured: dict = {}
+
+    def _execute(stmt: object, params: object = None) -> MagicMock:
+        res = MagicMock()
+        if "frozen_lineups" in str(stmt):
+            res.first.return_value = frozen_row
+        else:
+            captured["params"] = params
+            res.first.return_value = None
+        return res
+
+    conn = MagicMock()
+    conn.execute.side_effect = _execute
+    return conn, captured
+
+
+def test_auto_record_in_board_records_exact_percentile() -> None:
+    # Our score beats 2 of 5 captured finishers -> true field rank 3.
+    conn, captured = _mock_conn(_FROZEN_ROW)
+    out = auto_record_from_dayclose(
+        conn,
+        slate_date="2026-06-12",
+        entry_score=35.0,
+        leaderboard_scores=[50.0, 40.0, 30.0, 20.0, 10.0],
+        contest_id=999,
+        field_size=8300,
+    )
+    assert out is not None
+    p = captured["params"]
+    assert p["entry_rank"] == 3
+    assert p["entry_count"] == 8300
+    assert abs(p["finish_percentile"] - 3 / 8300) < 1e-9
+    meta = json.loads(p["metadata_json"])
+    assert meta["cracked_captured_board"] is True
+    assert meta["field_size"] == 8300
+
+
+def test_auto_record_below_board_records_floor_not_false_rank() -> None:
+    # Our score is under all 5 captured finishers: rank is unknown (>5).
+    conn, captured = _mock_conn(_FROZEN_ROW)
+    auto_record_from_dayclose(
+        conn,
+        slate_date="2026-06-12",
+        entry_score=5.0,
+        leaderboard_scores=[50.0, 40.0, 30.0, 20.0, 10.0],
+        contest_id=999,
+        field_size=8300,
+    )
+    p = captured["params"]
+    # No false "rank 6/8300": rank + percentile stay NULL, only a floor bound.
+    assert p["entry_rank"] is None
+    assert p["entry_count"] is None
+    assert p["finish_percentile"] is None
+    meta = json.loads(p["metadata_json"])
+    assert meta["cracked_captured_board"] is False
+    assert abs(meta["finish_percentile_floor"] - 6 / 8300) < 1e-6
+
+
+def test_auto_record_no_field_size_degrades_gracefully() -> None:
+    conn, captured = _mock_conn(_FROZEN_ROW)
+    auto_record_from_dayclose(
+        conn,
+        slate_date="2026-06-12",
+        entry_score=35.0,
+        leaderboard_scores=[50.0, 40.0, 30.0, 20.0, 10.0],
+        contest_id=999,
+        field_size=None,
+    )
+    p = captured["params"]
+    assert p["entry_rank"] == 3  # still records relative position
+    assert p["entry_count"] is None  # but no denominator -> percentile NULL
+    assert p["finish_percentile"] is None
+
+
+def test_auto_record_no_frozen_lineup_returns_none() -> None:
+    conn, _ = _mock_conn(None)
+    out = auto_record_from_dayclose(
+        conn,
+        slate_date="2026-06-12",
+        entry_score=35.0,
+        leaderboard_scores=[50.0, 40.0],
+        contest_id=999,
+        field_size=8300,
+    )
+    assert out is None

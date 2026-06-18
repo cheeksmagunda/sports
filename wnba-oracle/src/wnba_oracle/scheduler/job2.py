@@ -457,7 +457,7 @@ def _predict_heads_for_pool(
             continue
         # Cohort routing inside predict_real_score reads `position`; pool into "F"
         # for now (matches features/corpus build_gamelog_corpus, D63 memory).
-        row = {"position": "F"}
+        row: dict[str, object] = {"position": "F"}
         for c in needed:
             v = hf.get(c, 0.0)
             try:
@@ -924,6 +924,33 @@ def _load_slate_lock_time(slate_date: str) -> dt.datetime | None:
     return lock.astimezone(dt.UTC)
 
 
+def _freeze_deadline_utc(
+    lock_time_utc: dt.datetime | None,
+    settings,
+) -> dt.datetime | None:
+    """The tip-relative freeze deadline = lock/first-tip minus freeze_lead_minutes.
+
+    WNBA slates tip at different clock times each day, so a static UTC cutoff
+    (late_refreeze_after_utc) misses an afternoon slate that locks before the
+    evening cron window. The deadline anchors freeze timing to the slate's own
+    first tip. None when slate_meta has no timing (callers fall back to their
+    static behaviour). See deep-dive E.
+    """
+    if lock_time_utc is None:
+        return None
+    lead = int(getattr(settings, "freeze_lead_minutes", 40))
+    return lock_time_utc - dt.timedelta(minutes=lead)
+
+
+def _in_pre_freeze_window(
+    now_utc: dt.datetime, deadline_utc: dt.datetime | None
+) -> bool:
+    """True when this fire should be skipped because the slate has not reached
+    its T-minus freeze deadline yet. A None deadline (tip unknown) never skips:
+    the static late-refreeze fallback handles timing in that case. See E."""
+    return deadline_utc is not None and now_utc < deadline_utc
+
+
 def _late_refreeze_allowed(
     now_utc: dt.datetime,
     lock_time_utc: dt.datetime | None,
@@ -1211,15 +1238,37 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     if dry_run:
         return Job2Result(sd, model_sha, rec, False, "dry_run")
 
-    # D75: late re-freeze. If enabled and current UTC time is past the
-    # configured cutoff, pass force=True so a fresh optimizer run appends
-    # a new freeze (D82). The Redis key wnba.late_frozen.{sd}
-    # (first-fire-wins, 24h TTL) prevents the next 15-min cron fires from
-    # appending again. The D83 lock gate then refuses any append at or
-    # after contest lock: the operator already acted on the served row.
+    # E (deep-dive): T-minus freeze gate. WNBA slates tip at different clock
+    # times, so the freeze is anchored to the slate's own first tip, not a
+    # hardcoded evening slot. The freeze deadline is first_tip - freeze_lead
+    # (T-40 by default). When the tip is known:
+    #   - before T-40: skip this fire entirely. The lineup is finalized at
+    #     T-40 with the freshest enrichment (the confirmed-lineup refresh lands
+    #     ~T-35 via cron-job1-late); the next cron tick re-evaluates. This is
+    #     what makes the pipeline tip-relative instead of clock-relative -- a
+    #     noon-tip slate freezes ~T-40 in the morning, an evening slate at night.
+    #   - at/after T-40: freeze once (idempotent first-freeze path); later fires
+    #     see the existing row and no-op. No forced re-freeze is needed because
+    #     the single T-40 freeze already carries the latest data.
+    # When the tip is UNKNOWN (slate_meta empty), fall back to the legacy static
+    # behaviour: freeze on the first fire + optional late re-freeze at
+    # LATE_REFREEZE_AFTER_UTC (D75), gated by the D83 lock gate.
+    now_utc = dt.datetime.now(dt.UTC)
+    lock_time = _load_slate_lock_time(sd)
+    deadline = _freeze_deadline_utc(lock_time, settings)
+
     force_refreeze = False
-    if settings.late_refreeze_enabled:
-        now_utc = dt.datetime.now(dt.UTC)
+    if deadline is not None:
+        if _in_pre_freeze_window(now_utc, deadline):
+            log.info(
+                "job2_pre_freeze_window",
+                slate_date=sd,
+                deadline_utc=deadline.isoformat(),
+                now_utc=now_utc.isoformat(),
+            )
+            return Job2Result(sd, model_sha, rec, False, "pre_freeze_window")
+    elif settings.late_refreeze_enabled:
+        # tip unknown: legacy static late-refreeze trigger (D75).
         try:
             h, m = (int(x) for x in settings.late_refreeze_after_utc.split(":"))
             cutoff = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
@@ -1227,7 +1276,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         except (ValueError, AttributeError):
             log.warning("job2_late_refreeze_bad_config", val=settings.late_refreeze_after_utc)
         if force_refreeze:
-            lock_time = _load_slate_lock_time(sd)
             allowed, gate_reason = _late_refreeze_allowed(now_utc, lock_time, settings)
             if not allowed:
                 force_refreeze = False

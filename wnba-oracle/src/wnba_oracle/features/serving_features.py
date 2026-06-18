@@ -24,7 +24,7 @@ import polars as pl
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.features.game_features import to_nba_api_schema
 from wnba_oracle.features.rolling import build_rolling_features
-from wnba_oracle.predict.scoring import REAL_SCORE_WEIGHTS, REAL_SCORE_INTERCEPT
+from wnba_oracle.predict.scoring import REAL_SCORE_INTERCEPT, REAL_SCORE_WEIGHTS
 
 log = get_logger("oracle.features.serving")
 
@@ -77,7 +77,7 @@ def _schedule_for_player(
     if n_prior == 0:
         return 99.0, 0, 1
     last_iso = season_prior.get_column("game_date").max()
-    last = _parse_iso(last_iso)
+    last = _parse_iso(str(last_iso) if last_iso is not None else None)
     if last is None:
         return 99.0, 0, n_prior + 1
     delta = (slate_date - last).days
@@ -154,8 +154,8 @@ def build_head_feature_lookup(
             continue
         name = str(who.get("player_name", "") or "")
         team = str(who.get("team", "") or "")
-        key = _key(name, team)
-        if key is None:
+        jkey = _key(name, team)
+        if jkey is None:
             continue
 
         # Skip identity column so it does not leak into features_json.
@@ -180,9 +180,9 @@ def build_head_feature_lookup(
         if required_columns is not None:
             coerced = {k: coerced.get(k, 0.0) for k in required_columns}
 
-        out[key] = coerced
+        out[jkey] = coerced
         # Team-agnostic fallback (mirrors ingest.minutes_features.lookup behaviour).
-        fallback = (key[0], key[1], "")
+        fallback = (jkey[0], jkey[1], "")
         if fallback not in out:
             out[fallback] = coerced
 
@@ -223,7 +223,7 @@ def build_opp_dvp_lookup(game_logs: pl.DataFrame) -> dict[str, float]:
     """
     if game_logs.is_empty():
         return {}
-    needed = list(REAL_SCORE_WEIGHTS.keys()) + ["opponent", "min"]
+    needed = [*REAL_SCORE_WEIGHTS, "opponent", "min"]
     if not all(c in game_logs.columns for c in needed):
         return {}
     score_expr = pl.lit(float(REAL_SCORE_INTERCEPT))

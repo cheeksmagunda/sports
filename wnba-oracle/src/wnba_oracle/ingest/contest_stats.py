@@ -369,7 +369,7 @@ def labels_from_leaderboard_entries(
             team_key = str(team_raw or "UNK").strip().upper() or "UNK"
             name = _player_display_name(p)
             try:
-                boost = float(p.get("multiplierBonus", 0.0) or 0.0)
+                boost = float(str(p.get("multiplierBonus", 0.0) or 0.0))
             except (TypeError, ValueError):
                 boost = 0.0
             out.append(
@@ -377,7 +377,7 @@ def labels_from_leaderboard_entries(
                     contest_id=entry.contest_id,
                     slate_date=entry.slate_date,
                     section="leaderboard_lineup",
-                    platform_player_id=int(pid),
+                    platform_player_id=int(str(pid)),
                     display_name=name or f"Player {pid}",
                     team_key=team_key[:8],
                     card_boost=boost,

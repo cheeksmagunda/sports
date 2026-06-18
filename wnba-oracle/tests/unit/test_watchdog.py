@@ -215,6 +215,38 @@ def test_no_frozen_lineup_quiet_for_past_slate() -> None:
     assert events == []
 
 
+def test_no_frozen_lineup_tip_relative_overdue_fires_before_22utc() -> None:
+    """E: an afternoon slate (deadline 15:30) escalates critical at 15:45,
+    hours before the legacy 22:00 UTC rule would ever look."""
+    deadline = dt.datetime(2026, 6, 14, 15, 30, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(None)),
+        patch.object(watchdog, "_slate_freeze_deadline", return_value=deadline),
+    ):
+        events = watchdog._check_freeze(
+            "2026-06-14",
+            now_utc=dt.datetime(2026, 6, 14, 15, 45, tzinfo=dt.UTC),
+        )
+    assert len(events) == 1
+    assert events[0].trigger == "no_frozen_lineup"
+    assert events[0].severity == "critical"
+    assert events[0].payload["freeze_deadline_utc"] == deadline.isoformat()
+
+
+def test_no_frozen_lineup_tip_relative_quiet_before_deadline() -> None:
+    """Before the tip-relative deadline, a missing freeze is not yet overdue."""
+    deadline = dt.datetime(2026, 6, 14, 15, 30, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(None)),
+        patch.object(watchdog, "_slate_freeze_deadline", return_value=deadline),
+    ):
+        events = watchdog._check_freeze(
+            "2026-06-14",
+            now_utc=dt.datetime(2026, 6, 14, 15, 0, tzinfo=dt.UTC),
+        )
+    assert events == []
+
+
 def test_missing_per_player_block_triggers_error() -> None:
     lineup = {"player_ids": [1, 2, 3, 4, 5], "slot_multipliers": [1.5]}  # no per_player
     row = (json.dumps(lineup), 1.2, dt.datetime.now(dt.UTC))

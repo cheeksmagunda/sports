@@ -14,7 +14,7 @@ help:
 	@echo "  make dev                  - uvicorn on :8000 with reload"
 	@echo "  make migrate              - alembic upgrade head"
 	@echo "  make deploy               - emit deploy hint (go via use-railway skill)"
-	@echo "  make determinism-check    - train twice, assert pickle SHA byte-equal"
+	@echo "  make determinism-check    - train twice, assert model CONTENT byte-equal"
 	@echo "  make rotation-check-help  - print oracle-rotate-check usage"
 
 install:
@@ -45,25 +45,19 @@ deploy:
 
 determinism-check:
 	@echo "Run 1..."
-	OMP_NUM_THREADS=1 uv run oracle-train --commit dev_determ_1 \
+	OMP_NUM_THREADS=1 uv run oracle-train --commit determ01 \
 	  --metrics-path /tmp/wnba_determ_run1.json | tail -3
-	@PKL1=$$(find models -name "picker_*dev_determ_1*.pkl" | head -1); \
+	@PKL1=$$(find models -name "picker_determ01_*.pkl" | head -1); \
 	  mv $$PKL1 /tmp/wnba_determ_run1.pkl
 	@echo "Run 2..."
-	OMP_NUM_THREADS=1 uv run oracle-train --commit dev_determ_2 \
+	OMP_NUM_THREADS=1 uv run oracle-train --commit determ02 \
 	  --metrics-path /tmp/wnba_determ_run2.json | tail -3
-	@PKL2=$$(find models -name "picker_*dev_determ_2*.pkl" | head -1); \
+	@PKL2=$$(find models -name "picker_determ02_*.pkl" | head -1); \
 	  mv $$PKL2 /tmp/wnba_determ_run2.pkl
-	@SHA1=$$(shasum -a 256 /tmp/wnba_determ_run1.pkl | awk '{print $$1}'); \
-	  SHA2=$$(shasum -a 256 /tmp/wnba_determ_run2.pkl | awk '{print $$1}'); \
-	  echo "Run 1 pickle SHA: $$SHA1"; \
-	  echo "Run 2 pickle SHA: $$SHA2"; \
-	  if [ "$$SHA1" = "$$SHA2" ]; then \
-	    echo "PASS - byte-identical pickles"; \
-	  else \
-	    echo "FAIL - pickle SHA mismatch; upstream non-determinism leaked in"; \
-	    exit 1; \
-	  fi
+	@echo "Comparing trained model CONTENT (not pickle bytes -- LightGBM"; \
+	  echo "Boosters pickle non-deterministically even when content is equal)..."; \
+	  uv run python scripts/compare_artifacts.py \
+	    /tmp/wnba_determ_run1.pkl /tmp/wnba_determ_run2.pkl
 
 rotation-check-help:
 	uv run oracle-rotate-check --help
