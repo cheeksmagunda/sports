@@ -1,6 +1,17 @@
 status: BUILD_COMPLETE
-last_verified: 2026-06-15T00:00:00Z
-phase: live. 2026-06-15 (D93): Deep-dive work session (branch
+last_verified: 2026-06-19T00:00:00Z
+phase: live. 2026-06-19 (D94/D95): Production work session. (D94) Root-caused
+and fixed the 2026-06-13 freeze outage: FROZEN_APPEND reused the :model_sha bind
+param and, after migration 0008 made the column varchar(64), Postgres raised
+AmbiguousParameter on every append -- no slate froze for 5 days. Fixed with
+CAST(:model_sha AS varchar) + self-healing Redis lock release on append failure.
+Verified live: 2026-06-18 froze (row 25) and serves. (D95) The deeper cause was
+that all Railway services were pinned to 2026-06-13 code (auto-deploy was off),
+so every D86-D93 improvement was dark. Re-enabled auto-deploy on all 6 services
+and redeployed them to HEAD; widened cron-job2 to the all-day tip-relative
+window so the T-40 gate covers afternoon slates (current job1 now populates
+slate_meta.first_tip_utc, which the June-8 deploy never did). Full suite 370.
+2026-06-15 (D93): Deep-dive work session (branch
 claude/app-deep-dive-2026-rhwfn0). (A) Root-caused the corr-0.554-vs-"21/20"
 paradox to a CENSORED benchmark, not a projection deficit: contest_leaderboards
 stores only the top 20 of ~8,300 entries, so "below the captured top-20 median"
