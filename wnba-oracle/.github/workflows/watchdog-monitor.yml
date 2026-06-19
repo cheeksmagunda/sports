@@ -1,0 +1,99 @@
+name: watchdog-monitor
+
+# Dead-man's-switch + alerting for the live WNBA Oracle, using GitHub instead of
+# an external monitoring account (NEEDS_HUMAN #20/#26). Polls the public API and
+# opens a GitHub issue when the production pipeline is genuinely unhealthy:
+#   - /health unreachable or not ok          -> api/serving down
+#   - /watchdog/today reports no_frozen_lineup critical -> no pick past T-40
+# It deliberately ignores transient triggers (e.g. no_job1_pool, which can fire
+# in the minutes between the 13:00 UTC job1 run and the first job2 fire). One
+# open issue per incident; auto-closed on recovery.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 min (UTC); GitHub may delay under load
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+  contents: read
+
+env:
+  API_BASE: https://api-production-7033.up.railway.app
+  ALERT_LABEL: watchdog-alert
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production and decide
+        id: probe
+        run: |
+          set -uo pipefail
+          status="ok"; reason=""
+
+          health=$(curl -s -m 20 "$API_BASE/health" || true)
+          if ! echo "$health" | grep -q '"status":"ok"'; then
+            status="alert"; reason="api /health not ok (got: ${health:-<unreachable>})"
+          fi
+
+          if [ "$status" = "ok" ]; then
+            wd=$(curl -s -m 20 "$API_BASE/watchdog/today" || true)
+            if [ -z "$wd" ]; then
+              status="alert"; reason="api /watchdog/today unreachable"
+            else
+              # Alert only on no_frozen_lineup critical (means: past T-40, still no pick).
+              crit=$(printf '%s' "$wd" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+except Exception as e:
+    print('PARSE_ERROR'); sys.exit(0)
+sd = d.get('slate_date', '?')
+bad = [e for e in d.get('events', [])
+       if e.get('trigger') == 'no_frozen_lineup' and e.get('severity') == 'critical']
+print(f'NO_FROZEN_LINEUP {sd}' if bad else 'CLEAR')
+")
+              case "$crit" in
+                NO_FROZEN_LINEUP*) status="alert"; reason="$crit (no frozen pick past T-40)";;
+                PARSE_ERROR)       status="alert"; reason="/watchdog/today returned unparseable body";;
+              esac
+            fi
+          fi
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "probe -> $status : $reason"
+
+      - name: Ensure label exists
+        if: steps.probe.outputs.status == 'alert'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$ALERT_LABEL" --color B60205 --description "Live watchdog alert" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+
+      - name: Open alert issue (one per incident)
+        if: steps.probe.outputs.status == 'alert'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: ${{ steps.probe.outputs.reason }}
+        run: |
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label "$ALERT_LABEL" --state open --json number --jq 'length')
+          if [ "${open:-0}" -gt 0 ]; then
+            echo "alert issue already open; not duplicating"
+            exit 0
+          fi
+          gh issue create -R "$GITHUB_REPOSITORY" \
+            --label "$ALERT_LABEL" \
+            --title "🚨 WNBA Oracle production alert" \
+            --body "$(printf 'The watchdog monitor detected a production problem.\n\n**Reason:** %s\n**Detected:** %s UTC\n\nChecks:\n- %s/health\n- %s/watchdog/today\n\nThis issue auto-closes when the monitor next sees a healthy state.' "$REASON" "$(date -u +'%F %T')" "$API_BASE" "$API_BASE")"
+
+      - name: Auto-close on recovery
+        if: steps.probe.outputs.status == 'ok'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list -R "$GITHUB_REPOSITORY" --label "$ALERT_LABEL" --state open --json number --jq '.[].number'); do
+            gh issue comment "$n" -R "$GITHUB_REPOSITORY" --body "Recovered: production healthy as of $(date -u +'%F %T') UTC. Closing."
+            gh issue close "$n" -R "$GITHUB_REPOSITORY"
+          done
