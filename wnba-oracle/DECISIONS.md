@@ -3197,3 +3197,39 @@ then widen cron-job2 to all-day so the T-40 gate holds each slate to its own tip
 that a raising append releases the lock and returns False. Suite 365 -> 370.
 
 **Reverse.** The CAST and lock-release are strict correctness fixes (no reverse).
+
+### D95: full production redeploy + tip-relative all-day cron [verified]
+
+**Context.** After fixing the freeze SQL bug (D94), the deeper finding was that
+ALL six Railway services were pinned to 2026-06-13 code with auto-deploy OFF, so
+every improvement since D86 (real-ownership field model, stack-aware field
+simulation, objective shaping, ceiling sigma, placement tracking, the D93 T-40
+gate) was never live. Operator asked for a comprehensive production session.
+
+**Actions [verified].**
+- Re-enabled auto-deploy on all 6 services (`serviceInstanceAutoDeployUpdate
+  enabled:true`) and pushed `3942b58`, which auto-deployed every service to HEAD.
+  Confirmed the build/deploy of all six reached SUCCESS at the same commit.
+- Verified no pending migrations (prod DB already at head 0008), so a single-
+  commit mass deploy carried no schema-skew risk.
+- Force-ran current job1 and verified it populates the tip:
+  `job1_slate_meta first_tip_utc=2026-06-18T23:30:00 n_games=1`, then a clean
+  `job1_done` (n_pool=28, rotowire merged). Confirms `_persist_slate_meta` works
+  and that null tips were purely the stale June-8 deploy.
+- Widened cron-job2 to `*/15 13-23,0-3 * * *`. Key insight: TZ=America/New_York
+  on the cron services means `dt.date.today()` is the ET slate date, and Railway
+  cron schedules are UTC; this window therefore maps to ET 09:00-23:45 of the
+  SAME ET slate (UTC 00:00-03:59 = ET 20:00-23:59, still the same ET date), so
+  afternoon and evening slates are both covered with no date misalignment and no
+  pre-enrichment (overnight) watchdog spam. The dead zone UTC 04:00-12:45 (ET
+  00:00-08:45, before the 13:00 UTC job1) is intentionally excluded.
+- Post-deploy serving verified: /health ok, /watchdog/today `ok` (was critical),
+  /lineup/2026-06-18 serves, frontend 200.
+
+**Net effect.** The pipeline is tip-relative end to end: job1 (UTC 13:00 / ET
+09:00) enriches and writes first_tip_utc; cron-job2 fires across the ET slate
+day; the D93 gate holds each slate's freeze to first_tip-40min; the watchdog
+escalates relative to the same deadline. Future fixes auto-deploy on push.
+
+**Reverse.** Set cron-job2 cronSchedule back to `*/15 21-23,0-3` for evening-only;
+disable auto-deploy per service via `serviceInstanceAutoDeployUpdate enabled:false`.

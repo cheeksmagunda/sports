@@ -18,25 +18,38 @@ set for its 24h TTL, wedging the slate. Both fixed in commit `c60238e`
 (`CAST(:model_sha AS varchar)` + `_release_freeze_lock` on failure) and deployed
 to cron-job2 via `serviceInstanceDeploy(commitSha=...)`. Full write-up: D94.
 
-**Open operator items from this incident:**
+**Operator items from this incident:**
 
-24. **Cron services do not auto-deploy from `main`.** All Railway cron services
-    were pinned to `7f1d78a` (2026-06-13); `serviceInstanceRedeploy` re-runs the
-    pinned commit, so pushes to main never reached them -- the system ran 5 days
-    of stale code. Re-enable GitHub auto-deploy on cron-job1, cron-job1-late,
-    cron-job2, cron-dayclose (and api/frontend), or deploy by explicit commit
-    each release. Until then, ship with
-    `serviceInstanceDeploy(serviceId, environmentId, commitSha)`.
+24. **[DONE 2026-06-19, D95] Cron auto-deploy re-enabled + all services on HEAD.**
+    Root cause of the 5-day outage: auto-deploy was OFF on every service, so
+    they were pinned to `7f1d78a` (2026-06-13) and pushes to main never reached
+    them. Re-enabled GitHub auto-deploy on all 6 services via
+    `serviceInstanceAutoDeployUpdate(enabled:true)` and redeployed every service
+    to HEAD (`3942b58`). Verified: a subsequent push auto-deployed all 6. This
+    also lit up the D86-D93 work (real-ownership field, stack-aware field sim,
+    objective shaping, ceiling sigma, placement tracking) that had been dark.
 
-25. **first_tip_utc not populated -> T-40 gate idle; afternoon slates at risk.**
-    Live logs showed `lock_time_utc=null`, so the D93 tip-relative gate fell back
-    to the legacy path and cron-job2 must stay on the evening window
-    `*/15 21-23,0-3`. To get full afternoon coverage (the original request):
-    deploy current cron-job1 (commit c60238e populates `slate_meta.first_tip_utc`
-    via `_persist_slate_meta`), confirm tip times appear for a slate, THEN widen
-    cron-job2 to all-day `*/15 * * * *`. With tip times present the gate holds
-    each slate to first_tip - 40min regardless of clock time; without them an
-    all-day schedule would freeze ~13:15 UTC (far too early).
+25. **[DONE 2026-06-19, D95] Tip-relative all-day cron live.** Confirmed the null
+    `first_tip_utc` was a stale-deploy artifact (`_persist_slate_meta` / D83
+    postdates the June-8 job1). Deployed current job1 and force-verified it:
+    `job1_slate_meta first_tip_utc=2026-06-18T23:30:00 n_games=1`, clean
+    `job1_done`. Widened cron-job2 to `*/15 13-23,0-3 * * *`. Because
+    TZ=America/New_York (slate_date is the ET date) and Railway cron is UTC, this
+    window maps to ET 09:00-23:45 of the same ET slate -- full afternoon+evening
+    coverage, no date misalignment, no overnight watchdog spam. With tip times
+    populated the D93 T-40 gate now holds each slate to first_tip-40min.
+    Residual nicety (not blocking): cron-job1-late (`35 22` UTC) only refreshes
+    confirmed lineups before evening games; an early-afternoon slate gets the
+    13:00 enrichment but not a pre-tip confirmed-lineup refresh. Adding a second
+    early job1-late run would cover it but costs Odds API credits (item 19).
+
+26. **[OPEN] WATCHDOG_PING_URL still unset (item 20).** External push alerting
+    needs a healthchecks.io (or similar) account -- a human action (no new
+    accounts from the build). Create the check, then the var can be set on
+    api/cron-job1/cron-job1-late/cron-job2 via Railway GraphQL. Until then the
+    watchdog still persists events and surfaces at /watchdog/today (currently
+    `ok`). The nightly corpus-backup GitHub Action (item 11) is healthy --
+    runs 10-14 all succeeded.
 
 ---
 
