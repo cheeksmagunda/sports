@@ -43,13 +43,22 @@ to cron-job2 via `serviceInstanceDeploy(commitSha=...)`. Full write-up: D94.
     13:00 enrichment but not a pre-tip confirmed-lineup refresh. Adding a second
     early job1-late run would cover it but costs Odds API credits (item 19).
 
-26. **[OPEN] WATCHDOG_PING_URL still unset (item 20).** External push alerting
-    needs a healthchecks.io (or similar) account -- a human action (no new
-    accounts from the build). Create the check, then the var can be set on
-    api/cron-job1/cron-job1-late/cron-job2 via Railway GraphQL. Until then the
-    watchdog still persists events and surfaces at /watchdog/today (currently
-    `ok`). The nightly corpus-backup GitHub Action (item 11) is healthy --
-    runs 10-14 all succeeded.
+26. **[DONE 2026-06-19, item 20] Alerting via GitHub, no external account.**
+    Added `.github/workflows/watchdog-monitor.yml`: a scheduled (every 30 min)
+    workflow that polls `/health` and `/watchdog/today` and opens/auto-closes a
+    GitHub issue (label `watchdog-alert`) when the pipeline is genuinely
+    unhealthy -- api unreachable, or a `no_frozen_lineup` critical (no pick past
+    T-40). It deliberately ignores the transient `no_job1_pool` (which can fire
+    in the minutes between the 13:00 job1 run and the first job2 fire). Probe
+    logic verified against the live API. This supersedes the healthchecks.io
+    dependency; `WATCHDOG_PING_URL` (in-app dead-man ping) remains optional and
+    can still be wired if a hosted check is later preferred. corpus-backup
+    Action (item 11) healthy (runs 10-14 succeeded).
+
+27. **[DONE 2026-06-19, item 13a] Vectorized expected_payout (D96).** The picker
+    hot loop is ~5-7x faster, equivalence-proven (no behavioral change). The 13:00
+    no_job1_pool false-positive was removed by starting cron-job2 at 14:00
+    (`*/15 14-23,0-3`), after job1's 13:00 enrichment completes.
 
 ---
 
