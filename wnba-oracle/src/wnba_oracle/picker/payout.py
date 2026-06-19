@@ -55,6 +55,29 @@ class PayoutCurve:
             best = float(mult)
         return best
 
+    def payouts_for_ranks(self, ranks: np.ndarray, field_size: int) -> np.ndarray:
+        """Vectorized payout_for_rank over an array of ranks (#13a).
+
+        Numerically identical to calling payout_for_rank elementwise. The
+        per-sample EV loop in expected_payout is the picker's hottest call
+        (once per candidate combo x n_samples), so doing it in numpy instead of
+        Python removes the cron-window pressure that forced n_samples down.
+        """
+        ranks = np.asarray(ranks)
+        if field_size <= 0:
+            return np.zeros(ranks.shape, dtype=float)
+        pct = ranks.astype(float) / float(field_size)
+        items = sorted(self.percentile_to_payout.items())
+        if not items:
+            return np.zeros(pct.shape, dtype=float)
+        ts = np.array([t for t, _ in items], dtype=float)
+        ms = np.array([m for _, m in items], dtype=float)
+        # Smallest threshold >= pct (matches the loop's first "pct <= threshold").
+        idx = np.searchsorted(ts, pct, side="left")
+        within = idx < ts.size
+        mult = np.where(within, ms[np.clip(idx, 0, ts.size - 1)], ms[-1])
+        return np.where(pct <= self.cash_line_percentile, mult, 0.0)
+
 
 def default_curve_for_regime(regime: str) -> PayoutCurve:
     if regime == "top_1":
@@ -136,13 +159,11 @@ def expected_payout(
     """
     if own_samples.size == 0 or field_score_samples.size == 0:
         return 0.0
-    n_field, n_samples = field_score_samples.shape
+    n_field = field_score_samples.shape[0]
     field_size = field_size or (n_field + 1)
-    payouts = np.zeros(n_samples)
-    for s in range(n_samples):
-        field_scores = field_score_samples[:, s]
-        own_score = own_samples[s]
-        # Rank = number of field lineups scoring at least as high (0-indexed)
-        rank = int(np.sum(field_scores > own_score))
-        payouts[s] = curve.payout_for_rank(rank, field_size)
+    # Per sample s, rank = number of field lineups scoring strictly higher than
+    # our lineup. Vectorized over all samples at once (#13a); strict ">" and the
+    # curve step function are preserved exactly, so this equals the prior loop.
+    ranks = (field_score_samples > own_samples[np.newaxis, :]).sum(axis=0)
+    payouts = curve.payouts_for_ranks(ranks, field_size)
     return float(payouts.mean())

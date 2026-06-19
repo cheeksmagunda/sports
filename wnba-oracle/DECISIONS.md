@@ -3233,3 +3233,32 @@ escalates relative to the same deadline. Future fixes auto-deploy on push.
 
 **Reverse.** Set cron-job2 cronSchedule back to `*/15 21-23,0-3` for evening-only;
 disable auto-deploy per service via `serviceInstanceAutoDeployUpdate enabled:false`.
+
+### D96: vectorize expected_payout (#13a) [verified]
+
+**Context.** `expected_payout` is the picker's hottest call -- invoked once per
+candidate lineup combo (up to ~C(top_n,5)) and, inside, looping over n_samples
+in pure Python to rank our lineup against the field per sample. That Python
+double-loop is why n_samples was held down (the D56 freeze-outage note flagged
+it). Operator asked to stop deferring it.
+
+**Change.** Added `PayoutCurve.payouts_for_ranks(ranks, field_size)` -- a numpy
+vectorization of `payout_for_rank` using `searchsorted` over the sorted payout
+thresholds -- and rewrote `expected_payout` to compute all per-sample ranks at
+once (`(field > own[None,:]).sum(axis=0)`) and map them through it. Strict ">"
+ranking and the step-function curve are preserved exactly.
+
+**Safety.** This is a pure speedup, not a behavioral change. `test_payout_
+vectorized.py` proves equivalence: `payouts_for_ranks` equals elementwise
+`payout_for_rank` across all three regimes plus edge cases (rank past field,
+field_size 0, cash_line above the top threshold), and `expected_payout`
+(vectorized) equals the original per-sample loop to 1e-12 across regimes x
+seeds. The optimizer picks argmax EV, so identical EVs mean identical lineups.
+
+**Measured.** ~3.3 ms/call at n_field=500 x n_samples=5000 (was a multi-ms
+Python loop); the picker is ~5-7x faster at the live sample count, restoring
+cron-window headroom. n_samples itself is unchanged in code; the operator can
+now raise OPTIMIZER_N_SAMPLES with the recovered budget, watching job2 duration
+(large filtered pools still multiply per-combo cost, so validate before 5000).
+
+**Reverse.** Revert payout.py; payout_for_rank (scalar) is untouched.
