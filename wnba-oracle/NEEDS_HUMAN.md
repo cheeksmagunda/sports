@@ -340,3 +340,21 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     DSN):
     `UPDATE frozen_lineups SET expected_payout = 0.0 WHERE slate_date = '2026-05-31' AND expected_payout = '-Infinity'::float8;`
     Purely cosmetic; the live serving path never reads this stale row.
+
+25. **[NEW 2026-06-21, D99] Reconcile + freshen the serving minutes features
+    (root cause of the C. Leite knowable misses).** Carla Leite (platform id
+    762, stats id 1642304) was served STALE recency features on 2026-06-11 and
+    06-17: her `features_json.head_features` were byte-identical across both
+    slates (season_game_number frozen at 12 despite 3 interleaving games), and
+    the legacy `recent_minutes=12.0` understated her real ~25-min role by half
+    (`per_min_rate=0.04646`). Only 3-4 players/slate show recent_minutes <<
+    head mins_l10 (Leite, Engstler, Gustafson, Prosper) -- a targeted
+    platform-id -> stats-id resolution/freshness gap, not a global outage.
+    Three fixes, in priority order: (a) make the legacy `recent_minutes` /
+    `per_min_rate` derive from (or be replaced by) `head_features.mins_l5/l10`
+    so the two minutes paths cannot diverge; (b) add a job1 serving freshness
+    guard that warns/escalates when a player's `season_game_number` lags the
+    slate (stale snapshot detector); (c) harden the identity resolver so young
+    ramping players are not served a cached/stale row. This is a SERVING data
+    bug -- a retrain does not fix it (see D99). Pure code; no creds needed
+    beyond the normal deploy path.

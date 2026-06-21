@@ -3350,3 +3350,57 @@ just propensity.
 **Reverse.** `variableUpsert OPTIMIZER_GAME_STACK_BONUS=0.005` (or unset for
 the 0.0 code default) on cron-job2, then serviceInstanceDeployV2. No code
 change; the audit script is read-only and re-runnable.
+
+## 2026-06-21: D99 -- C. Leite knowable misses are stale serving features, not a weighting gap (post-mortem item 3) [verified]
+
+**Question.** The post-mortem flagged Carla Leite (POR guard, platform id 762)
+as the only repeat knowable miss: under-drafted on 2026-06-11 (4 drafts, scored
+4.5) and 2026-06-17 (11 drafts, scored 5.43). Were her L5/L10 rolling stats
+strong going in, and does the miss imply a model-weighting change?
+
+**Were the signals strong? YES [verified].** Her job1_enrichment
+`features_json.head_features` on both dates: pts_l5=15.4, mins_l5=24.0,
+ast_l5=5.6, fantasy_pts_l5=21.7, usg_pct_l10=0.65, ts_pct_l10=0.64 -- a
+high-usage, ~24-minute, efficient guard in good form. Ground-truthed against
+`wnba_game_logs` (stats.wnba.com id 1642304, which differs from the platform id
+762): actual L5 minutes 25.6, L10 25.0, ~13.4 pts, with several 8-12 assist
+games; on the slate days she played 28.5min/18pt/8ast (06-11) and
+29min/20pt/10ast (06-17). A genuine knowable miss -- the signal was real.
+
+**Root cause: stale / identity-lagged SERVING features, not weighting [verified].**
+Two independent tells:
+1. Her `head_features` are *byte-identical* across 06-11 and 06-17
+   (mins_l5=24.012333..., pts_l5=15.4, fantasy_pts_l5=21.72) with
+   `season_game_number=12.0` on BOTH -- impossible if recomputed fresh, since
+   she played 3 games (06-11, 06-13, 06-15) between the two slates and would be
+   at game ~15 by 06-17. The features were frozen at a ~game-12 (early-June)
+   snapshot and reused.
+2. The legacy serving minutes features understate her badly and are also
+   identical across dates: `recent_minutes=12.0` (vs real ~25) and
+   `per_min_rate=0.04646`. Only 3-4 players per slate show this
+   recent_minutes << head_features.mins_l10 gap (Leite, E. Engstler,
+   M. Gustafson, C. Prosper), so it is a TARGETED identity/freshness failure
+   -- the live stats fetch did not resolve platform id 762 -> stats id 1642304
+   and fell back to a stale row -- not a global outage. (NB: `ingested_at` is
+   useless here -- all 14,042 game-log rows carry one timestamp, 2026-06-21
+   13:57, i.e. the table was bulk-rebuilt today in a single txn; it cannot date
+   live availability. The staleness is proven by season_game_number, not by
+   ingested_at.)
+   On 06-11 she was additionally `is_starter=0`, `rotowire_confirmed=0`,
+   injury GTD, so the D71 confirmed-starter multiplier never lifted her.
+
+**Model weighting implication [reasoned].** None that a retrain fixes. The
+heads were not mis-weighted; they were fed a stale recency snapshot at SERVE
+time, and the legacy minutes feature served half her true role. Retraining the
+LightGBM heads cannot repair a serve-time data-freshness/identity gap. So the
+Leite misses do NOT justify a feature-weighting retrain. The corrective work is
+upstream (logged to NEEDS_HUMAN): (a) reconcile the two minutes paths so the
+legacy `recent_minutes`/`per_min_rate` can never diverge from
+`head_features.mins_l5/l10` (derive one from the other, or drop the legacy pair
+in favor of the head features the Tier-0 path already trusts); (b) add a
+serving freshness guard that warns when a player's `season_game_number` lags the
+slate date; (c) harden the platform-id -> stats-id resolver so ramping young
+players (Leite, Prosper) are not served stale fallbacks.
+
+**Reverse.** N/A (analysis + upstream follow-ups; no production change made for
+this item).
