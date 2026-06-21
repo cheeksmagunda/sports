@@ -19,7 +19,7 @@ from wnba_oracle.common.settings import get_settings
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--job", required=True, choices=["job1", "job2", "dayclose"]
+        "--job", required=True, choices=["job1", "job2", "dayclose", "backfill"]
     )
     args = parser.parse_args()
 
@@ -74,6 +74,10 @@ def main() -> int:
         from wnba_oracle.scheduler import job_dayclose
 
         return job_dayclose.main()
+    if args.job == "backfill":
+        from wnba_oracle.scheduler import job_backfill
+
+        return job_backfill.main()
     return 1
 
 
