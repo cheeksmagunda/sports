@@ -1,6 +1,28 @@
 status: BUILD_COMPLETE
-last_verified: 2026-06-19T00:00:00Z
-phase: live. 2026-06-19 (D94/D95): Production work session. (D94) Root-caused
+last_verified: 2026-06-21T00:00:00Z
+phase: live. 2026-06-21 (D97-D101): Post-mortem follow-up session (5 items).
+(D97) Fixed the -inf expected_payout bug: optimize._scan left best_ev at its
+-np.inf init when every combo was skipped (the 2026-05-31 two-team slate); a
+post-scan guard now clamps to 0.0 and skips the empty-slice np.median. 1 new
+test, 385 pass. (D98) Game-stack alignment audit (new
+scripts/stack_alignment_check.py): 56.2% of model-era slates put 2+ of our
+picks on the winner's stacked team -- below the 60% bar, so raised
+OPTIMIZER_GAME_STACK_BONUS 0.005 -> 0.010 on cron-job2 and redeployed (deploy
+33c3cb14 SUCCESS). Nuance: 4/7 misses had winners with NO 2+ stack
+(un-alignable); we already 2-stack 94% of slates, so the gap is stack SELECTION
+not propensity. (D99) C. Leite knowable misses root-caused to STALE serving
+features (head_features byte-identical across 06-11/06-17, season_game_number
+frozen at 12; legacy recent_minutes=12 vs real ~25) -- a targeted
+platform-id->stats-id freshness gap, not a weighting issue. (D100) The two
+negative-corr slates (06-12 -0.500, 06-19 -1.000) are tiny-sample rank noise
+(both in-band 3/3) + the boost-handicap variance tradeoff + the same serving
+gap (rotowire_confirmed=0 across the whole 06-12 slate); not a weighting issue.
+(D101) Retrain evaluated and NOT promoted: items 1-4 show no feature-weighting
+change; a same-recipe challenger on the fresher corpus (game logs now through
+06-20) had identical training_rows=11205 and differed from production in one
+booster (early-stop noise), unvalidated -- production picker_e2ced9ec kept.
+Serving-data follow-ups logged to NEEDS_HUMAN 24-26.
+2026-06-19 (D94/D95): Production work session. (D94) Root-caused
 and fixed the 2026-06-13 freeze outage: FROZEN_APPEND reused the :model_sha bind
 param and, after migration 0008 made the column varchar(64), Postgres raised
 AmbiguousParameter on every append -- no slate froze for 5 days. Fixed with

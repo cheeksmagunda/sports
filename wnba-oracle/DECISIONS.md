@@ -3461,3 +3461,49 @@ point at serving data + variance, NOT mis-weighted features, so they do not on
 their own justify a retrain (see item 5 / D101 for the data-recency angle).
 
 **Reverse.** N/A (analysis only; no production change for this item).
+
+## 2026-06-21: D101 -- retrain evaluated, NOT warranted; production model kept (post-mortem item 5) [verified]
+
+**The gate.** Item 5 says retrain "if any findings indicate a feature weighting
+change is warranted." Items 1-4 do NOT: item 1 is a code bug (payout guard),
+item 2 is an EV-knob change (already shipped via env), item 3 (Leite) is a
+serving freshness/identity gap a retrain cannot fix (D99), and item 4
+(negative-corr) is tiny-sample rank noise + the intentional boost-handicap
+variance tradeoff + the same RotoWire/serving gap (D100). None point at
+mis-weighted features. So the stated trigger is not met.
+
+**Data-recency check (the only retrain rationale, and it was tested) [verified].**
+Incidental to item 3 I found `wnba_game_logs` now carries the full 2026 season
+through 2026-06-20 (14,347 raw rows; the table was bulk-rebuilt today), whereas
+the production artifact `picker_e2ced9ec` was trained 2026-06-07 (D77b). To test
+whether fresher data alone warrants a rotation, I built a same-recipe challenger
+with the production command `oracle-train --corpus-mode both` against the
+read-only public DB (`DATABASE_URL=$DATABASE_PUBLIC_URL`). Result:
+- `training_rows = 11205` -- IDENTICAL to the prior heads artifact; the extra
+  two weeks of 2026 games did not expand the last walk-forward fold's training
+  window (the new rows land in the embargoed valid fold, not the train set).
+- 6 heads, cohort F, `low_data_mode=false` -- same shape as production.
+- `compare_artifacts.py` vs production: differs in exactly ONE booster --
+  `head ('minutes','F') quantile 0.1` -- consistent with a shifted
+  early-stopping iteration off the newer validation fold, i.e. noise, not a
+  feature or weighting change.
+
+**Decision [reasoned].** Do NOT promote. The challenger is a marginal,
+UNVALIDATED delta with no walk-forward evidence it beats the battle-tested
+production corr 0.554, and promotion here is a deliberate gated process
+(add `!models/picker_<sha>.pkl` un-ignore lines, force-add the artifact, bump
+`WNBA_ORACLE_MODEL_ARTIFACT_SHA` on api/cron-job1/cron-job2, redeploy) that the
+project runs only behind `oracle-rotate-check` and, when the gate is
+underpowered, explicit operator authorization (D79). Promoting an unvalidated
+model for a one-booster early-stop wiggle would add regression risk for no
+findings-based benefit. Production model `picker_e2ced9ec` (SHA 94f8e860...,
+verified still present in models/ and matching the live env var) is retained.
+The challenger artifact was deleted (it is gitignored; nothing committed). The
+real, evidence-backed follow-ups are the serving-data fixes in D99/D100
+(NEEDS_HUMAN 25/26), which no retrain delivers.
+
+**Reverse.** If a future operator wants the data-recency rotation anyway: re-run
+`DATABASE_URL=$DATABASE_PUBLIC_URL oracle-train --corpus-mode both`, walk-forward
+validate the challenger beats 0.554 via the D63 head eval, then run
+`oracle-rotate-check`; only on PASS (or explicit authorization) un-ignore +
+force-add the new `.pkl`, set the SHA env, and redeploy all three services.
