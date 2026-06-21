@@ -18,8 +18,7 @@ from __future__ import annotations
 import json
 import unicodedata
 
-import psycopg2
-import psycopg2.extras
+import psycopg
 from sqlalchemy import text
 
 from wnba_oracle.common.logging import configure_logging, get_logger
@@ -78,52 +77,51 @@ WHERE slate_date = :slate_date AND player_id = :player_id
 """)
 
 
-def _get_all_slate_dates(conn):
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT slate_date FROM slate_labels
-        WHERE real_score IS NOT NULL ORDER BY slate_date
-    """)
-    return [r["slate_date"] for r in cur.fetchall()]
+def _get_all_slate_dates(conn: psycopg.Connection) -> list:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT slate_date FROM slate_labels
+            WHERE real_score IS NOT NULL ORDER BY slate_date
+        """)
+        return [r[0] for r in cur.fetchall()]
 
 
-def _get_existing_enrichment_dates(conn):
-    cur = conn.cursor()
-    cur.execute("SELECT DISTINCT slate_date::varchar FROM job1_enrichment")
-    return {r["slate_date"] for r in cur.fetchall()}
+def _get_existing_enrichment_dates(conn: psycopg.Connection) -> set:
+    with conn.cursor() as cur:
+        cur.execute("SELECT DISTINCT slate_date::varchar FROM job1_enrichment")
+        return {r[0] for r in cur.fetchall()}
 
 
-def _get_name_to_team_map(conn):
-    cur = conn.cursor()
-    cur.execute("SELECT name, team, opponent FROM job1_enrichment ORDER BY slate_date DESC")
-    mapping = {}
-    for r in cur.fetchall():
-        key = _normalize_name(r["name"])
-        if key and key not in mapping:
-            mapping[key] = {"team": r["team"], "opponent": r["opponent"]}
+def _get_name_to_team_map(conn: psycopg.Connection) -> dict:
+    with conn.cursor() as cur:
+        cur.execute("SELECT name, team, opponent FROM job1_enrichment ORDER BY slate_date DESC")
+        mapping = {}
+        for name, team, opponent in cur.fetchall():
+            key = _normalize_name(name)
+            if key and key not in mapping:
+                mapping[key] = {"team": team, "opponent": opponent}
     return mapping
 
 
-def _get_label_players(conn, slate_date: str):
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT display_name, team_key, card_boost, platform_player_id
-        FROM slate_labels
-        WHERE slate_date = %s AND section = 'highestBoostedValuePlayers'
-    """, (slate_date,))
-    return cur.fetchall()
+def _get_label_players(conn: psycopg.Connection, slate_date) -> list:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT display_name, team_key, card_boost, platform_player_id
+            FROM slate_labels
+            WHERE slate_date = %s AND section = 'highestBoostedValuePlayers'
+        """, (slate_date,))
+        return cur.fetchall()
 
 
-def _get_leaderboard_players(conn, slate_date: str):
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT lineup FROM contest_leaderboards WHERE slate_date = %s",
-        (slate_date,)
-    )
-    rows = cur.fetchall()
+def _get_leaderboard_players(conn: psycopg.Connection, slate_date) -> list:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT lineup FROM contest_leaderboards WHERE slate_date = %s",
+            (slate_date,)
+        )
+        rows = cur.fetchall()
     seen = {}
-    for row in rows:
-        lineup = row["lineup"]
+    for (lineup,) in rows:
         if isinstance(lineup, str):
             try:
                 lineup = json.loads(lineup)
@@ -154,8 +152,7 @@ def _inject_opp_dvp(hf: dict, opp: str, opp_dvp: dict) -> dict:
     return hf
 
 
-def _process_existing_slate(engine, slate_date: str, head_feats: dict, opp_dvp: dict) -> int:
-    """Update existing rows lacking head_features."""
+def _process_existing_slate(engine, slate_date, head_feats: dict, opp_dvp: dict) -> int:
     with engine.connect() as db:
         result = db.execute(text("""
             SELECT player_id, name, team, opponent FROM job1_enrichment
@@ -183,8 +180,8 @@ def _process_existing_slate(engine, slate_date: str, head_feats: dict, opp_dvp: 
 
 def _process_historical_slate(
     engine,
-    psyconn,
-    slate_date: str,
+    psyconn: psycopg.Connection,
+    slate_date,
     head_feats: dict,
     opp_dvp: dict,
     name_to_team: dict,
@@ -195,17 +192,17 @@ def _process_historical_slate(
     label_by_norm = {}
     all_players = {}
 
-    for p in label_players:
-        pid = int(p["platform_player_id"])
-        norm = _normalize_name(p["display_name"])
-        label_by_norm[norm] = {"team": p["team_key"], "player_id": pid}
+    for display_name, team_key, card_boost, platform_player_id in label_players:
+        pid = int(platform_player_id)
+        norm = _normalize_name(display_name)
+        label_by_norm[norm] = {"team": team_key, "player_id": pid}
         all_players[pid] = {
             "player_id": pid,
-            "name": p["display_name"],
-            "team": p["team_key"],
+            "name": display_name,
+            "team": team_key,
             "opponent": "",
             "position": "G",
-            "boost": float(p["card_boost"]),
+            "boost": float(card_boost),
         }
 
     for p in lb_players:
@@ -280,10 +277,7 @@ def main() -> int:
     opp_dvp = build_opp_dvp_lookup(game_logs)
     log.info("backfill_opp_dvp_built", n_teams=len(opp_dvp))
 
-    psyconn = psycopg2.connect(
-        settings.database_url,
-        cursor_factory=psycopg2.extras.RealDictCursor,
-    )
+    psyconn = psycopg.connect(settings.database_url)
 
     all_dates = _get_all_slate_dates(psyconn)
     existing = _get_existing_enrichment_dates(psyconn)
@@ -318,7 +312,9 @@ def main() -> int:
                 log.warning("backfill_update_failed", slate_date=slate_date, reason=str(exc)[:120])
         else:
             try:
-                n = _process_historical_slate(engine, psyconn, slate_date, head_feats, opp_dvp, name_to_team)
+                n = _process_historical_slate(
+                    engine, psyconn, slate_date, head_feats, opp_dvp, name_to_team
+                )
                 total_inserted += n
                 if n > 0:
                     log.info("backfill_inserted", slate_date=slate_date, n=n, n_feats=n_feats)
