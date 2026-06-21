@@ -3261,6 +3261,8 @@ cron-window headroom. n_samples itself is unchanged in code; the operator can
 now raise OPTIMIZER_N_SAMPLES with the recovered budget, watching job2 duration
 (large filtered pools still multiply per-combo cost, so validate before 5000).
 
+**Reverse.** Revert payout.py; payout_for_rank (scalar) is untouched.
+
 ## 2026-06-21: D97 -- guard the -inf expected_payout sentinel (post-mortem item 1) [verified]
 
 **Symptom.** The 157-slate post-mortem model summary table shows `expected
@@ -3304,4 +3306,47 @@ recurrence. Logged to NEEDS_HUMAN for an in-container one-line UPDATE if desired
 again record -inf only on a constraint wipeout that the upstream relaxations
 already prevent.
 
-**Reverse.** Revert payout.py; payout_for_rank (scalar) is untouched.
+## 2026-06-21: D98 -- game-stack alignment audit + bonus bump (post-mortem item 2) [verified]
+
+**Audit.** New `scripts/stack_alignment_check.py` measures, across the 16
+model-era slates that have both a served (max freeze_seq) frozen lineup and a
+rank-1 contest leaderboard, how often OUR top-5 holds 2+ players from the
+WINNING lineup's game stack. Bridge: contest_leaderboards stores integer
+`teamId`; frozen per_player stores the team abbreviation. We learn teamId ->
+team_key by majority vote over playerId == platform_player_id, so the winner's
+stack is expressed in our abbreviation space. Winner stack teams = those with
+>= 2 players in the rank-1 lineup; ALIGNED = our picks include >= 2 players
+whose team is in that set.
+
+**Result [verified].** Primary alignment 9/16 = 56.2% (strict same-team also
+9/16). This is BELOW the 60% threshold the post-mortem set, so per the item-2
+rule the game-stack bonus was raised.
+
+**The nuance that matters [verified].** Of the 7 non-aligned slates, FOUR
+(2026-06-02, 06-06, 06-09, 06-20) had a rank-1 winner with NO 2+ same-team
+stack at all -- structurally un-alignable (you cannot match a stack the winner
+did not play; the post-mortem's own "80% of winners stack" means ~20% do not,
+and the model era ran 4/16 = 25% no-stack winners). Restricting to slates where
+the winner actually stacked, our alignment is 9/12 = 75%, above threshold.
+Separately, our own lineups already hold a 2+ stack on 15/16 = 94% of slates.
+So the deficit is NOT under-stacking propensity -- it is stack SELECTION (we
+stack a different game than the eventual winner) plus the un-alignable no-stack
+winners. The lone "we failed to stack when we should have" case is 2026-06-08
+(winner LVA:2 + NYL:2; our five picks were all singletons).
+
+**Decision [reasoned].** Followed the item-2 rule and raised
+`OPTIMIZER_GAME_STACK_BONUS` 0.005 -> 0.010 on cron-job2 (variableUpsert),
+redeployed (deployment 33c3cb14). Deliberately a 2x, not a large jump: the
+bonus is added per same-game pick-pair in expected_payout units, and model-era
+frozen EVs run ~0.57-2.75, so 0.010/pair is ~0.5-1% of a typical lineup EV --
+it breaks near-ties toward stacking without overriding a clear projection edge.
+A larger value would over-stack into the 25% of slates whose winners diversified
+and would hurt, not help. The honest expectation: this nudges the 06-08-style
+"no stack at all" case toward a 2-stack; it does NOT fix stack selection, which
+is a projection problem (predicting which game explodes), not a bonus-size
+problem. Logged so a future placement-feedback loop revisits selection, not
+just propensity.
+
+**Reverse.** `variableUpsert OPTIMIZER_GAME_STACK_BONUS=0.005` (or unset for
+the 0.0 code default) on cron-job2, then serviceInstanceDeployV2. No code
+change; the audit script is read-only and re-runnable.
