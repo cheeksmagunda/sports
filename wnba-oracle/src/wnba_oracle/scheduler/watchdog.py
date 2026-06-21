@@ -53,11 +53,14 @@ from __future__ import annotations
 import datetime as dt
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from sqlalchemy import text
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.db.engine import get_engine
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 log = get_logger("oracle.watchdog")
 
@@ -172,7 +175,7 @@ def _check_pool(slate_date: str) -> list[WatchdogEvent]:
     out: list[WatchdogEvent] = []
     if n < 10:
         # D84: escalated from warn. A sub-10 pool means the ingest
-        # partially failed and the 21:00 freeze would optimize over a
+        # partially failed and the tip-relative (T-40) freeze would optimize over a
         # broken universe (the 2026-06-08 incident shape).
         out.append(
             WatchdogEvent(
@@ -400,6 +403,96 @@ def _check_freeze(slate_date: str, *, now_utc: dt.datetime | None = None) -> lis
     return out
 
 
+FEATURE_CONTENT_Q = text(
+    "SELECT COUNT(*)::int AS n, "
+    "COUNT(*) FILTER (WHERE (features_json->>'vegas_total')::float8 > 0)::int AS n_odds, "
+    "COUNT(*) FILTER (WHERE (features_json->>'is_starter')::int = 1)::int AS n_starter "
+    "FROM job1_enrichment WHERE slate_date = :sd"
+)
+
+
+def _check_model_artifact(
+    slate_date: str,
+    *,
+    model_sha: str | None = None,
+    models_dir: Path | None = None,
+) -> list[WatchdogEvent]:
+    """Critical if the trained model won't load -- the system would silently
+    fall back to the boost heuristic (walk-forward corr 0.554 -> 0.246) with no
+    other alert. Catches the catastrophic case where WNBA_ORACLE_MODEL_ARTIFACT_SHA
+    is wiped/reset or points at a `.pkl` not shipped in the image.
+    """
+    if model_sha is None:
+        from wnba_oracle.common.settings import get_settings
+
+        model_sha = get_settings().model_artifact_sha
+    sha = (model_sha or "").strip().lower()
+    if not sha:
+        return [
+            WatchdogEvent(
+                slate_date=slate_date,
+                trigger="model_artifact_unset",
+                severity=SEVERITY_CRITICAL,
+                payload={"note": "WNBA_ORACLE_MODEL_ARTIFACT_SHA empty; serving heuristic"},
+            )
+        ]
+    mdir = models_dir or (REPO_ROOT / "models")
+    resolved = False
+    if mdir.exists():
+        for sidecar in mdir.glob("picker_*.sha256"):
+            try:
+                if sidecar.read_text().strip().lower() == sha and sidecar.with_suffix(".pkl").exists():
+                    resolved = True
+                    break
+            except OSError:
+                continue
+    if not resolved:
+        return [
+            WatchdogEvent(
+                slate_date=slate_date,
+                trigger="model_artifact_unresolved",
+                severity=SEVERITY_CRITICAL,
+                payload={"sha": sha[:12], "note": "no matching .pkl in models/; serving heuristic"},
+            )
+        ]
+    return []
+
+
+def _check_feature_content(slate_date: str) -> list[WatchdogEvent]:
+    """Warn when the pool is full but a whole upstream feed is empty -- the
+    silent-degradation class the row-count checks miss (D100 shape). Empty odds
+    drops the game-script tilt; zero RotoWire starters means lineups never
+    parsed/joined (the confirmed-starter signal is dark)."""
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(FEATURE_CONTENT_Q, {"sd": slate_date}).first()
+    n = int(row[0]) if row and row[0] is not None else 0
+    if n < 10:
+        return []  # tiny/empty pool is the _check_pool checks' job, not this.
+    n_odds = int(row[1]) if row and row[1] is not None else 0
+    n_starter = int(row[2]) if row and row[2] is not None else 0
+    out: list[WatchdogEvent] = []
+    if n_odds == 0:
+        out.append(
+            WatchdogEvent(
+                slate_date=slate_date,
+                trigger="odds_empty",
+                severity=SEVERITY_WARN,
+                payload={"pool": n, "note": "no vegas_total on any row; game-script tilt off"},
+            )
+        )
+    if n_starter == 0:
+        out.append(
+            WatchdogEvent(
+                slate_date=slate_date,
+                trigger="rotowire_empty",
+                severity=SEVERITY_WARN,
+                payload={"pool": n, "note": "no is_starter flags; RotoWire scrape/join failed"},
+            )
+        )
+    return out
+
+
 def run_watchdog(
     slate_date: str, *, now_utc: dt.datetime | None = None
 ) -> list[WatchdogEvent]:
@@ -413,6 +506,8 @@ def run_watchdog(
     events.extend(_check_pool(slate_date))
     events.extend(_check_enrichment_freshness(slate_date, now_utc=now_utc))
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
+    events.extend(_check_model_artifact(slate_date))
+    events.extend(_check_feature_content(slate_date))
     if events:
         persist_events(events)
         _ping_on_critical(events)

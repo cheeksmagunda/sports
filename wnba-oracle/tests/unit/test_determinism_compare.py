@@ -18,24 +18,33 @@ from wnba_oracle.train.pipeline import artifact_content_equal
 MODELS = Path(__file__).resolve().parents[2] / "models"
 
 
-def _load(name: str):
-    path = MODELS / name
-    if not path.exists():
-        pytest.skip(f"artifact {name} not present")
+def _artifacts() -> list[Path]:
+    """Glob whatever picker artifacts are committed, rather than pinning two
+    specific SHAs. Model rotation replaces the filenames; pinning them made the
+    determinism safety-net silently `skip` (go dark) after a promotion."""
+    return sorted(MODELS.glob("picker_*.pkl"))
+
+
+def _load(path: Path):
     with open(path, "rb") as fh:
         return pickle.load(fh)
 
 
 def test_artifact_equals_itself() -> None:
-    art = _load("picker_e2ced9ec_1780873338.pkl")
+    arts = _artifacts()
+    if not arts:
+        pytest.skip("no picker artifacts present")
+    art = _load(arts[0])
     equal, reason = artifact_content_equal(art, art)
     assert equal is True
     assert reason == "content-identical"
 
 
 def test_distinct_artifacts_differ() -> None:
-    a = _load("picker_e2ced9ec_1780873338.pkl")
-    b = _load("picker_bf3c8996_1780752059.pkl")
+    arts = _artifacts()
+    if len(arts) < 2:
+        pytest.skip("need >= 2 distinct artifacts")
+    a, b = _load(arts[0]), _load(arts[1])
     equal, reason = artifact_content_equal(a, b)
     assert equal is False
     assert reason  # names the first divergence
@@ -44,7 +53,10 @@ def test_distinct_artifacts_differ() -> None:
 def test_reload_of_same_pickle_is_equal() -> None:
     """A re-pickled / re-loaded copy is content-equal even though the pickle
     bytes can differ. This is exactly the case the old SHA check got wrong."""
-    art = _load("picker_e2ced9ec_1780873338.pkl")
+    arts = _artifacts()
+    if not arts:
+        pytest.skip("no picker artifacts present")
+    art = _load(arts[0])
     reloaded = pickle.loads(pickle.dumps(art))
     equal, reason = artifact_content_equal(art, reloaded)
     assert equal is True, reason

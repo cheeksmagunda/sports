@@ -2,7 +2,7 @@
 
 Invoked by Railway's cron with:
   oracle-cron --job job1     # morning enrichment (13:00 UTC)
-  oracle-cron --job job2     # pre-tip optimizer (21:00 UTC, every 15 min)
+  oracle-cron --job job2     # pre-tip optimizer (tip-relative T-40 freeze; cron fires */15 across 14-23,0-3 UTC)
   oracle-cron --job dayclose # corpus extension (06:00 UTC, captures
                              # the prior night's finalized contest)
 """
@@ -47,7 +47,7 @@ def main() -> int:
         rc = job1.main()
         # D84: run the watchdog after job1 too, so a degraded or absent
         # morning pool pages at 13:00 UTC instead of being discovered by
-        # the 21:00 job2 fire (or the operator's screenshot). Wrapped so a
+        # the job2 freeze fire (or the operator's screenshot). Wrapped so a
         # watchdog crash never masks job1's exit code.
         try:
             run_watchdog(dt.date.today().isoformat())

@@ -157,31 +157,27 @@ def test_caveat_is_skip_demotes_marginal_ev_to_skip() -> None:
         for i in range(n)
     ]
     curve = default_curve_for_regime("top_20")
-    base = optimize_lineup(
-        samp_specs,
-        field_specs,
-        curve,
-        cfg=OptimizeConfig(top_n_filter=10, n_samples=300, n_field_lineups=80),
-    )
+    common = {"top_n_filter": 10, "n_samples": 300, "n_field_lineups": 80}
+    # Bracket the skip/caveat thresholds around the realized EV so the base
+    # lineup lands in the marginal band deterministically -- otherwise this test
+    # silently passed via the no-op else branch whenever the pool's EV drifted
+    # out of the band (the pool actually scores in the 'skip' band by default).
+    ev = optimize_lineup(samp_specs, field_specs, curve, cfg=OptimizeConfig(**common)).expected_payout
+    band = {
+        "skip_if_expected_payout_below": ev - 0.1,
+        "caveat_if_expected_payout_below": ev + 0.1,
+    }
+    base = optimize_lineup(samp_specs, field_specs, curve, cfg=OptimizeConfig(**common, **band))
     flipped = optimize_lineup(
-        samp_specs,
-        field_specs,
-        curve,
-        cfg=OptimizeConfig(
-            top_n_filter=10,
-            n_samples=300,
-            n_field_lineups=80,
-            caveat_is_skip=True,
-        ),
+        samp_specs, field_specs, curve,
+        cfg=OptimizeConfig(**common, **band, caveat_is_skip=True),
     )
-    # Same player selection regardless of flag policy (EV ordering unchanged)
+    # Same player selection regardless of flag policy (EV ordering unchanged).
     assert base.player_ids == flipped.player_ids
-    # If base hit the caveat band, the flipped flag must be 'skip'.
-    if base.entry_flag == "enter_with_caveat":
-        assert flipped.entry_flag == "skip"
-    else:
-        # If base wasn't in the caveat band, flipping has no effect.
-        assert flipped.entry_flag == base.entry_flag
+    # Precondition: base really is in the caveat band (fail loud if it drifts).
+    assert base.entry_flag == "enter_with_caveat"
+    # caveat_is_skip demotes that marginal lineup to 'skip'.
+    assert flipped.entry_flag == "skip"
 
 
 def test_never_skip_defaults_off_in_library_config() -> None:
@@ -218,7 +214,7 @@ def test_never_skip_promotes_skip_to_caveat() -> None:
         for i in range(n)
     ]
     curve = default_curve_for_regime("top_20")
-    common = dict(top_n_filter=10, n_samples=300, n_field_lineups=80)
+    common = {"top_n_filter": 10, "n_samples": 300, "n_field_lineups": 80}
     base = optimize_lineup(samp_specs, field_specs, curve, cfg=OptimizeConfig(**common))
     no_skip = optimize_lineup(
         samp_specs, field_specs, curve, cfg=OptimizeConfig(never_skip=True, **common)
@@ -226,12 +222,11 @@ def test_never_skip_promotes_skip_to_caveat() -> None:
     # Pure flag policy: same players, same EV.
     assert base.player_ids == no_skip.player_ids
     assert base.expected_payout == no_skip.expected_payout
-    # never_skip never emits 'skip'.
-    assert no_skip.entry_flag != "skip"
-    if base.entry_flag == "skip":
-        assert no_skip.entry_flag == "enter_with_caveat"
-    else:
-        assert no_skip.entry_flag == base.entry_flag
+    # Precondition: this weak pool really lands in the 'skip' band by default
+    # (fail loud if it drifts), so the promotion below is actually exercised.
+    assert base.entry_flag == "skip"
+    # never_skip promotes that 'skip' to 'enter_with_caveat' and never emits skip.
+    assert no_skip.entry_flag == "enter_with_caveat"
 
 
 def test_never_skip_overrides_caveat_is_skip() -> None:

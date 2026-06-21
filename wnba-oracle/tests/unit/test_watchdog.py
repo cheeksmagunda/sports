@@ -297,6 +297,10 @@ def test_run_watchdog_aggregates_and_persists() -> None:
         watchdog, "_check_enrichment_freshness", return_value=[]
     ), patch.object(
         watchdog, "_check_freeze", return_value=[freeze_ev]
+    ), patch.object(
+        watchdog, "_check_model_artifact", return_value=[]
+    ), patch.object(
+        watchdog, "_check_feature_content", return_value=[]
     ), patch.object(watchdog, "persist_events", return_value=2) as persist, patch.object(
         watchdog, "_ping_on_critical"
     ) as ping:
@@ -308,6 +312,61 @@ def test_run_watchdog_aggregates_and_persists() -> None:
     assert triggers == {"no_job1_pool", "no_frozen_lineup"}
     persist.assert_called_once_with([pool_ev, freeze_ev])
     ping.assert_called_once_with([pool_ev, freeze_ev])
+
+
+def test_model_artifact_unset_is_critical() -> None:
+    """Empty WNBA_ORACLE_MODEL_ARTIFACT_SHA = silent heuristic fallback."""
+    events = watchdog._check_model_artifact("2026-06-21", model_sha="")
+    assert [e.trigger for e in events] == ["model_artifact_unset"]
+    assert events[0].severity == watchdog.SEVERITY_CRITICAL
+
+
+def test_model_artifact_unresolved_is_critical(tmp_path) -> None:
+    """SHA set but no matching .pkl shipped = silent heuristic fallback."""
+    events = watchdog._check_model_artifact(
+        "2026-06-21", model_sha="deadbeef" * 8, models_dir=tmp_path
+    )
+    assert [e.trigger for e in events] == ["model_artifact_unresolved"]
+    assert events[0].severity == watchdog.SEVERITY_CRITICAL
+
+
+def test_model_artifact_resolves_clean(tmp_path) -> None:
+    sha = "abc123" * 8
+    (tmp_path / "picker_x_1.sha256").write_text(sha)
+    (tmp_path / "picker_x_1.pkl").write_bytes(b"stub")
+    assert watchdog._check_model_artifact("2026-06-21", model_sha=sha, models_dir=tmp_path) == []
+
+
+def _engine_with_feature_counts(n: int, n_odds: int, n_starter: int) -> MagicMock:
+    eng = MagicMock()
+    result = MagicMock()
+    result.first.return_value = (n, n_odds, n_starter)
+    conn = MagicMock()
+    conn.execute.return_value = result
+    eng.connect.return_value.__enter__.return_value = conn
+    return eng
+
+
+def test_feature_content_warns_on_empty_odds_and_rotowire() -> None:
+    eng = _engine_with_feature_counts(20, 0, 0)
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        events = watchdog._check_feature_content("2026-06-21")
+    triggers = {e.trigger for e in events}
+    assert triggers == {"odds_empty", "rotowire_empty"}
+    assert all(e.severity == watchdog.SEVERITY_WARN for e in events)
+
+
+def test_feature_content_clean_when_feeds_present() -> None:
+    eng = _engine_with_feature_counts(20, 18, 9)
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        assert watchdog._check_feature_content("2026-06-21") == []
+
+
+def test_feature_content_quiet_on_tiny_pool() -> None:
+    """Below 10 rows is the _check_pool checks' job; don't double-warn."""
+    eng = _engine_with_feature_counts(4, 0, 0)
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        assert watchdog._check_feature_content("2026-06-21") == []
 
 
 def test_summarize_status_picks_highest_severity() -> None:

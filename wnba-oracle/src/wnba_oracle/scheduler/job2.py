@@ -867,7 +867,7 @@ def _build_specs(
     return samps, fields, projection_by_pid
 
 
-# D82: frozen_lineups is append-only. Every freeze fire (first 21:00 UTC
+# D82: frozen_lineups is append-only. Every freeze fire (the first tip-relative T-40 fire
 # freeze and D75 late re-freeze alike) inserts a NEW row with the next
 # freeze_seq for (slate_date, model_sha); nothing ever updates a frozen row
 # in place, so the lineup the operator saw at any point stays reconstructable.
