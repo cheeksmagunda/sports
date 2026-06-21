@@ -123,3 +123,24 @@ def test_static_cap_one_game_slate_relaxed_by_feasibility_guard() -> None:
     )
     rec = optimize_lineup(samp, fields, curve, cfg=cfg)
     assert len(rec.player_ids) == 5
+
+
+def test_two_team_slate_records_finite_payout_not_neg_inf() -> None:
+    """The 2026-05-31 bug: that two-team (1-game) slate froze an -inf
+    expected_payout because the static cap of 2 skipped every C(n,5) combo,
+    leaving the scan's b_ev at its -np.inf sentinel, which was then recorded
+    into frozen_lineups. The cap-feasibility relaxation plus the post-scan
+    -inf guard must guarantee a finite, non-negative expected_payout on this
+    exact slate shape, under both the dynamic and static cap paths."""
+    samp, fields = _two_team_pool()
+    curve = default_curve_for_regime("top_20")
+    for dynamic in (True, False):
+        cfg = OptimizeConfig(
+            top_n_filter=10, n_samples=150, n_field_lineups=40, max_per_team=2,
+            dynamic_team_cap=dynamic,
+        )
+        rec = optimize_lineup(samp, fields, curve, cfg=cfg)
+        assert np.isfinite(rec.expected_payout), f"dynamic={dynamic}"
+        assert rec.expected_payout >= 0.0
+        assert np.isfinite(rec.lineup_score_p50)
+        assert len(rec.player_ids) == 5

@@ -327,3 +327,16 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     early slates. Railway-config change (GraphQL or dashboard); no creds in this
     session. FREEZE_LEAD_MINUTES is env-tunable on cron-job2 (default 40; raise
     for more margin, lower to finalize closer to tip).
+
+24. **[NEW 2026-06-21, D97] Optional: correct the one historical -inf
+    expected_payout row.** The 2026-05-31 frozen_lineups row (freeze_seq=1,
+    model_sha `000f54fe...`) carries `expected_payout = -inf` -- the post-mortem
+    item-1 bug, now prevented in code by the D97 guard. It is the only non-finite
+    expected_payout in the whole table and is a dead historical artifact (a
+    'skip' recommendation with zero players). It could not be patched from this
+    build because `DATABASE_PUBLIC_URL` is read-only (UPDATE -> InsufficientPrivilege)
+    and the production write role is reachable only from inside Railway. If a
+    clean table is wanted, run from a Railway container (or with a write-capable
+    DSN):
+    `UPDATE frozen_lineups SET expected_payout = 0.0 WHERE slate_date = '2026-05-31' AND expected_payout = '-Infinity'::float8;`
+    Purely cosmetic; the live serving path never reads this stale row.

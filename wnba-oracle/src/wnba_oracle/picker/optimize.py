@@ -567,6 +567,36 @@ def optimize_lineup(
         n_games=n_games,
     )
 
+    # Guard the -inf sentinel. If every candidate combo was skipped (the
+    # filtered pool holds fewer than five draftable players, so C(n,5) is
+    # empty even after the team-cap / anchor-floor / boost-cap relaxations
+    # above), best_ev is still the -np.inf the scan initialised it to and
+    # best_indices is (). Recording that float("-inf") is exactly how the
+    # 2026-05-31 two-team slate froze an -inf expected_payout -- it pre-dated
+    # the _cap_is_feasible relaxation, and the empty best_indices also feeds
+    # np.median an empty slice (NaN + RuntimeWarning). Never persist -inf:
+    # clamp the EV to 0.0 (a slate with no feasible lineup has zero expected
+    # payout, not negative-infinite) and return the empty recommendation the
+    # caller's slate_labels fallback can take over from.
+    if n_evaluated == 0 or not np.isfinite(best_ev):
+        log.error(
+            "optimizer_no_feasible_lineup",
+            n_filtered=len(filtered_sampling),
+            n_games=n_games,
+            best_ev=float(best_ev),
+            note="no feasible 5-combo after all relaxations; EV clamped to 0.0",
+        )
+        flag = "enter_with_caveat" if cfg.never_skip else "skip"
+        return LineupRecommendation(
+            player_ids=tuple(int(keep_ids[i]) for i in best_indices),
+            slot_multipliers=tuple(float(x) for x in slot_multipliers),
+            expected_payout=0.0,
+            lineup_score_p10=0.0,
+            lineup_score_p50=0.0,
+            lineup_score_p90=0.0,
+            entry_flag=flag,
+        )
+
     # Lineup assembly: assign slots by rearrangement inequality on median
     rs_median = np.median(real_score_samples[:, list(best_indices)], axis=0)
     # kind='stable' so tied medians (e.g. two boost-3 rookies with the

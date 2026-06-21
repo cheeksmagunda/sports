@@ -3261,4 +3261,47 @@ cron-window headroom. n_samples itself is unchanged in code; the operator can
 now raise OPTIMIZER_N_SAMPLES with the recovered budget, watching job2 duration
 (large filtered pools still multiply per-combo cost, so validate before 5000).
 
+## 2026-06-21: D97 -- guard the -inf expected_payout sentinel (post-mortem item 1) [verified]
+
+**Symptom.** The 157-slate post-mortem model summary table shows `expected
+payout = -inf` for the 2026-05-31 slate. Verified against production: exactly
+one row in all of `frozen_lineups` carries a non-finite expected_payout --
+`slate_date=2026-05-31, freeze_seq=1, expected_payout=-inf,
+entry_recommendation='skip'`, and its lineup has zero `per_player` entries
+(empty lineup). model_sha `000f54fe...` (an early artifact, pre-NEVER_SKIP).
+
+**Root cause [verified].** `optimize._scan` initialises `b_ev = -np.inf` and
+only overwrites it when a candidate combo is evaluated. 2026-05-31 was a
+two-team (1-game: GSV@LVA) slate. With the static `max_per_team=2` and only
+two teams the most players any lineup can field is 2+2=4 < 5, so EVERY C(n,5)
+combo tripped the team-cap skip, `n_evaluated` stayed 0, and `best_ev` was
+recorded straight from the `-np.inf` sentinel via `expected_payout=float(
+best_ev)`. The empty `best_indices=()` is why the frozen lineup had no players.
+This slate pre-dated the `_cap_is_feasible` relaxation (optimize.py:375,
+committed 2026-06-01/952470d after this slate froze), which now bumps the
+effective cap to uncapped whenever the cap admits no 5-combo -- so the
+two-team shape can no longer reach the sentinel.
+
+**Fix [verified].** Added a post-scan guard in `optimize_lineup`: if
+`n_evaluated == 0 or not np.isfinite(best_ev)` after all relaxations
+(team-cap, anchor-floor, boost-cap), log `optimizer_no_feasible_lineup` and
+return a recommendation with `expected_payout=0.0` (a slate with no feasible
+lineup has zero expected payout, not negative-infinite) instead of letting the
+sentinel flow into `frozen_lineups`. This also stops the empty `best_indices`
+from feeding `np.median` an empty slice (NaN + RuntimeWarning). The normal
+path is byte-identical; the guard only fires on a total wipeout. Regression
+test `test_two_team_slate_records_finite_payout_not_neg_inf` asserts the exact
+2026-05-31 shape now records a finite, non-negative EV under both cap paths.
+
+**Historical row.** The single corrupt 2026-05-31 row cannot be corrected from
+this build env: `DATABASE_PUBLIC_URL` is read-only (write attempt returns
+`InsufficientPrivilege`), and the production write path uses the internal
+`DATABASE_URL` reachable only from inside Railway. The row is a dead historical
+artifact (a 'skip' recommendation with no players); the code guard prevents any
+recurrence. Logged to NEEDS_HUMAN for an in-container one-line UPDATE if desired.
+
+**Reverse.** Revert the guard block in `picker/optimize.py`; the slate would
+again record -inf only on a constraint wipeout that the upstream relaxations
+already prevent.
+
 **Reverse.** Revert payout.py; payout_for_rank (scalar) is untouched.
