@@ -209,6 +209,13 @@ def fetch_wnba_team_stats(season: str | None = None) -> dict[str, dict[str, floa
                     None,
                 )
         if not abbr:
+            # D102 (#32a): a new expansion team that _WNBA_NAME_TO_ABBR doesn't
+            # know silently drops out, so its players serve team_pace=0.0 (a
+            # calibration leak). Warn so the static map gets updated rather than
+            # degrading quietly. The WNBA is actively expanding (GSV/TOR added
+            # 2026), so this will fire on the next new franchise.
+            if name:
+                log.warning("team_name_unmapped", team_name=name)
             continue
         out[abbr] = {
             "pace": float(row.get("PACE", 0.0) or 0.0),

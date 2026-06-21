@@ -3577,3 +3577,34 @@ is either a bigger change or carries an external-credit/data tradeoff:**
 **Reverse.** Revert commits a4f96e3 (rotowire) and 2779fca (watchdog + tests).
 The watchdog additions are detection-only (no behavior change to the pipeline);
 the rotowire change only affects which players get confirmed/starter flags.
+
+## 2026-06-21: D103 -- CRITICAL: restored cron-job1 startCommand (was running backfill, not job1) [verified]
+
+**What was wrong [verified].** While closing NEEDS_HUMAN #27 I read the live
+Railway serviceInstance configs and found cron-job1 (`0 13`) AND cron-job1-late
+(`35 22`) both had `startCommand = oracle-cron --job backfill` -- the historical
+head_features backfill, which by design CANNOT fetch the live Real Sports pool,
+Odds, RotoWire, or props. The 2026-06-21 enrichment (85 players, vegas + RotoWire
++ props) was produced at 13:04, so cron-job1 ran the correct `--job job1` at
+13:00 today; the startCommands were overwritten to `--job backfill` AFTER that,
+during today's corpus rebuild (wnba_game_logs reloaded 13:57, head_features
+updated 15:37 -- both backfill outputs). The seed_storage_state auth wrapper was
+also lost. Left uncorrected, TOMORROW's 13:00 cron-job1 would have run backfill,
+produced NO fresh pool, and job2 would have had nothing to freeze
+(`no_job1_pool`). The dedicated `backfill-enrichment` service (cron=None) is the
+proper on-demand home for `--job backfill`; cron-job1/late must not be repointed
+at it.
+
+**Fix [verified].** Via `serviceInstanceUpdate` + `serviceInstanceDeployV2`:
+- cron-job1 -> `sh -c 'python /app/scripts/seed_storage_state.py && oracle-cron --job job1'` (matches the working cron-job2/dayclose pattern; re-seeds Real Sports auth).
+- cron-job1-late -> `oracle-cron --job job1late` (the new D102/#27 credit-free lite refresh; no auth needed -- RotoWire + DB only), schedule widened `35 22` -> `*/30 16-23 * * *` so afternoon AND evening slates get confirmed starters before their T-40 freeze.
+Both redeployed SUCCESS on commit 265b6e6 and verified live.
+
+**Why it stayed hidden.** The `enrichment_stale` watchdog (warn, after 20:00 UTC)
+would have caught it tomorrow evening, but only after a stale freeze. The new
+D102 watchdog `config_drift`/`rotowire_empty`/`model_artifact` checks don't cover
+the cron startCommand. Mitigation logged: NEEDS_HUMAN #33 (a startup self-check
+that asserts the dispatched job matches the service's intended role).
+
+**Reverse.** N/A (corrective). To re-run a manual backfill, use the
+`backfill-enrichment` service, never cron-job1/late.

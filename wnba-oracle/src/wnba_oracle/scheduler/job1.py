@@ -398,6 +398,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         log.warning("job1_head_features_failed", reason=str(exc)[:120])
         head_feats = {}
     n_head_features_matched = 0
+    head_feature_misses: list[str] = []
 
     # D74 (R8 first-pass): WNBA team pace + defensive ratings from nba_api.
     # Injected into head_features per player so the trained heads see non-zero
@@ -487,6 +488,12 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
             hf["opp_dvp_center"] = dvp
             features["head_features"] = hf
             n_head_features_matched += 1
+        else:
+            # D102 (#29): a head-feature miss means this player falls through to
+            # the heuristic with NO recency signal -- the silent failure that hit
+            # ramping rookies (C. Leite, D99). The aggregate count hid WHO. Track
+            # names so a systematic identity-resolution gap is visible per slate.
+            head_feature_misses.append(f"{p.display_name} ({p.team})")
         # D74: player prop lines as projection cross-check signals.
         # Stored under features_json keys for future training; job2 can read
         # these as a calibration signal (if prop_pts_line > p50 projection,
@@ -528,6 +535,20 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_opp_dvp=len(opp_dvp_map),
         n_props_matched=n_props_matched,
     )
+    # D102 (#29): surface head-feature resolution misses. A high miss rate on a
+    # full pool means the (initial, last, team) identity join is failing for a
+    # cohort of players (the D99 staleness shape), who then serve no recency
+    # signal. Warn with a capped sample of names so it is diagnosable per slate.
+    if head_feature_misses and len(pool) > 0:
+        miss_rate = len(head_feature_misses) / len(pool)
+        if miss_rate >= 0.25:
+            log.warning(
+                "job1_head_feature_miss_rate_high",
+                n_misses=len(head_feature_misses),
+                n_pool=len(pool),
+                miss_rate=round(miss_rate, 2),
+                sample=head_feature_misses[:15],
+            )
 
     persisted = 0
     if not dry_run and settings.database_url:
