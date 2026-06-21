@@ -429,3 +429,48 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     new expansion team silently serves team_pace=0.0. (d) Real Sports JWT
     expiry is reactive-only; decode the `exp` claim at job1 start and warn at
     < 7 days.
+
+---
+
+## CLOSURE (2026-06-21, D102/D103): items 24-32 actioned
+
+The operator asked me to close these out rather than hand them off. Status:
+
+- **#24 (-inf historical row): WON'T-FIX FROM HERE (cosmetic).** Confirmed twice
+  the public DSN is read-only (`InsufficientPrivilege`). The row is a dead 'skip'
+  recommendation with 0 players that the live serving path never reads. Patching
+  it needs an in-container write role; repurposing a production cron to fix a
+  cosmetic value is not worth the risk. Exact SQL is in #24 above for the next
+  in-container shell. Code guard (D97) already prevents recurrence.
+- **#25 (serving minutes reconcile): SUPERSEDED.** The deeper cause (stale
+  corpus) is fixed by #28 (nightly auto-refresh) and made visible by #29
+  (miss-rate warning). A full legacy-vs-head minutes-field reconciliation is now
+  low-value and folded into #29's follow-up.
+- **#26 (RotoWire confirmed): DONE (D102, a4f96e3).** Parse + name-join fixed.
+- **#27 (tip-relative refresh): DONE (D102/D103).** job1late lite refresh +
+  cron-job1-late `*/30 16-23`.
+- **#28 (wnba_game_logs auto-refresh): DONE (D102, 265b6e6).** Nightly in dayclose.
+- **#29 (identity Resolver): PARTIAL.** The silent-miss RISK is closed -- job1
+  now warns on a high head-feature miss rate with player names. The full
+  Resolver swap (nbaId trust + override CSV in the live path) remains a clean
+  follow-up but is no longer load-bearing now that misses are visible + the
+  corpus is fresh.
+- **#30 (config drift): DONE (D102).** Watchdog `config_drift` WARN vs the
+  committed EXPECTED_PROD_CONFIG manifest.
+- **#31 (contract tests): DONE (D102, 39bac9b).** Network schema-contract tests
+  added for RotoWire / nba_api / Odds events; `pytest -m contract` nightly.
+- **#32 (housekeeping): PARTIAL.** (a) expansion-team `team_name_unmapped` warn
+  DONE. (b/c/d) models/.pkl rotation, append-only retention policy, and proactive
+  JWT-exp warning remain as low-urgency follow-ups (none degrade a fire; the JWT
+  already fails loud via StorageStateStale -> watchdog critical).
+
+33. **[NEW 2026-06-21, D103] Add a cron-role self-check.** D103 found cron-job1
+    and cron-job1-late had been silently repointed to `--job backfill` (the
+    on-demand head-features backfill) during a corpus rebuild, which would have
+    starved tomorrow's pool. Add a startup assertion: each cron dispatch logs
+    its intended role and the watchdog escalates if the day's enrichment was
+    produced by a `--job backfill` run (e.g. enrichment rows present but with no
+    vegas/rotowire fields on a full slate). Until then, the existing
+    `enrichment_stale` + new `rotowire_empty` warnings are the backstop. Rule:
+    run `--job backfill` ONLY on the dedicated `backfill-enrichment` service
+    (cron=None), never on cron-job1/late.

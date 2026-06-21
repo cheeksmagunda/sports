@@ -1,6 +1,20 @@
 status: BUILD_COMPLETE
 last_verified: 2026-06-21T00:00:00Z
-phase: live. 2026-06-21 (D102): Post-work cleanup -- cron/test/sustainability
+phase: live. 2026-06-21 (D103, CRITICAL): restored cron-job1 + cron-job1-late
+startCommands. Both had been silently overwritten to `oracle-cron --job backfill`
+(the on-demand head-features backfill) during today's corpus rebuild -- left
+uncorrected, tomorrow's 13:00 cron-job1 would have run backfill, produced NO
+fresh pool, and frozen nothing. Restored cron-job1 ->
+`seed_storage_state && oracle-cron --job job1`; cron-job1-late ->
+`oracle-cron --job job1late` (the new credit-free lite confirmed-lineup refresh)
+on a widened `*/30 16-23` schedule so afternoon AND evening slates get confirmed
+starters before T-40. Both redeployed SUCCESS on 265b6e6, verified live. Rule:
+`--job backfill` runs ONLY on the dedicated backfill-enrichment service.
+Then closed NEEDS_HUMAN 24-32: #27/#28/#30/#31 DONE, #26 DONE (parse),
+#29/#32a PARTIAL (silent-miss warning + expansion-team warning shipped), #24
+cosmetic-wontfix (read-only DSN), #25 superseded. New #33 (cron-role self-check).
+Full suite 406 (+3 nightly contract). See DECISIONS D103.
+2026-06-21 (D102): Post-work cleanup -- cron/test/sustainability
 audit (3 parallel read-only audits) + fixes. SHIPPED: (1) RotoWire
 confirmed-starter parse repaired -- the D100 root cause -- the badge was read
 once per game-box and stamped on both teams, and abbreviated visiting-team
@@ -163,15 +177,21 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
   to off-`main` `backups` branch (D61). 3-2-1 off-site copy.
 - cron-job1: `0 13 * * *` UTC -- scrape Real Sports pool, nba_api minutes,
   odds, RotoWire lineups, player props, persist features_json enrichment.
-- cron-job1-late: `35 22 * * *` UTC -- re-run of job1 (D81, service id
-  2b0cd5aa) so enrichment carries RotoWire CONFIRMED lineups + late scratches +
-  props before the 23:00 job2 late re-freeze. Clone of cron-job1, env via
-  cross-service references.
-- cron-job2: `*/15 21-23,0-3 * * *` UTC -- run heads + optimizer, freeze lineup
-  to Redis + Postgres. Late re-freeze fires at 23:00 UTC when LATE_REFREEZE_ENABLED
-  (D75); consumes the cron-job1-late refresh (D81).
+- cron-job1-late: `*/30 16-23 * * *` UTC (D103, was `35 22`, service id
+  2b0cd5aa) -- runs `oracle-cron --job job1late`, the credit-free lite refresh
+  (D102/#27): re-scrapes RotoWire and JSONB-merges ONLY the starter/confirmed
+  fields onto existing enrichment (no Odds/props re-fetch). Fanned across the
+  afternoon+evening so every slate gets confirmed starters before its T-40
+  freeze. No Real Sports auth needed (RotoWire + DB only).
+- cron-job2: `*/15 14-23,0-3 * * *` UTC -- run heads + optimizer, freeze lineup
+  to Redis + Postgres (tip-relative T-40, D93). Late re-freeze when
+  LATE_REFREEZE_ENABLED (D75).
 - cron-dayclose: `0 6 * * *` UTC -- extend corpus from finalized contest ids
-  (D41/D60, service id 606d950d).
+  (D41/D60, service id 606d950d) + nightly wnba_game_logs refresh (D102/#28,
+  WNBA_DAYCLOSE_REFRESH_GAMELOGS).
+- backfill-enrichment: cron=None (on-demand) -- the ONLY service that should run
+  `oracle-cron --job backfill` (historical head_features). Never repoint
+  cron-job1/late at it (D103).
 
 ## Active Railway env vars (cron-job2, verified 2026-06-13, D91)
 
