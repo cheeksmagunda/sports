@@ -49,6 +49,23 @@ class LineupEntry:
     confirmed: bool  # True if "Confirmed" badge present, else expected
 
 
+def _list_is_confirmed(list_el) -> bool:  # type: ignore[no-untyped-def]
+    """Whether one team's lineup list is CONFIRMED (vs the default Expected).
+
+    RotoWire marks each team's `ul.lineup__list` with its own status li, e.g.
+    `<li class="lineup__status is-confirmed">Confirmed Lineup</li>` or
+    `<li class="lineup__status is-expected">Expected Lineup</li>`. Prefer the
+    `is-confirmed` class (stable) and fall back to the visible text.
+    """
+    status_el = list_el.select_one(".lineup__status")
+    if status_el is None:
+        return False
+    classes = status_el.get("class") or []
+    if "is-confirmed" in classes:
+        return True
+    return "confirmed" in status_el.get_text(" ", strip=True).lower()
+
+
 def fetch_lineups(
     *,
     use_cache: bool = True,
@@ -69,8 +86,20 @@ def fetch_lineups(
     with httpx.Client(timeout=20.0, headers=DEFAULT_HEADERS) as client:
         r = client.get(URL)
         r.raise_for_status()
-    soup = BeautifulSoup(r.text, "lxml")
+    entries = parse_lineups_html(r.text)
+    if use_cache:
+        cache_put(URL, None, {"entries": [e.__dict__ for e in entries]})
+    return entries
 
+
+def parse_lineups_html(html: str) -> list[LineupEntry]:
+    """Parse the RotoWire WNBA lineups HTML into LineupEntry rows.
+
+    Split out from fetch_lineups so the selector/parse logic is unit-testable
+    against a checked-in fixture without any network (the confirmed-status and
+    abbreviated-name paths previously had zero coverage -- the D100 bug).
+    """
+    soup = BeautifulSoup(html, "lxml")
     entries: list[LineupEntry] = []
     for box in soup.select("div.lineup.is-nba"):
         teams = box.select("div.lineup__abbr")
@@ -78,8 +107,6 @@ def fetch_lineups(
             continue
         away = teams[0].get_text(strip=True).upper()
         home = teams[1].get_text(strip=True).upper()
-        confirmed_badge = box.select_one(".lineup__status")
-        confirmed = "confirmed" in (confirmed_badge.get_text("").lower() if confirmed_badge else "")
         # Two lists: visiting + home starters.
         sides = [
             ("visit", away, home, False),
@@ -89,6 +116,13 @@ def fetch_lineups(
             list_el = box.select_one(f"ul.lineup__list.is-{cls}")
             if list_el is None:
                 continue
+            # Confirmation is PER TEAM: each team's own ul.lineup__list carries
+            # its own `.lineup__status` li (classes is-confirmed/is-expected,
+            # text "Confirmed Lineup"/"Expected Lineup"). The two teams in a
+            # game confirm independently, so reading one box-level status and
+            # stamping it on both sides (the pre-fix bug) mislabeled every
+            # mixed-status game. Read it from this team's list.
+            confirmed = _list_is_confirmed(list_el)
             for i, li in enumerate(list_el.select("li.lineup__player"), start=1):
                 # Each li has the position badge, player link, and injury badge.
                 pos_el = li.select_one(".lineup__pos")
@@ -111,8 +145,6 @@ def fetch_lineups(
                         confirmed=confirmed,
                     )
                 )
-    if use_cache:
-        cache_put(URL, None, {"entries": [e.__dict__ for e in entries]})
     return entries
 
 

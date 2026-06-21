@@ -178,14 +178,63 @@ def _normalize_name(name: str) -> str:
     return " ".join(parts).lower()
 
 
-def _index_rotowire(entries: list[LineupEntry]) -> dict[tuple[str, str], LineupEntry]:
-    """Build a (team_upper, normalized_name) -> LineupEntry lookup so
-    Real Sports pool rows can be enriched in O(1)."""
-    index: dict[tuple[str, str], LineupEntry] = {}
+def _name_keys(name: str) -> tuple[str, str]:
+    """Return (full_norm, initial_norm) join keys for a player name.
+
+    full_norm    = the case/suffix-normalized full name ('cecilia zandalasini').
+    initial_norm = first-initial + last name ('c zandalasini').
+
+    Both 'C. Zandalasini' (RotoWire often abbreviates the visiting team's first
+    names) and 'Cecilia Zandalasini' (Real Sports' full names) collapse to the
+    same initial_norm, so the initial key bridges the two sources when the full
+    names differ. The exact key is still tried first to avoid first-initial +
+    last-name collisions between two different players on the same team.
+    """
+    norm = _normalize_name(name)
+    parts = norm.split()
+    if len(parts) >= 2:
+        initial = parts[0].rstrip(".")[:1]
+        return norm, f"{initial} {parts[-1]}"
+    return norm, norm
+
+
+@dataclass(frozen=True)
+class RotowireIndex:
+    """(team, name) -> LineupEntry lookup with an abbreviated-name fallback."""
+
+    exact: dict[tuple[str, str], LineupEntry]
+    by_initial: dict[tuple[str, str], LineupEntry]
+
+    def get(self, team: str, name: str) -> LineupEntry | None:
+        team_u = team.upper()
+        full_norm, initial_norm = _name_keys(name)
+        hit = self.exact.get((team_u, full_norm))
+        if hit is not None:
+            return hit
+        return self.by_initial.get((team_u, initial_norm))
+
+    def __contains__(self, key: tuple[str, str]) -> bool:
+        # Back-compat for `(team, normalized_name) in idx` callers/tests.
+        return key in self.exact
+
+
+def _index_rotowire(entries: list[LineupEntry]) -> RotowireIndex:
+    """Build a RotowireIndex so Real Sports pool rows enrich in O(1).
+
+    Keys each entry under both the exact normalized full name and the
+    first-initial + last-name fallback so abbreviated RotoWire names still
+    match Real Sports' full names (D100 fix)."""
+    exact: dict[tuple[str, str], LineupEntry] = {}
+    by_initial: dict[tuple[str, str], LineupEntry] = {}
     for e in entries:
-        key = (e.team.upper(), _normalize_name(e.player_name))
-        index[key] = e
-    return index
+        team = e.team.upper()
+        full_norm, initial_norm = _name_keys(e.player_name)
+        exact[(team, full_norm)] = e
+        # First write wins on the initial key so a later collision (two players,
+        # same team + initial + last name) can't clobber the first; the exact
+        # key still disambiguates when the full name is present.
+        by_initial.setdefault((team, initial_norm), e)
+    return RotowireIndex(exact=exact, by_initial=by_initial)
 
 
 def pool_sanity(rows: list[dict], *, min_pool: int, min_teams: int) -> list[str]:
@@ -373,7 +422,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     rows = []
     for p in pool:
         vegas = team_to_vegas.get(p.team, {})
-        rw_entry = rotowire_idx.get((p.team.upper(), _normalize_name(p.display_name)))
+        rw_entry = rotowire_idx.get(p.team, p.display_name)
         # Prefer RotoWire's injury status when we have a confirmed match;
         # otherwise carry through the Real Sports value.
         if rw_entry is not None:

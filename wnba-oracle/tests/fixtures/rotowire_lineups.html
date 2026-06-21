@@ -1,0 +1,51 @@
+<!--
+  Minimal RotoWire WNBA lineups fixture mirroring the live DOM verified
+  2026-06-21 against https://www.rotowire.com/wnba/lineups.php. Structure:
+  - div.lineup.is-nba per game
+  - two div.lineup__abbr (away then home)
+  - ul.lineup__list.is-visit / .is-home, each with its OWN
+    li.lineup__status (classes is-expected / is-confirmed)
+  - li.lineup__player with .lineup__pos, an <a> name, optional .lineup__inj
+
+  Box 1 mixes statuses (visit Expected, home Confirmed) to pin the per-team
+  read. The visiting team uses abbreviated first names (as the live page does)
+  to pin the initial-key name fallback.
+-->
+<html><body>
+<div class="lineup is-nba">
+  <div class="lineup__teams">
+    <div class="lineup__abbr">GSV</div>
+    <div class="lineup__abbr">LVA</div>
+  </div>
+  <div class="lineup__box">
+    <ul class="lineup__list is-visit">
+      <li class="lineup__status is-expected">Expected Lineup</li>
+      <li class="lineup__player"><div class="lineup__pos">G</div><a href="#">C. Zandalasini</a></li>
+      <li class="lineup__player"><div class="lineup__pos">G</div><a href="#">V. Burton</a></li>
+      <li class="lineup__player"><div class="lineup__pos">F</div><a href="#">G. Williams</a><span class="lineup__inj">GTD</span></li>
+    </ul>
+    <ul class="lineup__list is-home">
+      <li class="lineup__status is-confirmed">Confirmed Lineup</li>
+      <li class="lineup__player"><div class="lineup__pos">G</div><a href="#">Chelsea Gray</a></li>
+      <li class="lineup__player"><div class="lineup__pos">G</div><a href="#">Jackie Young</a></li>
+      <li class="lineup__player"><div class="lineup__pos">F</div><a href="#">NaLyssa Smith</a><span class="lineup__inj">OUT</span></li>
+    </ul>
+  </div>
+</div>
+<div class="lineup is-nba">
+  <div class="lineup__teams">
+    <div class="lineup__abbr">NYL</div>
+    <div class="lineup__abbr">ATL</div>
+  </div>
+  <div class="lineup__box">
+    <ul class="lineup__list is-visit">
+      <li class="lineup__status is-expected">Expected Lineup</li>
+      <li class="lineup__player"><div class="lineup__pos">G</div><a href="#">Sabrina Ionescu</a></li>
+    </ul>
+    <ul class="lineup__list is-home">
+      <li class="lineup__status is-expected">Expected Lineup</li>
+      <li class="lineup__player"><div class="lineup__pos">F</div><a href="#">Rhyne Howard</a></li>
+    </ul>
+  </div>
+</div>
+</body></html>

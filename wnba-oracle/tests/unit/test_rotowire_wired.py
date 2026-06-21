@@ -62,9 +62,24 @@ def test_index_rotowire_keys_by_team_normalized_name() -> None:
         _entry("NYL", "Breanna Stewart", slot=1, status="OUT"),
     ]
     idx = job1._index_rotowire(entries)
+    # Exact full-name lookup via the .get(team, name) API.
+    assert idx.get("LVA", "A'ja Wilson") is not None
+    stew = idx.get("NYL", "Breanna Stewart")
+    assert stew is not None and stew.injury_status == "OUT"
+    # __contains__ back-compat on (team, normalized_name).
     assert ("LVA", "a'ja wilson") in idx
-    assert ("NYL", "breanna stewart") in idx
-    assert idx[("NYL", "breanna stewart")].injury_status == "OUT"
+    assert idx.get("LVA", "Unknown Player") is None
+
+
+def test_index_rotowire_initial_fallback_bridges_abbreviated_names() -> None:
+    """RotoWire abbreviates first names ('C. Zandalasini'); Real Sports sends
+    full names. The first-initial + last-name fallback must still resolve."""
+    entries = [_entry("GSV", "C. Zandalasini", slot=2, confirmed=True)]
+    idx = job1._index_rotowire(entries)
+    hit = idx.get("GSV", "Cecilia Zandalasini")  # full name from Real Sports
+    assert hit is not None and hit.starter_slot == 2 and hit.confirmed is True
+    # Different last name must not match on initial alone.
+    assert idx.get("GSV", "Cecilia Williams") is None
 
 
 def test_job2_is_out_from_features_handles_dict_string_and_missing() -> None:
