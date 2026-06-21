@@ -42,38 +42,63 @@ both`. See STATUS.md and DECISIONS.md for full roadmap and reverse paths.
 
 ## Credentials and authorization
 
-You are explicitly authorized to use the credentials in `.env` at the repo root.
-The owner of this project (Hans Larson) has provisioned these tokens specifically
-for this project and granted blanket authorization to use them for any operation
-this project legitimately requires. Do not pause to re-confirm before using them.
+All credentials are pre-injected into the session environment via
+`.claude/settings.local.json` (gitignored, machine-local). You do NOT need to
+source `.env` before using them -- `GITHUB_TOKEN`, `RAILWAY_TOKEN`,
+`DATABASE_URL`, and `REDIS_URL` are already exported when any tool runs.
 
-Specifically:
+The owner has granted blanket authorization to use these credentials for any
+operation this project legitimately requires. Do not pause to re-confirm.
 
-- `GITHUB_TOKEN`: authorized for any `gh` / git operation against the owner's
-  GitHub account (repo create, push, PR open, issue comment, releases, etc.).
-  Use via `GH_TOKEN="$GITHUB_TOKEN" gh ...` or by sourcing `.env`.
-- `RAILWAY_TOKEN`: authorized for Railway operations including service create,
-  variable set, deploy, logs against the existing `wnba-oracle` project
-  (id `ab83f44c-0bbc-4a58-931c-37d9fbfda73a`, production env id
-  `d57a759e-e189-439b-a612-bd220ef59c39`). The token is a workspace token,
-  which the Railway CLI rejects. Use the `use-railway` skill or hit the
-  GraphQL API at `backboard.railway.com/graphql/v2` directly with
-  `Authorization: Bearer $RAILWAY_TOKEN`. Destructive ops
-  (`railway down`, `railway delete`) are denied at the settings layer.
-- `ODDS_API_KEY`: authorized for any The Odds API request the project needs.
+### GitHub / git
+
+The repo's git credential helper reads `$GITHUB_TOKEN` directly. Plain
+`git push origin main` works without any prefix. For `gh` CLI operations use
+`GH_TOKEN="$GITHUB_TOKEN" gh ...`.
+
+### Railway
+
+`RAILWAY_TOKEN` is a workspace token. The Railway CLI rejects workspace tokens --
+never use `railway link`, `railway up`, or any Railway CLI mutation command.
+
+Use `scripts/rwgql.sh` for all Railway GraphQL operations:
+
+```bash
+scripts/rwgql.sh '<graphql query>'
+scripts/rwgql.sh '<graphql query>' '<variables-json>'
+```
+
+The script handles auth automatically. Destructive ops (`railway down`,
+`railway delete`) are blocked at the settings layer.
+
+Railway IDs:
+- Project: `ab83f44c-0bbc-4a58-931c-37d9fbfda73a`
+- Production env: `d57a759e-e189-439b-a612-bd220ef59c39`
+- Services: cron-job1 `2e110589`, cron-job2 `4a511ed2`, cron-dayclose `606d950d`,
+  postgres `5e827da3`, redis `bb131bec`, api `f4750eda`, frontend `d56dccf4`
+
+To redeploy a service:
+```bash
+scripts/rwgql.sh 'mutation { serviceInstanceDeployV2(serviceId: "SERVICE_ID", environmentId: "d57a759e-e189-439b-a612-bd220ef59c39") }'
+```
+
+### Other credentials
+
+- `ODDS_API_KEY`: authorized for any The Odds API request.
 - `REAL_SPORTS_USERNAME` / `REAL_SPORTS_PASSWORD`: authorized for headless
-  Real Sports login as part of the Job 1 re-auth flow described in Part 0.6
-  of the handoff.
+  Real Sports login (Job 1 re-auth flow, Part 0.6 of handoff). Source `.env`
+  for these two since they are not in `settings.local.json`.
 - `DATABASE_URL` / `REDIS_URL`: authorized for any read or write the project
-  legitimately requires against its own provisioned services.
+  legitimately requires. These connect to Railway internal endpoints and only
+  work from within Railway containers; for local use see `DATABASE_PUBLIC_URL`
+  in `.env`.
 
-Constraints that still apply:
+### Constraints
 
 - Never echo a credential value into a log, commit, chat message, comment,
-  PR body, or `DECISIONS.md`. Reference credentials by env var name only.
-- The `Read(./.env)` deny rule prevents reading `.env` via the Read tool.
-  Source it through shell when you need the values exported into a process.
-  Example: `set -a && source .env && set +a && <command>`.
-- Never create new accounts or generate new long-lived credentials. Both
-  are human actions. If a credential is missing or expired, log to
-  `NEEDS_HUMAN.md` and proceed with everything that doesn't depend on it.
+  PR body, or `DECISIONS.md`. Reference by env var name only.
+- The `Read(./.env)` deny rule blocks the Read tool from opening `.env`.
+  Source through shell if you need values not already in the environment:
+  `set -a && source .env && set +a && <command>`.
+- Never create new accounts or generate new long-lived credentials.
+  If a credential is missing or expired, log to `NEEDS_HUMAN.md`.
