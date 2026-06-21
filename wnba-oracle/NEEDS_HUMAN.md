@@ -358,3 +358,17 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     ramping players are not served a cached/stale row. This is a SERVING data
     bug -- a retrain does not fix it (see D99). Pure code; no creds needed
     beyond the normal deploy path.
+
+26. **[NEW 2026-06-21, D100] RotoWire confirmed-starter data is not landing in
+    enrichment at freeze time.** On 2026-06-12, `rotowire_confirmed=0` for ALL
+    58 players in job1_enrichment, captured 22:38 UTC -- i.e. AFTER the 22:35
+    cron-job1-late refresh that D81 added specifically to inject CONFIRMED
+    lineups before the 23:00 re-freeze. So the D71 confirmed-starter multiplier
+    has been firing on nothing. `is_starter` (the platform/projected flag) is
+    set for ~5-11 players/slate, but the RotoWire CONFIRMED scrape yields zero
+    confirmations. Check: (a) is cron-job1-late actually populating
+    `rotowire_confirmed`, or only `is_starter`? (b) is the RotoWire WNBA
+    confirmed-lineup parse still matching post-D74 URL change? (c) timing -- WNBA
+    confirmed lineups post ~30 min pre-tip; verify 22:35 is inside that window
+    for the slate's first tip (tie to the T-40 freeze, D93). This is the
+    proximate reason starter signal is weak on the negative-corr slates.

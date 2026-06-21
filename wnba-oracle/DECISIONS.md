@@ -3404,3 +3404,60 @@ players (Leite, Prosper) are not served stale fallbacks.
 
 **Reverse.** N/A (analysis + upstream follow-ups; no production change made for
 this item).
+
+## 2026-06-21: D100 -- the two negative-corr slates are tiny-sample noise + boost handicap, not a weighting bug (post-mortem item 4) [verified]
+
+**Slates.** 2026-06-12 (our-picks rank corr -0.500) and 2026-06-19 (-1.000).
+Pulled our served frozen picks (pred_p50) vs realized real_score (slate_labels)
+plus per-pick starter / vegas / recent-form features.
+
+**2026-06-12 (pred -> actual):** Austin 2.95->1.65, Johnson 1.89->0.71,
+Allemand 1.43->2.13, Fam 1.43->1.60, Onyenwere 1.12->3.14. The inversion is
+two picks: we ranked Austin #1 (chalk, 2600 drafts, strong recent form
+fpts_l5=32) and she flopped; we ranked Onyenwere LAST (pred 1.12) and she led
+(3.14). MAE 0.96, in-band 3/3.
+
+**2026-06-19 (pred -> actual):** Ionescu 2.25->1.16, Iriafen 2.21->3.24,
+Rivers 1.60->DNP, Fiebich 1.37->3.33, Conde 1.33->4.07. Near-perfect inversion:
+our top pick Ionescu flopped; our two lowest picks (Conde, Fiebich) led. MAE
+1.91, in-band 3/3.
+
+**Classification of the cause [verified]:**
+- (b) Vegas total mismatch: RULED OUT. Totals were present and sane
+  (157.5-171.5) and did not differentiate the popped vs flopped picks.
+- (a) RotoWire starter lag: PRESENT but systemic, not the proximate driver.
+  `rotowire_confirmed=0` for the ENTIRE 06-12 slate (0/58, captured 22:38 UTC,
+  i.e. AFTER the 22:35 cron-job1-late refresh), so the D71 confirmed-starter
+  lift never fired on any player. (06-19 enrichment was re-captured today at
+  15:37 so its rotowire flag is uninformative about serve time.) Real and
+  fixable, but it did not by itself flip these rankings.
+- (c) head_features / recent-form interaction with the boost handicap: the
+  DOMINANT driver. Every pick that popped (Onyenwere 2.3x, Conde 2.4x,
+  Fiebich 2.5x) carried a high card_boost AND modest recent form
+  (fpts_l5 ~11-15), so the boost handicap pushed pred down to ~1.1-1.4; they
+  then beat their recent form. Conversely the over-projected flops were either
+  chalk having a bad night (Austin) or a THIN-SAMPLE returning star: Ionescu
+  has only 4 actual 2026 games (verified -- season_game_number=4 is CORRECT,
+  not stale; slate-wide median season_game_number is 10-11, so the corpus was
+  NOT broadly stale here), so her pts_l5=9.8 over 4 games is unreliable and the
+  model leaned on boost/name to over-project her.
+
+**Why the corr sign is not alarming [reasoned].** Rank corr over 3-4 picks is
+statistically near-meaningless -- one popped contrarian flips -0.5 to +0.5. Both
+slates were in-band 3/3 (the calibrated bands covered the actuals); only the
+ORDERING within a tight, correctly-bounded range inverted. The post-mortem
+itself labels 06-19 noise-dominant (5 unknowable, 0 knowable). High-boost
+contrarians popping is exactly the variance the card_boost handicap prices in;
+you cannot project which 2.5x lottery card explodes without sacrificing
+calibration on the other 95% that do not.
+
+**Model weighting implication [reasoned].** No clean retrain signal here. The
+misses are (1) tiny-sample rank-corr noise within in-band predictions, (2) the
+intentional boost-handicap/variance tradeoff on high-boost contrarians, and (3)
+thin-sample returning players (Ionescu). The one systemic, actionable item is
+(a) RotoWire confirmations not landing -- a serving-data fix (shares the D99
+freshness/identity theme), not a weighting change. Combined with D99, items 3-4
+point at serving data + variance, NOT mis-weighted features, so they do not on
+their own justify a retrain (see item 5 / D101 for the data-recency angle).
+
+**Reverse.** N/A (analysis only; no production change for this item).
