@@ -493,6 +493,27 @@ def _check_feature_content(slate_date: str) -> list[WatchdogEvent]:
     return out
 
 
+def _check_config_drift(slate_date: str, *, settings: object | None = None) -> list[WatchdogEvent]:
+    """Warn when the live serving config has drifted from the validated prod
+    values (e.g. an env wipe reverted a tuned knob to its safe-off default).
+    Non-fatal: a drift may be intentional, but it must not be silent."""
+    if settings is None:
+        from wnba_oracle.common.settings import get_settings
+
+        settings = get_settings()
+    drift = settings.config_drift()  # type: ignore[attr-defined]
+    if not drift:
+        return []
+    return [
+        WatchdogEvent(
+            slate_date=slate_date,
+            trigger="config_drift",
+            severity=SEVERITY_WARN,
+            payload={"drift": {name: {"actual": a, "expected": e} for name, a, e in drift}},
+        )
+    ]
+
+
 def run_watchdog(
     slate_date: str, *, now_utc: dt.datetime | None = None
 ) -> list[WatchdogEvent]:
@@ -508,6 +529,7 @@ def run_watchdog(
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
     events.extend(_check_model_artifact(slate_date))
     events.extend(_check_feature_content(slate_date))
+    events.extend(_check_config_drift(slate_date))
     if events:
         persist_events(events)
         _ping_on_critical(events)

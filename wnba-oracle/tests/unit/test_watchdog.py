@@ -301,6 +301,8 @@ def test_run_watchdog_aggregates_and_persists() -> None:
         watchdog, "_check_model_artifact", return_value=[]
     ), patch.object(
         watchdog, "_check_feature_content", return_value=[]
+    ), patch.object(
+        watchdog, "_check_config_drift", return_value=[]
     ), patch.object(watchdog, "persist_events", return_value=2) as persist, patch.object(
         watchdog, "_ping_on_critical"
     ) as ping:
@@ -367,6 +369,40 @@ def test_feature_content_quiet_on_tiny_pool() -> None:
     eng = _engine_with_feature_counts(4, 0, 0)
     with patch.object(watchdog, "get_engine", return_value=eng):
         assert watchdog._check_feature_content("2026-06-21") == []
+
+
+def test_settings_config_drift_detects_reverted_knob() -> None:
+    """Settings.config_drift compares active knobs to EXPECTED_PROD_CONFIG.
+    Duck-typed via SimpleNamespace to avoid pydantic env-loading nondeterminism."""
+    import types
+
+    from wnba_oracle.common.settings import EXPECTED_PROD_CONFIG, Settings
+
+    prod = types.SimpleNamespace(**EXPECTED_PROD_CONFIG)
+    assert Settings.config_drift(prod) == []  # type: ignore[arg-type]
+    reverted = types.SimpleNamespace(**{**EXPECTED_PROD_CONFIG, "lineup_anchor_floor": 0})
+    drift = Settings.config_drift(reverted)  # type: ignore[arg-type]
+    assert [d[0] for d in drift] == ["lineup_anchor_floor"]
+
+
+class _StubSettings:
+    def __init__(self, drift):
+        self._drift = drift
+
+    def config_drift(self):
+        return self._drift
+
+
+def test_config_drift_warns_when_knob_reverted() -> None:
+    s = _StubSettings([("optimizer_game_stack_bonus", 0.0, 0.010)])
+    events = watchdog._check_config_drift("2026-06-21", settings=s)
+    assert [e.trigger for e in events] == ["config_drift"]
+    assert events[0].severity == watchdog.SEVERITY_WARN
+    assert "optimizer_game_stack_bonus" in events[0].payload["drift"]
+
+
+def test_config_drift_clean_when_env_matches_prod() -> None:
+    assert watchdog._check_config_drift("2026-06-21", settings=_StubSettings([])) == []
 
 
 def test_summarize_status_picks_highest_severity() -> None:

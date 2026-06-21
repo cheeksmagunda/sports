@@ -266,6 +266,46 @@ class Settings(BaseSettings):
         default=0.0, alias="OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST"
     )
 
+    def config_drift(self) -> list[tuple[str, object, object]]:
+        """Knobs whose ACTIVE value differs from the validated production
+        config (D102). Many code defaults are deliberately safe-off so the
+        library is conservative when used bare; production turns them on via
+        env. If the cron env is ever wiped/reset, every knob silently reverts
+        to that safe-off default and the validated behavior is lost with no
+        other signal. This returns (name, actual, expected) for each deviation
+        so the watchdog can WARN -- code stays the library default, but drift
+        from prod is no longer silent. Update EXPECTED_PROD_CONFIG when a knob
+        is intentionally retuned in production.
+        """
+        out: list[tuple[str, object, object]] = []
+        for name, expected in EXPECTED_PROD_CONFIG.items():
+            actual = getattr(self, name)
+            if isinstance(expected, float):
+                if abs(float(actual) - expected) > 1e-9:
+                    out.append((name, actual, expected))
+            elif actual != expected:
+                out.append((name, actual, expected))
+        return out
+
+
+# The validated production config (mirrors the STATUS.md env table, D70-D98).
+# This is the source of truth for "what cron-job2's env should be"; the
+# watchdog warns when the live settings drift from it (e.g. after an env reset).
+EXPECTED_PROD_CONFIG: dict[str, object] = {
+    "game_script_minutes_enabled": True,   # D57
+    "availability_model_enabled": True,    # D73
+    "late_refreeze_enabled": True,         # D75
+    "lineup_anchor_floor": 2,              # D57/D58
+    "prop_signal_scale": 0.3,              # D78
+    "optimizer_boost_sum_cap": 9.0,        # D70/R2
+    "optimizer_max_single_boost": 2.5,     # D70/R2
+    "optimizer_game_stack_bonus": 0.010,   # D70/R3, raised D98
+    "field_same_game_boost": 3.0,          # D88/D91
+    "field_same_team_boost": 2.0,          # D88/D91
+    "ceiling_sigma_blowout_boost": 0.15,   # D89/D92
+    "ceiling_sigma_low_history_boost": 0.20,  # D89/D92
+}
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

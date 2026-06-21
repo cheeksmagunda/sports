@@ -202,6 +202,23 @@ def main() -> int:
         except Exception as exc:
             log.exception("dayclose_auto_placement_failed", error=str(exc))
 
+    # D102: keep wnba_game_logs (the head-training corpus AND the live Tier-0
+    # head-feature source) fresh every night, so the rolling windows never go
+    # stale and a debuting player still gets head_features the next day. This
+    # was the deeper root cause of the D99 C. Leite staleness -- previously the
+    # only writer was the manual backfill_minutes.py. Current season only (the
+    # one that changes); offseason is a clean no-op. Best-effort, gated by
+    # WNBA_DAYCLOSE_REFRESH_GAMELOGS (default on); never changes the exit code.
+    if os.environ.get("WNBA_DAYCLOSE_REFRESH_GAMELOGS", "1").strip() not in {"0", "false", ""}:
+        try:
+            from wnba_oracle.ingest.minutes_backfill import refresh_game_logs
+
+            season = str(dt.date.today().year)
+            n = refresh_game_logs([season])
+            log.info("dayclose_game_logs_refreshed", season=season, rows=n)
+        except Exception as exc:
+            log.exception("dayclose_game_logs_refresh_failed", error=str(exc))
+
     # Best-effort: refresh the RESULTS.md ledger for the slate that just
     # finalized (yesterday UTC). Guarded by WNBA_RESULTS_LEDGER so the
     # default Railway fire is a clean no-op — the cron container's repo is

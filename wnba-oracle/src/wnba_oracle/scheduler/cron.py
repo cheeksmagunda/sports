@@ -2,6 +2,8 @@
 
 Invoked by Railway's cron with:
   oracle-cron --job job1     # morning enrichment (13:00 UTC)
+  oracle-cron --job job1late # credit-free RotoWire confirmed-lineup refresh
+                             # (fan across the afternoon/evening; D102/#27)
   oracle-cron --job job2     # pre-tip optimizer (tip-relative T-40 freeze; cron fires */15 across 14-23,0-3 UTC)
   oracle-cron --job dayclose # corpus extension (06:00 UTC, captures
                              # the prior night's finalized contest)
@@ -19,7 +21,9 @@ from wnba_oracle.common.settings import get_settings
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--job", required=True, choices=["job1", "job2", "dayclose", "backfill"]
+        "--job",
+        required=True,
+        choices=["job1", "job1late", "job2", "dayclose", "backfill"],
     )
     args = parser.parse_args()
 
@@ -54,6 +58,15 @@ def main() -> int:
         except Exception as exc:
             log.exception("watchdog_failed", error=str(exc))
         return rc
+    if args.job == "job1late":
+        # D102 (NEEDS_HUMAN #27): credit-free confirmed-lineup refresh. Re-scrapes
+        # RotoWire and JSONB-merges only the starter/confirmed fields onto the
+        # existing enrichment, so afternoon slates pick up confirmed starters
+        # before their T-40 freeze without burning Odds API credits. No watchdog
+        # (this is a targeted refresh, not a freeze).
+        from wnba_oracle.scheduler import job1
+
+        return job1.main_lite()
     if args.job == "job2":
         import datetime as dt
 

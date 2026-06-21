@@ -590,6 +590,82 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     )
 
 
+LITE_READ = text(
+    "SELECT id, name, team FROM job1_enrichment WHERE slate_date = :sd"
+)
+LITE_PATCH = text(
+    "UPDATE job1_enrichment "
+    "SET features_json = features_json || CAST(:patch AS jsonb) "
+    "WHERE id = :id"
+)
+
+
+def rotowire_patch(rw: LineupEntry) -> dict:
+    """The RotoWire-authoritative subset of features_json: starter slot +
+    confirmation, and the injury status ONLY when RotoWire has a fresh one
+    (so a Real-Sports-sourced OUT is never wiped by a blank RotoWire row)."""
+    patch: dict[str, object] = {
+        "is_starter": int(1 <= rw.starter_slot <= 5),
+        "starter_slot": int(rw.starter_slot),
+        "rotowire_confirmed": int(bool(rw.confirmed)),
+    }
+    if rw.injury_status:
+        patch["injury_status"] = rw.injury_status
+        patch["is_out"] = int(is_out_status(rw.injury_status))
+    return patch
+
+
+def run_lite(slate_date: str | None = None) -> Job1Result:
+    """Credit-free confirmed-lineup refresh (D102, NEEDS_HUMAN #27).
+
+    Re-scrapes RotoWire (free) and JSONB-merges only the RotoWire-authoritative
+    fields onto the EXISTING enrichment rows -- no Odds/props/minutes/head
+    re-fetch, so it costs zero Odds API credits and can fire many times across
+    the day. This lets afternoon slates (which freeze at T-40, hours before the
+    22:35 full job1-late) pick up confirmed starters before they lock. A no-op
+    if the slate has no enrichment yet (the 13:00 full run must seed it first).
+    """
+    settings = get_settings()
+    sd = slate_date or dt.date.today().isoformat()
+    log.info("job1_lite_start", slate_date=sd)
+    try:
+        lineups = fetch_lineups()
+    except Exception as exc:
+        log.warning("job1_lite_lineups_failed", reason=str(exc))
+        lineups = []
+    if not lineups or not settings.database_url:
+        log.warning("job1_lite_noop", slate_date=sd, n_lineups=len(lineups))
+        return Job1Result(sd, 0, 0, len(lineups), 0)
+    idx = _index_rotowire(lineups)
+    try:
+        eng = get_engine()
+    except RuntimeError as exc:
+        log.error("job1_lite_no_db", reason=str(exc))
+        return Job1Result(sd, 0, 0, len(lineups), 0)
+    n_existing = n_updated = n_confirmed = 0
+    with eng.begin() as conn:
+        existing = conn.execute(LITE_READ, {"sd": sd}).fetchall()
+        n_existing = len(existing)
+        for row_id, name, team in existing:
+            rw = idx.get(team or "", name or "")
+            if rw is None:
+                continue
+            conn.execute(
+                LITE_PATCH, {"id": row_id, "patch": json.dumps(rotowire_patch(rw))}
+            )
+            n_updated += 1
+            n_confirmed += int(bool(rw.confirmed))
+    log.info(
+        "job1_lite_done",
+        slate_date=sd,
+        n_existing=n_existing,
+        n_updated=n_updated,
+        n_confirmed=n_confirmed,
+        n_lineups=len(lineups),
+    )
+    return Job1Result(sd, n_existing, 0, len(lineups), n_updated)
+
+
 def main() -> int:
     configure_logging("INFO")
     settings = get_settings()
@@ -601,5 +677,15 @@ def main() -> int:
         return 1
     if result.degraded_reasons:
         # Nonzero exit so Railway surfaces the cron run as failed.
+        return 1
+    return 0
+
+
+def main_lite() -> int:
+    configure_logging("INFO")
+    try:
+        run_lite(dt.date.today().isoformat())
+    except Exception as exc:
+        log.exception("job1_lite_failed", error=str(exc))
         return 1
     return 0
