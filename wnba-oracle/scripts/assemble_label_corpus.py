@@ -1,10 +1,15 @@
-"""Assemble training_corpus.parquet from Postgres slate_labels.
+"""Assemble label_corpus.parquet from Postgres slate_labels.
 
-Thin wrapper around db.reads.read_training_corpus() that writes a local
-parquet snapshot for offline convenience. The training CLI (oracle-train)
-reads Postgres directly by default; this script is for local inspection.
+Thin wrapper around db.reads.read_label_corpus() that writes a local parquet
+snapshot of the contest-label corpus (one row per player-slate, target =
+realized real_score). The training CLI (oracle-train) reads Postgres directly
+by default; this script is for local inspection.
 
-Writes to data/processed/training_corpus.parquet.
+This is the LABEL corpus (~4.5k rows), used by the EB baseline / real_score
+blend / CQR calibration. The heads train on the gamelog corpus
+(features/corpus.build_gamelog_corpus, ~13k rows from wnba_game_logs).
+
+Writes to data/processed/label_corpus.parquet.
 """
 from __future__ import annotations
 
@@ -13,14 +18,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-OUT = Path("data/processed/training_corpus.parquet")
+OUT = Path("data/processed/label_corpus.parquet")
 OUT.parent.mkdir(parents=True, exist_ok=True)
 
 
 def main() -> int:
-    from wnba_oracle.db.reads import read_training_corpus
+    from wnba_oracle.db.reads import read_label_corpus
 
-    corpus = read_training_corpus()
+    corpus = read_label_corpus()
     print(f"Source (Postgres): {corpus.height} rows, "
           f"{corpus['slate_date'].n_unique()} slates")
     if corpus.is_empty():

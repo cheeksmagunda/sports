@@ -14,8 +14,17 @@ from sqlalchemy import text
 from wnba_oracle.db.engine import get_engine
 
 
-def read_training_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
-    """Training corpus assembled from slate_labels (replaces training_corpus.parquet)."""
+def read_label_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
+    """Contest-label corpus: one row per player-slate from ``slate_labels``.
+
+    Each row is a Real Sports contest entry with the realized ``real_score``
+    target the player earned on that slate. ~4.5k rows, grows by ~30 per day.
+
+    Used by the EB baseline and the real_score blend / CQR calibration — NOT
+    by the LightGBM heads. The heads train on ``build_gamelog_corpus``
+    (per-player-game feature+target rows over ``wnba_game_logs``, ~13k rows).
+    Replaces the legacy ``training_corpus.parquet`` archive.
+    """
     eng = engine or get_engine()
     q = text(
         "SELECT slate_date, platform_player_id AS player_id, display_name, "
@@ -80,7 +89,14 @@ def read_leaderboards(engine: sa.Engine | None = None) -> pl.DataFrame:
 
 
 def read_game_logs(engine: sa.Engine | None = None) -> pl.DataFrame:
-    """WNBA per-game box scores (replaces wnba_game_logs.parquet)."""
+    """WNBA per-game box scores from stats.wnba.com via nba_api.
+
+    The raw source feeding ``features.corpus.build_gamelog_corpus``, which adds
+    causal rolling features + per-game head targets and produces the ~13k-row
+    feature+target frame the LightGBM heads (minutes, per-min rate) train on.
+    Distinct from ``read_label_corpus`` (contest labels, per player-slate).
+    Replaces the legacy ``wnba_game_logs.parquet`` archive.
+    """
     eng = engine or get_engine()
     q = text(
         "SELECT game_date, player_id, player_name, first_initial, last_name, "

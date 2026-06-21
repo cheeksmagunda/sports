@@ -84,9 +84,9 @@ def build_and_pick(pool, prior, drafts, *, K, per_player_sigma, dynamic_cap):
 
 def main() -> int:
     sd = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "2026-05-25"
-    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels, read_training_corpus
+    from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
 
-    corpus = read_training_corpus().to_pandas()
+    corpus = read_label_corpus().to_pandas()
     lb = read_leaderboards().filter(pl.col("slate_date") == sd).sort("rank")
     sl = read_slate_labels().filter(pl.col("slate_date") == sd)
 

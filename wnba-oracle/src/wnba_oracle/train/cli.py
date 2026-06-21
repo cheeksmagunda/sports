@@ -60,9 +60,9 @@ def _split_last_fold(
 def _load_label_corpus(path: str | None) -> pl.DataFrame:
     if path:
         return pl.read_parquet(Path(path))
-    from wnba_oracle.db.reads import read_training_corpus
+    from wnba_oracle.db.reads import read_label_corpus
 
-    return read_training_corpus()
+    return read_label_corpus()
 
 
 def _load_gamelog_corpus(path: str | None) -> pl.DataFrame:

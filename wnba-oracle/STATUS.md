@@ -174,20 +174,35 @@ Production model: `WNBA_ORACLE_MODEL_ARTIFACT_SHA=94f8e8606dab...`
 All flags reverse via env with no redeploy. Set *_ENABLED=false or unset numeric
 knobs to revert to code defaults.
 
-## Historical corpus (updated 2026-06-05)
+## Historical corpus (updated 2026-06-21)
 
 All corpus data lives in Postgres (the canonical store). Local parquet
 files under `data/historical/` and `data/processed/` are archival backups
 only and are no longer read by any script.
 
-- `slate_labels`: 130 finalized slates (2025-05-16..2026-06-04), deduped
-  by player per contest.
+### Raw Postgres tables
+
+- `slate_labels`: 157 finalized slates (2025-05-16..2026-06-20), one row
+  per player-slate, deduped by player per contest. ~4,500 rows.
 - `contest_leaderboards`: top-20 finisher lineups per slate.
-- `wnba_game_logs`: 13,435 player-games across 2024-2026 seasons (454
+- `wnba_game_logs`: ~13.5k player-games across 2024-2026 seasons (454
   players), sourced from stats.wnba.com via nba_api.
 
+### Two corpora, two roles -- DO NOT CONFUSE
+
+The picker trains two distinct kinds of model on two distinct frames:
+
+| Corpus | Builder | Grain | Target | Source | Consumed by |
+| --- | --- | --- | --- | --- | --- |
+| **Gamelog** (the heads corpus) | `features/corpus.build_gamelog_corpus()` | one row per player-GAME | per-game minutes + real_score-per-min | `wnba_game_logs` (~13k rows) | LightGBM heads (minutes + per-min rate, cohort F) -- the D63 keystone |
+| **Label** (the contest corpus) | `features/corpus.build_label_corpus()` wrapping `db/reads.read_label_corpus()` | one row per player-SLATE | realized contest `real_score` | `slate_labels` (~4.5k rows) | EB baseline, real_score blend, CQR calibration |
+
+The label corpus is *not* the training corpus for the heads. It is the
+contest-platform corpus that carries `card_boost` and realized contest
+points. The heads are starved if trained on it alone (the pre-D63 bug).
+
 All reads go through `src/wnba_oracle/db/reads.py` (D62):
-`read_training_corpus()`, `read_slate_labels()`, `read_leaderboards()`,
+`read_label_corpus()`, `read_slate_labels()`, `read_leaderboards()`,
 `read_game_logs()`, `read_player_history()`.
 
 To re-run minutes backfill:

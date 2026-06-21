@@ -34,7 +34,7 @@ from scipy.stats import spearmanr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from wnba_oracle.db.reads import read_leaderboards, read_slate_labels, read_training_corpus
+from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
 from wnba_oracle.predict.form import (
     FormConfig,
     boost_prior,
@@ -204,7 +204,7 @@ def run_placement(corpus: pd.DataFrame, lb: pl.DataFrame, slates: list[str]) -> 
 
 
 def main() -> int:
-    corpus = read_training_corpus().to_pandas()
+    corpus = read_label_corpus().to_pandas()
     lb = read_leaderboards()
     slates = sorted(d for d in corpus["slate_date"].unique() if str(d).startswith("2026-"))
     print(f"Walk-forward over {len(slates)} 2026 slates "

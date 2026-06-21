@@ -1,19 +1,26 @@
-"""Assemble the feature+target training corpora (D63, the Phase-1 keystone).
+"""Assemble the two training corpora (D63, the Phase-1 keystone).
 
-The picker's heads were starved: the training corpus was 7 columns from
-``slate_labels`` with none of the head target/feature columns, so every head was
-skipped (``train/pipeline.py``). These builders close that gap.
+The oracle has two distinct datasets, easy to confuse, used by different
+members of the model:
 
-``build_gamelog_corpus`` -- one row per player-game over the ~13k
-``wnba_game_logs`` rows, with strictly-causal rolling features
-(``rolling.build_rolling_features``, ``game_date < as_of``) and the per-game head
-targets (``game_features.add_targets``). This dense frame is what the minutes +
-per-minute heads train on; it clears ``low_data_mode`` honestly.
+GAMELOG CORPUS -- ``build_gamelog_corpus`` over ~13k ``wnba_game_logs`` rows.
+  Grain: one row per player-GAME (stats.wnba.com box score).
+  Targets: per-game ``min``, ``real_score`` per-min, etc. (``game_features.add_targets``).
+  Features: strictly-causal rolling stats (``game_date < as_of``) +
+    schedule + team_pace/opp_dvp enrichment.
+  Consumed by: the LightGBM HEADS (minutes + per-minute rate, cohort F).
+  This is the dense frame that clears ``low_data_mode`` honestly.
 
-``build_label_corpus`` -- one row per player-slate over the ~3k contest rows
-(``read_training_corpus`` schema), reserved for the EB baseline, the real_score
-blend, and CQR calibration. Features can be joined here in a later phase; for now
-it carries the contest ``card_boost`` + ``real_score`` the EB member needs.
+LABEL CORPUS -- ``build_label_corpus`` over ~4.5k ``slate_labels`` rows
+  (raw read at ``db.reads.read_label_corpus``).
+  Grain: one row per player-SLATE (a Real Sports contest entry).
+  Target: realized ``real_score`` on the platform contest.
+  Carries: ``card_boost``, ``drafts``, position.
+  Consumed by: the EB baseline, the real_score blend, and CQR calibration.
+
+The picker's heads were starved before D63 because training only saw the label
+corpus (7 columns with no head target columns); every head was skipped in
+``train/pipeline.py``. The gamelog corpus closed that gap.
 
 Both call the same ``features`` code the serve path uses, so train/serve parity
 holds by construction.
@@ -184,9 +191,12 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
 def build_label_corpus(label_df: pl.DataFrame) -> pl.DataFrame:
     """The contest-label corpus for the EB baseline / real_score blend / CQR.
 
-    Currently the ``read_training_corpus`` 7-column frame (slate_date, player_id,
+    Currently the ``read_label_corpus`` 7-column frame (slate_date, player_id,
     display_name, team, card_boost, real_score, position). Kept as its own builder
     so a later phase can join causal features here without touching callers.
+
+    NOTE: this is the per-slate label corpus, NOT the per-game feature corpus.
+    The LightGBM heads train on ``build_gamelog_corpus``.
     """
     return label_df
 

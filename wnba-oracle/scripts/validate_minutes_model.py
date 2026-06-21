@@ -44,9 +44,9 @@ def alias(t):
 
 
 def load_joined() -> pd.DataFrame:
-    from wnba_oracle.db.reads import read_game_logs, read_training_corpus
+    from wnba_oracle.db.reads import read_game_logs, read_label_corpus
 
-    corpus = read_training_corpus().to_pandas()
+    corpus = read_label_corpus().to_pandas()
     logs = read_game_logs().to_pandas()
     corpus = corpus.copy()
     corpus["initial"] = corpus["display_name"].map(lambda s: _norm(s)[:1])

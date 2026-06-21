@@ -418,7 +418,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
             # D74 (R8 first-pass): inject tonight's matchup context that the
             # rolling-feature builder cannot know (team_pace, opp_pace,
             # opponent defensive rating, DvP). The trained heads were calibrated
-            # on real values for team_pace (nba_api via the training corpus);
+            # on real values for team_pace (nba_api via the gamelog corpus);
             # serving with zero is a calibration leak — override with live values.
             team_abbr = p.team.upper()
             opp_abbr = team_to_opp.get(team_abbr, "").upper()

@@ -100,9 +100,9 @@ def run(corpus, lb, slates, mode):
 
 
 def main():
-    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels, read_training_corpus
+    from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
 
-    corpus = read_training_corpus().to_pandas()
+    corpus = read_label_corpus().to_pandas()
     sl = read_slate_labels()
     drafts_map = {(r["slate_date"], int(r["platform_player_id"])): r["drafts"] for r in sl.iter_rows(named=True)}
     corpus["drafts"] = [drafts_map.get((d, p)) for d, p in zip(corpus["slate_date"], corpus["player_id"])]

@@ -728,7 +728,7 @@ def _build_specs(
             base = eb_pred
             n_eb_predicted += 1
         elif player_history is not None and pid in player_history:
-            # Use observed per-player mean from the training corpus. More
+            # Use observed per-player mean from the label corpus. More
             # accurate than the generic heuristic for players whose data
             # postdates the last training run (common early-season pattern).
             base = max(0.5, player_history[pid])
