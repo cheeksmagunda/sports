@@ -1,6 +1,23 @@
 status: BUILD_COMPLETE
 last_verified: 2026-06-21T00:00:00Z
-phase: live. 2026-06-21 (D97-D101): Post-mortem follow-up session (5 items).
+phase: live. 2026-06-21 (D102): Post-work cleanup -- cron/test/sustainability
+audit (3 parallel read-only audits) + fixes. SHIPPED: (1) RotoWire
+confirmed-starter parse repaired -- the D100 root cause -- the badge was read
+once per game-box and stamped on both teams, and abbreviated visiting-team
+names ('C. Zandalasini') defeated the Real Sports full-name join; both fixed,
+split into parse_lineups_html() with a checked-in fixture + test (was zero
+coverage). (2) Watchdog now surfaces silent failures: model_artifact_unset /
+_unresolved (CRITICAL -- catches an env-reset to the silent heuristic,
+0.554->0.246) and odds_empty / rotowire_empty (WARN). (3) Test health:
+determinism gate globs artifacts instead of pinning rotation-stale SHAs;
+caveat_is_skip/never_skip picker tests de-vacuumed (bracket EV, assert band);
+stale '21:00 static clock' comments refreshed to tip-relative T-40. Full suite
+385 -> 396. Audit confirmed clean: 2027 season rollover handled, Redis TTLs
+set, freeze idempotent. Deferred (NEEDS_HUMAN 27-32): tip-relative job1-late
+for afternoon slates, auto-refresh wnba_game_logs in dayclose (the deeper D99
+fix), live identity Resolver routing, config-drift manifest, contract tests,
+housekeeping. See DECISIONS D102.
+2026-06-21 (D97-D101): Post-mortem follow-up session (5 items).
 (D97) Fixed the -inf expected_payout bug: optimize._scan left best_ev at its
 -np.inf init when every combo was skipped (the 2026-05-31 two-team slate); a
 post-scan guard now clamps to 0.0 and skips the empty-slice np.median. 1 new

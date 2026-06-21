@@ -359,16 +359,73 @@ These are not strict NEEDS_HUMAN entries - the build works without them.
     bug -- a retrain does not fix it (see D99). Pure code; no creds needed
     beyond the normal deploy path.
 
-26. **[NEW 2026-06-21, D100] RotoWire confirmed-starter data is not landing in
-    enrichment at freeze time.** On 2026-06-12, `rotowire_confirmed=0` for ALL
-    58 players in job1_enrichment, captured 22:38 UTC -- i.e. AFTER the 22:35
-    cron-job1-late refresh that D81 added specifically to inject CONFIRMED
-    lineups before the 23:00 re-freeze. So the D71 confirmed-starter multiplier
-    has been firing on nothing. `is_starter` (the platform/projected flag) is
-    set for ~5-11 players/slate, but the RotoWire CONFIRMED scrape yields zero
-    confirmations. Check: (a) is cron-job1-late actually populating
-    `rotowire_confirmed`, or only `is_starter`? (b) is the RotoWire WNBA
-    confirmed-lineup parse still matching post-D74 URL change? (c) timing -- WNBA
-    confirmed lineups post ~30 min pre-tip; verify 22:35 is inside that window
-    for the slate's first tip (tie to the T-40 freeze, D93). This is the
-    proximate reason starter signal is weak on the negative-corr slates.
+26. **[PARSE FIXED 2026-06-21, D102; timing remains as #27] RotoWire
+    confirmed-starter data was not landing.** Root cause found and fixed in
+    code (commit a4f96e3): (b) the confirmed-status parse was reading one
+    box-level badge and stamping it on both teams, and the abbreviated-name
+    join missed half the players -- BOTH fixed and tested against the live
+    page. The remaining piece is (c) TIMING -- see #27 (cron-job1-late fires at
+    a fixed 22:35, too late for afternoon slates). With the parse fixed, evening
+    slates whose tip is after ~23:00 UTC now get confirmations from the 22:35
+    run; afternoon slates still need #27.
+
+27. **[NEW 2026-06-21, D102] Make the confirmed-lineup refresh tip-relative
+    (afternoon-slate gap).** cron-job1-late is a fixed `35 22 * * *` UTC fire,
+    but the freeze is tip-relative at first_tip - FREEZE_LEAD_MINUTES (T-40).
+    An afternoon slate (tip ~17-20 UTC) freezes at ~16:20-19:20 UTC, HOURS
+    before 22:35, so it never gets confirmed lineups even though the parse is
+    now fixed (D102). Credit-safe fix: add a lite job1 mode that skips the
+    Odds + props fetches (carry the existing vegas/prop_* fields forward from
+    the current enrichment row) and only refreshes RotoWire + minutes, then
+    schedule that lite refresh to fan across the afternoon/evening (e.g.
+    `*/30 15-23 * * *`). Naively widening cron-job1-late would multiply Odds
+    API credit burn (props are ~1 credit/event/run; free tier is 500/month).
+
+28. **[NEW 2026-06-21, D102] Auto-refresh wnba_game_logs in the dayclose cron
+    (root cause of the D99 head-feature staleness).** wnba_game_logs is BOTH
+    the head-training corpus AND the live Tier-0 head-feature source, but its
+    only writer is the manual `scripts/backfill_minutes.py`. If the operator
+    stops running it, every later slate serves stale rolling windows and any
+    player who debuts after the last backfill gets no head_features (silent
+    heuristic fallthrough) -- exactly the C. Leite shape. dayclose already runs
+    nba_api; fold the minutes upsert into it (or schedule backfill_minutes as a
+    5th cron). The `_persist_to_postgres` UPSERT in backfill_minutes is
+    reusable.
+
+29. **[NEW 2026-06-21, D102] Route the live identity path through `Resolver`.**
+    The live head-feature join uses name-string matching
+    (`serving_features.lookup` on first-initial + last-name + team), not the
+    robust `ingest/identity.Resolver` (nbaId trust + `data/identity_overrides.csv`).
+    Consequences: the override CSV can't fix a live mismatch; same-name+team
+    collisions are possible; a miss returns None and silently serves the
+    heuristic. Route the live path through Resolver and log per-player misses.
+
+30. **[NEW 2026-06-21, D102] Config drift: 12 env knobs whose code default
+    differs from the documented prod value.** An env wipe/reset on cron-job2
+    silently reverts validated behavior (GAME_SCRIPT_MINUTES_ENABLED,
+    AVAILABILITY_MODEL_ENABLED, LINEUP_ANCHOR_FLOOR, LATE_REFREEZE_ENABLED,
+    PROP_SIGNAL_SCALE, OPTIMIZER_BOOST_SUM_CAP, OPTIMIZER_MAX_SINGLE_BOOST,
+    OPTIMIZER_GAME_STACK_BONUS, FIELD_SAME_GAME_BOOST, FIELD_SAME_TEAM_BOOST,
+    OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST, OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST).
+    The catastrophic one (WNBA_ORACLE_MODEL_ARTIFACT_SHA) is now watchdog-paged
+    (D102). For the rest: either flip the code defaults to match prod (code
+    becomes source of truth) or add a startup log diffing live config vs a
+    committed expected-prod manifest. NOTE: PROP_SIGNAL_SCALE code default is
+    0.0 but STATUS claims 0.3 -- verify the live env actually sets it, else the
+    D78 prop multiplier is a no-op.
+
+31. **[NEW 2026-06-21, D102] No upstream schema-drift detection despite docs
+    claiming it.** stats_wnba.py / pyproject reference a nightly
+    `pytest -m contract` schema-drift suite, but there are ZERO
+    `@pytest.mark.contract` tests. An nba_api / Odds API response-shape change
+    surfaces only at runtime as silent empty data. Implement the contract
+    tests or remove the claim from the docstrings.
+
+32. **[NEW 2026-06-21, D102] Housekeeping (low urgency).** (a) No retention
+    policy on append-only tables (frozen_lineups, watchdog_events, etc.) --
+    years from being a problem but undocumented. (b) models/ has no .pkl
+    rotation; old artifacts accumulate in git + the image. (c)
+    `ingest/minutes_features._WNBA_NAME_TO_ABBR` is a hardcoded 15-team map; a
+    new expansion team silently serves team_pace=0.0. (d) Real Sports JWT
+    expiry is reactive-only; decode the `exp` claim at job1 start and warn at
+    < 7 days.

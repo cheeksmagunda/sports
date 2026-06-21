@@ -3507,3 +3507,73 @@ real, evidence-backed follow-ups are the serving-data fixes in D99/D100
 validate the challenger beats 0.554 via the D63 head eval, then run
 `oracle-rotate-check`; only on PASS (or explicit authorization) un-ignore +
 force-add the new `.pkl`, set the SHA env, and redeploy all three services.
+## 2026-06-21: D102 -- post-work cleanup: cron/test/sustainability audit + fixes [verified]
+
+Three parallel read-only audits (cron logic, test outdatedness, sustainability)
+ran over the repo. The clear, low-risk fixes were implemented and shipped; the
+larger items are logged to NEEDS_HUMAN with concrete fixes.
+
+**Fixed in code (shipped to main, auto-deployed):**
+
+1. **RotoWire confirmed-starter parse (the D100 root cause) [verified].** Two
+   bugs, both reproduced against the live page (37 entries, 6 teams):
+   - The confirmed badge was read once at game-box scope and stamped on BOTH
+     teams. Each team's `ul.lineup__list` carries its own `.lineup__status`
+     (`is-confirmed`/`is-expected`); they confirm independently. Now read
+     per-team via `_list_is_confirmed`.
+   - RotoWire abbreviates the visiting team's first names ("C. Zandalasini")
+     while Real Sports sends full names; the `(team, normalized_name)` join
+     missed them, so `is_starter`/`rotowire_confirmed` never attached. Added a
+     first-initial + last-name fallback (`RotowireIndex.get`) tried after the
+     exact key. Split parse into `parse_lineups_html()` and added a checked-in
+     `tests/fixtures/rotowire_lineups.html` + `test_rotowire_parse.py` (the
+     parse had ZERO coverage -- that is why the breakage went unnoticed).
+
+2. **Watchdog now catches silent feature/config degradation [verified].** The
+   row-count checks passed clean while the model silently served degraded.
+   Added: `model_artifact_unset` / `model_artifact_unresolved` (CRITICAL) for
+   the catastrophic case where `WNBA_ORACLE_MODEL_ARTIFACT_SHA` is wiped/reset
+   or points at a missing `.pkl` (silent heuristic fallback, corr 0.554->0.246);
+   and `odds_empty` / `rotowire_empty` (WARN) when a full pool has a whole feed
+   empty. 6 new tests.
+
+3. **Test health (test-outdatedness audit) [verified].** The determinism gate
+   pinned two model SHAs and silently `skip`-ped after a rotation; it now globs
+   whatever artifacts exist. The `caveat_is_skip` / `never_skip` picker tests
+   passed vacuously via an `else` branch when the pool EV drifted out of band;
+   they now bracket the thresholds around the realized EV and assert the band as
+   a precondition (fail loud). Stale "21:00 static clock" comments refreshed to
+   the tip-relative T-40 reality. Full suite 385 -> 396.
+
+**Audit verdicts worth recording [verified]:**
+- Season rollover into 2027 is handled correctly: the only season derivation is
+  calendar-year `sd.year`; rolling features span seasons; schedule features
+  reset per season. No hardcoded-date rot in the hot path.
+- Redis locks all carry 24h TTLs; the pgssl cert is valid to 2036 and is
+  laptop-only. No expiry risk there.
+- Empty odds correctly revert game_script to 1.0x (not the 0.95 grind tier).
+- `frozen_lineups` append-only + Redis NX + the unique `(slate, model, seq)`
+  constraint make the `*/15` fires idempotent; the freeze gate (T-40) is correct.
+
+**Logged for follow-up (NEEDS_HUMAN 27-32), not built this session because each
+is either a bigger change or carries an external-credit/data tradeoff:**
+- #27 cron-job1-late is a fixed 22:35 fire; afternoon slates freeze (T-40)
+  hours earlier, so even with the parse fixed they miss confirmations. The
+  credit-safe fix is a lite refresh (skip Odds/props, carry forward) fanned
+  across the day -- needs the Odds-budget tradeoff decided.
+- #28 `wnba_game_logs` (the head corpus AND the live Tier-0 feature source) has
+  NO automated refresh -- only the manual `backfill_minutes.py`. This is the
+  deeper root cause of the D99 Leite staleness; add it to the dayclose cron.
+- #29 the live identity path is name-string matching, not the `Resolver`
+  (no nbaId trust, no override file, silent misses).
+- #30 config drift: 12 env knobs whose code default differs from the documented
+  prod value (an env wipe silently reverts validated behavior).
+- #31 the claimed nba_api/Odds `pytest -m contract` schema-drift suite does not
+  exist (zero contract tests) -- implement it or drop the claim.
+- #32 housekeeping: no retention policy on append-only tables; no models/ .pkl
+  rotation; `_WNBA_NAME_TO_ABBR` is a hardcoded 15-team map that breaks on
+  expansion; JWT expiry is reactive-only.
+
+**Reverse.** Revert commits a4f96e3 (rotowire) and 2779fca (watchdog + tests).
+The watchdog additions are detection-only (no behavior change to the pipeline);
+the rotowire change only affects which players get confirmed/starter flags.
