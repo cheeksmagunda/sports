@@ -25,7 +25,7 @@ fresh pool, and frozen nothing. Restored cron-job1 ->
 on a widened `*/30 16-23` schedule so afternoon AND evening slates get confirmed
 starters before T-40. Both redeployed SUCCESS on 265b6e6, verified live. Rule:
 `--job backfill` runs ONLY on the dedicated backfill-enrichment service.
-Then closed NEEDS_HUMAN 24-32: #27/#28/#30/#31 DONE, #26 DONE (parse),
+Then closed NEEDS_CLAUDE 24-32: #27/#28/#30/#31 DONE, #26 DONE (parse),
 #29/#32a PARTIAL (silent-miss warning + expansion-team warning shipped), #24
 cosmetic-wontfix (read-only DSN), #25 superseded. New #33 (cron-role self-check).
 Full suite 406 (+3 nightly contract). See DECISIONS D103.
@@ -42,7 +42,7 @@ determinism gate globs artifacts instead of pinning rotation-stale SHAs;
 caveat_is_skip/never_skip picker tests de-vacuumed (bracket EV, assert band);
 stale '21:00 static clock' comments refreshed to tip-relative T-40. Full suite
 385 -> 396. Audit confirmed clean: 2027 season rollover handled, Redis TTLs
-set, freeze idempotent. Deferred (NEEDS_HUMAN 27-32): tip-relative job1-late
+set, freeze idempotent. Deferred (NEEDS_CLAUDE 27-32): tip-relative job1-late
 for afternoon slates, auto-refresh wnba_game_logs in dayclose (the deeper D99
 fix), live identity Resolver routing, config-drift manifest, contract tests,
 housekeeping. See DECISIONS D102.
@@ -67,7 +67,7 @@ gap (rotowire_confirmed=0 across the whole 06-12 slate); not a weighting issue.
 change; a same-recipe challenger on the fresher corpus (game logs now through
 06-20) had identical training_rows=11205 and differed from production in one
 booster (early-stop noise), unvalidated -- production picker_e2ced9ec kept.
-Serving-data follow-ups logged to NEEDS_HUMAN 24-26.
+Serving-data follow-ups logged to NEEDS_CLAUDE 24-26.
 2026-06-19 (D94/D95): Production work session. (D94) Root-caused
 and fixed the 2026-06-13 freeze outage: FROZEN_APPEND reused the :model_sha bind
 param and, after migration 0008 made the column varchar(64), Postgres raised
@@ -92,7 +92,7 @@ bound otherwise. (C+E) FREEZE_LEAD_MINUTES (default 40): the freeze is now
 anchored to first_tip - 40min (T-40), tip-relative not clock-relative -- job2
 skips fires before T-40 and freezes once at/after it, and the watchdog escalates
 a missing freeze at the same deadline (catches matinee slates the static 22:00
-rule missed). REQUIRES widening cron-job2 to fire across the day (NEEDS_HUMAN).
+rule missed). REQUIRES widening cron-job2 to fire across the day (NEEDS_CLAUDE).
 (D) ruff + mypy on src/ clean again; make determinism-check repaired
 (content-equality, not pickle SHA). Full suite 365 tests.
 2026-06-13 (D86): Placement overhaul Phase 0. Root-caused the
@@ -142,7 +142,7 @@ existed when the 21:00 pool reportedly had 1 row (job2 pool_too_small gates
 at <5); (4) D85 backfill: oracle-backfill --mode historical --start-id <cid>
 --stop-id <cid> for the 2026-06-08 contest, then verify pids 726 (0.8) and
 627 (2.94) carry section='leaderboard_lineup' rows; (5) set
-WATCHDOG_PING_URL once the human provisions a monitor (NEEDS_HUMAN 20).
+WATCHDOG_PING_URL once the human provisions a monitor (NEEDS_CLAUDE 20).
 Earlier 2026-06-08 (D80/D81): Pre-slate pipeline audit. Verified core
 serving healthy via job2 dry-run (heads fire 71/73, optimizer converges, valid
 lineup). Found + fixed two dead "improvements": D80 player props were hitting
@@ -344,7 +344,7 @@ expires and the lineup lands.
 | Frontend shows countdown past 21:00 UTC | Railway logs for cron-job2 service. Most likely `pool_too_small` (job1 didn't write rows) or `job2_failed` (DB / Redis hiccup) |
 | Frontend shows ErrorState block | `curl https://api-production-7033.up.railway.app/health` first; if 200, check api Railway logs |
 | Lineup loaded but card names show "Player 12345" | per_player block missing — should be impossible after D36; check job2's `_build_per_player` ran |
-| Job1 fails with StorageStateStale | JWT inside REALSPORTS_STORAGE_STATE_B64GZ rotated. Re-run `scripts/realsports_login.py` locally and re-seed the env var on cron-job1 + cron-job2 (NEEDS_HUMAN item 6) |
+| Job1 fails with StorageStateStale | JWT inside REALSPORTS_STORAGE_STATE_B64GZ rotated. Re-run `scripts/realsports_login.py` locally and re-seed the env var on cron-job1 + cron-job2 (NEEDS_CLAUDE item 6) |
 | Odds API returns 429 / 401 | Free-tier quota or rotated key. Job1 degrades to empty odds; game_script_multiplier reverts to 1.0x. Lineup still ships, just without the Vegas tilt |
 
 Railway dashboard for logs:
@@ -394,7 +394,7 @@ These came out of the deep code audit (general-purpose subagent, 2026-05-27
 05:00 UTC) and are documented for follow-up; they will NOT block
 tomorrow's first frozen lineup.
 
-- **RotoWire lineups fetched but not persisted** (NEEDS_HUMAN item 7):
+- **RotoWire lineups fetched but not persisted** (NEEDS_CLAUDE item 7):
   `job1.py:114` calls `fetch_lineups()` and counts the result for the
   log line, but the rows aren't written to `job1_enrichment`. The
   injury-cascade port (D33) only fires through `features/build.py`
@@ -404,7 +404,7 @@ tomorrow's first frozen lineup.
   reasonable picks (boost + Vegas signals carry it), just without the
   injury-aware adjustment.
 
-- **Job2 `_freeze` is not strictly idempotent** (NEEDS_HUMAN item 8):
+- **Job2 `_freeze` is not strictly idempotent** (NEEDS_CLAUDE item 8):
   The Redis SETNX guards the lock metadata but the Postgres UPSERT
   fires every invocation. Subsequent cron-job2 fires within the same
   slate window can replace the frozen lineup if new draft data arrives
@@ -413,7 +413,7 @@ tomorrow's first frozen lineup.
   the lock is held, or accept the refresh-as-data-arrives semantics
   and rename "freeze" everywhere.
 
-- **Watchdog not wired** (NEEDS_HUMAN item 9): `scheduler/watchdog.py`
+- **Watchdog not wired** (NEEDS_CLAUDE item 9): `scheduler/watchdog.py`
   is a stub returning `[]` and is not called from `cron.py`. Operator
   must read Railway logs manually for failure detection until the
   watchdog + alerting path lands.
@@ -425,7 +425,7 @@ tomorrow's first frozen lineup.
   `--extra dev python -m pytest`.
 - ruff + mypy on `src/` clean (D93 fixed pre-existing drift the docs had
   claimed clean: 3 ruff + 6 mypy).
-- `make determinism-check` repaired (D93 / NEEDS_HUMAN #14): compares model
+- `make determinism-check` repaired (D93 / NEEDS_CLAUDE #14): compares model
   CONTENT via `pipeline.artifact_content_equal`, not pickle SHA.
 - 72 source files in `src/wnba_oracle/`.
 - 6 basketball-main patterns ported with zero new external dependencies.

@@ -1,7 +1,7 @@
 """RotoWire injury wiring: job1 persists is_out into features_json,
 job2 filters those players before optimizing.
 
-NEEDS_HUMAN #7. Until per-player minutes ingestion lands (mins_l10
+NEEDS_CLAUDE #7. Until per-player minutes ingestion lands (mins_l10
 from game logs), the full D33 minutes-redistribution cascade can't
 fire; the binary drop-OUT-players half lives in this wiring and
 is the bigger value lift anyway.

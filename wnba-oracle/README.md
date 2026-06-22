@@ -5,7 +5,7 @@ player pool, plus a lineup optimizer that maximizes expected payout
 against a simulated field. Goal is contest-payout EV, not raw prediction
 accuracy.
 
-Status: see `STATUS.md`. Open human asks: see `NEEDS_HUMAN.md`. Build
+Status: see `STATUS.md`. Open human asks: see `NEEDS_CLAUDE.md`. Build
 decision log: see `DECISIONS.md`.
 
 ## Architecture

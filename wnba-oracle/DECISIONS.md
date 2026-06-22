@@ -17,7 +17,7 @@ Railway CLI rejects for every operation (`whoami`, `link`, `up`). Use the
 directly. The `Makefile` has no `up` target for this reason; the `deploy`
 target points the operator at the skill. Reverse: a per-project deploy
 token issued by the human would re-enable the CLI; that is a Part 0.1
-category-3 action (`NEEDS_HUMAN.md`).
+category-3 action (`NEEDS_CLAUDE.md`).
 
 ### D2: Railway GraphQL smoke uses `projects`, not `me` (carryover) [verified]
 Workspace tokens cannot resolve the `me` query. The startup script smoke
@@ -390,10 +390,10 @@ not — this silently breaks env injection).
 
 The remaining DEGRADED audit findings (RotoWire wiring, job2 freeze
 idempotency, watchdog stub) are multi-day work and are documented in
-NEEDS_HUMAN.md items 7, 8, 9. None blocks tomorrow's first frozen
+NEEDS_CLAUDE.md items 7, 8, 9. None blocks tomorrow's first frozen
 lineup.
 
-### D37: Close out the three non-blocking audit items (NEEDS_HUMAN #7/#8/#9) [verified]
+### D37: Close out the three non-blocking audit items (NEEDS_CLAUDE #7/#8/#9) [verified]
 The 2026-05-27 deep audit (D36) left three known-issues marked
 non-blocking-but-real. This commit closes all three.
 
@@ -565,7 +565,7 @@ that always catches the prior night.
 
 The cron is wired locally + smoke-tested (5-id window walking back
 from 1840 correctly skipped 5 non-WNBA contests). Railway cron service
-config is operator action (item 10 in NEEDS_HUMAN.md): create a third
+config is operator action (item 10 in NEEDS_CLAUDE.md): create a third
 service `cron-dayclose` with start command `oracle-cron --job dayclose`
 and cron `0 6 * * *`. Requires the same env as cron-job1
 (REALSPORTS_STORAGE_STATE_B64GZ + WNBA_DEVICE_UUID for Playwright auth)
@@ -611,7 +611,7 @@ stable. Also rescaled `ContrarianConfig.max_penalty` from 3.0 to 0.8
 scale).
 
 Reverse: drop the calibration once a trained LightGBM artifact lands
-(see NEEDS_HUMAN #3) — `_heuristic_real_score` is the fallback only.
+(see NEEDS_CLAUDE #3) — `_heuristic_real_score` is the fallback only.
 
 ### D44: 2025 WNBA backfill + first trained EB artifact [verified]
 2026-05-27. Real Sports retains prior-season contests (probed cid=700 =
@@ -876,7 +876,7 @@ Today's 22:54 UTC frozen lineup row in Postgres still carries the
 placeholder names: the freeze is a single row keyed by
 `(slate_date, model_sha)` and the cron schedule (`*/15` ticks
 through 04:00 UTC) will overwrite it on the next fire after deploy
-because `_freeze` is non-idempotent on the UPSERT (NEEDS_HUMAN item
+because `_freeze` is non-idempotent on the UPSERT (NEEDS_CLAUDE item
 8). No manual backfill needed if the deploy lands before 04:00 UTC;
 otherwise the row stays placeholder until tomorrow's slate replaces
 it. The `entry_recommendation` was already `skip` so no
@@ -976,7 +976,7 @@ driver of real_score. Wiring a starter/minutes term into `_build_specs`
 `sigma=0.25` and softening the `K=10` log-offset that compresses the
 right-skew, are the next levers. These need walk-forward validation
 (the EB artifact saw the 16 test slates), so they are scoped as a
-follow-up rather than shipped blind here. See NEEDS_HUMAN.
+follow-up rather than shipped blind here. See NEEDS_CLAUDE.
 
 ### D52: Walk-forward prediction work -- sampling calibrated, recency rejected, starter signal shipped [verified]
 2026-06-01. Followed up D51's "real gap is prediction" by building the
@@ -1177,7 +1177,7 @@ so the value is in being able to INJECT tonight's minutes, not the algebra.
 line recovers it at R^2 = 0.957 (`predict/scoring.py`, locked weights). This
 makes the pipeline SELF-CONTAINED on nba_api -- minutes AND real_score (hence
 the rate) come from one source, with no dependency on slate_labels being
-maintained on prod (it is not; dayclose cron unwired, NEEDS_HUMAN #10).
+maintained on prod (it is not; dayclose cron unwired, NEEDS_CLAUDE #10).
 
 **Shipped predictor** = `predict/minutes.blended_real_score`: boost prior
 shrinking toward minutes x rate as a player accumulates games
@@ -1250,7 +1250,7 @@ normal 13:00 job1 / 21:00 job2 cycle produces named picks. Follow-ups:
 - RotoWire `wnba-lineups.php` returned 404 during recovery, so the starter /
   injury-cascade signals were OFF (minutes model fell back to the recency
   baseline). If it persists, the RotoWire URL/scrape needs fixing -- that is
-  half the minutes edge (same-day role). See NEEDS_HUMAN.
+  half the minutes edge (same-day role). See NEEDS_CLAUDE.
 
 ### D57: Draft-winning strategy + Tier 3 game-script bench-minutes [verified diagnosis; reasoning strategy]
 2026-06-02. Operator reviewed the 2026-06-01 leaderboard (in-app screenshots:
@@ -1333,7 +1333,7 @@ recent minutes so they are untouched, so this alone does NOT fix the 06-01 bust
 OFF the live freeze is byte-identical.
 
 Determinism note: `make determinism-check` is broken independent of Tier 3 (see
-NEEDS_HUMAN 14). Verified manually that training is deterministic at the
+NEEDS_CLAUDE 14). Verified manually that training is deterministic at the
 MODEL-CONTENT level (every artifact array/scalar byte-equal across two runs);
 the pickle SHA differs only because LightGBM Booster serialization is not
 byte-stable. Tier 3 touches no training code, and the freeze path stays
@@ -1398,7 +1398,7 @@ KILL-SWITCH: AVAILABILITY_MODEL_ENABLED (default OFF, live unchanged). Arm with
 AVAILABILITY_MODEL_ENABLED=true on cron-job2.
 
 SCOPE: Tier 2 ships the availability model ONLY. Deferred with reasons
-(NEEDS_HUMAN 17): (item 6) real ownership ingestion from the Daily Draft Stats
+(NEEDS_CLAUDE 17): (item 6) real ownership ingestion from the Daily Draft Stats
 panel -- job1 already fired at 13:00 UTC so a new scraper cannot help tonight's
 slate, and a fresh Real Sports scrape hours before tip is the RotoWire-404
 fragility class; (item 7) the win-equity/ceiling objective -- held to keep
@@ -1417,7 +1417,7 @@ three armed in test_all_tiers_integration.py.
 ### D60: Corpus tail backfill (Jun 3/4) + cron-dayclose wired to prod [verified]
 
 Context: the historical corpus had stalled at slate 2026-06-02. Root cause was
-NEEDS_HUMAN #10 -- the day-close cron (D41) was coded and tested but never wired
+NEEDS_CLAUDE #10 -- the day-close cron (D41) was coded and tested but never wired
 on Railway, so nothing auto-extended slate_labels / contest_leaderboards after
 the build paused. Both the local parquet analysis surface and the canonical
 Postgres went stale.
@@ -1440,7 +1440,7 @@ Done 2026-06-05 (~04:00 UTC):
    and wnba_game_logs.parquet (nba_api, through 06-04). All *.parquet are
    gitignored -- the off-Railway analysis surface, refreshed on demand.
 
-3. Wired cron-dayclose on Railway (closes NEEDS_HUMAN #10). New service
+3. Wired cron-dayclose on Railway (closes NEEDS_CLAUDE #10). New service
    606d950d from cheeksmagunda/wnba-oracle, RAILPACK, cron `0 6 * * *` UTC,
    restart NEVER, start `sh -c 'python /app/scripts/seed_storage_state.py &&
    oracle-cron --job dayclose'`. The pending migration
@@ -1792,7 +1792,7 @@ day the model could have actually drafted on.
 merge because main's D47 is the prior Railway env hardening entry.)
 
 Started `RESULTS.md`, a per-slate ledger of actual contest standings, as a
-tracked deliverable alongside STATUS / DECISIONS / NEEDS_HUMAN / README.
+tracked deliverable alongside STATUS / DECISIONS / NEEDS_CLAUDE / README.
 The frozen lineup is written to Redis + Postgres (not git), and eval/ only
 auto-populates model metrics, so there was no human-readable record of how
 the picker is doing in real contests. The ledger closes that gap: it ties
@@ -1902,7 +1902,7 @@ overrides, or historical corpus. That freeze appears to be a synthetic
 first-fire, not a real Real Sports pool (uniform card_boost 3.0,
 sub-3.0 pred_real_scores). Real names live only in production
 `job1_enrichment.name`, which is unreachable from a fresh container
-without `DATABASE_URL`. Logged for the operator in NEEDS_HUMAN.md.
+without `DATABASE_URL`. Logged for the operator in NEEDS_CLAUDE.md.
 
 ---
 
@@ -2682,13 +2682,13 @@ something re-captured between 13:06 and 21:00. The old overwrite-in-place
 schema destroyed the first row's frozen_at, so this cannot be settled
 from the current DB state -- which is itself the D82 motivation. Forensic
 queries are listed in STATUS.md for the next operator session with DB
-access; this environment has no credentials (see NEEDS_HUMAN.md).
+access; this environment has no credentials (see NEEDS_CLAUDE.md).
 
 **Paging [reasoned]**: watchdog gains an optional dead-man's-switch-style
 ping (WATCHDOG_PING_URL): on any critical event it GETs {url}/fail
 best-effort. External heartbeat monitoring is the standard remedy for
 silent cron failure; provisioning the URL is a human action (account
-creation), logged in NEEDS_HUMAN.md.
+creation), logged in NEEDS_CLAUDE.md.
 
 **Reverse**: set JOB1_MIN_POOL=0 and JOB1_MIN_TEAMS=0 (gate passes
 everything) or revert the commit.
@@ -2739,7 +2739,7 @@ through label_coverage_gap instead of silently losing the label.
 `oracle-backfill --mode historical --start-id <cid> --stop-id <cid>` for
 the 2026-06-08 contest to recover Loyd (0.8) and Boston (2.94) if any
 top-20 finisher drafted them. This environment has no DATABASE_URL;
-the command is queued in STATUS.md / NEEDS_HUMAN.md.
+the command is queued in STATUS.md / NEEDS_CLAUDE.md.
 
 **Reverse**: revert the commit;
 `DELETE FROM slate_labels WHERE section = 'leaderboard_lineup'` removes
@@ -3108,7 +3108,7 @@ board, rank/percentile stay NULL (no false "21/8300") and metadata carries a
 `metadata` param; `job_dayclose` + `backfill_placements` pass `field_size`; the
 censored "beat top-20 median" output was relabeled as an elite-finish threshold.
 NOTE: auto-placement was already wired into `job_dayclose.main()` in D91 (the
-STATUS/NEEDS_HUMAN claims that it was "deferred" were stale).
+STATUS/NEEDS_CLAUDE claims that it was "deferred" were stale).
 
 **C+E -- T-40 tip-relative freeze gate [verified].** WNBA slates tip at
 different clock times; the static UTC freeze timing (late_refreeze_after_utc
@@ -3125,12 +3125,12 @@ Operator chose lead=40 over 90 because T-40 lands just after the 22:35
 cron-job1-late confirmed-lineup refresh, so the single freeze keeps D81's
 confirmed-starter benefit while staying tip-relative. REQUIRES a Railway cron
 change: cron-job2 (and ideally cron-job1-late) must fire across the day, not
-just the evening window, so a tick exists near T-40 for any tip (NEEDS_HUMAN).
+just the evening window, so a tick exists near T-40 for any tip (NEEDS_CLAUDE).
 
 **D -- quality + docs [verified].** ruff + mypy on `src/` were not clean despite
 the docs claiming so: fixed 3 ruff (RUF005 + import sort) and 6 mypy
 (annotations / object-coercions); both now clean. Repaired
-`make determinism-check` (NEEDS_HUMAN #14): it matched `picker_*dev_determ_1*`
+`make determinism-check` (NEEDS_CLAUDE #14): it matched `picker_*dev_determ_1*`
 but `oracle-train` truncates `--commit` to 8 chars (both -> `dev_dete`, find
 matched nothing) and compared pickle SHAs, which are not byte-stable for
 LightGBM Boosters. New `pipeline.artifact_content_equal` compares canonical
@@ -3300,7 +3300,7 @@ this build env: `DATABASE_PUBLIC_URL` is read-only (write attempt returns
 `InsufficientPrivilege`), and the production write path uses the internal
 `DATABASE_URL` reachable only from inside Railway. The row is a dead historical
 artifact (a 'skip' recommendation with no players); the code guard prevents any
-recurrence. Logged to NEEDS_HUMAN for an in-container one-line UPDATE if desired.
+recurrence. Logged to NEEDS_CLAUDE for an in-container one-line UPDATE if desired.
 
 **Reverse.** Revert the guard block in `picker/optimize.py`; the slate would
 again record -inf only on a constraint wipeout that the upstream relaxations
@@ -3394,7 +3394,7 @@ heads were not mis-weighted; they were fed a stale recency snapshot at SERVE
 time, and the legacy minutes feature served half her true role. Retraining the
 LightGBM heads cannot repair a serve-time data-freshness/identity gap. So the
 Leite misses do NOT justify a feature-weighting retrain. The corrective work is
-upstream (logged to NEEDS_HUMAN): (a) reconcile the two minutes paths so the
+upstream (logged to NEEDS_CLAUDE): (a) reconcile the two minutes paths so the
 legacy `recent_minutes`/`per_min_rate` can never diverge from
 `head_features.mins_l5/l10` (derive one from the other, or drop the legacy pair
 in favor of the head features the Tier-0 path already trusts); (b) add a
@@ -3500,7 +3500,7 @@ findings-based benefit. Production model `picker_e2ced9ec` (SHA 94f8e860...,
 verified still present in models/ and matching the live env var) is retained.
 The challenger artifact was deleted (it is gitignored; nothing committed). The
 real, evidence-backed follow-ups are the serving-data fixes in D99/D100
-(NEEDS_HUMAN 25/26), which no retrain delivers.
+(NEEDS_CLAUDE 25/26), which no retrain delivers.
 
 **Reverse.** If a future operator wants the data-recency rotation anyway: re-run
 `DATABASE_URL=$DATABASE_PUBLIC_URL oracle-train --corpus-mode both`, walk-forward
@@ -3511,7 +3511,7 @@ force-add the new `.pkl`, set the SHA env, and redeploy all three services.
 
 Three parallel read-only audits (cron logic, test outdatedness, sustainability)
 ran over the repo. The clear, low-risk fixes were implemented and shipped; the
-larger items are logged to NEEDS_HUMAN with concrete fixes.
+larger items are logged to NEEDS_CLAUDE with concrete fixes.
 
 **Fixed in code (shipped to main, auto-deployed):**
 
@@ -3555,7 +3555,7 @@ larger items are logged to NEEDS_HUMAN with concrete fixes.
 - `frozen_lineups` append-only + Redis NX + the unique `(slate, model, seq)`
   constraint make the `*/15` fires idempotent; the freeze gate (T-40) is correct.
 
-**Logged for follow-up (NEEDS_HUMAN 27-32), not built this session because each
+**Logged for follow-up (NEEDS_CLAUDE 27-32), not built this session because each
 is either a bigger change or carries an external-credit/data tradeoff:**
 - #27 cron-job1-late is a fixed 22:35 fire; afternoon slates freeze (T-40)
   hours earlier, so even with the parse fixed they miss confirmations. The
@@ -3580,7 +3580,7 @@ the rotowire change only affects which players get confirmed/starter flags.
 
 ## 2026-06-21: D103 -- CRITICAL: restored cron-job1 startCommand (was running backfill, not job1) [verified]
 
-**What was wrong [verified].** While closing NEEDS_HUMAN #27 I read the live
+**What was wrong [verified].** While closing NEEDS_CLAUDE #27 I read the live
 Railway serviceInstance configs and found cron-job1 (`0 13`) AND cron-job1-late
 (`35 22`) both had `startCommand = oracle-cron --job backfill` -- the historical
 head_features backfill, which by design CANNOT fetch the live Real Sports pool,
@@ -3603,7 +3603,7 @@ Both redeployed SUCCESS on commit 265b6e6 and verified live.
 **Why it stayed hidden.** The `enrichment_stale` watchdog (warn, after 20:00 UTC)
 would have caught it tomorrow evening, but only after a stale freeze. The new
 D102 watchdog `config_drift`/`rotowire_empty`/`model_artifact` checks don't cover
-the cron startCommand. Mitigation logged: NEEDS_HUMAN #33 (a startup self-check
+the cron startCommand. Mitigation logged: NEEDS_CLAUDE #33 (a startup self-check
 that asserts the dispatched job matches the service's intended role).
 
 **Reverse.** N/A (corrective). To re-run a manual backfill, use the

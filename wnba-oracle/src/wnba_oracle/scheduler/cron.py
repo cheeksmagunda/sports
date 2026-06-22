@@ -59,7 +59,7 @@ def main() -> int:
             log.exception("watchdog_failed", error=str(exc))
         return rc
     if args.job == "job1late":
-        # D102 (NEEDS_HUMAN #27): credit-free confirmed-lineup refresh. Re-scrapes
+        # D102 (NEEDS_CLAUDE #27): credit-free confirmed-lineup refresh. Re-scrapes
         # RotoWire and JSONB-merges only the starter/confirmed fields onto the
         # existing enrichment, so afternoon slates pick up confirmed starters
         # before their T-40 freeze without burning Odds API credits. No watchdog

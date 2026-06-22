@@ -1,4 +1,4 @@
-"""Credit-free confirmed-lineup refresh (D102, NEEDS_HUMAN #27).
+"""Credit-free confirmed-lineup refresh (D102, NEEDS_CLAUDE #27).
 
 run_lite re-scrapes RotoWire and JSONB-merges only the RotoWire-authoritative
 fields onto existing enrichment, with no Odds/props re-fetch.

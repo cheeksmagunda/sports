@@ -32,7 +32,7 @@ both`. See STATUS.md and DECISIONS.md for full roadmap and reverse paths.
 - Read files before editing. Preserve existing style.
 - Commit after every working increment with a descriptive message.
 - Keep code grep-able and consistent. Remove dead code and scratch files.
-- Maintain README.md, DECISIONS.md, NEEDS_HUMAN.md, STATUS.md as you go.
+- Maintain README.md, DECISIONS.md, NEEDS_CLAUDE.md, STATUS.md as you go.
   These are required deliverables for this project.
 
 ## Output style
@@ -101,4 +101,4 @@ scripts/rwgql.sh 'mutation { serviceInstanceDeployV2(serviceId: "SERVICE_ID", en
   Source through shell if you need values not already in the environment:
   `set -a && source .env && set +a && <command>`.
 - Never create new accounts or generate new long-lived credentials.
-  If a credential is missing or expired, log to `NEEDS_HUMAN.md`.
+  If a credential is missing or expired, log to `NEEDS_CLAUDE.md`.

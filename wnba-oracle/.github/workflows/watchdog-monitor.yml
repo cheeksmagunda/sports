@@ -1,7 +1,7 @@
 name: watchdog-monitor
 
 # Dead-man's-switch + alerting for the live WNBA Oracle, using GitHub instead of
-# an external monitoring account (NEEDS_HUMAN #20/#26). Polls the public API and
+# an external monitoring account (NEEDS_CLAUDE #20/#26). Polls the public API and
 # opens a GitHub issue when the production pipeline is genuinely unhealthy:
 #   - /health unreachable or not ok          -> api/serving down
 #   - /watchdog/today reports no_frozen_lineup critical -> no pick past T-40

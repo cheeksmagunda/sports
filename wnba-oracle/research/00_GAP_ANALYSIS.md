@@ -110,7 +110,7 @@ Ranked by per-slate EV cost (high to low):
    in winning lineups but are missing from `slate_labels` — at least 3 of
    141 slates affected (`research/internal/03_theoretical_ceiling.md` point 4).
 6. **No late-info hook.** RotoWire fetched but not persisted
-   (NEEDS_HUMAN #7); confirmed-starter / late-inactive lands AFTER our
+   (NEEDS_CLAUDE #7); confirmed-starter / late-inactive lands AFTER our
    21:00 UTC freeze. Cost hard to quantify without a backtest of the
    late-news leak window.
 
@@ -190,7 +190,7 @@ The top-3 items are scoped to ship-in-a-day each.
 
 ### R5. Persist RotoWire confirmed-starter into features_json
 
-- **What:** close NEEDS_HUMAN #7 — RotoWire fetched but never written.
+- **What:** close NEEDS_CLAUDE #7 — RotoWire fetched but never written.
   `job1` already pulls lineups; route the result into the per-player
   `features_json["rotowire_confirmed"]`, which job2's existing
   `_starter_multiplier` already reads. Pure addition.

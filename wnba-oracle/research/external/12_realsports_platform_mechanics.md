@@ -438,7 +438,7 @@ Current field simulation uses 120 lineups to model a 9,000-entry field -- a 75:1
 
 The confirmed-starter signal is broken (404 on WNBA URL, 0 matches across 11 slates). This is a menu-scrape quality issue that affects player pool completeness: if confirmed starters are missing from the pool, the oracle cannot select them regardless of how good its projections are.
 
-**Specific build**: Audit the RotoWire WNBA lineups URL against the current RotoWire site structure (the URL may have changed in 2025-2026). Add fallback sources: ESPN WNBA Starting Lineups API, WNBA official box scores for recent games, or Rotogrinders WNBA projected stats. Add a pre-contest health check that verifies starter signal is non-empty; log to NEEDS_HUMAN.md if it fires 2+ slates in a row.
+**Specific build**: Audit the RotoWire WNBA lineups URL against the current RotoWire site structure (the URL may have changed in 2025-2026). Add fallback sources: ESPN WNBA Starting Lineups API, WNBA official box scores for recent games, or Rotogrinders WNBA projected stats. Add a pre-contest health check that verifies starter signal is non-empty; log to NEEDS_CLAUDE.md if it fires 2+ slates in a row.
 
 ### Recommendation 8: Build a Real Sports Ownership Proxy from Historical Contest Results
 

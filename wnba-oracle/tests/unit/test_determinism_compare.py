@@ -1,6 +1,6 @@
 """D-session: content-based artifact comparison for the determinism gate.
 
-NEEDS_HUMAN #14: `make determinism-check` compared pickle SHAs, which are not
+NEEDS_CLAUDE #14: `make determinism-check` compared pickle SHAs, which are not
 byte-stable for LightGBM Boosters even under content-deterministic training.
 The fix compares trained-model CONTENT via `artifact_content_equal`. These
 tests pin that an artifact equals itself and differs from a distinct artifact.

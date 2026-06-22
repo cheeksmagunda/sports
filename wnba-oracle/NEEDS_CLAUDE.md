@@ -64,7 +64,7 @@ to cron-job2 via `serviceInstanceDeploy(commitSha=...)`. Full write-up: D94.
 
 ## Operator action items
 
-These are not strict NEEDS_HUMAN entries - the build works without them.
+These are not strict NEEDS_CLAUDE entries - the build works without them.
 
 1. **Seed REALSPORTS_STORAGE_STATE_B64GZ on Railway.** [DONE 2026-05-27]
    Set on cron-job1 + cron-job2.

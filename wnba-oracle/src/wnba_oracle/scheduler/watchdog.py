@@ -308,7 +308,7 @@ def _ping_on_critical(events: list[WatchdogEvent]) -> None:
     GETs {WATCHDOG_PING_URL}/fail so an external monitor (healthchecks.io
     style) pages the operator. Never raises; paging must not break the
     pipeline it watches. No-op until the operator provisions the URL
-    (see NEEDS_HUMAN.md).
+    (see NEEDS_CLAUDE.md).
     """
     from wnba_oracle.common.settings import get_settings
 

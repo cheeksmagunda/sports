@@ -637,7 +637,7 @@ def rotowire_patch(rw: LineupEntry) -> dict:
 
 
 def run_lite(slate_date: str | None = None) -> Job1Result:
-    """Credit-free confirmed-lineup refresh (D102, NEEDS_HUMAN #27).
+    """Credit-free confirmed-lineup refresh (D102, NEEDS_CLAUDE #27).
 
     Re-scrapes RotoWire (free) and JSONB-merges only the RotoWire-authoritative
     fields onto the EXISTING enrichment rows -- no Odds/props/minutes/head
