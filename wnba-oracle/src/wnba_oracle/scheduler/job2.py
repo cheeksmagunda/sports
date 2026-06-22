@@ -235,24 +235,44 @@ def _is_out_from_features(features_json: object) -> bool:
     return bool(int(f.get("is_out", 0) or 0))
 
 
-def _starter_multiplier(features_json: object, *, enabled: bool) -> float:
-    """Real_score multiplier from the RotoWire confirmed-starter flag (D52).
+def _effective_confirmed(f: dict, *, use_expected: bool) -> bool:
+    """Whether RotoWire gives a trustworthy same-day STARTER role (D104).
+
+    A CONFIRMED row always counts. An EXPECTED start (RotoWire-listed in the
+    top five, ``is_starter=1``) counts too when ``use_expected`` is set --
+    confirmed lineups for every game on a slate are not all posted by the T-40
+    freeze of the first tip, so the expected lineup from the 13:00 job1 scrape
+    is the operative signal. An expected NON-starter is left neutral (RotoWire's
+    expected bench order is noisy); only a CONFIRMED bench is faded. The net
+    effect of ``use_expected`` is therefore narrow and one-directional: it
+    promotes expected-but-not-yet-confirmed starters from "no info" to "starter"
+    and changes nothing else, so a fully-confirmed slate is unaffected.
+    """
+    if int(f.get("rotowire_confirmed", 0) or 0):
+        return True
+    return use_expected and bool(int(f.get("is_starter", 0) or 0))
+
+
+def _starter_multiplier(
+    features_json: object, *, enabled: bool, use_expected: bool = True
+) -> float:
+    """Real_score multiplier from the RotoWire starter signal (D52, D104).
 
     card_boost is a lagging rolling-rating handicap, so it cannot know
-    tonight's starting five. RotoWire's same-day confirmation is the one
-    pre-game signal additive to boost. We only act on CONFIRMED rows
-    (rotowire_confirmed=1); an unconfirmed/unmatched player gets 1.0 (no
-    info) so we never punish a player RotoWire simply did not list.
+    tonight's starting five. RotoWire's same-day lineup is the one pre-game
+    signal additive to boost. We act on a known role (see
+    ``_effective_confirmed`` -- expected OR confirmed starters when
+    ``use_expected``); an unmatched / unknown-role player gets 1.0 (no info)
+    so we never punish a player RotoWire simply did not list.
 
     Magnitudes are modest on purpose -- boost already captures most of a
     player's role, so this is a nudge for same-day starts/sits, not a
-    wholesale re-rating. confirmed starter -> 1.10, confirmed non-starter
-    -> 0.82.
+    wholesale re-rating. starter -> 1.10, faded (confirmed) non-starter -> 0.82.
     """
     if not enabled:
         return 1.0
     f = _features_dict(features_json)
-    if not int(f.get("rotowire_confirmed", 0) or 0):
+    if not _effective_confirmed(f, use_expected=use_expected):
         return 1.0
     return 1.10 if int(f.get("is_starter", 0) or 0) else 0.82
 
@@ -612,6 +632,14 @@ def _build_specs(
         total, spread = _vegas_from_features(r.get("features_json"))
         gs_mult = game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
         f = _features_dict(r.get("features_json"))
+        # D104: treat RotoWire EXPECTED starters as a known role, not only
+        # CONFIRMED ones -- confirmed lineups for every game are not all out by
+        # the T-40 freeze. This `eff_confirmed` flag feeds every role consumer
+        # below (anchor, availability, blended minutes) so the starting five on
+        # the slate's later games is honored from the 13:00 expected lineup.
+        eff_confirmed = _effective_confirmed(
+            f, use_expected=settings.starter_signal_use_expected
+        )
         mf = _minutes_features(r.get("features_json")) if settings.minutes_model_enabled else None
         # Anchor flag (D57, Tier 1) -- computed regardless of the floor setting
         # so it always rides on the spec; the optimizer only enforces it when
@@ -620,16 +648,13 @@ def _build_specs(
             mf is not None
             and mf["n_min_games"] >= ANCHOR_MIN_GAMES
             and mf["recent_minutes"] >= ANCHOR_MIN_MINUTES
-        ) or (
-            bool(int(f.get("rotowire_confirmed", 0) or 0))
-            and bool(int(f.get("is_starter", 0) or 0))
-        )
+        ) or (eff_confirmed and bool(int(f.get("is_starter", 0) or 0)))
         if avail_enabled:
             p_active_by_pid[pid] = availability_probability(
                 recent_minutes=float(mf["recent_minutes"]) if mf is not None else 0.0,
                 minutes_vol=float(mf["minutes_vol"]) if mf is not None else 0.0,
                 n_min_games=int(mf["n_min_games"]) if mf is not None else 0,
-                rotowire_confirmed=bool(int(f.get("rotowire_confirmed", 0) or 0)),
+                rotowire_confirmed=eff_confirmed,
                 is_starter=bool(int(f.get("is_starter", 0) or 0)),
                 cfg=avail_cfg,
             )
@@ -670,7 +695,9 @@ def _build_specs(
             # the symmetric scaling of the 80% interval keeps the sampler's
             # delta-method sigma in the same units.
             starter_mult = _starter_multiplier(
-                r.get("features_json"), enabled=settings.starter_signal_enabled
+                r.get("features_json"),
+                enabled=settings.starter_signal_enabled,
+                use_expected=settings.starter_signal_use_expected,
             )
             # Game-script multiplier still applies (Vegas tilt on top of the
             # head). Floor matches every other Tier so the downstream sampler
@@ -707,7 +734,7 @@ def _build_specs(
                 rate=mf["per_min_rate"],
                 n_games=mf["n_min_games"],
                 boost_prior=_heuristic_real_score(boost),
-                rotowire_confirmed=bool(int(f.get("rotowire_confirmed", 0) or 0)),
+                rotowire_confirmed=eff_confirmed,
                 is_starter=bool(int(f.get("is_starter", 0) or 0)),
                 injury_bonus_min=float(bonus.get(pid, 0.0)),
                 blowout=False,
@@ -721,7 +748,9 @@ def _build_specs(
         # Fallback (no minutes match): EB > corpus history > boost heuristic,
         # with the legacy starter nudge.
         starter_mult = _starter_multiplier(
-            r.get("features_json"), enabled=settings.starter_signal_enabled
+            r.get("features_json"),
+            enabled=settings.starter_signal_enabled,
+            use_expected=settings.starter_signal_use_expected,
         )
         eb_pred = _eb_predict_one(art, pid, position)
         if eb_pred is not None:

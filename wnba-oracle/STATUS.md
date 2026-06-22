@@ -1,6 +1,21 @@
 status: BUILD_COMPLETE
 last_verified: 2026-06-21T00:00:00Z
-phase: live. 2026-06-21 (D103, CRITICAL): restored cron-job1 + cron-job1-late
+phase: live. 2026-06-21 (D104): two operator-directed corrections for T-40
+serving. (a) The RotoWire starter signal now acts on EXPECTED starters, not
+only CONFIRMED -- confirmed lineups for every game on a slate are not all out by
+the T-40 freeze of the first tip, so a confirmed-only gate silently ignored the
+starting five (e.g. tomorrow's 4-game slate, captured 13:04 UTC when RotoWire is
+all "Expected"). New `_effective_confirmed = confirmed OR (use_expected AND
+is_starter)` threaded through every role consumer (multiplier, anchor,
+availability, blended minutes); one-directional (promotes expected starters
+only), so a fully-confirmed slate is byte-identical -- verified today's 30
+starters were all confirmed. Reverse: STARTER_SIGNAL_USE_EXPECTED=false. (b) The
+frontend countdown was hardcoded to 21:00 UTC; now tip-relative via new
+`GET /slate/{date}` (first_tip_utc + freeze_target_utc = lock - freeze_lead,
+mirrors job2's deadline math), consumed by useSlateTiming -> Countdown; neutral
+caption when timing unknown. Backend 414 tests, ruff+mypy clean; frontend builds,
+5 vitest pass. See DECISIONS D104.
+2026-06-21 (D103, CRITICAL): restored cron-job1 + cron-job1-late
 startCommands. Both had been silently overwritten to `oracle-cron --job backfill`
 (the on-demand head-features backfill) during today's corpus rebuild -- left
 uncorrected, tomorrow's 13:00 cron-job1 would have run backfill, produced NO

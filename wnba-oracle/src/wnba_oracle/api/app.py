@@ -37,9 +37,11 @@ def create_app() -> FastAPI:
         return {"service": "wnba-oracle", "version": __version__}
 
     from wnba_oracle.api.lineup import router as lineup_router
+    from wnba_oracle.api.slate import router as slate_router
     from wnba_oracle.api.watchdog import router as watchdog_router
 
     app.include_router(lineup_router)
+    app.include_router(slate_router)
     app.include_router(watchdog_router)
 
     return app

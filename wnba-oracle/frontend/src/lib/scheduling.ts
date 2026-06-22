@@ -1,18 +1,13 @@
-// Time-to-next-freeze helper. cron-job2 first fires at 21:00 UTC (4 PM
-// CDT / 5 PM EDT) — that is when today's lineup actually lands in the
-// `frozen_lineups` table. cron-job1 (the data fetch) fires earlier at
-// 13:00 UTC but produces nothing user-visible; pointing the countdown
-// at 21:00 UTC matches what the operator is actually waiting for.
+// Countdown helpers. The freeze is tip-relative (job2 freezes at
+// first_tip - freeze_lead_minutes, D93/D104), so the target comes from the
+// API's /slate/{date} endpoint (freeze_target_utc); there is no hardcoded
+// wall-clock slot here. These helpers are pure so they can be unit-tested.
 
-const FREEZE_HOUR_UTC = 21;
-
-export function nextFreezeUTC(now: Date = new Date()): Date {
-  const next = new Date(now);
-  next.setUTCHours(FREEZE_HOUR_UTC, 0, 0, 0);
-  if (next.getTime() <= now.getTime()) {
-    next.setUTCDate(next.getUTCDate() + 1);
-  }
-  return next;
+export function msUntil(targetIso: string | null, nowMs: number): number | null {
+  if (!targetIso) return null;
+  const t = Date.parse(targetIso);
+  if (Number.isNaN(t)) return null;
+  return t - nowMs;
 }
 
 export function formatHMS(ms: number): string {

@@ -81,3 +81,23 @@ export async function fetchLatestLineup(): Promise<FrozenLineup | null> {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as FrozenLineup;
 }
+
+// Slate timing for the pre-freeze countdown. freeze_target_utc is
+// first_tip - freeze_lead_minutes (tip-relative T-40), so the loader clock
+// tracks the real freeze instead of a hardcoded slot. 404 until job1 captures
+// today's tip times, in which case the loader shows a neutral waiting caption.
+export type SlateTiming = {
+  slate_date: string;
+  first_tip_utc: string | null;
+  contest_lock_utc: string | null;
+  freeze_lead_minutes: number;
+  freeze_target_utc: string;
+};
+
+export async function fetchSlateTiming(): Promise<SlateTiming | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const r = await fetch(`${API_URL}/slate/${today}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()) as SlateTiming;
+}

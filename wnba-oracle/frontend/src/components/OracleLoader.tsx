@@ -23,12 +23,14 @@ interface Props {
   visible: boolean;
   fading?: boolean;
   mode?: "intro" | "waiting";
+  freezeTargetUtc?: string | null;
 }
 
 export function OracleLoader({
   visible,
   fading = false,
   mode = "waiting",
+  freezeTargetUtc = null,
 }: Props) {
   const [idx, setIdx] = useState(0);
 
@@ -65,7 +67,7 @@ export function OracleLoader({
           {ROTATION[idx]}
         </h2>
         {mode === "waiting" ? (
-          <Countdown />
+          <Countdown targetUtc={freezeTargetUtc} />
         ) : (
           <span className="oracle-label">Loading the oracle</span>
         )}

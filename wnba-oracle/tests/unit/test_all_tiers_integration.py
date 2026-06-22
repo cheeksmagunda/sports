@@ -26,6 +26,7 @@ def _all_tiers_settings() -> SimpleNamespace:
         model_artifact_sha=None,
         minutes_model_enabled=True,
         starter_signal_enabled=True,
+        starter_signal_use_expected=True,
         sampling_score_offset=2.0,
         game_script_minutes_enabled=True,
         availability_model_enabled=True,

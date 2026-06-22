@@ -99,6 +99,17 @@ class Settings(BaseSettings):
     # average can't know tonight's starting five). Default on; set
     # STARTER_SIGNAL_ENABLED=false to disable. See D52.
     starter_signal_enabled: bool = Field(default=True, alias="STARTER_SIGNAL_ENABLED")
+    # starter_signal_use_expected: act on RotoWire EXPECTED starters, not only
+    # CONFIRMED ones. Confirmed lineups for every game on a slate are not all
+    # posted by the T-40 freeze of the first tip (they land ~30-90 min before
+    # each game), so a confirmed-only gate silently ignores the starting five on
+    # the slate's later games. The expected lineup is available at the 13:00
+    # job1 scrape, so we act on it; an expected NON-starter stays neutral (the
+    # expected bench order is noisy) -- only a CONFIRMED bench is faded. Default
+    # on; set STARTER_SIGNAL_USE_EXPECTED=false to restore confirmed-only. See D104.
+    starter_signal_use_expected: bool = Field(
+        default=True, alias="STARTER_SIGNAL_USE_EXPECTED"
+    )
     # minutes_model_enabled: use the D55 minutes x rate blended predictor for
     # players job1 matched to nba_api game logs. The one signal orthogonal to
     # card_boost (corr 0.554 vs boost 0.246 walk-forward). Default on; set

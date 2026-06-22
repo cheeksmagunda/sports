@@ -10,6 +10,7 @@ import { LineupStack } from "../components/LineupStack";
 import { OracleLoader } from "../components/OracleLoader";
 import { SlateBand } from "../components/SlateBand";
 import { useLineupData } from "../hooks/useLineupData";
+import { useSlateTiming } from "../hooks/useSlateTiming";
 import { useTheme } from "../hooks/useTheme";
 
 const APP_VERSION =
@@ -70,6 +71,7 @@ export function PickerPage() {
   const { theme, toggle } = useTheme();
   const intro = useFirstMountLoader();
   const { uiState, lineup, error, refresh } = useLineupData();
+  const { freezeTargetUtc } = useSlateTiming();
 
   const view = useMemo(() => {
     if (uiState === "error") {
@@ -109,6 +111,7 @@ export function PickerPage() {
         visible={loaderVisible}
         fading={loaderFading}
         mode={loaderMode}
+        freezeTargetUtc={freezeTargetUtc}
       />
       <div className="app">
         <Header

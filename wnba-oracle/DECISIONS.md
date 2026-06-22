@@ -3608,3 +3608,68 @@ that asserts the dispatched job matches the service's intended role).
 
 **Reverse.** N/A (corrective). To re-run a manual backfill, use the
 `backfill-enrichment` service, never cron-job1/late.
+
+## 2026-06-21: D104 -- expected starters + tip-relative frontend countdown [verified]
+
+Operator-directed session. Two corrections so the live app honors T-40 and the
+starting five for *every* game on a slate, not just the games confirmed early.
+
+### D104a: starter signal acts on EXPECTED starters, not only CONFIRMED [verified]
+
+**Problem [verified].** The RotoWire role signal was gated on
+`rotowire_confirmed=1` in every consumer: `_starter_multiplier`
+(job2.py:255), the lineup-anchor flag (job2.py:624), `availability_probability`
+(availability.py:83), and `blended_real_score` (minutes.py:105). Confirmed
+lineups post ~30-90 min before each game, so for a multi-game slate they are not
+all out by the T-40 freeze of the FIRST tip. Tomorrow's slate (4 games, first
+tip 23:00 UTC) is captured by job1 at 13:04 UTC -- ~10h early, when RotoWire is
+all "Expected" -- and cron-job1-late's confirmed refresh has not been landing
+(`enrichment_stale` warns daily; capture stuck at the 13:0x job1 write). Net:
+under the old gate the starting five would have been IGNORED entirely tomorrow
+(`rotowire_confirmed=0` for the whole pool). The data is present -- job1 writes
+`is_starter` (RotoWire-listed in the top five) and `starter_slot` independent of
+confirmation -- but nothing consumed it without the confirmed flag.
+
+**Fix [verified].** New `_effective_confirmed(f, use_expected) = confirmed OR
+(use_expected AND is_starter)`, threaded through all four consumers via one
+`eff_confirmed` per player in `_build_specs`. The expression is deliberately
+one-directional: it only promotes an expected-but-not-confirmed STARTER from
+"no info" to "starter"; an expected non-starter stays neutral (RotoWire's
+expected bench order is noisy -- only a CONFIRMED bench is faded), and an
+unlisted player stays neutral. Consequence: a fully-confirmed slate is
+unchanged. Verified against today's live enrichment -- all 30 starters were
+already confirmed (is_starter_sum == rotowire_confirmed_sum == 30), so today's
+frozen lineup is byte-identical under the change; only partial-confirmation days
+(every multi-game evening slate at T-40) gain the signal.
+
+**Reverse [verified].** `STARTER_SIGNAL_USE_EXPECTED=false` on cron-job2 restores
+confirmed-only with no redeploy. Tests: `test_starter_signal.py` grows to 11
+(expected-starter boost, expected-bench neutral, use_expected=false reversal,
+`_effective_confirmed` truth table); 3 SimpleNamespace settings stubs updated.
+
+### D104b: frontend countdown is tip-relative T-40, no hardcoded slot [verified]
+
+**Problem [verified].** `frontend/src/lib/scheduling.ts` hardcoded
+`FREEZE_HOUR_UTC = 21`; the loader counted down to a fixed 21:00 UTC regardless
+of the slate's actual first tip. The backend already freezes at
+`first_tip - freeze_lead_minutes` (D93), so the on-screen clock could disagree
+with the real freeze by hours (today: tip 20:00 -> freeze gate 19:20, clock
+showed 21:00).
+
+**Fix [verified].** New read-only `GET /slate/{date}` endpoint (api/slate.py)
+exposes `first_tip_utc` and `freeze_target_utc = lock - freeze_lead_minutes`,
+mirroring `job2._freeze_deadline_utc` exactly (contest_lock_utc, else
+first_tip_utc; minus settings.freeze_lead_minutes). Verified live: 2026-06-21 ->
+freeze_target 19:20 UTC; tomorrow 404 until job1 runs. Frontend: `useSlateTiming`
+polls it; `Countdown` counts down to `freeze_target_utc` (pure `msUntil` helper)
+and shows a neutral "freezes ~40 min before first tip" caption when timing is
+unknown (pre-job1 or no slate) instead of a misleading number. `nextFreezeUTC`
+and the hardcoded hour are deleted. Tests: `scheduling.test.ts` (5, vitest),
+`test_slate_api.py` (4: T-40 math, explicit-lock precedence, both 404 paths).
+
+**Quality gates.** Backend 414 unit tests pass (was 410), ruff + mypy clean on
+src/; frontend `tsc -b && vite build` clean, 5 vitest pass.
+
+**Reverse.** Revert the frontend commit (countdown falls back to the neutral
+caption if `/slate` is unreachable, so the API endpoint is additive and safe to
+keep). The `/slate` route is read-only and cannot affect the freeze path.
