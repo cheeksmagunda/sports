@@ -96,5 +96,5 @@ scraper/
 
 # Playwright MCP debug artifacts (per-session snapshots + console logs)
 .playwright-mcp/
-.pgssl/
+.pgssl/server.key
 data/backups/
