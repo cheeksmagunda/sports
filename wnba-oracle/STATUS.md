@@ -198,9 +198,10 @@ the live collector has accumulated >= 7 slate labels in `slate_labels`.
   fields onto existing enrichment (no Odds/props re-fetch). Fanned across the
   afternoon+evening so every slate gets confirmed starters before its T-40
   freeze. No Real Sports auth needed (RotoWire + DB only).
-- cron-job2: `*/15 14-23,0-3 * * *` UTC -- run heads + optimizer, freeze lineup
-  to Redis + Postgres (tip-relative T-40, D93). Late re-freeze when
-  LATE_REFREEZE_ENABLED (D75).
+- cron-job2: `*/5 14-23,0-3 * * *` UTC -- run heads + optimizer, freeze lineup
+  to Redis + Postgres (tip-relative T-40, D93). Changed from */15 to */5 on
+  2026-06-22 to cut worst-case freeze lag from 15 min to 5 min after T-40.
+  Late re-freeze when LATE_REFREEZE_ENABLED (D75).
 - cron-dayclose: `0 6 * * *` UTC -- extend corpus from finalized contest ids
   (D41/D60, service id 606d950d) + nightly wnba_game_logs refresh (D102/#28,
   WNBA_DAYCLOSE_REFRESH_GAMELOGS).
