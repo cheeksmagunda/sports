@@ -16,8 +16,10 @@ fi
 echo "==> Installing Python deps"
 uv sync --extra dev
 
-echo "==> Installing Playwright Chromium"
-uv run playwright install chromium --with-deps
+echo "==> Installing Playwright Chromium (best-effort -- routines don't need it)"
+uv run playwright install chromium --with-deps 2>/dev/null \
+  || uv run playwright install chromium 2>/dev/null \
+  || echo "    WARN -- Playwright install failed (no sudo); skipping. JWT refresh will need a machine with Playwright."
 
 echo "==> Loading credentials"
 if [[ -f ".claude/credentials.env" ]]; then
