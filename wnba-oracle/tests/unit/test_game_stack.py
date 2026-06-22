@@ -28,7 +28,6 @@ from wnba_oracle.picker.optimize import (
 from wnba_oracle.picker.payout import default_curve_for_regime
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 
-
 # -- pure helper --------------------------------------------------------------
 
 
@@ -136,7 +135,6 @@ def test_game_stack_bonus_on_prefers_stacks_at_equal_ev() -> None:
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     # Resolve teams + opponents from the field specs.
-    by_pid = {f.player_id: f for f in fields}
     spec_by_pid = {s.player_id: s for s in samps}
     teams = [spec_by_pid[p].team for p in rec.player_ids]
     opps = [spec_by_pid[p].opponent for p in rec.player_ids]

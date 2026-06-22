@@ -25,7 +25,6 @@ from wnba_oracle.picker.optimize import (
 from wnba_oracle.picker.payout import default_curve_for_regime
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 
-
 # -- pure cap-check helpers ---------------------------------------------------
 
 

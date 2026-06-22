@@ -15,8 +15,6 @@ recovers the missed pids.
 
 from __future__ import annotations
 
-import json
-
 import httpx
 import pytest
 

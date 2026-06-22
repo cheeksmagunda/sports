@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import polars as pl
-import pytest
 
 from wnba_oracle.features.corpus import _enrich_corpus_matchup
 
