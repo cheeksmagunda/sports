@@ -52,10 +52,6 @@ models/artifacts/
 # deploy ships it. To bump the served model: train a new artifact via
 # `oracle-train`, then add another `!models/picker_<new-sha>.pkl` line
 # below + update WNBA_ORACLE_MODEL_ARTIFACT_SHA on Railway.
-!models/picker_cfe5868_1779880756.pkl
-!models/picker_cfe5868_1779880756.sha256
-!models/picker_2a2fe836_1779943299.pkl
-!models/picker_2a2fe836_1779943299.sha256
 !models/picker_bf3c8996_1780752059.pkl
 !models/picker_bf3c8996_1780752059.sha256
 !models/picker_e2ced9ec_1780873338.pkl

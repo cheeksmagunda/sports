@@ -24,6 +24,13 @@ install:
 test:
 	uv run python -m pytest tests/ -q
 
+test-contract:
+	uv run python -m pytest tests/ -m contract -v
+
+test-all:
+	uv run python -m pytest tests/ -q
+	uv run python -m pytest tests/ -m contract -v
+
 lint:
 	uv run ruff check src/ tests/
 
