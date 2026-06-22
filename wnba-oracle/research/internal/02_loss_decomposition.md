@@ -10,8 +10,8 @@ Data sources [verified]:
 - `frozen_lineups` (n=10, 2026-05-27 to 2026-06-05, 9 with realized scores)
 - `slate_labels` (141 slates, 2025-05-16 to 2026-06-04)
 - `contest_leaderboards` (top-20 only, 141 slates)
-- `/Users/hanslarson/Desktop/wnba-oracle/research/internal/_loss_decomp.py`
-- `/Users/hanslarson/Desktop/wnba-oracle/research/internal/_loss_decomp_data.csv` (40 rows)
+- `research/internal/_loss_decomp.py`
+- `research/internal/_loss_decomp_data.csv` (40 rows)
 
 Method: for each slate, brute-force `C(N,5)` over the menu under the prod
 team-cap (dynamic cap by slate size, max 2 on 3+ game slates) to find

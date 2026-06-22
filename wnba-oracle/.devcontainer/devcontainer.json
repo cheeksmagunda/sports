@@ -1,0 +1,39 @@
+{
+  "name": "WNBA Oracle",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "postCreateCommand": "bash .devcontainer/postCreate.sh",
+
+  "forwardPorts": [8000, 5173],
+  "portsAttributes": {
+    "8000": { "label": "API", "onAutoForward": "notify" },
+    "5173": { "label": "Frontend", "onAutoForward": "notify" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.mypy-type-checker",
+        "charliermarsh.ruff",
+        "ms-python.vscode-pylance",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "[python]": { "editor.defaultFormatter": "charliermarsh.ruff" }
+      }
+    }
+  },
+
+  "remoteEnv": {
+    "PGSSLROOTCERT": "${containerWorkspaceFolder}/.pgssl/server.crt"
+  }
+}

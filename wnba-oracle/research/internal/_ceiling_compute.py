@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-ROOT = Path('/Users/hanslarson/Desktop/wnba-oracle')
+ROOT = Path(__file__).resolve().parents[2]
 SLATE_DIR = ROOT / 'data/historical/slate_labels'
 LB_DIR    = ROOT / 'data/historical/leaderboards'
 OUT_DIR   = ROOT / 'research/internal'

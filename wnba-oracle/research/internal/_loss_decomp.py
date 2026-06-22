@@ -393,7 +393,8 @@ def main():
         results.append(r)
 
     df = pd.DataFrame(results)
-    df.to_csv("/Users/hanslarson/Desktop/wnba-oracle/research/internal/_loss_decomp_data.csv", index=False)
+    out = Path(__file__).resolve().parent / "_loss_decomp_data.csv"
+    df.to_csv(out, index=False)
     print(f"\nWrote {len(df)} rows")
     print(df.head().to_string())
 
