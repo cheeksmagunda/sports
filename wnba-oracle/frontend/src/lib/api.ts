@@ -33,6 +33,14 @@ export type FrozenLineup = {
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
+function localSlateDate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // ?demo=1 returns a synthetic frozen lineup so the UI can be screenshotted
 // before the first real cron-job1 fire. Defined inside the
 // import.meta.env.DEV block so esbuild drops the whole fixture + lookup
@@ -75,7 +83,7 @@ function demoFixture(): FrozenLineup | null {
 export async function fetchLatestLineup(): Promise<FrozenLineup | null> {
   const demo = demoFixture();
   if (demo) return demo;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localSlateDate();
   const r = await fetch(`${API_URL}/lineup/${today}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -95,7 +103,7 @@ export type SlateTiming = {
 };
 
 export async function fetchSlateTiming(): Promise<SlateTiming | null> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localSlateDate();
   const r = await fetch(`${API_URL}/slate/${today}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
