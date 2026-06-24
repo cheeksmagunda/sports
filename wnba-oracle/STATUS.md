@@ -437,3 +437,4 @@ the live collector accumulates enough slates (Part 0.4 deliverable list).
 
 [2026-06-22 14:00 UTC audit] Status: OK. Pool: healthy (no watchdog pool/model events). Freeze target: 22:20 UTC. Issues fixed: none.
 [2026-06-23 14:00 UTC audit] Status: OK. Pool: 28 players, 1 game. Freeze target: 01:20 UTC (Jun 24). Issues fixed: none. Notes: config_drift WARN from cron-job1 watchdog is the known false positive (#30) -- cron-job2 watchdog_clean confirms freeze knobs intact.
+[2026-06-24 14:00 UTC audit] Status: OK. Pool: 120 players, 4 games. Freeze target: 22:50 UTC. Frontend: OK (toISOString=0, getFullYear=1, VITE_API_URL correct). Issues fixed: none. Notes: cron-job2 watchdog_clean at 14:16:48 UTC (optimizer evaluated 9777 lineups, expected_payout 1.2942, entry_flag enter); /watchdog/today still shows the known cron-job1 config_drift false-positive (#30). Odds quota 486 remaining.
