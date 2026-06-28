@@ -12,6 +12,7 @@ Invoked by Railway's cron with:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from wnba_oracle.common.logging import configure_logging, get_logger
@@ -31,9 +32,24 @@ def main() -> int:
     configure_logging(settings.log_level)
     log = get_logger("oracle.cron")
 
+    # D107: cron-role self-check (#33). Prevents D103-style silent misconfigurations
+    # where a cron service's start command was overwritten to the wrong --job.
+    # Each Railway service sets WNBA_CRON_ROLE to its intended role. If the CLI
+    # --job does not match, abort immediately with a critical log.
+    intended_role = os.environ.get("WNBA_CRON_ROLE", "").strip()
+    if intended_role and args.job != intended_role:
+        log.critical(
+            "cron_role_mismatch_abort",
+            expected_role=intended_role,
+            actual_job=args.job,
+            msg="WNBA_CRON_ROLE env var does not match --job CLI arg; aborting to prevent silent misconfiguration",
+        )
+        return 1
+
     log.info(
         "cron_dispatch",
         job=args.job,
+        role=intended_role or "(unchecked)",
         env=settings.env,
         has_database_url=bool(settings.database_url),
         has_redis_url=bool(settings.redis_url),

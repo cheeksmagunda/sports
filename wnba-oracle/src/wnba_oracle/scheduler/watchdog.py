@@ -493,6 +493,49 @@ def _check_feature_content(slate_date: str) -> list[WatchdogEvent]:
     return out
 
 
+ENRICHMENT_SOURCE_Q = text(
+	"""
+	SELECT COUNT(*)::int AS n_total,
+	       COUNT(*) FILTER (
+		   WHERE features_json ? 'vegas_total'
+		   OR features_json ? 'minutes_l5'
+		   OR features_json ? 'is_starter'
+	   )::int AS n_live_enriched
+	FROM job1_enrichment WHERE slate_date = :sd
+	"""
+)
+
+
+def _check_enrichment_source(slate_date: str) -> list[WatchdogEvent]:
+	"""D107 (#33): detect if enrichment was produced by --job backfill instead of
+	live job1. Backfill fills only player_id/name/team, skipping vegas, rotowire,
+	and minutes features. If rows exist but NONE have live-enrichment fields
+	(vegas_total, minutes_l5, is_starter), the pool is useless and job2 will
+	freeze on empty/heuristic data.
+	"""
+	eng = get_engine()
+	with eng.connect() as conn:
+		row = conn.execute(ENRICHMENT_SOURCE_Q, {"sd": slate_date}).first()
+	n_total = int(row[0]) if row and row[0] is not None else 0
+	n_live = int(row[1]) if row and row[1] is not None else 0
+	if n_total < 10:
+		return []  # tiny/empty pool is the _check_pool checks' job
+	if n_live == 0:
+		# All rows exist but with zero live enrichment fields: backfill-produced
+		return [
+			WatchdogEvent(
+				slate_date=slate_date,
+				trigger="enrichment_from_backfill",
+				severity=SEVERITY_CRITICAL,
+				payload={
+					"n_rows": n_total,
+					"note": "no vegas/rotowire/minutes fields; cron--job backfill was run instead of live job1"
+				},
+			)
+		]
+	return []
+
+
 def _check_config_drift(slate_date: str, *, settings: object | None = None) -> list[WatchdogEvent]:
     """Warn when the live serving config has drifted from the validated prod
     values (e.g. an env wipe reverted a tuned knob to its safe-off default).
@@ -526,6 +569,7 @@ def run_watchdog(
     events: list[WatchdogEvent] = []
     events.extend(_check_pool(slate_date))
     events.extend(_check_enrichment_freshness(slate_date, now_utc=now_utc))
+    events.extend(_check_enrichment_source(slate_date))
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
     events.extend(_check_model_artifact(slate_date))
     events.extend(_check_feature_content(slate_date))
