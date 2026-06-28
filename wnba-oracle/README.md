@@ -45,13 +45,18 @@ caps.
 
 ```sh
 make install          # uv sync + playwright install chromium
-source scripts/dev.sh # verifies credentials, sets env
+bash scripts/dev.sh   # verify 5 credentials in .claude/settings.local.json
 make test             # unit tests
 make lint             # ruff
 make typecheck        # mypy strict on src/
 make dev              # uvicorn :8000 with reload
 make migrate          # alembic upgrade head
 ```
+
+**Credentials:** All 5 credentials (GitHub, Railway, Odds API, Real Sports) are
+stored in `.claude/settings.local.json` (gitignored, machine-local). Config values
+(DATABASE_URL, REDIS_URL, model SHA, etc.) live on Railway and are not needed
+for local development.
 
 Determinism gate (run before pushing any change to training code):
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Full dev startup script. Sources .env, verifies every credential, prints
-# status, updates STATUS.md timestamp. Designed for interactive runs.
-# The lightweight subset for the SessionStart hook lives in verify-creds.sh.
+# Local dev startup: verify credentials from .claude/settings.local.json,
+# check connectivity to GitHub/Railway/Odds API. Config values (DATABASE_URL,
+# REDIS_URL, model SHA, etc.) live on Railway only and are not needed locally.
 
 set -u
 set -o pipefail
@@ -9,29 +9,40 @@ set -o pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-if [ ! -f .env ]; then
-  echo "[FATAL] .env missing at repo root."
+# Load credentials from Claude Code settings
+SETTINGS_FILE=".claude/settings.local.json"
+if [ ! -f "$SETTINGS_FILE" ]; then
+  echo "[FATAL] $SETTINGS_FILE missing. Claude credentials not configured."
   exit 1
 fi
 
-set -a
-# shellcheck disable=SC1091
-source ./.env
-set +a
+# Extract credentials from settings.local.json using python
+read -r GITHUB_TOKEN RAILWAY_TOKEN ODDS_API_KEY RS_USER RS_PASS < <(
+  python3 -c "
+import json
+settings = json.load(open('$SETTINGS_FILE'))
+env = settings.get('env', {})
+print(
+  env.get('GITHUB_TOKEN', ''),
+  env.get('RAILWAY_TOKEN', ''),
+  env.get('ODDS_API_KEY', ''),
+  env.get('REAL_SPORTS_USERNAME', ''),
+  env.get('REAL_SPORTS_PASSWORD', '')
+)
+" 2>/dev/null || echo "     "
+)
 
 ok()   { printf "  [OK]   %s\n" "$1"; }
 warn() { printf "  [WARN] %s\n" "$1"; }
 fail() { printf "  [FAIL] %s\n" "$1"; }
 
 printf "wnba-oracle credential check (%s)\n" "$(date -u +%FT%TZ)"
+printf "Architecture: Local credentials from settings.local.json, config on Railway\n\n"
 
 # GitHub
-if [ -z "${GITHUB_TOKEN:-}" ]; then
-  fail "GITHUB_TOKEN missing"
+if [ -z "$GITHUB_TOKEN" ]; then
+  fail "GITHUB_TOKEN missing from settings.local.json"
 else
-  # gh auth status exits non-zero if ANY known account is stale, even when our
-  # env token works. Capture the output first (pipefail otherwise kills the
-  # pipeline before grep runs) and look for "Logged in ... (GH_TOKEN)".
   gh_out=$(GH_TOKEN="$GITHUB_TOKEN" gh auth status 2>&1 || true)
   if printf '%s\n' "$gh_out" | grep -q "Logged in to github.com .* (GH_TOKEN)"; then
     ok "GITHUB_TOKEN (gh recognizes env token)"
@@ -40,10 +51,9 @@ else
   fi
 fi
 
-# Railway. CLI rejects workspace tokens; smoke via GraphQL projects query
-# (NOT `me`, which fails on workspace tokens). See DECISIONS.md.
-if [ -z "${RAILWAY_TOKEN:-}" ]; then
-  fail "RAILWAY_TOKEN missing"
+# Railway (GraphQL, not CLI)
+if [ -z "$RAILWAY_TOKEN" ]; then
+  fail "RAILWAY_TOKEN missing from settings.local.json"
 else
   resp=$(curl -sS -X POST https://backboard.railway.com/graphql/v2 \
     -H "Authorization: Bearer $RAILWAY_TOKEN" \
@@ -51,17 +61,17 @@ else
     -d '{"query":"query{projects{edges{node{id name}}}}"}' \
     --max-time 10 || true)
   if echo "$resp" | grep -q 'wnba-oracle'; then
-    ok "RAILWAY_TOKEN (workspace token reaches GraphQL, wnba-oracle visible)"
+    ok "RAILWAY_TOKEN (workspace token, wnba-oracle visible)"
   elif echo "$resp" | grep -q '"data"'; then
-    warn "RAILWAY_TOKEN GraphQL ok but wnba-oracle project not in listing"
+    warn "RAILWAY_TOKEN GraphQL ok but wnba-oracle not in listing"
   else
     fail "RAILWAY_TOKEN GraphQL probe failed"
   fi
 fi
 
-# The Odds API. Free /v4/sports endpoint; no quota burn.
-if [ -z "${ODDS_API_KEY:-}" ]; then
-  fail "ODDS_API_KEY missing"
+# Odds API
+if [ -z "$ODDS_API_KEY" ]; then
+  fail "ODDS_API_KEY missing from settings.local.json"
 else
   http_code=$(curl -sS -o /dev/null -w '%{http_code}' \
     "https://api.the-odds-api.com/v4/sports?apiKey=$ODDS_API_KEY" --max-time 10)
@@ -72,69 +82,19 @@ else
   fi
 fi
 
-# Real Sports. No lightweight check exists. Deferred to Playwright run.
-if [ -z "${REAL_SPORTS_USERNAME:-}" ] || [ -z "${REAL_SPORTS_PASSWORD:-}" ]; then
-  fail "REAL_SPORTS_USERNAME / REAL_SPORTS_PASSWORD missing"
+# Real Sports
+if [ -z "$RS_USER" ] || [ -z "$RS_PASS" ]; then
+  fail "REAL_SPORTS_USERNAME / REAL_SPORTS_PASSWORD missing from settings.local.json"
 else
   warn "REAL_SPORTS_* present (verification deferred to first Playwright run)"
 fi
 
-# Claude Code OAuth token. Empty is acceptable; warn only.
-if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-  warn "CLAUDE_CODE_OAUTH_TOKEN empty (human runs interactively; not fatal)"
-else
-  ok "CLAUDE_CODE_OAUTH_TOKEN present"
-fi
-
-# Database / Redis. Empty until Railway provisioning completes.
-if [ -z "${DATABASE_URL:-}" ]; then
-  warn "DATABASE_URL empty (populate after Railway Postgres provisioning)"
-else
-  ok "DATABASE_URL set"
-fi
-if [ -z "${REDIS_URL:-}" ]; then
-  warn "REDIS_URL empty (populate after Railway Redis provisioning)"
-else
-  ok "REDIS_URL set"
-fi
-
-# Tooling presence
+# Tooling
 command -v claude >/dev/null 2>&1 && ok "claude CLI present" || warn "claude CLI missing"
 command -v uv >/dev/null 2>&1 && ok "uv present" || warn "uv missing"
 command -v gh >/dev/null 2>&1 && ok "gh present" || warn "gh missing"
 
-# Credential rotation reminder. Tracks ages in .credential-ages.json.
-AGES_FILE=".credential-ages.json"
-if [ -f "$AGES_FILE" ]; then
-  python3 - <<'PY'
-import json, datetime, pathlib, sys
-p = pathlib.Path(".credential-ages.json")
-try:
-    data = json.loads(p.read_text())
-except Exception:
-    sys.exit(0)
-today = datetime.date.today()
-for name, iso in data.items():
-    try:
-        d = datetime.date.fromisoformat(iso)
-    except Exception:
-        continue
-    age = (today - d).days
-    if age > 90:
-        print(f"  [WARN] credential {name} is {age} days old; consider rotation")
-PY
-fi
-
-# Update STATUS.md last-verified timestamp if file exists.
-if [ -f STATUS.md ]; then
-  ts="$(date -u +%FT%TZ)"
-  if grep -q '^last_verified:' STATUS.md; then
-    if [ "$(uname)" = "Darwin" ]; then
-      sed -i '' -E "s/^last_verified:.*/last_verified: ${ts}/" STATUS.md
-    else
-      sed -i -E "s/^last_verified:.*/last_verified: ${ts}/" STATUS.md
-    fi
-  fi
-fi
-
-echo "Done."
+echo ""
+echo "Config values (DATABASE_URL, REDIS_URL, WNBA_ORACLE_MODEL_ARTIFACT_SHA, etc.)"
+echo "live on Railway and are not needed locally. Run 'make dev' to start."
+echo ""

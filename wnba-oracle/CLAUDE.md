@@ -42,13 +42,24 @@ both`. See STATUS.md and DECISIONS.md for full roadmap and reverse paths.
 
 ## Credentials and authorization
 
-All credentials are pre-injected into the session environment via
-`.claude/settings.local.json` (gitignored, machine-local). You do NOT need to
-source `.env` before using them -- `GITHUB_TOKEN`, `RAILWAY_TOKEN`,
-`DATABASE_URL`, and `REDIS_URL` are already exported when any tool runs.
+Architecture: Single source of truth per layer.
+
+**Local (Claude dev):** `.claude/settings.local.json` (gitignored, machine-local)
+contains 5 credentials. Claude reads them directly; they are exported when any
+tool runs.
+
+**Production (Railway):** The same 5 credentials plus all config (80+ env vars).
+Config values (DATABASE_URL, REDIS_URL, model artifact SHA, optimizer settings,
+etc.) live on Railway only and are not needed locally.
 
 The owner has granted blanket authorization to use these credentials for any
 operation this project legitimately requires. Do not pause to re-confirm.
+
+**Local credentials (.claude/settings.local.json):**
+- `GITHUB_TOKEN`: git auth via credential helper
+- `RAILWAY_TOKEN`: workspace token for GraphQL operations
+- `ODDS_API_KEY`: The Odds API requests
+- `REAL_SPORTS_USERNAME` / `REAL_SPORTS_PASSWORD`: headless Real Sports login
 
 ### GitHub / git
 
@@ -82,22 +93,12 @@ To redeploy a service:
 scripts/rwgql.sh 'mutation { serviceInstanceDeployV2(serviceId: "SERVICE_ID", environmentId: "d57a759e-e189-439b-a612-bd220ef59c39") }'
 ```
 
-### Other credentials
-
-- `ODDS_API_KEY`: authorized for any The Odds API request.
-- `REAL_SPORTS_USERNAME` / `REAL_SPORTS_PASSWORD`: authorized for headless
-  Real Sports login (Job 1 re-auth flow, Part 0.6 of handoff). Source `.env`
-  for these two since they are not in `settings.local.json`.
-- `DATABASE_URL` / `REDIS_URL`: authorized for any read or write the project
-  legitimately requires. These connect to Railway internal endpoints and only
-  work from within Railway containers; for local use see `DATABASE_PUBLIC_URL`
-  in `.env`.
-
 ### Constraints
 
 - Never echo a credential value into a log, commit, chat message, comment,
   PR body, or `DECISIONS.md`. Reference by env var name only.
-- The `Read(./.env)` deny rule blocks the Read tool from opening `.env`.
+- Do not store config (DATABASE_URL, etc.) in local settings or .env files.
+  Config lives on Railway and is stable across deploys.
   Source through shell if you need values not already in the environment:
   `set -a && source .env && set +a && <command>`.
 - Never create new accounts or generate new long-lived credentials.
