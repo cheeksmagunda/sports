@@ -35,12 +35,7 @@ from scipy.stats import spearmanr
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
-from wnba_oracle.predict.form import (
-    FormConfig,
-    boost_prior,
-    player_volatility,
-    predict_real_scores,
-)
+from wnba_oracle.predict.base import boost_prior, player_volatility
 from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
 
 
@@ -73,8 +68,7 @@ def predictor_quality(corpus: pd.DataFrame, slates: list[str]) -> None:
     print("=" * 74)
     print("PART 1: PREDICTOR QUALITY (walk-forward, no leakage, no optimizer)")
     print("=" * 74)
-    cfg = FormConfig()
-    rows = {k: {"rho": [], "recov": []} for k in ("boost_only", "eb_wf", "form")}
+    rows = {k: {"rho": [], "recov": []} for k in ("boost_only", "eb_wf")}
     for sd in slates:
         history = corpus[corpus["slate_date"] < sd]
         pool = corpus[corpus["slate_date"] == sd].drop_duplicates("player_id")
@@ -87,7 +81,6 @@ def predictor_quality(corpus: pd.DataFrame, slates: list[str]) -> None:
         preds = {
             "boost_only": {p: boost_prior(b) for p, b in boost_by.items()},
             "eb_wf": eb_walkforward_pred(history, pool),
-            "form": predict_real_scores(prior, boost_by, cfg=cfg),
         }
         pids = [int(r.player_id) for r in pool.itertuples()]
         boosts = [float(r.card_boost) for r in pool.itertuples()]
@@ -99,11 +92,11 @@ def predictor_quality(corpus: pd.DataFrame, slates: list[str]) -> None:
             pred_top5 = set(np.argsort(cv)[::-1][:5].tolist())
             rows[name]["recov"].append(len(pred_top5 & top8))
     print(f"  {'predictor':12s} {'mean Spearman':>14s} {'top-5 recovers of top-8':>26s}")
-    for name in ("boost_only", "eb_wf", "form"):
+    for name in ("boost_only", "eb_wf"):
         print(f"  {name:12s} {np.mean(rows[name]['rho']):>+14.3f} "
               f"{np.mean(rows[name]['recov']):>22.2f}/5")
     print("\n  (boost_only is the no-player-signal floor; eb_wf is the honest"
-          " version of\n   today's model; form should beat both if recency helps.)")
+          " version of\n   today's model.)")
 
 
 def _load_drafts_by_slate() -> dict[str, dict[int, int]]:

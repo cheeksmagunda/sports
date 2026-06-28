@@ -29,7 +29,7 @@ from wnba_oracle.picker.popularity import (
     slate_labels_to_popularity,
 )
 from wnba_oracle.picker.sample import PlayerSamplingSpec
-from wnba_oracle.predict.form import boost_prior, player_volatility
+from wnba_oracle.predict.base import boost_prior, player_volatility
 
 SLOTS = [2.0, 1.8, 1.6, 1.4, 1.2]
 

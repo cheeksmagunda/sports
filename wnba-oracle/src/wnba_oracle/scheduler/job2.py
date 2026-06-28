@@ -49,7 +49,7 @@ from wnba_oracle.picker.popularity import (
 from wnba_oracle.picker.sample import PlayerSamplingSpec, ceiling_adjusted_sigma_log
 from wnba_oracle.predict.archetypes import ArchetypeInput, classify_pool
 from wnba_oracle.predict.availability import AvailabilityConfig, availability_probability
-from wnba_oracle.predict.form import player_volatility
+from wnba_oracle.predict.base import player_volatility
 from wnba_oracle.predict.minutes import MinutesConfig, blended_real_score
 from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
