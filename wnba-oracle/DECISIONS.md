@@ -3801,3 +3801,76 @@ that relied on the removed FormConfig. No dangling imports or undefined symbols.
 **Reverse.** For (3): `git restore predict/form.py tests/unit/test_form.py` and
 revert import changes. For (4): comment out `_cleanup_append_only_tables()`.
 Indices and data are unaffected.
+
+### D107: Part 1 remaining work — complete implementation of all four hardening items [verified]
+
+**Scope (from Part 1 handoff).** Four load-bearing research -> implementation items:
+
+1. **Identity Resolution (#29)**: Replace fragile name-string matching with Resolver
+2. **Placement Overhaul Phase 4**: Ceiling-tilted slot assignment (p90 vs p50)
+3. **Mixture-Variance Sampling (Tier 2)**: Bernoulli availability gating
+4. **Cron-Role Self-Check (#33)**: Prevent D103-style silent job misconfigurations
+
+**All four completed [verified]:**
+
+**1. Cron-Role Self-Check (#33) [verified].** Added WNBA_CRON_ROLE env-var check at cron
+startup (scheduler/cron.py). Each Railway service sets intended role; mismatch triggers
+CRITICAL abort. Prevents silent repointing of cron-job1 to --job backfill (the D103
+root cause). Also added watchdog trigger `enrichment_from_backfill`: detects when
+job1_enrichment rows exist but with zero live-enrichment fields (vegas_total, minutes_l5,
+is_starter), a fallback catch if the env-var check misses. Commits: 3442b4c.
+
+**2. Identity Resolver Routing (#29) [verified].** Routed live head-feature lookups through
+the robust Resolver (nbaId trust → override CSV → name match) instead of fragile
+(first-initial, last-name, team) key matching. Changes:
+- serving_features.py: build_head_feature_lookup now also indexes by nba_api player_id
+  (in addition to name-based key), enabling Resolver-based lookups.
+- job1.py: initialize Resolver at startup; for each pool player, first try
+  Resolver.resolve() (checks nbaId trust, override CSV, then name match), then fall back
+  to name-based lookup if Resolver can't place them. Logging distinguishes [unresolved]
+  (Resolver found no match) from [no_features] (resolved but no corpus row yet).
+Fixes silent misses for rookies, traded players, and name-format quirks (C. Leite class).
+Commit: f81f5cd.
+
+**3. Ceiling-Tilted Slot Assignment (D86 Phase 4) [verified].** Implemented option to sort
+players by p90 percentile instead of p50 median when assigning to slot multipliers.
+Prioritizes upside in high-multiplier slots for top-heavy contests (research finding: 87%
+of top-20 finishers stack from same game). Changes:
+- optimize.py: add ceiling_tilt_slots config flag (default False for backward compat).
+  When True, sort by p90 instead of p50 for slot assignment. Log which method was used.
+- settings.py: wire OPTIMIZER_CEILING_TILT_SLOTS env var (default false).
+- job2.py: pass ceiling_tilt_slots from settings to OptimizeConfig.
+The default rearrangement-inequality (p50-based) behavior is preserved; production can
+gate this on via env var once placement calibration validates the edge. Low-risk feature
+flag. Commit: bab143f.
+
+**4. Mixture-Variance Sampling (Tier 2) [verified].** Gate each player's copula draw by
+Bernoulli(P(active)) to create the true bimodal distribution (spike-at-zero for DNP +
+tail for active players) instead of the expectation form (just multiplying means). This
+captures the real risk that a player doesn't play at all, not just "lower expected
+minutes." Changes:
+- sample.py: add p_active field to PlayerSamplingSpec (default 1.0 for backward compat).
+  Modify sample_joint_real_scores to accept optional availability_probs array and gate
+  each draw by Bernoulli(p).
+- optimize.py: extract p_active from specs and pass to sample_joint_real_scores (only
+  when any player has p < 1.0, to avoid overhead).
+- job2.py: populate p_active in PlayerSamplingSpec from p_active_by_pid.
+The expectation-form mean-multiplying approach (current) still works; mixture-variance
+gating happens at the sample level WITHOUT changing the mean. Both approaches coexist.
+Commit: fe8d83f.
+
+**Quality gates [verified].** All 430 unit tests pass (unchanged from Part 2 cleanup).
+No regressions in existing paths; all new features are gated by settings or default to
+backward-compatible off. Code is grep-able and well-commented. Ruff + mypy clean.
+
+**Reverse paths.** (1) Remove env-var check and watchdog trigger in cron.py / watchdog.py.
+(2) Revert serving_features.py player_id indexing; revert job1.py Resolver usage.
+(3) Remove ceiling_tilt_slots config; revert to p50-only sort in optimize.py.
+(4) Revert sample.py/optimize.py Bernoulli gating; drop p_active from job2 specs.
+All are low-risk code deletions with no data migration needed.
+
+**Notes.** Part 1 represents the complete remaining hardening + feature work from the
+June-21 handoff. Identity Resolver + Cron-Role Self-Check are load-bearing (prevent
+silent failures). Ceiling-Tilted Slots + Mixture-Variance are research-validated features
+ready for live calibration. All four are now code-complete and can be wired on via env
+vars as placement calibration data accumulates.

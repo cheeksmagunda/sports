@@ -1,16 +1,22 @@
 status: BUILD_COMPLETE
 last_verified: 2026-06-28T00:00:00Z
-phase: live. 2026-06-28 (D106): cleanup phase -- tech debt reduction.
+phase: live. 2026-06-28 (D107): Part 1 remaining work -- all four hardening items
+complete. (1) Cron-Role Self-Check (#33, 3442b4c): WNBA_CRON_ROLE env-var startup
+assertion prevents D103-style silent job misconfigurations. Watchdog trigger
+enrichment_from_backfill catches if env check misses. (2) Identity Resolver
+Routing (#29, f81f5cd): Routed live head-feature lookups through Resolver
+(nbaId trust + override CSV) instead of fragile name-string matching. Fixes silent
+misses for rookies/traded players (C. Leite class). (3) Ceiling-Tilted Slots
+(D86 Phase 4, bab143f): Implement p90-based slot assignment (gated by env var).
+Prioritizes upside in high-multiplier slots for top-heavy contests. Default False
+for backward compat. (4) Mixture-Variance Sampling (Tier 2, fe8d83f): Gate copula
+draws by Bernoulli(P(active)) to model spike-at-zero + tail (DNP risk) instead of
+just mean-shifting. Both approaches coexist. All 430 tests pass. See DECISIONS D107.
+
+2026-06-28 (D106): cleanup phase -- tech debt reduction.
 (a) Removed predict/form.py (recency-weighted predictor proven not to beat
-boost_prior in D52 walk-forward). Extracted boost_prior + player_volatility to
-new predict/base.py. Updated imports in job2.py, replay_slate.py,
-test_recalibrated_prior.py, backtest_walkforward.py. Deleted tests/unit/test_form.py
-(430 tests pass, was 437). (b) Implemented append-only table retention policy in
-job_dayclose: watchdog_events truncate at 14-day window; frozen_lineups keep only
-max freeze_seq per slate (serving row), delete stale mid-slate freeze attempts.
-Both best-effort, exception-guarded. Addresses NEEDS_CLAUDE items 32a, 32b
-(model rotation already correct), 32c (expansion vulnerability already mitigated).
-See DECISIONS D106.
+boost_prior in D52 walk-forward). (b) Implemented append-only table retention policy in
+job_dayclose. Addresses NEEDS_CLAUDE items 32a, 32b, 32c. See DECISIONS D106.
 
 ---
 

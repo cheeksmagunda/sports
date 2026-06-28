@@ -501,3 +501,26 @@ Also completed:
   (recency predictor unused in serving, proven no better than boost_prior in
   D52). Extracted boost_prior + player_volatility to predict/base.py. Deleted
   tests/unit/test_form.py. Updated all imports.
+
+---
+
+## UPDATE (2026-06-28, D107): Part 1 remaining work -- all four items DONE
+
+### Item #29 (Identity Resolver): DONE (D107, f81f5cd)
+Route live head-feature lookups through Resolver (nbaId trust + override CSV)
+instead of fragile name-string matching. Fixes silent misses for rookies/traded players.
+Logging distinguishes [unresolved] from [no_features] for diagnostics.
+
+### Item #33 (Cron-Role Self-Check): DONE (D107, 3442b4c)
+Add WNBA_CRON_ROLE env-var startup assertion to prevent D103-style silent job
+misconfigurations. Watchdog trigger enrichment_from_backfill catches if env check misses.
+
+### Ceiling-Tilted Slots (D86 Phase 4): DONE (D107, bab143f)
+Implement p90-based slot assignment (gated by OPTIMIZER_CEILING_TILT_SLOTS env var).
+Prioritizes upside in high-multiplier slots for top-heavy contests. Default False for
+backward compat; production can enable via env once placement calibration validates.
+
+### Mixture-Variance Sampling (Tier 2): DONE (D107, fe8d83f)
+Gate copula draws by Bernoulli(P(active)) to model spike-at-zero + tail (DNP risk)
+instead of just mean-shifting. Both expectation form (current) and Bernoulli gating
+coexist; gating happens at sample level without changing EV means.
