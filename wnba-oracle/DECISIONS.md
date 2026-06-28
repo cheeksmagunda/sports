@@ -3673,3 +3673,64 @@ src/; frontend `tsc -b && vite build` clean, 5 vitest pass.
 **Reverse.** Revert the frontend commit (countdown falls back to the neutral
 caption if `/slate` is unreachable, so the API endpoint is additive and safe to
 keep). The `/slate` route is read-only and cannot affect the freeze path.
+
+### D105: MLB DFS value archetypes -- stat leverage, streak quality, archetype classification [reasoned]
+
+**Motivation.** The MLB DFS "Highest Value" analysis (June 23-25, 2026
+leaderboard reconstruction) identifies three repeatable value archetypes that
+are sport-agnostic: (A) top-of-order power bats on high-implied-total teams,
+(B) table-setter facilitators who accumulate efficient stat production, and
+(C) cheap high-strikeout pitchers whose value concentrates in the
+highest-leverage scoring category. The WNBA Oracle already captures most of
+the structural analog (confirmed-starter multiplier, team pace, opp DvP,
+per-player volatility) but lacks explicit archetype labeling and stat-leverage
+concentration analysis.
+
+**Three new modules [reasoned]:**
+
+1. `predict/stat_leverage.py` -- Under the fitted REAL_SCORE_WEIGHTS, steals
+   (0.223), blocks (0.220), and assists (0.204) generate more real_score per
+   event than points (0.151). `stat_leverage_score()` computes the fraction of a
+   player's per-minute production attributable to these high-weight categories.
+   The WNBA analog of the MLB "strikeouts beat everything else" finding.
+
+2. `predict/streak_quality.py` -- Distinguishes sustainable hot streaks (driven
+   by high-leverage stats or efficient shooting, the WNBA equivalent of
+   power-driven MLB streaks) from regressive ones (high-volume scoring on poor
+   TS%, the WNBA equivalent of BABIP-driven streaks). Outputs a quality score
+   in [0, 1] and a driver label.
+
+3. `predict/archetypes.py` -- Classifies each player into one of four DFS value
+   archetypes mapped from the MLB analysis:
+   - ceiling_anchor: confirmed starter, high usage, high minutes, on a
+     fast-paced or high-total team (MLB: top-of-order slugger)
+   - efficient_producer: production concentrated in high-leverage stat
+     categories (MLB: table-setter)
+   - leverage_spike: high card_boost (cheap price) with confirmed role
+     (MLB: cheap high-K pitcher enabling stars-and-scrubs construction)
+   - baseline: no strong archetype signal
+
+   Each label carries a confidence score (0-1) and a streaking supplementary
+   tag.
+
+**Wiring [verified].** Archetype labels are surfaced in the frozen lineup JSONB
+metadata via `_build_specs` and `_build_per_player` (job2.py). The `per_player`
+array gains optional fields: `archetype`, `stat_leverage`, `streak_driver`,
+`streak_quality`. These are metadata-only -- they do NOT change predictions,
+optimizer behaviour, or the sampling path. The fields are absent for players
+without head_features (cold-start), preserving backward compatibility.
+
+**Quality gates [verified].** 34 new tests across 3 test files:
+- `test_stat_leverage.py` (9 tests): leverage score bounds, monotonicity, pure
+  profiles, threshold gating
+- `test_streak_quality.py` (10 tests): streak detection, all four drivers,
+  edge cases (zero baseline, both zero), custom threshold, quality bounds
+- `test_archetypes.py` (15 tests): each archetype path, streaking tag,
+  confidence ordering, pool classification, representability
+
+All 447 existing unit tests pass unchanged. Ruff clean.
+
+**Reverse.** Delete the three `predict/` modules and the job2.py archetype
+block (search for "D105"). Remove the three test files. The frozen lineup
+JSONB fields are additive -- removing them is backward-compatible because no
+reader depends on them yet.

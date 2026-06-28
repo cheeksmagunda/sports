@@ -47,6 +47,7 @@ from wnba_oracle.picker.popularity import (
     slate_labels_to_popularity,
 )
 from wnba_oracle.picker.sample import PlayerSamplingSpec, ceiling_adjusted_sigma_log
+from wnba_oracle.predict.archetypes import ArchetypeInput, classify_pool
 from wnba_oracle.predict.availability import AvailabilityConfig, availability_probability
 from wnba_oracle.predict.form import player_volatility
 from wnba_oracle.predict.minutes import MinutesConfig, blended_real_score
@@ -893,6 +894,49 @@ def _build_specs(
             proj["pred_real_score_p10"] = float(hq["p10"])
             proj["pred_real_score_p90"] = float(hq["p90"])
         projection_by_pid[pid] = proj
+
+    # D105: archetype classification. Surface the DFS value archetype for each
+    # player in the frozen lineup metadata. Derived from the MLB highest-value
+    # archetype analysis: ceiling_anchor (high-usage starter on high-total team),
+    # efficient_producer (high-leverage stat concentration), leverage_spike
+    # (cheap confirmed starter), plus a streaking tag. Metadata-only -- does
+    # not change predictions or optimizer behaviour.
+    archetype_inputs: list[ArchetypeInput] = []
+    for pid, proj in projection_by_pid.items():
+        r = rows_by_pid.get(pid, {})
+        f = _features_dict(r.get("features_json"))
+        hf = f.get("head_features") if isinstance(f, dict) else None
+        hf = hf if isinstance(hf, dict) else {}
+        archetype_inputs.append(
+            ArchetypeInput(
+                player_id=pid,
+                card_boost=float(proj.get("card_boost", 0.0)),
+                is_confirmed_starter=is_anchor_by_pid.get(pid, False),
+                is_anchor=is_anchor_by_pid.get(pid, False),
+                mins_l10=float(hf.get("mins_l10", 0.0) or 0.0),
+                pts_per_min_l10=float(hf.get("pts_per_min_l10", 0.0) or 0.0),
+                ast_per_min_l10=float(hf.get("ast_per_min_l10", 0.0) or 0.0),
+                stl_blk_per_min_l10=float(hf.get("stl_blk_per_min_l10", 0.0) or 0.0),
+                reb_per_min_l10=float(hf.get("reb_per_min_l10", 0.0) or 0.0),
+                ts_pct_l10=float(hf.get("ts_pct_l10", 0.0) or 0.0),
+                fantasy_pts_l5=float(hf.get("fantasy_pts_l5", 0.0) or 0.0),
+                fantasy_pts_l10=float(hf.get("fantasy_pts_l10", 0.0) or 0.0),
+                pts_per_min_l5=float(hf.get("pts_per_min_l5", 0.0) or 0.0),
+                implied_team_total=float(hf.get("implied_team_total", 0.0) or 0.0),
+                vegas_total=float(hf.get("vegas_total", 0.0) or 0.0),
+                usg_pct_l10=float(hf.get("usg_pct_l10", 0.0) or 0.0),
+            )
+        )
+    if archetype_inputs:
+        archetype_labels = classify_pool(archetype_inputs)
+        for pid, label in archetype_labels.items():
+            if pid in projection_by_pid:
+                projection_by_pid[pid]["archetype"] = label.primary
+                if label.is_streaking:
+                    projection_by_pid[pid]["streak_driver"] = label.streak_driver
+                    projection_by_pid[pid]["streak_quality"] = label.streak_quality
+                projection_by_pid[pid]["stat_leverage"] = label.stat_leverage
+
     return samps, fields, projection_by_pid
 
 
@@ -1060,6 +1104,14 @@ def _build_per_player(
         if "pred_real_score_p10" in proj:
             entry["pred_real_score_p10"] = float(proj["pred_real_score_p10"])
             entry["pred_real_score_p90"] = float(proj["pred_real_score_p90"])
+        # D105: archetype label (metadata-only; does not affect predictions).
+        if "archetype" in proj:
+            entry["archetype"] = proj["archetype"]
+        if "streak_driver" in proj:
+            entry["streak_driver"] = proj["streak_driver"]
+            entry["streak_quality"] = float(proj.get("streak_quality", 0.0))
+        if "stat_leverage" in proj:
+            entry["stat_leverage"] = float(proj["stat_leverage"])
         out.append(entry)
     return out
 
