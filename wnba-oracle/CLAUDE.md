@@ -85,21 +85,29 @@ The script handles auth automatically. Destructive ops (`railway down`,
 Railway IDs:
 - Project: `ab83f44c-0bbc-4a58-931c-37d9fbfda73a`
 - Production env: `d57a759e-e189-439b-a612-bd220ef59c39`
-- Services: cron-job1 `2e110589`, cron-job2 `4a511ed2`, cron-dayclose `606d950d`,
-  postgres `5e827da3`, redis `bb131bec`, api `f4750eda`, frontend `d56dccf4`
+- Services: cron-job1 `2e110589-9527-4541-a754-41c4719515ba`, cron-job2 `4a511ed2-10ad-441f-bf9a-3748c1e6b929`, cron-dayclose `606d950d-7d7d-4f5a-a049-b9fa69799169`,
+  postgres `5e827da3-6df6-4349-97ad-a800ece2716d`, redis `bb131bec-4edd-4809-accd-e09e09aacbf6`, api `f4750eda-fd6c-432b-b6f5-34254013c271`, frontend `d56dccf4-85b3-4ba0-acaf-58ef0cced58c`
 
 To redeploy a service:
 ```bash
 scripts/rwgql.sh 'mutation { serviceInstanceDeployV2(serviceId: "SERVICE_ID", environmentId: "d57a759e-e189-439b-a612-bd220ef59c39") }'
 ```
 
+### Local dev setup
+
+Verify credentials are working before starting work:
+
+```bash
+bash scripts/dev.sh
+```
+
+This checks GitHub, Railway, Odds API, and Real Sports connectivity. It reads
+credentials from `.claude/settings.local.json` and validates they work.
+
 ### Constraints
 
 - Never echo a credential value into a log, commit, chat message, comment,
   PR body, or `DECISIONS.md`. Reference by env var name only.
-- Do not store config (DATABASE_URL, etc.) in local settings or .env files.
-  Config lives on Railway and is stable across deploys.
-  Source through shell if you need values not already in the environment:
-  `set -a && source .env && set +a && <command>`.
+- Do not store config in local files. Config lives on Railway only.
 - Never create new accounts or generate new long-lived credentials.
   If a credential is missing or expired, log to `NEEDS_CLAUDE.md`.
