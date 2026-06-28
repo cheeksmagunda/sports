@@ -142,6 +142,56 @@ def _auto_record_placement(slate_date: str) -> None:
         conn.commit()
 
 
+def _cleanup_append_only_tables(retention_days: int = 14) -> None:
+	"""Clean up append-only tables to prevent indefinite growth (D102 item 32a).
+
+	watchdog_events: truncate rows older than retention_days.
+	frozen_lineups: keep only the max freeze_seq per slate (the serving row);
+	    delete stale freeze attempts that the live path never reads.
+	"""
+	from sqlalchemy import create_engine, text
+
+	settings = get_settings()
+	if not settings.database_url:
+		return
+
+	cutoff_date = (dt.date.today() - dt.timedelta(days=retention_days)).isoformat()
+	engine = create_engine(settings.database_url, future=True)
+	try:
+		with engine.connect() as conn:
+			# Truncate old watchdog_events
+			result = conn.execute(
+				text(
+					"DELETE FROM watchdog_events WHERE slate_date < :cutoff"
+				),
+				{"cutoff": cutoff_date},
+			)
+			n_watchdog = result.rowcount or 0
+
+			# Keep only the max freeze_seq per slate in frozen_lineups.
+			# This preserves the serving row (what job2 shows) and audit history
+			# (all rows via max(freeze_seq)) while deleting stale mid-slate freezes.
+			result = conn.execute(
+				text(
+					"""DELETE FROM frozen_lineups f
+					WHERE id NOT IN (
+						SELECT MAX(id) FROM frozen_lineups
+						GROUP BY slate_date, model_sha
+					)"""
+				)
+			)
+			n_frozen = result.rowcount or 0
+			conn.commit()
+			log.info(
+				"dayclose_retention_cleanup",
+				watchdog_old_days=retention_days,
+				watchdog_deleted=n_watchdog,
+				frozen_stale_deleted=n_frozen,
+			)
+	except Exception as exc:
+		log.exception("dayclose_retention_cleanup_failed", error=str(exc))
+
+
 def main() -> int:
     settings = get_settings()
     walk_window = int(os.environ.get("WNBA_DAYCLOSE_WALK_WINDOW", DEFAULT_WALK_WINDOW))
@@ -218,6 +268,14 @@ def main() -> int:
             log.info("dayclose_game_logs_refreshed", season=season, rows=n)
         except Exception as exc:
             log.exception("dayclose_game_logs_refresh_failed", error=str(exc))
+
+    # D102 item 32a: append-only table retention policy. Best-effort cleanup;
+    # never changes the dayclose exit code. Truncates old watchdog_events and
+    # deletes stale frozen_lineup attempts (keeping only the current freeze_seq).
+    try:
+        _cleanup_append_only_tables(retention_days=14)
+    except Exception as exc:
+        log.exception("dayclose_retention_cleanup_failed", error=str(exc))
 
     # Best-effort: refresh the RESULTS.md ledger for the slate that just
     # finalized (yesterday UTC). Guarded by WNBA_RESULTS_LEDGER so the
