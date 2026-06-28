@@ -264,6 +264,12 @@ class OptimizeConfig:
     leverage_weight: float = 0.0
     ceiling_weight: float = 0.0
     duplication_weight: float = 0.0
+    # D107 (Phase 4 / ceiling-tilted slots): sort players by p90 percentile
+    # instead of p50 median when assigning to slot multipliers. Prioritizes
+    # upside on high-multiplier slots so ceiling plays occupy the 2.0 slot
+    # instead of the 1.2 slot. Default False maintains rearrangement-inequality
+    # (p50-based) behavior; flip via OPTIMIZER_CEILING_TILT_SLOTS env var.
+    ceiling_tilt_slots: bool = False
     # D88 (Phase 3 / stack-aware field). When either boost is != 1.0, the
     # field simulator generates correlated opponent lineups (same-game and
     # same-team affinity after each pick). Default 1.0 leaves the
@@ -597,13 +603,20 @@ def optimize_lineup(
             entry_flag=flag,
         )
 
-    # Lineup assembly: assign slots by rearrangement inequality on median
-    rs_median = np.median(real_score_samples[:, list(best_indices)], axis=0)
-    # kind='stable' so tied medians (e.g. two boost-3 rookies with the
-    # same EB shrinkage pull, as on 2026-05-28's R.Johnson/G.VanSlooten
-    # tie at 1.71) resolve deterministically by input order, not by
-    # quicksort implementation detail.
-    order = np.argsort(rs_median, kind="stable")[::-1]
+    # Lineup assembly: assign slots by rearrangement inequality.
+    # D107 (Phase 4): ceiling-tilted slots sort by p90 instead of p50 to
+    # prioritize upside in high-multiplier slots. Default is p50 (rearrangement
+    # inequality, which optimizes expected value). kind='stable' so tied values
+    # (e.g. two boost-3 rookies with the same EB shrinkage, as on 2026-05-28's
+    # R.Johnson/G.VanSlooten tie at 1.71) resolve deterministically by input
+    # order, not by quicksort implementation detail.
+    if cfg.ceiling_tilt_slots:
+        rs_sort_key = np.quantile(real_score_samples[:, list(best_indices)], 0.9, axis=0)
+        sort_method = "p90 (ceiling-tilted)"
+    else:
+        rs_sort_key = np.median(real_score_samples[:, list(best_indices)], axis=0)
+        sort_method = "p50 (rearrangement)"
+    order = np.argsort(rs_sort_key, kind="stable")[::-1]
     ordered_pids = tuple(keep_ids[best_indices[i]] for i in order)
 
     p10, p50, p90 = np.quantile(best_samples, [0.1, 0.5, 0.9])
@@ -620,6 +633,9 @@ def optimize_lineup(
     # caveat flag + expected_payout) without suppressing the slate.
     if cfg.never_skip and flag == "skip":
         flag = "enter_with_caveat"
+
+    # D107: log which slot assignment method was used (p50 vs p90)
+    log.debug("optimizer_slot_assignment", method=sort_method)
 
     return LineupRecommendation(
         player_ids=ordered_pids,

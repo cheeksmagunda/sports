@@ -236,6 +236,14 @@ class Settings(BaseSettings):
     optimizer_duplication_weight: float = Field(
         default=0.0, alias="OPTIMIZER_DUPLICATION_WEIGHT"
     )
+    # D107 (Phase 4, ceiling-tilted slots): sort players by p90 percentile
+    # instead of p50 median when assigning to slot multipliers. Prioritizes
+    # upside in high-multiplier slots for top-heavy contests. Default False
+    # preserves rearrangement-inequality (p50-based) behavior; set
+    # OPTIMIZER_CEILING_TILT_SLOTS=true to enable. See research/internal/07_placement_overhaul.md Phase 4.
+    optimizer_ceiling_tilt_slots: bool = Field(
+        default=False, alias="OPTIMIZER_CEILING_TILT_SLOTS"
+    )
     # D88 (Phase 3, stack-aware field). Multiplicative boost on the marginal
     # weight of remaining-pool players that share a game (same-game) or team
     # (same-team) with already-picked field players. Captures the empirical

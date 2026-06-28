@@ -1339,6 +1339,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         leverage_weight=getattr(settings, "optimizer_leverage_weight", 0.0),
         ceiling_weight=getattr(settings, "optimizer_ceiling_weight", 0.0),
         duplication_weight=getattr(settings, "optimizer_duplication_weight", 0.0),
+        ceiling_tilt_slots=getattr(settings, "optimizer_ceiling_tilt_slots", False),
         field_same_game_boost=getattr(settings, "field_same_game_boost", 1.0),
         field_same_team_boost=getattr(settings, "field_same_team_boost", 1.0),
         duplication_aware_payout=getattr(
