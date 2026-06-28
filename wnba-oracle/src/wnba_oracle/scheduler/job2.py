@@ -1347,7 +1347,10 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
             settings, "optimizer_duplication_aware_payout", False
         ),
     )
-    rec = optimize_lineup(samps, fields, curve, cfg=cfg)
+    mixture_variance_enabled = getattr(settings, "optimizer_mixture_variance_enabled", True)
+    rec = optimize_lineup(
+        samps, fields, curve, cfg=cfg, mixture_variance_enabled=mixture_variance_enabled
+    )
     log.info(
         "job2_optimizer_done",
         n_pool=len(samps),

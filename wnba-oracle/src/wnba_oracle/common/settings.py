@@ -238,11 +238,19 @@ class Settings(BaseSettings):
     )
     # D107 (Phase 4, ceiling-tilted slots): sort players by p90 percentile
     # instead of p50 median when assigning to slot multipliers. Prioritizes
-    # upside in high-multiplier slots for top-heavy contests. Default False
-    # preserves rearrangement-inequality (p50-based) behavior; set
-    # OPTIMIZER_CEILING_TILT_SLOTS=true to enable. See research/internal/07_placement_overhaul.md Phase 4.
+    # upside in high-multiplier slots for top-heavy contests. Enabled by default
+    # (validated with two years of placement data). Set OPTIMIZER_CEILING_TILT_SLOTS=false
+    # to revert to rearrangement-inequality (p50-based) behavior. See research/internal/07_placement_overhaul.md Phase 4.
     optimizer_ceiling_tilt_slots: bool = Field(
-        default=False, alias="OPTIMIZER_CEILING_TILT_SLOTS"
+        default=True, alias="OPTIMIZER_CEILING_TILT_SLOTS"
+    )
+    # D107 (Tier 2, mixture-variance sampling): gate each player's copula draw by
+    # Bernoulli(P(active)) to model spike-at-zero (DNP risk) + tail instead of just
+    # mean-shifting (expectation form). Creates true bimodal distribution. Enabled by
+    # default (correctly models availability risk). Set OPTIMIZER_MIXTURE_VARIANCE_ENABLED=false
+    # to revert to expectation-form mean scaling only.
+    optimizer_mixture_variance_enabled: bool = Field(
+        default=True, alias="OPTIMIZER_MIXTURE_VARIANCE_ENABLED"
     )
     # D88 (Phase 3, stack-aware field). Multiplicative boost on the marginal
     # weight of remaining-pool players that share a game (same-game) or team
@@ -323,6 +331,8 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "field_same_team_boost": 2.0,          # D88/D91
     "ceiling_sigma_blowout_boost": 0.15,   # D89/D92
     "ceiling_sigma_low_history_boost": 0.20,  # D89/D92
+    "optimizer_ceiling_tilt_slots": True,  # D107/Phase 4, validated with two years data
+    "optimizer_mixture_variance_enabled": True,  # D107/Tier 2, Bernoulli availability gating
 }
 
 

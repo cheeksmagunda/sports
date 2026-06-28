@@ -292,6 +292,7 @@ def optimize_lineup(
     *,
     slot_multipliers: np.ndarray = DEFAULT_SLOT_MULTIPLIERS,
     cfg: OptimizeConfig = OptimizeConfig(),
+    mixture_variance_enabled: bool = True,
 ) -> LineupRecommendation:
     n_all = len(sampling_specs)
     if n_all < 5:
@@ -332,12 +333,15 @@ def optimize_lineup(
     log.info("optimizer_stage1", n_all=n_all, n_filtered=len(filtered_sampling))
 
     # Joint sample once for the filtered pool.
-    # D107 (Tier 2): mixture-variance sampling. Pass availability probs to gate
-    # each draw by Bernoulli(P(active)), creating spike-at-zero + tail instead
-    # of just shifting the mean (expectation form).
-    avail_probs = np.array([s.p_active for s in filtered_sampling], dtype=float)
-    # Only gate if any player has P(active) < 1.0
-    avail_probs_arg = avail_probs if np.any(avail_probs < 1.0) else None
+    # D107 (Tier 2): mixture-variance sampling. When enabled, pass availability probs
+    # to gate each draw by Bernoulli(P(active)), creating spike-at-zero + tail instead
+    # of just shifting the mean (expectation form). When disabled, sample without gating
+    # (pure lognormal, no availability variance).
+    avail_probs_arg = None
+    if mixture_variance_enabled:
+        avail_probs = np.array([s.p_active for s in filtered_sampling], dtype=float)
+        # Only gate if any player has P(active) < 1.0
+        avail_probs_arg = avail_probs if np.any(avail_probs < 1.0) else None
     real_score_samples = sample_joint_real_scores(
         filtered_sampling,
         cfg.n_samples,
