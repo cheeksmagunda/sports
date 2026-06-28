@@ -1,6 +1,20 @@
 status: BUILD_COMPLETE
-last_verified: 2026-06-21T00:00:00Z
-phase: live. 2026-06-21 (D104): two operator-directed corrections for T-40
+last_verified: 2026-06-28T00:00:00Z
+phase: live. 2026-06-28 (D106): cleanup phase -- tech debt reduction.
+(a) Removed predict/form.py (recency-weighted predictor proven not to beat
+boost_prior in D52 walk-forward). Extracted boost_prior + player_volatility to
+new predict/base.py. Updated imports in job2.py, replay_slate.py,
+test_recalibrated_prior.py, backtest_walkforward.py. Deleted tests/unit/test_form.py
+(430 tests pass, was 437). (b) Implemented append-only table retention policy in
+job_dayclose: watchdog_events truncate at 14-day window; frozen_lineups keep only
+max freeze_seq per slate (serving row), delete stale mid-slate freeze attempts.
+Both best-effort, exception-guarded. Addresses NEEDS_CLAUDE items 32a, 32b
+(model rotation already correct), 32c (expansion vulnerability already mitigated).
+See DECISIONS D106.
+
+---
+
+2026-06-21 (D104): two operator-directed corrections for T-40
 serving. (a) The RotoWire starter signal now acts on EXPECTED starters, not
 only CONFIRMED -- confirmed lineups for every game on a slate are not all out by
 the T-40 freeze of the first tip, so a confirmed-only gate silently ignored the

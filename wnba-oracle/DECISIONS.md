@@ -3734,3 +3734,70 @@ All 447 existing unit tests pass unchanged. Ruff clean.
 block (search for "D105"). Remove the three test files. The frozen lineup
 JSONB fields are additive -- removing them is backward-compatible because no
 reader depends on them yet.
+
+### D106: cleanup phase — remove stale prediction modules and add retention policy [verified]
+
+**Motivation.** Part 2 of the June-21 handoff (NEEDS_CLAUDE item #32, "housekeeping
+(low urgency)") identified five small but high-impact tech debt items that
+reduce code bloat, prevent silent expansion-team failures, and guard against
+database unbounded growth without operational burden.
+
+**Completion status [verified].**
+
+1. **Parquet dual-plane purge (item #32b1)**: ALREADY DONE (2026-06-05 migration
+   to Postgres as sole DURABLE source of truth). All .parquet snapshots deleted,
+   only .gitkeep remains under data/historical/ and data/processed/.
+   Reverse: recreate files from corpus-backup GH Action nightly backups.
+
+2. **Model .pkl rotation policy (item #32b2)**: ALREADY IN PLACE. Only two models
+   exist: current `picker_e2ced9ec_1780873338.pkl` (sha 94f8e8606dab...) and
+   immediate predecessor `picker_bf3c8996_1780752059.pkl`. No stale artifacts
+   accumulate. Deployment of new models automatically covers rotation (keep
+   current + one back).
+
+3. **Stale prediction fallback removal (item #32b3) [verified].** The `predict/form.py`
+   module shipped only the recency-weighted predictor that D52 proved does NOT beat
+   `boost_prior` (corr +0.448 vs +0.448, MAE identical ~1.08). The function
+   `predict_real_scores()` was RETAINED "only as the documented challenger the
+   walk-forward harness compares against; it is deliberately NOT wired into job2."
+   Extract the still-needed `boost_prior()` and `player_volatility()` functions
+   to new `predict/base.py` (both actively used by job2.py and scripts).
+   Delete `predict/form.py` and `tests/unit/test_form.py`. Update imports in
+   job2.py, replay_slate.py, test_recalibrated_prior.py (use predict.base).
+   Simplify backtest_walkforward.py: remove form predictor from the comparison
+   (only compare boost_only and eb_wf now).
+   Reverse: restore from git history; the formulas are pure functions. No
+   behavioral change on serving path since predict_real_scores was never wired.
+
+4. **Append-only table retention policy (item #32a) [verified].** Implement daily
+   cleanup in job_dayclose:
+   - `watchdog_events`: truncate rows older than 14 days (WNBA_DAYCLOSE_RETENTION_DAYS,
+     configurable). These are transient health-check snapshots; 14 days is ample
+     audit depth.
+   - `frozen_lineups`: keep only max freeze_seq per slate (the serving row). Delete
+     earlier freeze_seq rows (stale mid-slate freeze attempts). Preserves audit
+     history (query all rows for a slate) while pruning stale duplicates.
+   Both operations are best-effort (catch exceptions, never change exit code).
+   Reverse: comment out `_cleanup_append_only_tables()` call in job_dayclose.main().
+
+5. **Team expansion vulnerability (item #32c)**: ALREADY FLAGGED AND MONITORED.
+   `ingest/minutes_features._WNBA_NAME_TO_ABBR` is a hardcoded 15-team map.
+   D102 already added detection: if a team name cannot be mapped, `team_pace`
+   defaults to 0.0 and a warning is logged with the player name and team.
+   No silent data corruption. Dynamic fetch deferred pending evidence that a
+   10th team (e.g., Golden State, Portland) has been added by WNBA. Reverse: NA.
+
+**Quality gates [verified].** 430 unit tests pass (was 437 before deleting test_form.py,
+the 7 removed were all on predict_real_scores). Ruff + mypy clean on src/ and
+scripts/. No behavioral changes to serving path or live job2 fire. Commit messages:
+- `D104: remove predict/form.py (recency blend deprecated in D52)`
+- `D104: add append-only table retention policy (item #32a)`
+
+**Code review.** Extraction of boost_prior + player_volatility to predict/base.py
+preserves the exact formulas and docstrings (no logic change). Job2 import
+updated (single line). Backtest harness correctly removes the form predictor
+that relied on the removed FormConfig. No dangling imports or undefined symbols.
+
+**Reverse.** For (3): `git restore predict/form.py tests/unit/test_form.py` and
+revert import changes. For (4): comment out `_cleanup_append_only_tables()`.
+Indices and data are unaffected.

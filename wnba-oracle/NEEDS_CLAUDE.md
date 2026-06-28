@@ -474,3 +474,30 @@ The operator asked me to close these out rather than hand them off. Status:
     `enrichment_stale` + new `rotowire_empty` warnings are the backstop. Rule:
     run `--job backfill` ONLY on the dedicated `backfill-enrichment` service
     (cron=None), never on cron-job1/late.
+
+---
+
+## UPDATE (2026-06-28, D106): item #32 (housekeeping) partial completion
+
+Items (a), (b), (c) from D102 item #32:
+
+- **#32a (retention policy): DONE (D106, 325d0f0).** Daily cleanup in job_dayclose:
+  watchdog_events truncated at 14-day window; frozen_lineups pruned to max
+  freeze_seq per slate. Both best-effort, guarded by exception handling.
+
+- **#32b (model rotation): DONE (D106).** Already correct; only 2 models in
+  models/ directory (current + predecessor).
+
+- **#32c (team expansion vulnerability): ALREADY MITIGATED (D102).** Detected
+  and logged if team_name not in _WNBA_NAME_TO_ABBR map; dynamic fetch deferred
+  pending evidence of new team.
+
+- **#32d (JWT expiry warning): REMAINS.** Low urgency; watchdog already catches
+  StorageStateStale cascade failure loud. Proactive < 7-day warning deferred.
+
+Also completed:
+
+- **D106 stale prediction cleanup: DONE (D106, becb50c).** Removed predict/form.py
+  (recency predictor unused in serving, proven no better than boost_prior in
+  D52). Extracted boost_prior + player_volatility to predict/base.py. Deleted
+  tests/unit/test_form.py. Updated all imports.
