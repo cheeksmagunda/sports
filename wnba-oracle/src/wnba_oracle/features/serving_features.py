@@ -89,7 +89,7 @@ def build_head_feature_lookup(
     *,
     slate_date: str,
     required_columns: tuple[str, ...] | None = None,
-) -> dict[tuple[str, str, str], dict[str, float]]:
+) -> dict[tuple[str, str, str] | int, dict[str, float]]:
     """Build {(initial, last, team): {col: value}} for every player with prior games.
 
     Steps mirror features/corpus.build_gamelog_corpus:
@@ -181,6 +181,10 @@ def build_head_feature_lookup(
             coerced = {k: coerced.get(k, 0.0) for k in required_columns}
 
         out[jkey] = coerced
+        # D107 (#29): also index by nba_api player_id so Resolver-based lookups
+        # (via nbaId trust + override CSV) can find head features by player_id
+        # instead of fragile name-string matching. Resolver returns int player_id.
+        out[pid] = coerced
         # Team-agnostic fallback (mirrors ingest.minutes_features.lookup behaviour).
         fallback = (jkey[0], jkey[1], "")
         if fallback not in out:

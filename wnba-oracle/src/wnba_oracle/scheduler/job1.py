@@ -37,6 +37,7 @@ from wnba_oracle.ingest.minutes_features import (
     fetch_wnba_team_stats,
     lookup,
 )
+from wnba_oracle.ingest.identity import build_resolver
 from wnba_oracle.ingest.odds import build_props_lookup, fetch_odds_for_slate, fetch_player_props
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
@@ -400,6 +401,15 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     n_head_features_matched = 0
     head_feature_misses: list[str] = []
 
+    # D107 (#29): initialize Resolver to route identity lookups through nbaId
+    # trust + override CSV instead of fragile name-string matching. Used per-player
+    # to get the nba_api player_id, which is then looked up in head_feats.
+    try:
+        resolver = build_resolver()
+    except Exception as exc:
+        log.warning("job1_resolver_failed", reason=str(exc)[:120])
+        resolver = None
+
     # D74 (R8 first-pass): WNBA team pace + defensive ratings from nba_api.
     # Injected into head_features per player so the trained heads see non-zero
     # values (they were trained with real team_pace from the corpus; serving
@@ -461,7 +471,26 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
             features["n_min_games"] = mf.n_games
         # D69 / Phase 2b: full head feature row (one nested dict under
         # `head_features`). job2 reads this and runs the D63 quantile heads.
-        hf = head_feature_lookup(head_feats, display_name=p.display_name, team=p.team)
+        # D107 (#29): route through Resolver (nbaId trust + override CSV) first,
+        # fall back to name-based lookup.
+        hf = None
+        resolved_pid: int | None = None
+        if resolver:
+            try:
+                resolved_pid = resolver.resolve(
+                    p.platform_id,
+                    display_name=p.display_name,
+                    first_name=p.first_name,
+                    last_name=p.last_name,
+                    team=p.team,
+                )
+                if resolved_pid is not None and isinstance(head_feats, dict):
+                    hf = head_feats.get(resolved_pid)
+            except Exception as exc:
+                log.debug("job1_resolver_lookup_failed", player=p.display_name, reason=str(exc)[:60])
+        # Fallback to name-based lookup if Resolver lookup failed
+        if hf is None:
+            hf = head_feature_lookup(head_feats, display_name=p.display_name, team=p.team)
         if hf is not None:
             # Copy before mutating so the shared lookup dict is not modified.
             hf = dict(hf)
@@ -489,11 +518,16 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
             features["head_features"] = hf
             n_head_features_matched += 1
         else:
-            # D102 (#29): a head-feature miss means this player falls through to
-            # the heuristic with NO recency signal -- the silent failure that hit
-            # ramping rookies (C. Leite, D99). The aggregate count hid WHO. Track
-            # names so a systematic identity-resolution gap is visible per slate.
-            head_feature_misses.append(f"{p.display_name} ({p.team})")
+            # D102 / D107 (#29): a head-feature miss means this player falls through
+            # to the heuristic with NO recency signal -- the silent failure that hit
+            # ramping rookies (C. Leite, D99). D107 now routes through Resolver
+            # (nbaId trust + override CSV) to reduce false misses; genuine misses are
+            # logged as "unresolved" (Resolver could not place them) or "no_features"
+            # (resolved but no corpus row yet).
+            if resolved_pid is not None:
+                head_feature_misses.append(f"{p.display_name} ({p.team}) [no_features, pid={resolved_pid}]")
+            else:
+                head_feature_misses.append(f"{p.display_name} ({p.team}) [unresolved]")
         # D74: player prop lines as projection cross-check signals.
         # Stored under features_json keys for future training; job2 can read
         # these as a calibration signal (if prop_pts_line > p50 projection,
