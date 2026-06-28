@@ -332,10 +332,17 @@ def optimize_lineup(
     log.info("optimizer_stage1", n_all=n_all, n_filtered=len(filtered_sampling))
 
     # Joint sample once for the filtered pool.
+    # D107 (Tier 2): mixture-variance sampling. Pass availability probs to gate
+    # each draw by Bernoulli(P(active)), creating spike-at-zero + tail instead
+    # of just shifting the mean (expectation form).
+    avail_probs = np.array([s.p_active for s in filtered_sampling], dtype=float)
+    # Only gate if any player has P(active) < 1.0
+    avail_probs_arg = avail_probs if np.any(avail_probs < 1.0) else None
     real_score_samples = sample_joint_real_scores(
         filtered_sampling,
         cfg.n_samples,
         CopulaConfig(seed=cfg.seed, score_offset=cfg.score_offset),
+        availability_probs=avail_probs_arg,
     )
     # Project field ownership + sample opponent lineups.
     ownership = project_ownership(filtered_field)

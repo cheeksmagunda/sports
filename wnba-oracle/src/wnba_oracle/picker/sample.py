@@ -43,6 +43,7 @@ class PlayerSamplingSpec:
     is_starter: bool = False  # role tag for regime-switching correlation (D57)
     blowout_prob: float = 0.0  # this player's game blowout propensity in [0, 1]
     is_anchor: bool = False  # confirmed-minutes floor player for the anchor floor (D57)
+    p_active: float = 1.0  # D107 (Tier 2): P(player is active/logs minutes). Used by mixture-variance sampling to gate Bernoulli draws. Default 1.0 (backward compatible).
 
 
 @dataclass
@@ -114,8 +115,17 @@ def sample_joint_real_scores(
     specs: list[PlayerSamplingSpec],
     n_samples: int,
     cfg: CopulaConfig = CopulaConfig(),
+    availability_probs: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Returns (n_samples, n_players) real_score samples for each player."""
+    """Returns (n_samples, n_players) real_score samples for each player.
+
+    D107 (Tier 2): mixture-variance sampling. When availability_probs is provided
+    (one P(active) per player), each player's draw is gated by a Bernoulli: with
+    probability P(active) they log real_score, with probability 1-P(active) they
+    DNP and return 0. This creates the bimodal spike-at-zero + tail distribution
+    instead of the expectation form (just multiplying means). Captures the true
+    risk that a player doesn't play at all, not just "lower expected minutes."
+    """
     n = len(specs)
     if n == 0:
         return np.zeros((n_samples, 0))
@@ -129,7 +139,17 @@ def sample_joint_real_scores(
     # Convert log-scale samples back to real_score. Predictions are stored in
     # log(real_score + K) space; subtract K after exp. K = cfg.score_offset
     # (D52). The caller MUST build mu with the same K.
-    return np.exp(log_samples) - cfg.score_offset
+    real_scores = np.exp(log_samples) - cfg.score_offset
+
+    # D107 (Tier 2): apply mixture-variance availability gating if provided.
+    # For each player, draw Bernoulli(P(active)) and spike inactive draws at zero.
+    if availability_probs is not None:
+        avail_probs = np.asarray(availability_probs, dtype=float)
+        if avail_probs.shape[0] == n:
+            # One Bernoulli draw per player per sample
+            active_draws = rng.binomial(1, avail_probs, size=(n_samples, n))
+            real_scores = real_scores * active_draws  # spike inactive to 0
+    return real_scores
 
 
 def ceiling_adjusted_sigma_log(

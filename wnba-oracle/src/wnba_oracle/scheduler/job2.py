@@ -854,6 +854,7 @@ def _build_specs(
                 is_starter=is_starter_by_pid.get(pid, False),
                 blowout_prob=blowout_prob_by_pid.get(pid, 0.0),
                 is_anchor=is_anchor_by_pid.get(pid, False),
+                p_active=p_active_by_pid.get(pid, 1.0),  # D107 (Tier 2): P(active) for mixture-variance sampling
             )
         )
         # D86: when enabled, attach the real measured draft count so the field
