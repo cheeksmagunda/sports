@@ -20,19 +20,45 @@ def _logs() -> pl.DataFrame:
     for i, d in enumerate(dates_2025):
         rows.append(
             {
-                "game_date": d, "player_id": 1, "season": "2025",
-                "min": 30.0 + i, "pts": 15.0 + i, "reb": 6.0, "oreb": 2.0, "dreb": 4.0,
-                "ast": 4.0, "stl": 1.0, "blk": 1.0, "tov": 2.0,
-                "fgm": 6.0, "fga": 12.0, "fg3m": 1.0, "ftm": 2.0, "fta": 3.0,
+                "game_date": d,
+                "player_id": 1,
+                "season": "2025",
+                "min": 30.0 + i,
+                "pts": 15.0 + i,
+                "reb": 6.0,
+                "oreb": 2.0,
+                "dreb": 4.0,
+                "ast": 4.0,
+                "stl": 1.0,
+                "blk": 1.0,
+                "tov": 2.0,
+                "fgm": 6.0,
+                "fga": 12.0,
+                "fg3m": 1.0,
+                "ftm": 2.0,
+                "fta": 3.0,
             }
         )
     for d in ["2026-05-10", "2026-05-13"]:
         rows.append(
             {
-                "game_date": d, "player_id": 1, "season": "2026",
-                "min": 25.0, "pts": 12.0, "reb": 5.0, "oreb": 1.0, "dreb": 4.0,
-                "ast": 3.0, "stl": 1.0, "blk": 0.0, "tov": 1.0,
-                "fgm": 5.0, "fga": 10.0, "fg3m": 1.0, "ftm": 1.0, "fta": 2.0,
+                "game_date": d,
+                "player_id": 1,
+                "season": "2026",
+                "min": 25.0,
+                "pts": 12.0,
+                "reb": 5.0,
+                "oreb": 1.0,
+                "dreb": 4.0,
+                "ast": 3.0,
+                "stl": 1.0,
+                "blk": 0.0,
+                "tov": 1.0,
+                "fgm": 5.0,
+                "fga": 10.0,
+                "fg3m": 1.0,
+                "ftm": 1.0,
+                "fta": 2.0,
             }
         )
     return pl.from_dicts(rows)
@@ -41,8 +67,24 @@ def _logs() -> pl.DataFrame:
 def test_add_targets_real_score_matches_scoring_formula() -> None:
     df = add_targets(_logs())
     row = df.row(0, named=True)
-    box = {k: row[k] for k in ("pts", "reb", "oreb", "dreb", "ast", "stl", "blk",
-                               "tov", "fgm", "fga", "fg3m", "ftm", "fta")}
+    box = {
+        k: row[k]
+        for k in (
+            "pts",
+            "reb",
+            "oreb",
+            "dreb",
+            "ast",
+            "stl",
+            "blk",
+            "tov",
+            "fgm",
+            "fga",
+            "fg3m",
+            "ftm",
+            "fta",
+        )
+    }
     assert abs(row["real_score"] - box_to_real_score(box)) < 1e-9
     assert row["minutes_played"] == row["min"]
     assert abs(row["pts_per_min"] - row["pts"] / row["min"]) < 1e-9
@@ -51,8 +93,9 @@ def test_add_targets_real_score_matches_scoring_formula() -> None:
 
 
 def test_add_targets_per_min_null_on_dnp() -> None:
-    logs = _logs().with_columns(pl.when(pl.col("game_date") == "2025-05-16")
-                                .then(0.0).otherwise(pl.col("min")).alias("min"))
+    logs = _logs().with_columns(
+        pl.when(pl.col("game_date") == "2025-05-16").then(0.0).otherwise(pl.col("min")).alias("min")
+    )
     df = add_targets(logs).sort("game_date")
     dnp = df.filter(pl.col("game_date") == "2025-05-16").row(0, named=True)
     assert dnp["minutes_played"] == 0.0

@@ -213,9 +213,7 @@ def run_live_collect(*, dry_run: bool = False) -> int:
     refresh = _force_reauth(device_uuid, device_name)
     with httpx.Client(timeout=20.0) as client:
         try:
-            labels = fetch_contest_stats(
-                contest_id, headers, client, refresh_headers=refresh
-            )
+            labels = fetch_contest_stats(contest_id, headers, client, refresh_headers=refresh)
         except ContestUnavailable as exc:
             log.warning("contest_unavailable", contest_id=contest_id, reason=str(exc))
             return 0
@@ -269,9 +267,7 @@ def run_historical_backfill(
     with httpx.Client(timeout=20.0) as client:
         for cid in _iter_contest_ids(start_id, stop_id):
             try:
-                labels = fetch_contest_stats(
-                    cid, headers, client, refresh_headers=refresh
-                )
+                labels = fetch_contest_stats(cid, headers, client, refresh_headers=refresh)
             except ContestUnavailable as exc:
                 log.info("skip_stats", contest_id=cid, reason=str(exc))
                 n_unavailable += 1
@@ -291,9 +287,7 @@ def run_historical_backfill(
             slate_date = labels[0].slate_date
             if with_leaderboards:
                 try:
-                    entries = fetch_contest_entries(
-                        cid, headers, client, refresh_headers=refresh
-                    )
+                    entries = fetch_contest_entries(cid, headers, client, refresh_headers=refresh)
                 except ContestUnavailable as exc:
                     log.info("skip_entries", contest_id=cid, reason=str(exc))
                 except PlatformAuthRequired:

@@ -34,18 +34,18 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class MinutesConfig:
-    half_life: float = 3.0          # games; weight halves every half_life prior games
-    league_rate: float = 0.095      # median per-minute real_score (cold-start rate)
+    half_life: float = 3.0  # games; weight halves every half_life prior games
+    league_rate: float = 0.095  # median per-minute real_score (cold-start rate)
     min_rate: float = 0.04
     max_rate: float = 0.18
-    starter_minutes: float = 30.0   # projected minutes for a confirmed starter
-    bench_minutes: float = 13.0     # projected minutes for a confirmed non-starter
-    confirm_weight: float = 0.6     # how hard a confirmed role overrides stale history
-    blowout_trim: float = 0.90      # starter minutes multiplier in a likely blowout
+    starter_minutes: float = 30.0  # projected minutes for a confirmed starter
+    bench_minutes: float = 13.0  # projected minutes for a confirmed non-starter
+    confirm_weight: float = 0.6  # how hard a confirmed role overrides stale history
+    blowout_trim: float = 0.90  # starter minutes multiplier in a likely blowout
     min_minutes: float = 4.0
     max_minutes: float = 40.0
     min_obs_for_history: int = 2
-    blend_k0: float = 3.0           # prior games of boost pull in the blend
+    blend_k0: float = 3.0  # prior games of boost pull in the blend
 
 
 def _ewma(vals: Sequence[float], half_life: float) -> tuple[float, float]:
@@ -123,9 +123,13 @@ def project_minutes(
     """Project tonight's minutes from a prior-minutes series (offline path)."""
     have = len(prior_min) >= cfg.min_obs_for_history
     return project_minutes_from_base(
-        recent_minutes(prior_min, cfg=cfg), has_history=have,
-        rotowire_confirmed=rotowire_confirmed, is_starter=is_starter,
-        injury_bonus_min=injury_bonus_min, blowout=blowout, cfg=cfg,
+        recent_minutes(prior_min, cfg=cfg),
+        has_history=have,
+        rotowire_confirmed=rotowire_confirmed,
+        is_starter=is_starter,
+        injury_bonus_min=injury_bonus_min,
+        blowout=blowout,
+        cfg=cfg,
     )
 
 
@@ -143,8 +147,12 @@ def predict_real_score(
     (offline series path)."""
     rate = per_minute_rate(prior_real, prior_min, cfg=cfg)
     proj = project_minutes(
-        prior_min, rotowire_confirmed=rotowire_confirmed, is_starter=is_starter,
-        injury_bonus_min=injury_bonus_min, blowout=blowout, cfg=cfg,
+        prior_min,
+        rotowire_confirmed=rotowire_confirmed,
+        is_starter=is_starter,
+        injury_bonus_min=injury_bonus_min,
+        blowout=blowout,
+        cfg=cfg,
     )
     return max(0.5, proj * rate)
 
@@ -172,15 +180,25 @@ def blended_real_score(
     has_history = n_games >= cfg.min_obs_for_history
     if has_history:
         proj = project_minutes_from_base(
-            recent_min, has_history=True, rotowire_confirmed=rotowire_confirmed,
-            is_starter=is_starter, injury_bonus_min=injury_bonus_min, blowout=blowout, cfg=cfg,
+            recent_min,
+            has_history=True,
+            rotowire_confirmed=rotowire_confirmed,
+            is_starter=is_starter,
+            injury_bonus_min=injury_bonus_min,
+            blowout=blowout,
+            cfg=cfg,
         )
         minutes_pred = max(0.5, proj * rate)
     else:
         # No minutes history: still honour a confirmed start/sit if present.
         proj = project_minutes_from_base(
-            recent_min, has_history=False, rotowire_confirmed=rotowire_confirmed,
-            is_starter=is_starter, injury_bonus_min=injury_bonus_min, blowout=blowout, cfg=cfg,
+            recent_min,
+            has_history=False,
+            rotowire_confirmed=rotowire_confirmed,
+            is_starter=is_starter,
+            injury_bonus_min=injury_bonus_min,
+            blowout=blowout,
+            cfg=cfg,
         )
         minutes_pred = max(0.5, proj * (rate if rate > 0 else cfg.league_rate))
     w = n_games / (n_games + cfg.blend_k0)

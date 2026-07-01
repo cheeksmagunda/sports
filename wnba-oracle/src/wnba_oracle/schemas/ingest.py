@@ -21,9 +21,7 @@ PlayerPoolSchema = DataFrameSchema(
         "display_name": Column(str, nullable=True),
         "position": Column(str, nullable=True),
         "team": Column(str, Check.str_length(min_value=2, max_value=4), nullable=False),
-        "multiplier_bonus": Column(
-            float, Check.in_range(0.0, 3.0), nullable=False
-        ),
+        "multiplier_bonus": Column(float, Check.in_range(0.0, 3.0), nullable=False),
         "primary_ranking": Column(int, nullable=True),
         "injury_status": Column(str, nullable=True),
     },

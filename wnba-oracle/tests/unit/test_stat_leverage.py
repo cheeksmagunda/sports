@@ -44,9 +44,7 @@ def test_leverage_score_bounded_zero_one() -> None:
     for pts in (0.0, 0.5, 1.0):
         for ast in (0.0, 0.5, 1.0):
             for stl in (0.0, 0.5, 1.0):
-                s = stat_leverage_score(
-                    pts_per_min=pts, ast_per_min=ast, stl_blk_per_min=stl
-                )
+                s = stat_leverage_score(pts_per_min=pts, ast_per_min=ast, stl_blk_per_min=stl)
                 assert 0.0 <= s <= 1.0
 
 

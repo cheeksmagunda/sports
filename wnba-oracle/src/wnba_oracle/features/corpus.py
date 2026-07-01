@@ -123,6 +123,7 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
     team_pace: dict[str, float] = {}
     try:
         from wnba_oracle.ingest.minutes_features import fetch_wnba_team_stats
+
         ts = fetch_wnba_team_stats()
         team_pace = {abbr: float(stats.get("pace", 0.0)) for abbr, stats in ts.items()}
     except Exception as exc:
@@ -150,8 +151,10 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
     # -- opp_dvp from game_logs (season-wide mean real_score allowed per opponent) --
     dvp_map: dict[str, float] = {}
     needed = [*REAL_SCORE_WEIGHTS, "opponent", "min"]
-    if game_logs is not None and not game_logs.is_empty() and all(
-        c in game_logs.columns for c in needed
+    if (
+        game_logs is not None
+        and not game_logs.is_empty()
+        and all(c in game_logs.columns for c in needed)
     ):
         try:
             score_expr = pl.lit(float(REAL_SCORE_INTERCEPT))
@@ -164,9 +167,7 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
                 .agg(pl.col("_est_rs").mean().alias("mean_allowed"))
                 .filter(pl.col("opponent").is_not_null() & (pl.col("opponent") != ""))
             )
-            dvp_map = {
-                row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()
-            }
+            dvp_map = {row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()}
             log.info("corpus_dvp_computed", n_teams=len(dvp_map))
         except Exception as exc:
             log.warning("corpus_dvp_failed", error=str(exc))
@@ -175,9 +176,8 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
         if col not in corpus.columns:
             corpus = corpus.with_columns(pl.lit(0.0).alias(col))
     if dvp_map and has_opp:
-        dvp_expr = (
-            pl.col("opponent")
-            .map_elements(lambda o: dvp_map.get(str(o).upper(), 0.0), return_dtype=pl.Float64)
+        dvp_expr = pl.col("opponent").map_elements(
+            lambda o: dvp_map.get(str(o).upper(), 0.0), return_dtype=pl.Float64
         )
         corpus = corpus.with_columns(
             dvp_expr.alias("opp_dvp_guard"),

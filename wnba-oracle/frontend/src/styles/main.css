@@ -1,15 +1,12 @@
-/* WNBA Oracle — design tokens, layout, and component styles.
+/* WNBA Oracle: design tokens, layout, and component styles.
  *
  * One file, no Tailwind. Hex literals are confined to §1; everything else
  * resolves through semantic tokens via light-dark().
  *
- * Palette: teal + magenta. Chosen to be league-neutral (DECISIONS D9 — deep
- * purple + orange was rejected for reading as Mercury / Lakers).
+ * Palette: teal + magenta. Chosen to be league-neutral.
  */
 
-/* ───────────────────────────────────────────────────────────── */
-/* §1 Primitive ramp — only place hex literals are allowed       */
-/* ───────────────────────────────────────────────────────────── */
+/* Primitive ramp: only place hex literals are allowed. */
 
 :root {
   color-scheme: light dark;

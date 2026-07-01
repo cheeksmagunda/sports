@@ -6,6 +6,7 @@ exactly the same set of 5 base slot multipliers. The platform fixes them
 and the user only picks which player goes in which slot. Card boost is
 additive on top of the slot multiplier (effective_mult = slot + boost).
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -49,9 +50,7 @@ def test_lineup_score_rearrangement_maximizes_score() -> None:
     real_score_samples = np.array([[5.0, 1.0, 3.0, 2.0, 4.0]])  # values
     boosts = np.array([0.0, 0.0, 0.0, 0.0, 0.0])  # no boosts to isolate slot effect
     indices = [0, 1, 2, 3, 4]
-    out = lineup_score_samples(
-        real_score_samples, boosts, indices, DEFAULT_SLOT_MULTIPLIERS
-    )
+    out = lineup_score_samples(real_score_samples, boosts, indices, DEFAULT_SLOT_MULTIPLIERS)
     # Sorted values descending: 5, 4, 3, 2, 1
     # Slot multipliers: 2.0, 1.8, 1.6, 1.4, 1.2
     # Score: 5*2.0 + 4*1.8 + 3*1.6 + 2*1.4 + 1*1.2 = 10 + 7.2 + 4.8 + 2.8 + 1.2 = 26.0

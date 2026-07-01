@@ -1,9 +1,8 @@
 """RotoWire injury wiring: job1 persists is_out into features_json,
 job2 filters those players before optimizing.
 
-NEEDS_CLAUDE #7. Until per-player minutes ingestion lands (mins_l10
-from game logs), the full D33 minutes-redistribution cascade can't
-fire; the binary drop-OUT-players half lives in this wiring and
+Until per-player minutes ingestion lands, the full minutes-redistribution
+cascade can't fire; the binary drop-OUT-players half lives in this wiring and
 is the bigger value lift anyway.
 """
 
@@ -15,7 +14,9 @@ from wnba_oracle.ingest.rotowire import LineupEntry
 from wnba_oracle.scheduler import job1, job2
 
 
-def _entry(team: str, name: str, slot: int = 0, status: str = "", confirmed: bool = False) -> LineupEntry:
+def _entry(
+    team: str, name: str, slot: int = 0, status: str = "", confirmed: bool = False
+) -> LineupEntry:
     return LineupEntry(
         team=team,
         opponent="",

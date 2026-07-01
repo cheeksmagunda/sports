@@ -36,13 +36,17 @@ def run_adversarial_validation(
     """Fit a LightGBM binary classifier on (train=0, serve=1). Return AUC +
     top SHAP-like feature importances. AUC > 0.6 should block promotion."""
     if train_df.is_empty() or serve_df.is_empty():
-        return AdversarialResult(auc=0.0, top_features=[], n_train=len(train_df), n_serve=len(serve_df))
+        return AdversarialResult(
+            auc=0.0, top_features=[], n_train=len(train_df), n_serve=len(serve_df)
+        )
 
     cols = feature_columns or [
         c for c in train_df.columns if c in serve_df.columns and train_df[c].dtype.is_numeric()
     ]
     if not cols:
-        return AdversarialResult(auc=0.0, top_features=[], n_train=len(train_df), n_serve=len(serve_df))
+        return AdversarialResult(
+            auc=0.0, top_features=[], n_train=len(train_df), n_serve=len(serve_df)
+        )
 
     X_train = train_df.select(cols).fill_null(0.0).to_pandas()
     X_serve = serve_df.select(cols).fill_null(0.0).to_pandas()

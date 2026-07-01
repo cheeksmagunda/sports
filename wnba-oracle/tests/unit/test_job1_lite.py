@@ -1,4 +1,4 @@
-"""Credit-free confirmed-lineup refresh (D102, NEEDS_CLAUDE #27).
+"""Credit-free confirmed-lineup refresh.
 
 run_lite re-scrapes RotoWire and JSONB-merges only the RotoWire-authoritative
 fields onto existing enrichment, with no Odds/props re-fetch.
@@ -14,8 +14,14 @@ from wnba_oracle.scheduler import job1
 
 def _entry(team, name, slot=0, status="", confirmed=False) -> LineupEntry:
     return LineupEntry(
-        team=team, opponent="", is_home=False, starter_slot=slot,
-        player_name=name, position="G", injury_status=status, confirmed=confirmed,
+        team=team,
+        opponent="",
+        is_home=False,
+        starter_slot=slot,
+        player_name=name,
+        position="G",
+        injury_status=status,
+        confirmed=confirmed,
     )
 
 
@@ -48,9 +54,11 @@ def test_run_lite_patches_matched_existing_rows() -> None:
     eng = MagicMock()
     eng.begin.return_value.__enter__.return_value = conn
     settings = MagicMock(database_url="postgresql://x")
-    with patch.object(job1, "fetch_lineups", return_value=lineups), patch.object(
-        job1, "get_settings", return_value=settings
-    ), patch.object(job1, "get_engine", return_value=eng):
+    with (
+        patch.object(job1, "fetch_lineups", return_value=lineups),
+        patch.object(job1, "get_settings", return_value=settings),
+        patch.object(job1, "get_engine", return_value=eng),
+    ):
         res = job1.run_lite("2026-06-21")
     assert res.n_pool == 1 and res.persisted_rows == 1
     # The UPDATE (second execute call) carried the row id + a JSON patch.

@@ -5,7 +5,7 @@ against the corresponding schema before downstream consumers see it.
 A schema violation raises pandera.errors.SchemaError and the calling
 pipeline halts (Hard Rule 7).
 
-Schema evolution is recorded in DECISIONS.md as a diff entry. Never
+Schema evolution belongs in migrations, tests, and tight code review. Never
 silently weaken a constraint to make a failing run pass.
 """
 

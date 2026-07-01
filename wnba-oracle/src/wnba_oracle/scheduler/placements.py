@@ -1,11 +1,9 @@
-"""Closed-loop placement / calibration tracking (D90, Phase 2).
+"""Closed-loop placement / calibration tracking.
 
-The 2026 research synthesis (research/internal/07_placement_overhaul.md)
-names the placement feedback loop as the keystone instrumentation phase:
-no later objective change (leverage, ceiling, duplication weights, the
-Phase 3 stack-aware field, the Phase 4 ceiling marginals) can be calibrated
-without a clean record of where the entered lineup actually finished
-across enough slates to dominate variance.
+The placement feedback loop is the calibration backbone: objective changes
+such as leverage, ceiling, duplication weights, stack-aware field modeling, and
+ceiling marginals need a clean record of where the entered lineup actually
+finished across enough slates to dominate variance.
 
 This module is the writer + reader of two append-only tables:
 
@@ -30,7 +28,7 @@ Diagnostics surfaced by `summarize_placements` and `compute_pit_histogram`:
   - Per-decile ownership log-loss -- localizes the miscalibration regime
     in the field-ownership model.
 
-Synthesis anti-patterns enforced (see research/internal/07*.md):
+Small-sample guardrails:
   - No tuning of PROP_SIGNAL_SCALE / leverage / ceiling weights below 100
     logged slates (the analysis emits a warning).
   - ROI is hidden until >= 500 slates.
@@ -60,7 +58,6 @@ from wnba_oracle.common.settings import get_settings
 
 log = get_logger("oracle.placements")
 
-# Synthesis display thresholds (research/internal/07_placement_overhaul.md).
 # Below these slate counts, the corresponding metric is unreliable and the CLI
 # warns rather than silently presenting noise as signal.
 SHOW_PIT_AFTER_SLATES = 50
@@ -173,10 +170,10 @@ def _stdnorm_sf(z: float) -> float:
     t = 1.0 / (1.0 + 0.2316419 * z)
     p = (
         0.319381530 * t
-        - 0.356563782 * t ** 2
-        + 1.781477937 * t ** 3
-        - 1.821255978 * t ** 4
-        + 1.330274429 * t ** 5
+        - 0.356563782 * t**2
+        + 1.781477937 * t**3
+        - 1.821255978 * t**4
+        + 1.330274429 * t**5
     )
     pdf = 0.39894228 * pow(2.71828182845905, -0.5 * z * z)
     return pdf * p
@@ -216,9 +213,7 @@ def ownership_log_loss_by_decile(
         if not rows:
             out.append(((d + 1) / 10.0, float("nan"), 0))
             continue
-        ll = -sum(
-            y * math.log(p) + (1 - y) * math.log(1 - p) for p, y in rows
-        ) / len(rows)
+        ll = -sum(y * math.log(p) + (1 - y) * math.log(1 - p) for p, y in rows) / len(rows)
         out.append(((d + 1) / 10.0, ll, len(rows)))
     return out
 
@@ -355,9 +350,7 @@ def record_placement(
 
     # Look up the freeze snapshot that produced this entry.
     if freeze_seq is None:
-        frozen = conn.execute(
-            FROZEN_SNAPSHOT_SELECT_LATEST, {"sd": slate_date}
-        ).first()
+        frozen = conn.execute(FROZEN_SNAPSHOT_SELECT_LATEST, {"sd": slate_date}).first()
     else:
         frozen = conn.execute(
             FROZEN_SNAPSHOT_SELECT_BY_SEQ, {"sd": slate_date, "seq": freeze_seq}
@@ -462,8 +455,7 @@ def auto_record_from_dayclose(
     platform truncates to top 20); `field_size` is the full contest entry count
     (`num_brawlers`, persisted in `contest_leaderboards`).
 
-    Two regimes, because the capture is right-censored (research/internal/
-    08_projection_paradox.md):
+    Two regimes, because the capture is right-censored:
 
     - **Inside the captured board** (our score beats at least one captured
       finisher): the captured finishers ARE the true top-N of the field, so
@@ -572,9 +564,7 @@ def render_summary_markdown(summary: dict[str, Any]) -> str:
         return "No placements logged yet."
     lines = [f"## Placement summary (last {summary['n_placements']} slates)\n"]
     if summary.get("median_finish_percentile") is not None:
-        lines.append(
-            f"- Median finish percentile: **{summary['median_finish_percentile']:.3f}**"
-        )
+        lines.append(f"- Median finish percentile: **{summary['median_finish_percentile']:.3f}**")
     if summary.get("cash_rate") is not None:
         lines.append(f"- Cash (top 50%) rate: **{summary['cash_rate']:.1%}**")
     if summary.get("top_10pct_rate") is not None:

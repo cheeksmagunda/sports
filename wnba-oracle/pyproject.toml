@@ -46,9 +46,8 @@ dependencies = [
     "playwright>=1.59.0",
 ]
 
-# Deferred dependencies. None of these are imported in the current build,
-# but they are documented capability targets. Re-add to `dependencies`
-# (and an entry in DECISIONS.md) when the feature ships.
+# Deferred dependencies. None of these are imported in the current build.
+# Re-add to `dependencies` only when the feature ships.
 #   apscheduler        - if Railway cron is ever replaced with in-process scheduling
 #   asyncpg            - if any code path needs the asyncio postgres driver
 #   duckdb             - the experiments.parquet ad-hoc query path (Part 6.6)
@@ -82,7 +81,6 @@ oracle-cron = "wnba_oracle.scheduler.cron:main"
 oracle-train = "wnba_oracle.train.cli:main"
 oracle-rotate-check = "wnba_oracle.audit.rotation_cli:main"
 oracle-backfill = "wnba_oracle.ingest.backfill:main"
-oracle-results = "wnba_oracle.scheduler.results_ledger:main"
 oracle-placements = "wnba_oracle.scheduler.placements:main"
 
 [build-system]

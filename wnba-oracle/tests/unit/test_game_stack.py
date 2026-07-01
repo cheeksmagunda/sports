@@ -1,11 +1,9 @@
-"""D70 / R3: game-stack bonus in the optimizer objective.
+"""Game-stack bonus in the optimizer objective.
 
-From research/internal/01_winners_anatomy.md: 87% of top-20 lineups have at
-least one 2+ pick group from the same game. Our optimizer treats picks as
-independent (the copula's same-team rho only fires for same-team players,
-not for opponents in the same game). The game_stack_bonus knob adds a small
-per-stack-pair EV bias so that at near-equal EV the optimizer prefers a
-stacked lineup; default 0.0 keeps prior behaviour.
+Our optimizer treats picks as independent unless a same-game bonus is supplied.
+The game_stack_bonus knob adds a small per-stack-pair EV bias so that at
+near-equal EV the optimizer prefers a stacked lineup; default 0.0 keeps prior
+behaviour.
 
 Also pins R4: the slot assignment is the rearrangement-inequality optimum
 (sort picks by descending median real_score, hand the highest to slot 0
@@ -74,7 +72,7 @@ def _flat_pair(
     Every player has identical projection so the optimizer's choice is
     entirely driven by the team-cap and the game-stack bonus.
     """
-    games: list[tuple[str, str]] = [(f"T{2*i}", f"T{2*i+1}") for i in range(n_games)]
+    games: list[tuple[str, str]] = [(f"T{2 * i}", f"T{2 * i + 1}") for i in range(n_games)]
     samps: list[PlayerSamplingSpec] = []
     fields: list[FieldPlayerSpec] = []
     pid = 100

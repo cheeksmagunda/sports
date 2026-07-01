@@ -64,8 +64,9 @@ def test_force_skips_postgres_existence_check() -> None:
     """force=True never calls connect() — the existence check is bypassed."""
     eng = _fake_engine_for_force(upsert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     assert out is True
@@ -77,8 +78,9 @@ def test_force_acquires_late_frozen_redis_key() -> None:
     """force=True uses wnba.late_frozen.{sd} with NX and 24h TTL."""
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     rd.set.assert_called_once_with(
@@ -91,8 +93,9 @@ def test_force_second_fire_bails_on_late_frozen_key() -> None:
     without touching Postgres — prevents overwriting twice."""
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=False)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     assert out is False
@@ -104,8 +107,9 @@ def test_force_append_payload_frozen_via_late_refreeze() -> None:
     as a late re-freeze."""
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     call_args = eng.begin.return_value.__enter__.return_value.execute.call_args
@@ -120,8 +124,9 @@ def test_force_uses_append_statement_not_update() -> None:
     ON CONFLICT ... DO UPDATE clause that could touch the earlier freeze."""
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     call_args = eng.begin.return_value.__enter__.return_value.execute.call_args
@@ -140,8 +145,9 @@ def test_force_false_preserves_normal_flow() -> None:
     select_conn.execute.return_value = select_result
     eng.connect.return_value.__enter__.return_value = select_conn
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=False)
     assert out is False

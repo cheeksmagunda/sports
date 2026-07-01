@@ -5,6 +5,7 @@ Call .to_pandas() at the call site when the consumer needs pandas. All accept
 an optional engine parameter for custom connections; default to get_engine()
 which reads DATABASE_URL.
 """
+
 from __future__ import annotations
 
 import polars as pl
@@ -34,11 +35,17 @@ def read_label_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
     with eng.connect() as conn:
         rows = conn.execute(q).fetchall()
     if not rows:
-        return pl.DataFrame(schema={
-            "slate_date": pl.Utf8, "player_id": pl.Int64, "display_name": pl.Utf8,
-            "team": pl.Utf8, "card_boost": pl.Float64, "real_score": pl.Float64,
-            "position": pl.Utf8,
-        })
+        return pl.DataFrame(
+            schema={
+                "slate_date": pl.Utf8,
+                "player_id": pl.Int64,
+                "display_name": pl.Utf8,
+                "team": pl.Utf8,
+                "card_boost": pl.Float64,
+                "real_score": pl.Float64,
+                "position": pl.Utf8,
+            }
+        )
     return pl.from_dicts([dict(r._mapping) for r in rows])
 
 
@@ -53,13 +60,19 @@ def read_slate_labels(engine: sa.Engine | None = None) -> pl.DataFrame:
     with eng.connect() as conn:
         rows = conn.execute(q).fetchall()
     if not rows:
-        return pl.DataFrame(schema={
-            "contest_id": pl.Int64, "slate_date": pl.Utf8,
-            "section": pl.Utf8, "platform_player_id": pl.Int64,
-            "display_name": pl.Utf8, "team_key": pl.Utf8,
-            "card_boost": pl.Float64, "drafts": pl.Int64,
-            "real_score": pl.Float64,
-        })
+        return pl.DataFrame(
+            schema={
+                "contest_id": pl.Int64,
+                "slate_date": pl.Utf8,
+                "section": pl.Utf8,
+                "platform_player_id": pl.Int64,
+                "display_name": pl.Utf8,
+                "team_key": pl.Utf8,
+                "card_boost": pl.Float64,
+                "drafts": pl.Int64,
+                "real_score": pl.Float64,
+            }
+        )
     return pl.from_dicts([dict(r._mapping) for r in rows])
 
 
@@ -78,13 +91,19 @@ def read_leaderboards(engine: sa.Engine | None = None) -> pl.DataFrame:
     with eng.connect() as conn:
         rows = conn.execute(q).fetchall()
     if not rows:
-        return pl.DataFrame(schema={
-            "contest_id": pl.Int64, "slate_date": pl.Utf8,
-            "entry_id": pl.Int64, "rank": pl.Int64,
-            "paged_rank": pl.Int64, "user_id": pl.Utf8,
-            "score": pl.Float64, "lineup_json": pl.Utf8,
-            "num_brawlers": pl.Int64,
-        })
+        return pl.DataFrame(
+            schema={
+                "contest_id": pl.Int64,
+                "slate_date": pl.Utf8,
+                "entry_id": pl.Int64,
+                "rank": pl.Int64,
+                "paged_rank": pl.Int64,
+                "user_id": pl.Utf8,
+                "score": pl.Float64,
+                "lineup_json": pl.Utf8,
+                "num_brawlers": pl.Int64,
+            }
+        )
     return pl.from_dicts([dict(r._mapping) for r in rows])
 
 
@@ -108,21 +127,34 @@ def read_game_logs(engine: sa.Engine | None = None) -> pl.DataFrame:
     with eng.connect() as conn:
         rows = conn.execute(q).fetchall()
     if not rows:
-        return pl.DataFrame(schema={
-            "game_date": pl.Utf8, "player_id": pl.Int64,
-            "player_name": pl.Utf8, "first_initial": pl.Utf8,
-            "last_name": pl.Utf8, "team": pl.Utf8,
-            "opponent": pl.Utf8, "home_away": pl.Utf8,
-            "game_id": pl.Utf8,
-            "min": pl.Float64, "season": pl.Utf8,
-            "pts": pl.Float64, "reb": pl.Float64,
-            "oreb": pl.Float64, "dreb": pl.Float64,
-            "ast": pl.Float64, "stl": pl.Float64,
-            "blk": pl.Float64, "tov": pl.Float64,
-            "fgm": pl.Float64, "fga": pl.Float64,
-            "fg3m": pl.Float64, "ftm": pl.Float64,
-            "fta": pl.Float64,
-        })
+        return pl.DataFrame(
+            schema={
+                "game_date": pl.Utf8,
+                "player_id": pl.Int64,
+                "player_name": pl.Utf8,
+                "first_initial": pl.Utf8,
+                "last_name": pl.Utf8,
+                "team": pl.Utf8,
+                "opponent": pl.Utf8,
+                "home_away": pl.Utf8,
+                "game_id": pl.Utf8,
+                "min": pl.Float64,
+                "season": pl.Utf8,
+                "pts": pl.Float64,
+                "reb": pl.Float64,
+                "oreb": pl.Float64,
+                "dreb": pl.Float64,
+                "ast": pl.Float64,
+                "stl": pl.Float64,
+                "blk": pl.Float64,
+                "tov": pl.Float64,
+                "fgm": pl.Float64,
+                "fga": pl.Float64,
+                "fg3m": pl.Float64,
+                "ftm": pl.Float64,
+                "fta": pl.Float64,
+            }
+        )
     return pl.from_dicts([dict(r._mapping) for r in rows])
 
 
@@ -136,4 +168,6 @@ def read_player_history(engine: sa.Engine | None = None) -> dict[int, float]:
     )
     with eng.connect() as conn:
         rows = conn.execute(q).fetchall()
-    return {int(r._mapping["platform_player_id"]): float(r._mapping["mean_real_score"]) for r in rows}
+    return {
+        int(r._mapping["platform_player_id"]): float(r._mapping["mean_real_score"]) for r in rows
+    }

@@ -19,6 +19,7 @@ Two-stage auth, identical to MLB:
 Hard Rule 7 (carried from MLB): if any step fails, raise. Never synthesize
 `card_boost=0`. The picker is silent when the source can't be trusted.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -143,13 +144,9 @@ async def login_and_seed_storage(
             user_agent=DEFAULT_USER_AGENT,
         )
         page = await ctx.new_page()
-        await page.goto(
-            "https://realsports.io/", wait_until="domcontentloaded", timeout=30000
-        )
+        await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=30000)
         try:
-            await page.locator("input[type='password']").wait_for(
-                state="visible", timeout=15000
-            )
+            await page.locator("input[type='password']").wait_for(state="visible", timeout=15000)
         except Exception:
             await page.wait_for_timeout(2000)
 
@@ -185,9 +182,7 @@ async def login_and_seed_storage(
             )
         if not any(t in snippet for t in ("WNBA", "MLB", "Home", "Sport")):
             await browser.close()
-            raise RuntimeError(
-                f"Login did not land on the home feed. Body: {snippet!r}"
-            )
+            raise RuntimeError(f"Login did not land on the home feed. Body: {snippet!r}")
 
         await ctx.storage_state(path=str(STORAGE_STATE_PATH))
         await browser.close()
@@ -205,9 +200,7 @@ async def capture_live_headers(
     request is observed within 20s.
     """
     if not STORAGE_STATE_PATH.exists():
-        raise StorageStateMissing(
-            f"{STORAGE_STATE_PATH} not found. Run `oracle-realsports-login`."
-        )
+        raise StorageStateMissing(f"{STORAGE_STATE_PATH} not found. Run `oracle-realsports-login`.")
 
     from playwright.async_api import async_playwright
 
@@ -235,9 +228,7 @@ async def capture_live_headers(
         ctx.on("request", on_request)
         page = await ctx.new_page()
         try:
-            await page.goto(
-                "https://realsports.io/", wait_until="domcontentloaded", timeout=25000
-            )
+            await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=25000)
         except Exception:
             pass
 
@@ -359,7 +350,7 @@ async def _search_with_query(
     (unlike MLB). Probe 2026-05-26 confirmed that passing `day=YYYY-MM-DD`
     returns an empty player list; omitting it returns the full currently-
     rated set. `slate_date` is retained in the signature for caller
-    parity but unused on the wire. See DECISIONS D17.
+    parity but unused on the wire.
     """
     _ = slate_date  # acknowledge unused param
     r = await _real_sports_get_with_retry(
@@ -436,9 +427,7 @@ async def fetch_pool_for_date(
         if gid is not None:
             game_ids.append(int(gid))
     if not game_ids:
-        raise RuntimeError(
-            f"no games found in /home/{SPORT}/next for slate_date={slate_date}"
-        )
+        raise RuntimeError(f"no games found in /home/{SPORT}/next for slate_date={slate_date}")
 
     sem = asyncio.Semaphore(4)
 
@@ -489,11 +478,10 @@ async def fetch_pool_for_date(
             except (TypeError, ValueError):
                 continue
 
-    # D72 / R6: targeted-search fallback. The single-letter prefix sweep
-    # caps results per query and misses players deep in the alphabetical
-    # ordering. The audit (research/internal/_menu_scrape_gap_pool.csv)
-    # showed 8 of 13 live slates had >= 1 winning-lineup pick that the
-    # optimizer's pool DID NOT have, all draftable players the prefix
+    # Targeted-search fallback. The single-letter prefix sweep caps results
+    # per query and misses players deep in the alphabetical ordering. Live
+    # audits showed winning-lineup picks missing from the optimizer pool, all
+    # draftable players the prefix
     # sweep silently dropped (A. Stevens, S. Sabally, J. Jocyte, M. Akoa
     # Makani, C. McMahon, K. Bell, ...). For each player in the per-game
     # union not yet in rated_by_id, we query their last name (first 3
@@ -599,9 +587,8 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
                 platform_id=str(p.get("id", "")),
                 first_name=p.get("firstName") or "",
                 last_name=p.get("lastName") or "",
-                display_name=p.get("displayName") or (
-                    f"{p.get('firstName') or ''} {p.get('lastName') or ''}".strip()
-                ),
+                display_name=p.get("displayName")
+                or (f"{p.get('firstName') or ''} {p.get('lastName') or ''}".strip()),
                 position=p.get("position") or "",
                 team=team,
                 multiplier_bonus=boost_f,
@@ -627,8 +614,7 @@ async def fetch_contest_meta(
     WNBA-specific note: unlike MLB, there is no `/home/{sport}/day/next`
     endpoint to enumerate the current contest id; that endpoint returns
     500 for WNBA. Use `discover_wnba_contest_id` (Playwright-based) to
-    find the active WNBA contest id, then call this with that id. See
-    DECISIONS D18.
+    find the active WNBA contest id, then call this with that id.
     """
     h = _http_headers(headers)
     r = await _real_sports_get_with_retry(
@@ -649,9 +635,7 @@ async def discover_wnba_contest_id() -> int | None:
     fire to seed the day's contest id into Redis.
     """
     if not STORAGE_STATE_PATH.exists():
-        raise StorageStateMissing(
-            f"{STORAGE_STATE_PATH} not found; cannot discover contest id."
-        )
+        raise StorageStateMissing(f"{STORAGE_STATE_PATH} not found; cannot discover contest id.")
     from playwright.async_api import async_playwright
 
     seen_ids: list[int] = []
@@ -677,13 +661,9 @@ async def discover_wnba_contest_id() -> int | None:
         page = await ctx.new_page()
         page.on("request", on_req)
         try:
-            await page.goto(
-                "https://realsports.io/", wait_until="domcontentloaded", timeout=15000
-            )
+            await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=15000)
             await page.evaluate("localStorage.setItem('selectedSport', 'wnba');")
-            await page.goto(
-                "https://realsports.io/", wait_until="domcontentloaded", timeout=15000
-            )
+            await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=15000)
             await page.wait_for_timeout(3000)
             try:
                 await page.locator("text=/WNBA/i").first.click(timeout=3000)

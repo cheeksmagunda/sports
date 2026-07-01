@@ -47,7 +47,7 @@ def test_measured_marginal_matches_real_counts() -> None:
     specs = [
         _spec(1, pred=1.0, boost=1.6, drafts=2600),  # chalk, low proj
         _spec(2, pred=1.0, boost=0.7, drafts=2900),  # chalk, low proj
-        _spec(3, pred=3.0, boost=2.1, drafts=321),   # contrarian, high proj
+        _spec(3, pred=3.0, boost=2.1, drafts=321),  # contrarian, high proj
         _spec(4, pred=1.5, boost=1.6, drafts=1700),
         _spec(5, pred=3.0, boost=3.1, drafts=494),
     ]

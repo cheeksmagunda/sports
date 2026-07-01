@@ -58,9 +58,7 @@ _MIN_MINUTES_FLOOR = 0.5
 _MIN_RATE_FLOOR = 1e-4
 
 
-def _sorted_quantiles(
-    q: dict[float, np.ndarray], *, floor: float
-) -> dict[float, np.ndarray]:
+def _sorted_quantiles(q: dict[float, np.ndarray], *, floor: float) -> dict[float, np.ndarray]:
     """Per-row monotone (P10<=P50<=P90) quantiles with a positive floor.
 
     The three quantile boosters are trained independently and can cross
@@ -107,9 +105,7 @@ class PickerArtifact:
         p50 = np.full(n, np.nan)
         p90 = np.full(n, np.nan)
         positions = (
-            frame.get_column("position").to_list()
-            if "position" in frame.columns
-            else [None] * n
+            frame.get_column("position").to_list() if "position" in frame.columns else [None] * n
         )
         cohorts = [cohort_for_position(p) for p in positions]
         served_any = False
@@ -152,7 +148,10 @@ def artifact_content_equal(a: PickerArtifact, b: PickerArtifact) -> tuple[bool, 
     Returns ``(equal, reason)``; ``reason`` names the first divergence found.
     """
     if set(a.heads) != set(b.heads):
-        return False, f"head keys differ: {sorted(map(str, a.heads))} vs {sorted(map(str, b.heads))}"
+        return (
+            False,
+            f"head keys differ: {sorted(map(str, a.heads))} vs {sorted(map(str, b.heads))}",
+        )
     for key in a.heads:
         ha, hb = a.heads[key], b.heads[key]
         if set(ha.quantile_models) != set(hb.quantile_models):
@@ -188,9 +187,7 @@ def _filter_cohort(df: pl.DataFrame, cohort: Cohort) -> pl.DataFrame:
     if "cohort" in df.columns:
         return df.filter(pl.col("cohort") == cohort)
     return df.with_columns(
-        pl.col("position").map_elements(cohort_for_position, return_dtype=pl.String).alias(
-            "cohort"
-        )
+        pl.col("position").map_elements(cohort_for_position, return_dtype=pl.String).alias("cohort")
     ).filter(pl.col("cohort") == cohort)
 
 
@@ -218,9 +215,7 @@ def train_picker(
     seed = int(cfg.get("seeds", {}).get("numpy", 1729))
     _set_seeds(seed)
 
-    low_data = len(train_df) < int(
-        cfg.get("low_data_mode", {}).get("min_labeled_rows", 2000)
-    )
+    low_data = len(train_df) < int(cfg.get("low_data_mode", {}).get("min_labeled_rows", 2000))
     head_cfg = LGBMHeadConfig(
         num_leaves=int(cfg["lightgbm"]["num_leaves"]),
         min_data_in_leaf=int(cfg["lightgbm"]["min_data_in_leaf"]),
@@ -313,9 +308,9 @@ def train_picker(
     if target_real_score in label_train.columns:
         eb = EBHierarchicalBaseline()
         eb_input = label_train.with_columns(
-            pl.col("position").map_elements(cohort_for_position, return_dtype=pl.String).alias(
-                "cohort"
-            )
+            pl.col("position")
+            .map_elements(cohort_for_position, return_dtype=pl.String)
+            .alias("cohort")
             if "cohort" not in train_df.columns
             else pl.col("cohort")
         )

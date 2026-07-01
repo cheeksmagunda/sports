@@ -87,8 +87,9 @@ def test_freeze_releases_lock_when_append_raises() -> None:
     )
     rd = MagicMock()
     rd.set.return_value = True  # lock acquired
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-18", "sha", _rec(), "top_20", _proj(), force=False)
     assert out is False

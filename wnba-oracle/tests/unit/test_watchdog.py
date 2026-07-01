@@ -149,9 +149,10 @@ def test_ping_fires_on_critical_when_url_set() -> None:
     from types import SimpleNamespace
 
     settings = SimpleNamespace(watchdog_ping_url="https://hc.example/abc")
-    with patch(
-        "wnba_oracle.common.settings.get_settings", return_value=settings
-    ), patch("httpx.get") as get:
+    with (
+        patch("wnba_oracle.common.settings.get_settings", return_value=settings),
+        patch("httpx.get") as get,
+    ):
         watchdog._ping_on_critical([_ev("critical")])
     get.assert_called_once_with("https://hc.example/abc/fail", timeout=5.0)
 
@@ -160,9 +161,10 @@ def test_ping_skipped_without_critical() -> None:
     from types import SimpleNamespace
 
     settings = SimpleNamespace(watchdog_ping_url="https://hc.example/abc")
-    with patch(
-        "wnba_oracle.common.settings.get_settings", return_value=settings
-    ), patch("httpx.get") as get:
+    with (
+        patch("wnba_oracle.common.settings.get_settings", return_value=settings),
+        patch("httpx.get") as get,
+    ):
         watchdog._ping_on_critical([_ev("warn"), _ev("error")])
     get.assert_not_called()
 
@@ -171,9 +173,10 @@ def test_ping_noop_without_url() -> None:
     from types import SimpleNamespace
 
     settings = SimpleNamespace(watchdog_ping_url="")
-    with patch(
-        "wnba_oracle.common.settings.get_settings", return_value=settings
-    ), patch("httpx.get") as get:
+    with (
+        patch("wnba_oracle.common.settings.get_settings", return_value=settings),
+        patch("httpx.get") as get,
+    ):
         watchdog._ping_on_critical([_ev("critical")])
     get.assert_not_called()
 
@@ -293,19 +296,17 @@ def test_run_watchdog_aggregates_and_persists() -> None:
         severity=watchdog.SEVERITY_CRITICAL,
         payload={"note": "no row"},
     )
-    with patch.object(watchdog, "_check_pool", return_value=[pool_ev]), patch.object(
-        watchdog, "_check_enrichment_freshness", return_value=[]
-    ), patch.object(
-        watchdog, "_check_freeze", return_value=[freeze_ev]
-    ), patch.object(
-        watchdog, "_check_model_artifact", return_value=[]
-    ), patch.object(
-        watchdog, "_check_feature_content", return_value=[]
-    ), patch.object(
-        watchdog, "_check_config_drift", return_value=[]
-    ), patch.object(watchdog, "persist_events", return_value=2) as persist, patch.object(
-        watchdog, "_ping_on_critical"
-    ) as ping:
+    with (
+        patch.object(watchdog, "_check_pool", return_value=[pool_ev]),
+        patch.object(watchdog, "_check_enrichment_freshness", return_value=[]),
+        patch.object(watchdog, "_check_freeze", return_value=[freeze_ev]),
+        patch.object(watchdog, "_check_model_artifact", return_value=[]),
+        patch.object(watchdog, "_check_feature_content", return_value=[]),
+        patch.object(watchdog, "_check_config_drift", return_value=[]),
+        patch.object(watchdog, "_check_enrichment_source", return_value=[]),
+        patch.object(watchdog, "persist_events", return_value=2) as persist,
+        patch.object(watchdog, "_ping_on_critical") as ping,
+    ):
         events = watchdog.run_watchdog(
             "2026-05-27",
             now_utc=dt.datetime(2026, 5, 27, 23, 0, tzinfo=dt.UTC),
@@ -412,9 +413,7 @@ def test_summarize_status_picks_highest_severity() -> None:
     assert _summarize([{"severity": "warn"}]) == "warn"
     assert _summarize([{"severity": "warn"}, {"severity": "error"}]) == "error"
     assert (
-        _summarize(
-            [{"severity": "warn"}, {"severity": "error"}, {"severity": "critical"}]
-        )
+        _summarize([{"severity": "warn"}, {"severity": "error"}, {"severity": "critical"}])
         == "critical"
     )
 

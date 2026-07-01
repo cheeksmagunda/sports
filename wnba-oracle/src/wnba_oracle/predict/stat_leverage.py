@@ -26,12 +26,8 @@ from wnba_oracle.predict.scoring import REAL_SCORE_WEIGHTS
 HIGH_LEVERAGE_STATS = ("stl", "blk", "ast")
 MODERATE_LEVERAGE_STATS = ("pts", "oreb", "reb")
 
-HIGH_LEVERAGE_WEIGHT_SUM = sum(
-    abs(REAL_SCORE_WEIGHTS[s]) for s in HIGH_LEVERAGE_STATS
-)
-ALL_POSITIVE_WEIGHT_SUM = sum(
-    w for w in REAL_SCORE_WEIGHTS.values() if w > 0
-)
+HIGH_LEVERAGE_WEIGHT_SUM = sum(abs(REAL_SCORE_WEIGHTS[s]) for s in HIGH_LEVERAGE_STATS)
+ALL_POSITIVE_WEIGHT_SUM = sum(w for w in REAL_SCORE_WEIGHTS.values() if w > 0)
 HIGH_LEVERAGE_SHARE = HIGH_LEVERAGE_WEIGHT_SUM / ALL_POSITIVE_WEIGHT_SUM
 
 
@@ -59,11 +55,7 @@ def stat_leverage_score(
     w_reb = abs(REAL_SCORE_WEIGHTS["reb"]) + abs(REAL_SCORE_WEIGHTS["oreb"])
 
     high_contrib = stl_blk_per_min * w_stl_blk + ast_per_min * w_ast
-    total_contrib = (
-        high_contrib
-        + pts_per_min * w_pts
-        + reb_per_min * w_reb
-    )
+    total_contrib = high_contrib + pts_per_min * w_pts + reb_per_min * w_reb
     if total_contrib <= 0:
         return 0.0
     return min(1.0, high_contrib / total_contrib)
@@ -82,9 +74,12 @@ def is_leverage_efficient(
     tercile of WNBA per-minute profiles (guards with high assist rates
     and/or defensive specialists with steal/block rates).
     """
-    return stat_leverage_score(
-        pts_per_min=pts_per_min,
-        ast_per_min=ast_per_min,
-        stl_blk_per_min=stl_blk_per_min,
-        reb_per_min=reb_per_min,
-    ) >= threshold
+    return (
+        stat_leverage_score(
+            pts_per_min=pts_per_min,
+            ast_per_min=ast_per_min,
+            stl_blk_per_min=stl_blk_per_min,
+            reb_per_min=reb_per_min,
+        )
+        >= threshold
+    )

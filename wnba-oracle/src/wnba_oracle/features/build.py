@@ -80,7 +80,9 @@ def build_slate_features(
                 "position": p.position,
                 "cohort": cohort_for_position(p.position),
                 "card_boost": float(p.multiplier_bonus),
-                "primary_ranking": int(p.primary_ranking) if p.primary_ranking is not None else None,
+                "primary_ranking": int(p.primary_ranking)
+                if p.primary_ranking is not None
+                else None,
             }
         )
     if unresolved:
@@ -99,8 +101,8 @@ def build_slate_features(
         if roll.is_empty():
             continue
         rolling_rows.append(roll)
-    rolling = pl.concat(rolling_rows, how="vertical") if rolling_rows else pl.DataFrame(
-        {"player_id": []}
+    rolling = (
+        pl.concat(rolling_rows, how="vertical") if rolling_rows else pl.DataFrame({"player_id": []})
     )
     if not rolling.is_empty():
         base = base.join(rolling, on="player_id", how="left")
@@ -109,8 +111,8 @@ def build_slate_features(
     # `injury_status` per starter ("IL" / "OUT" / "GTD" / "" etc); we
     # treat IL/OUT as donors. Same-cohort teammates inherit the freed
     # minutes inversely weighted by their current minutes. Each
-    # recipient's mins_l10 is bumped by the cascade bonus before the
-    # picker reads it. See DECISIONS D29.
+    # recipient's mins_l10 is bumped by the cascade bonus before the picker
+    # reads it.
     cascade_rows = _build_cascade_inputs(base, lineups)
     cascade_bonuses = redistribute_minutes(cascade_rows, CascadeConfig())
     if cascade_bonuses and "mins_l10" in base.columns:
@@ -124,30 +126,38 @@ def build_slate_features(
             except (TypeError, ValueError):
                 return 0.0
 
-        base = base.with_columns(
-            pl.col("player_id")
-            .map_elements(_bonus_lookup, return_dtype=pl.Float64)
-            .alias("_cascade_bonus")
-        ).with_columns(
-            (pl.col("mins_l10") + pl.col("_cascade_bonus")).alias("mins_l10")
-        ).drop("_cascade_bonus")
+        base = (
+            base.with_columns(
+                pl.col("player_id")
+                .map_elements(_bonus_lookup, return_dtype=pl.Float64)
+                .alias("_cascade_bonus")
+            )
+            .with_columns((pl.col("mins_l10") + pl.col("_cascade_bonus")).alias("mins_l10"))
+            .drop("_cascade_bonus")
+        )
 
     # 3) Team / opponent context.
     team_lookup, opp_pace_map, _ = _team_lookup_from_stats(team_stats)
     base = base.with_columns(
         [
-            pl.col("team").map_elements(
+            pl.col("team")
+            .map_elements(
                 lambda t: team_lookup.get(str(t), {}).get("pace", 0.0),
                 return_dtype=pl.Float64,
-            ).alias("team_pace"),
-            pl.col("team").map_elements(
+            )
+            .alias("team_pace"),
+            pl.col("team")
+            .map_elements(
                 lambda t: team_lookup.get(str(t), {}).get("off_rating", 0.0),
                 return_dtype=pl.Float64,
-            ).alias("team_off_rtg"),
-            pl.col("team").map_elements(
+            )
+            .alias("team_off_rtg"),
+            pl.col("team")
+            .map_elements(
                 lambda t: team_lookup.get(str(t), {}).get("def_rating", 0.0),
                 return_dtype=pl.Float64,
-            ).alias("team_def_rtg"),
+            )
+            .alias("team_def_rtg"),
         ]
     )
 
@@ -155,29 +165,37 @@ def build_slate_features(
     odds_by_team = _odds_by_team(odds)
     base = base.with_columns(
         [
-            pl.col("team").map_elements(
+            pl.col("team")
+            .map_elements(
                 lambda t: odds_by_team.get(str(t), {}).get("opponent", ""),
                 return_dtype=pl.String,
-            ).alias("opponent"),
-            pl.col("team").map_elements(
+            )
+            .alias("opponent"),
+            pl.col("team")
+            .map_elements(
                 lambda t: 1 if odds_by_team.get(str(t), {}).get("is_home", False) else 0,
                 return_dtype=pl.Int64,
-            ).alias("is_home"),
-            pl.col("team").map_elements(
+            )
+            .alias("is_home"),
+            pl.col("team")
+            .map_elements(
                 lambda t: _as_float(odds_by_team.get(str(t), {}).get("total", 0.0)),
                 return_dtype=pl.Float64,
-            ).alias("vegas_total"),
-            pl.col("team").map_elements(
+            )
+            .alias("vegas_total"),
+            pl.col("team")
+            .map_elements(
                 lambda t: _as_float(odds_by_team.get(str(t), {}).get("spread", 0.0)),
                 return_dtype=pl.Float64,
-            ).alias("vegas_spread"),
+            )
+            .alias("vegas_spread"),
         ]
     ).with_columns(
         # Implied team total = (vegas_total - vegas_spread) / 2; positive
         # spread is the underdog so subtract.
-        (
-            (pl.col("vegas_total") - pl.col("vegas_spread")) / pl.lit(2.0)
-        ).alias("implied_team_total"),
+        ((pl.col("vegas_total") - pl.col("vegas_spread")) / pl.lit(2.0)).alias(
+            "implied_team_total"
+        ),
         pl.lit(0.0).alias("home_moneyline"),
         pl.lit(0.0).alias("away_moneyline"),
     )
@@ -185,23 +203,27 @@ def build_slate_features(
     # Opponent pace + def rtg via opponent team key.
     base = base.with_columns(
         [
-            pl.col("opponent").map_elements(
+            pl.col("opponent")
+            .map_elements(
                 lambda t: opp_pace_map.get(str(t), 0.0),
                 return_dtype=pl.Float64,
-            ).alias("opp_pace"),
-            pl.col("opponent").map_elements(
+            )
+            .alias("opp_pace"),
+            pl.col("opponent")
+            .map_elements(
                 lambda t: team_lookup.get(str(t), {}).get("off_rating", 0.0),
                 return_dtype=pl.Float64,
-            ).alias("opp_off_rtg"),
-            pl.col("opponent").map_elements(
+            )
+            .alias("opp_off_rtg"),
+            pl.col("opponent")
+            .map_elements(
                 lambda t: team_lookup.get(str(t), {}).get("def_rating", 0.0),
                 return_dtype=pl.Float64,
-            ).alias("opp_def_rtg"),
+            )
+            .alias("opp_def_rtg"),
         ]
     ).with_columns(
-        ((pl.col("team_pace") + pl.col("opp_pace")) / pl.lit(2.0)).alias(
-            "game_pace_implied"
-        ),
+        ((pl.col("team_pace") + pl.col("opp_pace")) / pl.lit(2.0)).alias("game_pace_implied"),
         pl.lit(0.0).alias("opp_dvp_guard"),
         pl.lit(0.0).alias("opp_dvp_forward"),
         pl.lit(0.0).alias("opp_dvp_center"),
@@ -227,15 +249,15 @@ def build_slate_features(
 
     base = base.with_columns(
         [
-            pl.struct(["team", "platform_player_id"]).map_elements(
-                _conf_starter, return_dtype=pl.Int64
-            ).alias("is_confirmed_starter"),
-            pl.struct(["team", "platform_player_id"]).map_elements(
-                _exp_starter, return_dtype=pl.Int64
-            ).alias("is_expected_starter"),
-            pl.struct(["team", "platform_player_id"]).map_elements(
-                _slot, return_dtype=pl.Int64
-            ).alias("starter_slot"),
+            pl.struct(["team", "platform_player_id"])
+            .map_elements(_conf_starter, return_dtype=pl.Int64)
+            .alias("is_confirmed_starter"),
+            pl.struct(["team", "platform_player_id"])
+            .map_elements(_exp_starter, return_dtype=pl.Int64)
+            .alias("is_expected_starter"),
+            pl.struct(["team", "platform_player_id"])
+            .map_elements(_slot, return_dtype=pl.Int64)
+            .alias("starter_slot"),
         ]
     ).with_columns(pl.lit(0).alias("is_injury_flag"))
 

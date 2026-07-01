@@ -40,14 +40,14 @@ def _rbo_at_5(a: list[int], b: list[int], p: float = 0.9) -> float:
     return (1 - p) * score / (1 - p**5)
 
 
-def _bootstrap_ci(values: list[float], *, n_boot: int = 1000, ci: float = 0.95) -> tuple[float, float]:
+def _bootstrap_ci(
+    values: list[float], *, n_boot: int = 1000, ci: float = 0.95
+) -> tuple[float, float]:
     if not values:
         return (0.0, 0.0)
     arr = np.array(values)
     rng = np.random.default_rng(1729)
-    samples = [
-        float(np.mean(rng.choice(arr, size=arr.size, replace=True))) for _ in range(n_boot)
-    ]
+    samples = [float(np.mean(rng.choice(arr, size=arr.size, replace=True))) for _ in range(n_boot)]
     lo = float(np.quantile(samples, (1.0 - ci) / 2))
     hi = float(np.quantile(samples, 1.0 - (1.0 - ci) / 2))
     return lo, hi
@@ -67,7 +67,9 @@ def evaluate_window(window_days: int) -> dict:
 
     rbo_vals = [r["rbo_at_5"] for r in rows if r.get("rbo_at_5") is not None]
     ndcg_vals = [r["ndcg_at_5"] for r in rows if r.get("ndcg_at_5") is not None]
-    delta_vals = [r["realized_value_delta"] for r in rows if r.get("realized_value_delta") is not None]
+    delta_vals = [
+        r["realized_value_delta"] for r in rows if r.get("realized_value_delta") is not None
+    ]
 
     rbo_ci = _bootstrap_ci(rbo_vals)
     ndcg_ci = _bootstrap_ci(ndcg_vals)

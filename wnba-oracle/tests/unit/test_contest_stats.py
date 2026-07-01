@@ -55,15 +55,10 @@ def test_player_display_name_falls_back_to_first_last() -> None:
     table is the live freeze's defense-in-depth name source."""
     assert _player_display_name({"displayName": "A. Wilson"}) == "A. Wilson"
     assert (
-        _player_display_name(
-            {"displayName": "", "firstName": "Frieda", "lastName": "Buhner"}
-        )
+        _player_display_name({"displayName": "", "firstName": "Frieda", "lastName": "Buhner"})
         == "Frieda Buhner"
     )
-    assert (
-        _player_display_name({"firstName": "Naz", "lastName": "Hillmon"})
-        == "Naz Hillmon"
-    )
+    assert _player_display_name({"firstName": "Naz", "lastName": "Hillmon"}) == "Naz Hillmon"
     assert _player_display_name({}) == ""
 
 
@@ -174,19 +169,37 @@ def test_fetch_contest_entries_rejects_wrong_sport() -> None:
 def test_dedupe_by_player_keeps_first() -> None:
     labels = [
         ContestLabel(
-            contest_id=1, slate_date="2026-05-26", section="highestBoostedValuePlayers",
-            platform_player_id=42, display_name="X", team_key="LVA",
-            card_boost=1.5, drafts=100, real_score=5.0,
+            contest_id=1,
+            slate_date="2026-05-26",
+            section="highestBoostedValuePlayers",
+            platform_player_id=42,
+            display_name="X",
+            team_key="LVA",
+            card_boost=1.5,
+            drafts=100,
+            real_score=5.0,
         ),
         ContestLabel(
-            contest_id=1, slate_date="2026-05-26", section="popularPlayers",
-            platform_player_id=42, display_name="X", team_key="LVA",
-            card_boost=1.5, drafts=200, real_score=5.0,
+            contest_id=1,
+            slate_date="2026-05-26",
+            section="popularPlayers",
+            platform_player_id=42,
+            display_name="X",
+            team_key="LVA",
+            card_boost=1.5,
+            drafts=200,
+            real_score=5.0,
         ),
         ContestLabel(
-            contest_id=1, slate_date="2026-05-26", section="popularPlayers",
-            platform_player_id=43, display_name="Y", team_key="NYL",
-            card_boost=0.5, drafts=300, real_score=3.0,
+            contest_id=1,
+            slate_date="2026-05-26",
+            section="popularPlayers",
+            platform_player_id=43,
+            display_name="Y",
+            team_key="NYL",
+            card_boost=0.5,
+            drafts=300,
+            real_score=3.0,
         ),
     ]
     out = dedupe_by_player(labels)

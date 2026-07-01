@@ -27,8 +27,21 @@ from wnba_oracle.predict.scoring import box_to_real_score
 
 log = get_logger("oracle.ingest.minutes_features")
 
-_BOX_STATS = ("pts", "reb", "oreb", "dreb", "ast", "stl", "blk", "tov",
-              "fgm", "fga", "fg3m", "ftm", "fta")
+_BOX_STATS = (
+    "pts",
+    "reb",
+    "oreb",
+    "dreb",
+    "ast",
+    "stl",
+    "blk",
+    "tov",
+    "fgm",
+    "fga",
+    "fg3m",
+    "ftm",
+    "fta",
+)
 
 
 @dataclass(frozen=True)
@@ -113,7 +126,11 @@ def build_minutes_features(
         rec_min, _ = _ewma(min_series, cfg.half_life)
         r_mean, _ = _ewma(reals, cfg.half_life)
         m_mean, _ = _ewma(min_series, cfg.half_life)
-        rate = cfg.league_rate if m_mean <= 0 else min(cfg.max_rate, max(cfg.min_rate, r_mean / m_mean))
+        rate = (
+            cfg.league_rate
+            if m_mean <= 0
+            else min(cfg.max_rate, max(cfg.min_rate, r_mean / m_mean))
+        )
         feat = MinutesFeatures(
             recent_minutes=rec_min,
             per_min_rate=rate,

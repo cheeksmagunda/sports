@@ -30,8 +30,7 @@ from dataclasses import dataclass
 class AvailabilityConfig:
     active_minutes_floor: float = 10.0  # a "meaningful shift" worth a roster spot
     min_vol: float = 4.0  # floor on the minutes std used in the normal CDF
-    # D73 (R9 refinement): empirical recalibration over the 13,002-row
-    # gamelog corpus (scripts/research/availability_calibration.py).
+    # Empirical recalibration over the 13,002-row gamelog corpus.
     # Per-bin P(min >= 10):
     #   mins_l5 [0,  5): 0.204  (n=432, cold/bench)
     #   mins_l5 [5, 15): 0.554  (n=3397, rotation bench)

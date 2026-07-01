@@ -173,7 +173,7 @@ def fetch_contest_stats(
             backoff_429 += 1
             if backoff_429 > 3:
                 raise ContestUnavailable(f"429 on {url} after {backoff_429} retries")
-            sleep_s = min(30, 2 ** backoff_429)
+            sleep_s = min(30, 2**backoff_429)
             log.warning("contest_stats_429_backoff", contest_id=contest_id, sleep_s=sleep_s)
             _time.sleep(sleep_s)
             continue
@@ -191,7 +191,8 @@ def fetch_contest_stats(
     # three known sections (~30 players/slate); if the platform ever ships
     # a fuller section this log line is how we find out.
     unknown_sections = [
-        str(s.get("sectionName")) for s in sections
+        str(s.get("sectionName"))
+        for s in sections
         if s.get("sectionName") not in DRAFT_STATS_SECTIONS
     ]
     if unknown_sections:
@@ -295,7 +296,7 @@ def fetch_contest_entries(
             backoff_429 += 1
             if backoff_429 > 3:
                 raise ContestUnavailable(f"429 on {url} after {backoff_429} retries")
-            sleep_s = min(30, 2 ** backoff_429)
+            sleep_s = min(30, 2**backoff_429)
             log.warning("contest_entries_429_backoff", contest_id=contest_id, sleep_s=sleep_s)
             _time.sleep(sleep_s)
             continue
@@ -344,8 +345,8 @@ def labels_from_leaderboard_entries(
     The /stats draftStats sections cover only ~30 highlighted players per
     slate; any pool player outside them (Loyd/Boston on 2026-06-08) loses
     their realized real_score forever. Leaderboard lineups carry the same
-    per-player `value` verbatim from the platform (results_ledger already
-    trusts the field), so harvest them as `section="leaderboard_lineup"`
+    per-player `value` verbatim from the platform, so harvest them as
+    `section="leaderboard_lineup"`
     rows. Persistence uses DO NOTHING so these never clobber a canonical
     three-section row.
 

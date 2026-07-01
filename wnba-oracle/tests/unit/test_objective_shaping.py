@@ -73,9 +73,7 @@ def test_default_weights_are_byte_identical() -> None:
     """
     samps, fields = _toy_pool()
     curve = default_curve_for_regime("top_20")
-    cfg = OptimizeConfig(
-        top_n_filter=10, n_samples=500, n_field_lineups=80, max_per_team=5
-    )
+    cfg = OptimizeConfig(top_n_filter=10, n_samples=500, n_field_lineups=80, max_per_team=5)
     a = optimize_lineup(samps, fields, curve, cfg=cfg)
     cfg2 = OptimizeConfig(
         top_n_filter=10,
@@ -100,9 +98,7 @@ def test_leverage_weight_biases_toward_contrarian() -> None:
     """
     samps, fields = _toy_pool()
     curve = default_curve_for_regime("top_20")
-    base_cfg = OptimizeConfig(
-        top_n_filter=10, n_samples=500, n_field_lineups=80, max_per_team=5
-    )
+    base_cfg = OptimizeConfig(top_n_filter=10, n_samples=500, n_field_lineups=80, max_per_team=5)
     base = optimize_lineup(samps, fields, curve, cfg=base_cfg)
     lev_cfg = OptimizeConfig(
         top_n_filter=10,

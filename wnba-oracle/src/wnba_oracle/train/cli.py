@@ -29,9 +29,7 @@ log = get_logger("oracle.train.cli")
 
 def _git_sha() -> str:
     try:
-        r = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-        )
+        r = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
         return r.stdout.strip()[:12]
     except Exception:
         return "no-git"
@@ -47,8 +45,11 @@ def _split_last_fold(
         last_train, last_valid = folds[-1]
         train_df, valid_df = df[last_train], df[last_valid]
         log.info(
-            "fold_used", corpus=name, train_rows=len(train_df),
-            valid_rows=len(valid_df), n_folds=len(folds),
+            "fold_used",
+            corpus=name,
+            train_rows=len(train_df),
+            valid_rows=len(valid_df),
+            n_folds=len(folds),
         )
         return train_df, valid_df
     log.warning("no_folds_available_fallback_time_ordered_80_20", corpus=name, rows=len(df))
@@ -104,9 +105,7 @@ def main() -> int:
 
     label_df = _load_label_corpus(args.corpus) if args.corpus_mode in ("label", "both") else None
     heads_df = (
-        _load_gamelog_corpus(args.game_logs)
-        if args.corpus_mode in ("gamelog", "both")
-        else None
+        _load_gamelog_corpus(args.game_logs) if args.corpus_mode in ("gamelog", "both") else None
     )
     if args.corpus_mode == "label":
         heads_df = label_df  # heads skip (no target columns); EB-only artifact.
@@ -116,8 +115,12 @@ def main() -> int:
     if heads_df is None or heads_df.is_empty():
         log.error("empty_heads_corpus", mode=args.corpus_mode)
         return 2
-    log.info("corpus_loaded", mode=args.corpus_mode, heads_rows=len(heads_df),
-             label_rows=0 if label_df is None else len(label_df))
+    log.info(
+        "corpus_loaded",
+        mode=args.corpus_mode,
+        heads_rows=len(heads_df),
+        label_rows=0 if label_df is None else len(label_df),
+    )
 
     heads_date_col = "slate_date" if args.corpus_mode == "label" else "game_date"
     heads_train, heads_valid = _split_last_fold(heads_df, "heads", date_col=heads_date_col)
@@ -127,9 +130,7 @@ def main() -> int:
     else:
         label_train, label_valid = None, None
 
-    art = train_picker(
-        heads_train, heads_valid, label_train=label_train, label_valid=label_valid
-    )
+    art = train_picker(heads_train, heads_valid, label_train=label_train, label_valid=label_valid)
     path = write_artifact(art, commit=args.commit)
 
     metrics = {

@@ -307,8 +307,7 @@ def _ping_on_critical(events: list[WatchdogEvent]) -> None:
 
     GETs {WATCHDOG_PING_URL}/fail so an external monitor (healthchecks.io
     style) pages the operator. Never raises; paging must not break the
-    pipeline it watches. No-op until the operator provisions the URL
-    (see NEEDS_CLAUDE.md).
+    pipeline it watches. No-op until the operator provisions the URL.
     """
     from wnba_oracle.common.settings import get_settings
 
@@ -441,7 +440,10 @@ def _check_model_artifact(
     if mdir.exists():
         for sidecar in mdir.glob("picker_*.sha256"):
             try:
-                if sidecar.read_text().strip().lower() == sha and sidecar.with_suffix(".pkl").exists():
+                if (
+                    sidecar.read_text().strip().lower() == sha
+                    and sidecar.with_suffix(".pkl").exists()
+                ):
                     resolved = True
                     break
             except OSError:
@@ -494,46 +496,46 @@ def _check_feature_content(slate_date: str) -> list[WatchdogEvent]:
 
 
 ENRICHMENT_SOURCE_Q = text(
-	"""
-	SELECT COUNT(*)::int AS n_total,
-	       COUNT(*) FILTER (
-		   WHERE features_json ? 'vegas_total'
-		   OR features_json ? 'minutes_l5'
-		   OR features_json ? 'is_starter'
-	   )::int AS n_live_enriched
-	FROM job1_enrichment WHERE slate_date = :sd
-	"""
+    """
+    SELECT COUNT(*)::int AS n_total,
+           COUNT(*) FILTER (
+           WHERE features_json ? 'vegas_total'
+           OR features_json ? 'minutes_l5'
+           OR features_json ? 'is_starter'
+       )::int AS n_live_enriched
+    FROM job1_enrichment WHERE slate_date = :sd
+    """
 )
 
 
 def _check_enrichment_source(slate_date: str) -> list[WatchdogEvent]:
-	"""D107 (#33): detect if enrichment was produced by --job backfill instead of
-	live job1. Backfill fills only player_id/name/team, skipping vegas, rotowire,
-	and minutes features. If rows exist but NONE have live-enrichment fields
-	(vegas_total, minutes_l5, is_starter), the pool is useless and job2 will
-	freeze on empty/heuristic data.
-	"""
-	eng = get_engine()
-	with eng.connect() as conn:
-		row = conn.execute(ENRICHMENT_SOURCE_Q, {"sd": slate_date}).first()
-	n_total = int(row[0]) if row and row[0] is not None else 0
-	n_live = int(row[1]) if row and row[1] is not None else 0
-	if n_total < 10:
-		return []  # tiny/empty pool is the _check_pool checks' job
-	if n_live == 0:
-		# All rows exist but with zero live enrichment fields: backfill-produced
-		return [
-			WatchdogEvent(
-				slate_date=slate_date,
-				trigger="enrichment_from_backfill",
-				severity=SEVERITY_CRITICAL,
-				payload={
-					"n_rows": n_total,
-					"note": "no vegas/rotowire/minutes fields; cron--job backfill was run instead of live job1"
-				},
-			)
-		]
-	return []
+    """D107 (#33): detect if enrichment was produced by --job backfill instead of
+    live job1. Backfill fills only player_id/name/team, skipping vegas, rotowire,
+    and minutes features. If rows exist but NONE have live-enrichment fields
+    (vegas_total, minutes_l5, is_starter), the pool is useless and job2 will
+    freeze on empty/heuristic data.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        row = conn.execute(ENRICHMENT_SOURCE_Q, {"sd": slate_date}).first()
+    n_total = int(row[0]) if row and row[0] is not None else 0
+    n_live = int(row[1]) if row and row[1] is not None else 0
+    if n_total < 10:
+        return []  # tiny/empty pool is the _check_pool checks' job
+    if n_live == 0:
+        # All rows exist but with zero live enrichment fields: backfill-produced
+        return [
+            WatchdogEvent(
+                slate_date=slate_date,
+                trigger="enrichment_from_backfill",
+                severity=SEVERITY_CRITICAL,
+                payload={
+                    "n_rows": n_total,
+                    "note": "no vegas/rotowire/minutes fields; cron--job backfill was run instead of live job1",
+                },
+            )
+        ]
+    return []
 
 
 def _check_config_drift(slate_date: str, *, settings: object | None = None) -> list[WatchdogEvent]:
@@ -557,9 +559,7 @@ def _check_config_drift(slate_date: str, *, settings: object | None = None) -> l
     ]
 
 
-def run_watchdog(
-    slate_date: str, *, now_utc: dt.datetime | None = None
-) -> list[WatchdogEvent]:
+def run_watchdog(slate_date: str, *, now_utc: dt.datetime | None = None) -> list[WatchdogEvent]:
     """Run all checks for the slate; persist deduplicated events.
 
     Returns the full event list for caller-side logging / API surface.

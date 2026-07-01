@@ -33,9 +33,7 @@ def test_build_specs_name_fallback_chain(monkeypatch) -> None:
     monkeypatch.setattr(job2, "_load_model_artifact", lambda *_a, **_k: None)
     monkeypatch.setattr(job2, "_load_measured_drafts", lambda *_a, **_k: {})
     # slate_labels carries a name only for the player the pool left blank.
-    monkeypatch.setattr(
-        job2, "_load_slate_label_names", lambda *_a, **_k: {617: "Naz Hillmon"}
-    )
+    monkeypatch.setattr(job2, "_load_slate_label_names", lambda *_a, **_k: {617: "Naz Hillmon"})
 
     enrichment = [
         _enrich(745, "Alyssa Thomas"),  # pool name present -> wins

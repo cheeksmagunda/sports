@@ -107,9 +107,7 @@ class Settings(BaseSettings):
     # job1 scrape, so we act on it; an expected NON-starter stays neutral (the
     # expected bench order is noisy) -- only a CONFIRMED bench is faded. Default
     # on; set STARTER_SIGNAL_USE_EXPECTED=false to restore confirmed-only. See D104.
-    starter_signal_use_expected: bool = Field(
-        default=True, alias="STARTER_SIGNAL_USE_EXPECTED"
-    )
+    starter_signal_use_expected: bool = Field(default=True, alias="STARTER_SIGNAL_USE_EXPECTED")
     # minutes_model_enabled: use the D55 minutes x rate blended predictor for
     # players job1 matched to nba_api game logs. The one signal orthogonal to
     # card_boost (corr 0.554 vs boost 0.246 walk-forward). Default on; set
@@ -184,31 +182,19 @@ class Settings(BaseSettings):
     # failure mode, while leaving established rotation players ~unchanged.
     # Default OFF; set AVAILABILITY_MODEL_ENABLED=true on cron-job2 to arm.
     availability_model_enabled: bool = Field(default=False, alias="AVAILABILITY_MODEL_ENABLED")
-    # D70 (R2): cap the sum-of-card-boost across the 5 picked players.
-    # Winners' anatomy (research/internal/01_winners_anatomy.md): median rank-1
-    # total boost is 7.5; the 75th percentile is ~10. Our recent freezes hit
-    # 12-15. The 2026-06-04 ~6000th finish was driven by five high-boost
-    # cards with no minutes history. 0.0 disables (default off so the
-    # rollout is reversible via env); set OPTIMIZER_BOOST_SUM_CAP=9.0 to
-    # arm. The optimizer relaxes the cap (with a warning) if no lineup is
-    # jointly feasible with the team cap.
+    # Cap the sum-of-card-boost across the 5 picked players. Historical winners
+    # clustered near 7.5 total boost; recent busts hit 12-15 with thin minutes
+    # history. 0.0 disables. The optimizer relaxes the cap with a warning if no
+    # lineup is jointly feasible with the team cap.
     optimizer_boost_sum_cap: float = Field(default=0.0, alias="OPTIMIZER_BOOST_SUM_CAP")
-    # D70 (R2): cap the single-pick card_boost. Boost economics
-    # (research/internal/04_boost_economics.md) found the 3.0 bucket has
-    # an 8.2% hit rate and Sharpe 1.21 vs the (2.0, 2.5] bucket at 50.4%
-    # / 2.01 -- a value trap unless used sparingly. 0.0 disables (default
-    # off); set OPTIMIZER_MAX_SINGLE_BOOST=2.5 to refuse the 2.5-3.0 lottery
-    # tier entirely, or 2.75 to allow it but block the 3.0 wall. Relaxed
-    # alongside the sum cap when jointly infeasible.
+    # Cap the single-pick card_boost. The highest boost bucket was a value trap
+    # unless used sparingly. 0.0 disables; 2.5 refuses the 2.5-3.0 lottery tier.
+    # Relaxed alongside the sum cap when jointly infeasible.
     optimizer_max_single_boost: float = Field(default=0.0, alias="OPTIMIZER_MAX_SINGLE_BOOST")
-    # D70 (R3): game-stack bonus added to expected_payout per "stack pair"
-    # in the combo. A stack pair is two picks in the same game (matched by
-    # the unordered {team, opponent} pair). Per research/internal/01_winners_anatomy.md,
-    # 87% of top-20 lineups have at least one 2+ same-game pick group; our
-    # optimizer treats outcomes as independent today. Default 0.0 (off);
-    # set OPTIMIZER_GAME_STACK_BONUS=0.005 to mildly prefer stacked lineups
-    # at equal EV (a 2-stack adds 0.005 to ev, a 3-stack adds 0.010). The
-    # cap relax/EV log paths from R2 are unaffected.
+    # Game-stack bonus added to expected_payout per stack pair in the combo.
+    # A stack pair is two picks in the same game, matched by unordered
+    # {team, opponent}. Historical top-20 lineups often include a 2+ same-game
+    # group. Default 0.0 disables.
     optimizer_game_stack_bonus: float = Field(default=0.0, alias="OPTIMIZER_GAME_STACK_BONUS")
     # D86: feed the real measured draft counts (slate_labels.drafts) into the
     # field-ownership simulation instead of re-deriving the field from our own
@@ -223,7 +209,7 @@ class Settings(BaseSettings):
     # D87 (Phase 1, objective shaping). Explicit additive corrective terms on
     # top of the rank-based E[payout] objective, each in expected_payout units.
     # All default 0.0 so the optimizer is byte-identical to pre-D87 until armed
-    # against placement data (D88). See research/internal/07_placement_overhaul.md.
+    # against placement data.
     #
     #  - LEVERAGE_WEIGHT       : rewards mean(-log own_i) over the 5 picks
     #                            (log-form penalises chalk asymmetrically).
@@ -233,17 +219,13 @@ class Settings(BaseSettings):
     #                            number of mirror entries against our 5-stack.
     optimizer_leverage_weight: float = Field(default=0.0, alias="OPTIMIZER_LEVERAGE_WEIGHT")
     optimizer_ceiling_weight: float = Field(default=0.0, alias="OPTIMIZER_CEILING_WEIGHT")
-    optimizer_duplication_weight: float = Field(
-        default=0.0, alias="OPTIMIZER_DUPLICATION_WEIGHT"
-    )
+    optimizer_duplication_weight: float = Field(default=0.0, alias="OPTIMIZER_DUPLICATION_WEIGHT")
     # D107 (Phase 4, ceiling-tilted slots): sort players by p90 percentile
     # instead of p50 median when assigning to slot multipliers. Prioritizes
     # upside in high-multiplier slots for top-heavy contests. Enabled by default
     # (validated with two years of placement data). Set OPTIMIZER_CEILING_TILT_SLOTS=false
-    # to revert to rearrangement-inequality (p50-based) behavior. See research/internal/07_placement_overhaul.md Phase 4.
-    optimizer_ceiling_tilt_slots: bool = Field(
-        default=True, alias="OPTIMIZER_CEILING_TILT_SLOTS"
-    )
+    # to revert to rearrangement-inequality (p50-based) behavior.
+    optimizer_ceiling_tilt_slots: bool = Field(default=True, alias="OPTIMIZER_CEILING_TILT_SLOTS")
     # D107 (Tier 2, mixture-variance sampling): gate each player's copula draw by
     # Bernoulli(P(active)) to model spike-at-zero (DNP risk) + tail instead of just
     # mean-shifting (expectation form). Creates true bimodal distribution. Enabled by
@@ -255,10 +237,9 @@ class Settings(BaseSettings):
     # D88 (Phase 3, stack-aware field). Multiplicative boost on the marginal
     # weight of remaining-pool players that share a game (same-game) or team
     # (same-team) with already-picked field players. Captures the empirical
-    # field-stack rate (per research/internal/01_winners_anatomy.md, 87% of
-    # top-20 lineups stack 2+ from one game). Defaults of 1.0 leave the
-    # independent-pick sampler in place byte-for-byte. Recommended starting
-    # values per the 2026 synthesis: same_game=1.4, same_team=1.15.
+    # field-stack rate. Defaults of 1.0 leave the independent-pick sampler in
+    # place byte-for-byte. Current starting values: same_game=1.4,
+    # same_team=1.15.
     field_same_game_boost: float = Field(default=1.0, alias="FIELD_SAME_GAME_BOOST")
     field_same_team_boost: float = Field(default=1.0, alias="FIELD_SAME_TEAM_BOOST")
     # D88 (Phase 3, continued). When True, the optimizer prices duplication
@@ -319,17 +300,17 @@ class Settings(BaseSettings):
 # This is the source of truth for "what cron-job2's env should be"; the
 # watchdog warns when the live settings drift from it (e.g. after an env reset).
 EXPECTED_PROD_CONFIG: dict[str, object] = {
-    "game_script_minutes_enabled": True,   # D57
-    "availability_model_enabled": True,    # D73
-    "late_refreeze_enabled": True,         # D75
-    "lineup_anchor_floor": 2,              # D57/D58
-    "prop_signal_scale": 0.3,              # D78
-    "optimizer_boost_sum_cap": 9.0,        # D70/R2
-    "optimizer_max_single_boost": 2.5,     # D70/R2
-    "optimizer_game_stack_bonus": 0.010,   # D70/R3, raised D98
-    "field_same_game_boost": 3.0,          # D88/D91
-    "field_same_team_boost": 2.0,          # D88/D91
-    "ceiling_sigma_blowout_boost": 0.15,   # D89/D92
+    "game_script_minutes_enabled": True,  # D57
+    "availability_model_enabled": True,  # D73
+    "late_refreeze_enabled": True,  # D75
+    "lineup_anchor_floor": 2,  # D57/D58
+    "prop_signal_scale": 0.3,  # D78
+    "optimizer_boost_sum_cap": 9.0,  # D70/R2
+    "optimizer_max_single_boost": 2.5,  # D70/R2
+    "optimizer_game_stack_bonus": 0.010,  # D70/R3, raised D98
+    "field_same_game_boost": 3.0,  # D88/D91
+    "field_same_team_boost": 2.0,  # D88/D91
+    "ceiling_sigma_blowout_boost": 0.15,  # D89/D92
     "ceiling_sigma_low_history_boost": 0.20,  # D89/D92
     "optimizer_ceiling_tilt_slots": True,  # D107/Phase 4, validated with two years data
     "optimizer_mixture_variance_enabled": True,  # D107/Tier 2, Bernoulli availability gating

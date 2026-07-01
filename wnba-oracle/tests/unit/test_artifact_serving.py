@@ -1,6 +1,7 @@
 """Tests for the D45 wiring: job2 loads the trained PickerArtifact and
 uses EB baseline predictions for seen players (heuristic fallback for
 the rest)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -54,9 +55,7 @@ def test_eb_predict_one_no_artifact() -> None:
 
 
 def test_eb_predict_one_no_eb_baseline() -> None:
-    art = PickerArtifact(
-        feature_module_sha="test", config={}, eb_baseline=None, training_rows=0
-    )
+    art = PickerArtifact(feature_module_sha="test", config={}, eb_baseline=None, training_rows=0)
     assert _eb_predict_one(art, 42, "F") is None
 
 
@@ -69,9 +68,7 @@ def test_eb_predict_one_floored_at_half() -> None:
         pace_beta=0.0,
         league_pace=0.0,
     )
-    art = PickerArtifact(
-        feature_module_sha="t", config={}, eb_baseline=eb, training_rows=1
-    )
+    art = PickerArtifact(feature_module_sha="t", config={}, eb_baseline=eb, training_rows=1)
     assert _eb_predict_one(art, 42, "F") == pytest.approx(0.5)
 
 

@@ -68,8 +68,9 @@ def _engine_with_results(first_returns: list) -> MagicMock:
 def test_first_fire_sets_frozen_via_column() -> None:
     eng = _engine_with_results([(42, 1)])
     rd = _fake_redis()
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
     assert out is True
@@ -81,8 +82,9 @@ def test_seq_race_retries_once_then_succeeds() -> None:
     """Empty RETURNING (lost seq race) triggers exactly one retry."""
     eng = _engine_with_results([None, (43, 2)])
     rd = _fake_redis()
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
     assert out is True
@@ -93,8 +95,9 @@ def test_seq_race_retries_once_then_succeeds() -> None:
 def test_seq_race_gives_up_after_two_attempts() -> None:
     eng = _engine_with_results([None, None])
     rd = _fake_redis()
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
     assert out is False

@@ -1,4 +1,4 @@
-"""External-API schema contract tests (D102, NEEDS_CLAUDE #31).
+"""External-API schema contract tests.
 
 These hit the live upstreams and assert the response SHAPE our parsers depend
 on, so a silent schema change (RotoWire CSS rename, stats.wnba.com column drop,

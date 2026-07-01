@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import os
-from pathlib import Path
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import get_settings
@@ -75,7 +74,9 @@ def _auto_record_placement(slate_date: str) -> None:
     with engine.connect() as conn:
         # Pull the most-recent frozen lineup for this slate
         row = conn.execute(
-            text("SELECT lineup FROM frozen_lineups WHERE slate_date = :sd ORDER BY id DESC LIMIT 1"),
+            text(
+                "SELECT lineup FROM frozen_lineups WHERE slate_date = :sd ORDER BY id DESC LIMIT 1"
+            ),
             {"sd": slate_date},
         ).first()
         if row is None:
@@ -143,53 +144,51 @@ def _auto_record_placement(slate_date: str) -> None:
 
 
 def _cleanup_append_only_tables(retention_days: int = 14) -> None:
-	"""Clean up append-only tables to prevent indefinite growth (D102 item 32a).
+    """Clean up append-only tables to prevent indefinite growth (D102 item 32a).
 
-	watchdog_events: truncate rows older than retention_days.
-	frozen_lineups: keep only the max freeze_seq per slate (the serving row);
-	    delete stale freeze attempts that the live path never reads.
-	"""
-	from sqlalchemy import create_engine, text
+    watchdog_events: truncate rows older than retention_days.
+    frozen_lineups: keep only the max freeze_seq per slate (the serving row);
+        delete stale freeze attempts that the live path never reads.
+    """
+    from sqlalchemy import create_engine, text
 
-	settings = get_settings()
-	if not settings.database_url:
-		return
+    settings = get_settings()
+    if not settings.database_url:
+        return
 
-	cutoff_date = (dt.date.today() - dt.timedelta(days=retention_days)).isoformat()
-	engine = create_engine(settings.database_url, future=True)
-	try:
-		with engine.connect() as conn:
-			# Truncate old watchdog_events
-			result = conn.execute(
-				text(
-					"DELETE FROM watchdog_events WHERE slate_date < :cutoff"
-				),
-				{"cutoff": cutoff_date},
-			)
-			n_watchdog = result.rowcount or 0
+    cutoff_date = (dt.date.today() - dt.timedelta(days=retention_days)).isoformat()
+    engine = create_engine(settings.database_url, future=True)
+    try:
+        with engine.connect() as conn:
+            # Truncate old watchdog_events
+            result = conn.execute(
+                text("DELETE FROM watchdog_events WHERE slate_date < :cutoff"),
+                {"cutoff": cutoff_date},
+            )
+            n_watchdog = result.rowcount or 0
 
-			# Keep only the max freeze_seq per slate in frozen_lineups.
-			# This preserves the serving row (what job2 shows) and audit history
-			# (all rows via max(freeze_seq)) while deleting stale mid-slate freezes.
-			result = conn.execute(
-				text(
-					"""DELETE FROM frozen_lineups f
+            # Keep only the max freeze_seq per slate in frozen_lineups.
+            # This preserves the serving row (what job2 shows) and audit history
+            # (all rows via max(freeze_seq)) while deleting stale mid-slate freezes.
+            result = conn.execute(
+                text(
+                    """DELETE FROM frozen_lineups f
 					WHERE id NOT IN (
 						SELECT MAX(id) FROM frozen_lineups
 						GROUP BY slate_date, model_sha
 					)"""
-				)
-			)
-			n_frozen = result.rowcount or 0
-			conn.commit()
-			log.info(
-				"dayclose_retention_cleanup",
-				watchdog_old_days=retention_days,
-				watchdog_deleted=n_watchdog,
-				frozen_stale_deleted=n_frozen,
-			)
-	except Exception as exc:
-		log.exception("dayclose_retention_cleanup_failed", error=str(exc))
+                )
+            )
+            n_frozen = result.rowcount or 0
+            conn.commit()
+            log.info(
+                "dayclose_retention_cleanup",
+                watchdog_old_days=retention_days,
+                watchdog_deleted=n_watchdog,
+                frozen_stale_deleted=n_frozen,
+            )
+    except Exception as exc:
+        log.exception("dayclose_retention_cleanup_failed", error=str(exc))
 
 
 def main() -> int:
@@ -276,21 +275,6 @@ def main() -> int:
         _cleanup_append_only_tables(retention_days=14)
     except Exception as exc:
         log.exception("dayclose_retention_cleanup_failed", error=str(exc))
-
-    # Best-effort: refresh the RESULTS.md ledger for the slate that just
-    # finalized (yesterday UTC). Guarded by WNBA_RESULTS_LEDGER so the
-    # default Railway fire is a clean no-op — the cron container's repo is
-    # ephemeral, so the write only matters when the env var points at a
-    # persisted / committed path (operator host or a future GH Action).
-    # A ledger failure never changes the dayclose exit code. See D66.
-    ledger_env = os.environ.get("WNBA_RESULTS_LEDGER", "").strip()
-    if ledger_env:
-        from wnba_oracle.scheduler import results_ledger
-
-        try:
-            results_ledger.append_for_slate(yesterday, Path(ledger_env))
-        except Exception as exc:
-            log.exception("dayclose_results_append_failed", error=str(exc))
 
     return rc
 

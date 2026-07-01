@@ -121,9 +121,7 @@ def _exceeds_boost_cap(
     return False
 
 
-def _boost_cap_is_feasible(
-    boosts: np.ndarray, sum_cap: float, max_single: float
-) -> bool:
+def _boost_cap_is_feasible(boosts: np.ndarray, sum_cap: float, max_single: float) -> bool:
     """True if at least one 5-player lineup respects the boost caps.
 
     Greedy lower bound: take the five smallest-boost players (after the
@@ -138,9 +136,7 @@ def _boost_cap_is_feasible(
     return float(np.sort(eligible)[:5].sum()) <= sum_cap
 
 
-def _game_stack_pairs(
-    combo: tuple[int, ...], teams: list[str], opponents: list[str]
-) -> int:
+def _game_stack_pairs(combo: tuple[int, ...], teams: list[str], opponents: list[str]) -> int:
     """Count "stack pairs" in combo. Two picks form a pair iff they are in
     the same game (unordered {team, opponent} match). A 2-stack contributes
     1 pair, a 3-stack contributes 2 (k-1 per group, summed).
@@ -222,7 +218,6 @@ class OptimizeConfig:
     # in the filtered pool and relaxed if jointly infeasible with the team cap,
     # so it NEVER forfeits a slate (the D50 lesson). Set via LINEUP_ANCHOR_FLOOR.
     min_anchors: int = 0
-    # D70 (R2): boost caps from research/internal/04_boost_economics.md.
     # boost_sum_cap is the lineup-wide ceiling on sum of card_boost for the 5
     # picks; max_single_boost is the per-pick ceiling. 0.0 disables either,
     # which is the library default so a bare OptimizeConfig() is unchanged
@@ -237,13 +232,11 @@ class OptimizeConfig:
     # contributes 1 pair, a 3-stack contributes 2). Same-game pairing uses
     # the unordered {team, opponent} key. Default 0.0 (off); a tiny value
     # like 0.005 mildly biases the optimizer toward stacked lineups at
-    # near-equal EV. Source: research/internal/01_winners_anatomy.md (87%
-    # of top-20 lineups stack 2+ from one game; we currently model picks as
-    # independent).
+    # near-equal EV. Historical top-20 lineups often stack 2+ from one game;
+    # this offsets the independent-pick assumption.
     game_stack_bonus: float = 0.0
     # D87 (Phase 1 / objective shaping). Explicit additive terms on top of
-    # E[payout]. The 2026 research synthesis (research/internal/07*.md) warns
-    # that the THEORETICALLY clean target is duplication-penalized E[payout]
+    # E[payout]. The cleaner target is duplication-penalized E[payout]
     # alone, because leverage / ceiling / duplication are all emergent
     # properties of a correctly calibrated field sim (Phase 3) + per-player
     # ceiling marginals (Phase 4). Bolting additive correctives on top
@@ -357,7 +350,8 @@ def optimize_lineup(
     keep_teams_pre = [s.team or "" for s in filtered_sampling]
     keep_opponents_pre = [s.opponent or "" for s in filtered_sampling]
     keep_game_keys = [
-        "|".join(sorted([t, o])) if t and o else "" for t, o in zip(keep_teams_pre, keep_opponents_pre)
+        "|".join(sorted([t, o])) if t and o else ""
+        for t, o in zip(keep_teams_pre, keep_opponents_pre)
     ]
     field_lineup_idx = simulate_field_lineups_correlated(
         ownership,
@@ -447,7 +441,9 @@ def optimize_lineup(
         else None
     )
 
-    def _scan(min_anchors_req: int) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
+    def _scan(
+        min_anchors_req: int,
+    ) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
         """Enumerate C(n,5) under team cap + anchor floor + boost cap; return the best."""
         b_ev = -np.inf
         b_idx: tuple[int, ...] = ()
@@ -474,9 +470,7 @@ def optimize_lineup(
             own_samples = lineup_score_samples(
                 real_score_samples, keep_boosts, list(combo), slot_multipliers
             )
-            ev = expected_payout(
-                own_samples, field_scores, curve, field_size=field_size_total
-            )
+            ev = expected_payout(own_samples, field_scores, curve, field_size=field_size_total)
             # D88 (Phase 3): research-preferred duplication treatment.
             # `lineup_score_samples` reads the global `real_score_samples`
             # matrix by player index, so any field lineup with the SAME 5

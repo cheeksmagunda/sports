@@ -88,9 +88,7 @@ class WalkForwardSplitter:
         total_days = (parsed[-1] - parsed[0]).days
         fold_span = max(1, (total_days - self.min_train_days) // self.n_folds)
         for fold in range(self.n_folds):
-            train_end = parsed[0] + dt.timedelta(
-                days=self.min_train_days + fold * fold_span
-            )
+            train_end = parsed[0] + dt.timedelta(days=self.min_train_days + fold * fold_span)
             eval_start = train_end + dt.timedelta(days=self.embargo_days)
             eval_end = eval_start + dt.timedelta(days=fold_span)
             if eval_end > parsed[-1]:

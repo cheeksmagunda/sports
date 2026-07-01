@@ -22,9 +22,28 @@ from wnba_oracle.db.engine import get_engine
 
 log = get_logger("oracle.ingest.minutes_backfill")
 
-COLS = ["PLAYER_ID", "PLAYER_NAME", "TEAM_ABBREVIATION", "GAME_ID", "GAME_DATE",
-        "MATCHUP", "MIN", "PTS", "REB", "OREB", "DREB", "AST", "STL", "BLK",
-        "TOV", "FGM", "FGA", "FG3M", "FTM", "FTA"]
+COLS = [
+    "PLAYER_ID",
+    "PLAYER_NAME",
+    "TEAM_ABBREVIATION",
+    "GAME_ID",
+    "GAME_DATE",
+    "MATCHUP",
+    "MIN",
+    "PTS",
+    "REB",
+    "OREB",
+    "DREB",
+    "AST",
+    "STL",
+    "BLK",
+    "TOV",
+    "FGM",
+    "FGA",
+    "FG3M",
+    "FTM",
+    "FTA",
+]
 
 # Phoenix changed abbreviation from PHO (2024) to PHX (2025+). Same franchise;
 # unify so cross-season joins work.
@@ -105,17 +124,22 @@ def _fetch_season_logs(season: str):
 def _to_rows(raw) -> pl.DataFrame:
     """Map an nba_api PlayerGameLogs frame (with a `season` column) to the
     wnba_game_logs row schema."""
-    parsed = [_parse_matchup(m) for m in raw["MATCHUP"]] if "MATCHUP" in raw else [("", "")] * len(raw)
+    parsed = (
+        [_parse_matchup(m) for m in raw["MATCHUP"]] if "MATCHUP" in raw else [("", "")] * len(raw)
+    )
     game_ids = (
         [str(g) if g is not None and str(g).lower() != "nan" else "" for g in raw["GAME_ID"]]
-        if "GAME_ID" in raw else [""] * len(raw)
+        if "GAME_ID" in raw
+        else [""] * len(raw)
     )
     cols = {
         "game_date": [str(d)[:10] for d in raw["GAME_DATE"]],
         "player_id": raw["PLAYER_ID"].astype(int),
         "player_name": raw["PLAYER_NAME"].astype(str),
         "first_initial": [(_norm(n)[:1] if n else "") for n in raw["PLAYER_NAME"]],
-        "last_name": [_norm(str(n).split()[-1]) if str(n).strip() else "" for n in raw["PLAYER_NAME"]],
+        "last_name": [
+            _norm(str(n).split()[-1]) if str(n).strip() else "" for n in raw["PLAYER_NAME"]
+        ],
         "team": [_normalize_team(t) for t in raw["TEAM_ABBREVIATION"]],
         "opponent": [op for op, _ in parsed],
         "home_away": [ha for _, ha in parsed],
@@ -123,7 +147,21 @@ def _to_rows(raw) -> pl.DataFrame:
         "min": raw["MIN"].astype(float),
         "season": raw["season"].astype(str),
     }
-    for stat in ("PTS", "REB", "OREB", "DREB", "AST", "STL", "BLK", "TOV", "FGM", "FGA", "FG3M", "FTM", "FTA"):
+    for stat in (
+        "PTS",
+        "REB",
+        "OREB",
+        "DREB",
+        "AST",
+        "STL",
+        "BLK",
+        "TOV",
+        "FGM",
+        "FGA",
+        "FG3M",
+        "FTM",
+        "FTA",
+    ):
         cols[stat.lower()] = raw[stat].astype(float) if stat in raw else 0.0
     return pl.DataFrame(cols)
 

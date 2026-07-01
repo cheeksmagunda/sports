@@ -78,7 +78,11 @@ def redistribute_minutes(
             eligible = []
             for r in recipients:
                 rcohort = cohort_for_position(r.position)
-                if rcohort == cohort or (rcohort == "C" and cohort == "F") or (rcohort == "F" and cohort == "C"):
+                if (
+                    rcohort == cohort
+                    or (rcohort == "C" and cohort == "F")
+                    or (rcohort == "F" and cohort == "C")
+                ):
                     eligible.append(r)
             if not eligible:
                 continue

@@ -62,9 +62,7 @@ def _estimated_ownership_unnormalized(
 ) -> np.ndarray:
     """Pre-D86 estimator: softmax of public-visible value with multiplicative
     adjustments. Returns an UNNORMALIZED weight per spec."""
-    raw = np.array(
-        [s.pred_real_score * (1.0 + s.card_boost) for s in specs], dtype=float
-    )
+    raw = np.array([s.pred_real_score * (1.0 + s.card_boost) for s in specs], dtype=float)
     raw = raw - raw.max()  # numerical stability
     base = np.exp(raw / max(softmax_temperature, 1e-6))
     adj = np.ones_like(base)
@@ -165,12 +163,10 @@ def simulate_field_lineups_correlated(
     """Sample correlated opponent lineups (D88 / Phase 3).
 
     The independent-pick sampler treats every roster slot as an iid draw from
-    the marginal ownership. Real GPP fields stack: the project's
-    `research/internal/01_winners_anatomy.md` records 87% of top-20 lineups
-    carrying at least one 2+ same-game group. Modeling that correlation tightens
-    the rank distribution at the top (where chalk concentrates) and is the
-    second half of the keystone D86 fix -- without it our EV/rank math still
-    assumes the field is uncorrelated even when its marginals are right.
+    the marginal ownership. Real GPP fields stack often enough that modeling
+    correlation tightens the rank distribution at the top, where chalk
+    concentrates. Without it, EV/rank math assumes the field is uncorrelated
+    even when its marginals are right.
 
     Sampling algorithm: sequential weighted draw-without-replacement. After
     each pick, the remaining-weight vector is multiplied by `same_team_boost`

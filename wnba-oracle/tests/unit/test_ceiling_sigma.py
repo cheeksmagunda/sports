@@ -1,8 +1,7 @@
-"""Environment-conditioned ceiling sigma scaling (D89, Phase 4).
+"""Environment-conditioned ceiling sigma scaling.
 
-The 2026 research synthesis (research/internal/07_placement_overhaul.md)
-identifies per-player sigma -- not just mu -- as the primary upper-tail
-signal for top-heavy contests. These tests pin `ceiling_adjusted_sigma_log`:
+Per-player sigma, not just mu, is the primary upper-tail signal for top-heavy
+contests. These tests pin `ceiling_adjusted_sigma_log`:
 
   - Default boosts (0.0) leave base_sigma untouched (byte-identical).
   - blowout_prob > 0 with a non-zero blowout_boost widens sigma.

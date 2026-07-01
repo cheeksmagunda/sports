@@ -1,10 +1,8 @@
-"""Stack-aware (correlated) field simulation (D88, Phase 3).
+"""Stack-aware correlated field simulation.
 
 The independent-pick sampler treats each opponent roster slot as an iid draw
 from the marginal ownership. Real GPP fields stack: top finishers and many
-public entrants concentrate same-game or same-team picks. The synthesis in
-research/internal/07_placement_overhaul.md (2026 best-practice review) names
-this the biggest unaddressed gap after the D86 measured-ownership fix.
+public entrants concentrate same-game or same-team picks.
 
 These tests pin three properties:
 

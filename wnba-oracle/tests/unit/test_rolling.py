@@ -11,7 +11,9 @@ def _make_log(pid: int = 100, n: int = 12) -> pl.DataFrame:
     """n synthetic games. Game dates Apr 1, Apr 4, Apr 7 ... (3 days apart)."""
     from datetime import date, timedelta
 
-    dates = [(date(2026, 4, 1) + timedelta(days=3 * i)).strftime("%b %d, %Y").upper() for i in range(n)]
+    dates = [
+        (date(2026, 4, 1) + timedelta(days=3 * i)).strftime("%b %d, %Y").upper() for i in range(n)
+    ]
     return pl.DataFrame(
         {
             "Player_ID": [pid] * n,
@@ -67,9 +69,7 @@ def test_empty_log_returns_empty_frame() -> None:
 def test_fantasy_pts_formula_is_real_sports_proxy() -> None:
     """Documented proxy: pts + 1.2*reb + 1.5*ast + 3*stl + 3*blk - tov.
     Doubles as a regression guard on the formula constants."""
-    df = pl.DataFrame(
-        {"PTS": [10], "REB": [5], "AST": [4], "STL": [1], "BLK": [1], "TOV": [2]}
-    )
+    df = pl.DataFrame({"PTS": [10], "REB": [5], "AST": [4], "STL": [1], "BLK": [1], "TOV": [2]})
     val = df.select(fantasy_pts_expr()).to_series().to_list()[0]
     expected = 10 + 1.2 * 5 + 1.5 * 4 + 3 * 1 + 3 * 1 - 1 * 2
     assert val == expected

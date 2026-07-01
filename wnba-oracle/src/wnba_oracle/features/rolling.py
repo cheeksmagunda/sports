@@ -163,9 +163,7 @@ def build_rolling_features(
                     else pl.lit(0.0).alias("fg3a_sum"),
                 ]
             ).to_dicts()[0]
-            true_shooting_denom = 2.0 * (
-                float(tot["fga_sum"]) + 0.44 * float(tot["fta_sum"])
-            )
+            true_shooting_denom = 2.0 * (float(tot["fga_sum"]) + 0.44 * float(tot["fta_sum"]))
             rec["ts_pct_l10"] = (
                 float(tot["p_sum"]) / true_shooting_denom if true_shooting_denom > 0 else 0.0
             )
@@ -176,9 +174,7 @@ def build_rolling_features(
                 else 0.0
             )
             rec["fg3_pct_l10"] = (
-                float(tot["fg3m_sum"]) / float(tot["fg3a_sum"])
-                if tot["fg3a_sum"] > 0
-                else 0.0
+                float(tot["fg3m_sum"]) / float(tot["fg3a_sum"]) if tot["fg3a_sum"] > 0 else 0.0
             )
             # USG% proxy: (FGA + 0.44*FTA + TOV) per 36 min relative to team
             # is the canonical formula. Without team context per game, fall
@@ -197,9 +193,7 @@ def build_rolling_features(
             rec["usg_pct_l10"] = usage_num / float(min_sum) if min_sum > 0 else 0.0
             # Foul rate (PF column in nba_api) and rotation consistency
             pf_sum = (
-                float(
-                    l10.select(pl.col("PF").cast(pl.Float64).sum()).to_dicts()[0]["PF"]
-                )
+                float(l10.select(pl.col("PF").cast(pl.Float64).sum()).to_dicts()[0]["PF"])
                 if "PF" in l10.columns
                 else 0.0
             )

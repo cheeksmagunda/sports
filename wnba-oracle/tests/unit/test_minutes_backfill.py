@@ -23,9 +23,19 @@ def _fake_frame() -> pd.DataFrame:
             "GAME_DATE": ["2026-06-20T00:00:00", "2026-06-20"],
             "MATCHUP": ["LVA vs. PHX", "PHX @ LVA"],
             "MIN": [31.5, 24.0],
-            "PTS": [20, 10], "REB": [8, 3], "OREB": [1, 0], "DREB": [7, 3],
-            "AST": [4, 7], "STL": [2, 1], "BLK": [1, 0], "TOV": [3, 2],
-            "FGM": [8, 4], "FGA": [15, 9], "FG3M": [1, 1], "FTM": [3, 1], "FTA": [4, 2],
+            "PTS": [20, 10],
+            "REB": [8, 3],
+            "OREB": [1, 0],
+            "DREB": [7, 3],
+            "AST": [4, 7],
+            "STL": [2, 1],
+            "BLK": [1, 0],
+            "TOV": [3, 2],
+            "FGM": [8, 4],
+            "FGA": [15, 9],
+            "FG3M": [1, 1],
+            "FTM": [3, 1],
+            "FTA": [4, 2],
             "season": ["2026", "2026"],
         }
     )
@@ -45,9 +55,10 @@ def test_to_rows_maps_schema_and_normalizes() -> None:
 
 
 def test_refresh_upserts_and_returns_count() -> None:
-    with patch.object(mb, "_fetch_season_logs", return_value=_fake_frame()), patch.object(
-        mb, "_persist", return_value=2
-    ) as persist:
+    with (
+        patch.object(mb, "_fetch_season_logs", return_value=_fake_frame()),
+        patch.object(mb, "_persist", return_value=2) as persist,
+    ):
         n = mb.refresh_game_logs(["2026"], pause_seconds=0)
     assert n == 2
     persist.assert_called_once()

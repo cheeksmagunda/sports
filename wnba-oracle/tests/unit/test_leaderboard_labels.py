@@ -59,8 +59,9 @@ def test_multiplier_bonus_used_when_present() -> None:
 
 def test_dedupes_across_entries_keeping_first() -> None:
     e1 = _entry([{"playerId": 7, "value": "5.0"}], rank=1, entry_id=100)
-    e2 = _entry([{"playerId": 7, "value": "5.0"}, {"playerId": 8, "value": "1.0"}],
-                rank=2, entry_id=101)
+    e2 = _entry(
+        [{"playerId": 7, "value": "5.0"}, {"playerId": 8, "value": "1.0"}], rank=2, entry_id=101
+    )
     labels = labels_from_leaderboard_entries([e1, e2])
     assert [label.platform_player_id for label in labels] == [7, 8]
 

@@ -11,16 +11,12 @@ from wnba_oracle.features.allowlist import (
 
 
 def test_allowed_columns_pass() -> None:
-    assert_predict_features_allowed(
-        ["player_id", "team", "card_boost", "mins_l10", "vegas_total"]
-    )
+    assert_predict_features_allowed(["player_id", "team", "card_boost", "mins_l10", "vegas_total"])
 
 
 def test_unknown_column_raises_leakage_error() -> None:
     with pytest.raises(FeatureLeakageError, match="post_game_real_score"):
-        assert_predict_features_allowed(
-            ["player_id", "post_game_real_score"]
-        )
+        assert_predict_features_allowed(["player_id", "post_game_real_score"])
 
 
 def test_post_game_feature_blocked() -> None:

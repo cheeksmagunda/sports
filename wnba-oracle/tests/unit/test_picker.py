@@ -162,14 +162,18 @@ def test_caveat_is_skip_demotes_marginal_ev_to_skip() -> None:
     # lineup lands in the marginal band deterministically -- otherwise this test
     # silently passed via the no-op else branch whenever the pool's EV drifted
     # out of the band (the pool actually scores in the 'skip' band by default).
-    ev = optimize_lineup(samp_specs, field_specs, curve, cfg=OptimizeConfig(**common)).expected_payout
+    ev = optimize_lineup(
+        samp_specs, field_specs, curve, cfg=OptimizeConfig(**common)
+    ).expected_payout
     band = {
         "skip_if_expected_payout_below": ev - 0.1,
         "caveat_if_expected_payout_below": ev + 0.1,
     }
     base = optimize_lineup(samp_specs, field_specs, curve, cfg=OptimizeConfig(**common, **band))
     flipped = optimize_lineup(
-        samp_specs, field_specs, curve,
+        samp_specs,
+        field_specs,
+        curve,
         cfg=OptimizeConfig(**common, **band, caveat_is_skip=True),
     )
     # Same player selection regardless of flag policy (EV ordering unchanged).

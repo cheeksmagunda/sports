@@ -72,8 +72,9 @@ def _fake_redis(lock_wins: bool) -> MagicMock:
 def test_first_fire_writes_and_returns_true() -> None:
     eng = _fake_engine(existing_row=False, insert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is True
@@ -86,8 +87,9 @@ def test_second_fire_short_circuits_at_existence_check() -> None:
     """When Postgres already has the freeze row, neither Redis nor INSERT fire."""
     eng = _fake_engine(existing_row=True)
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is False
@@ -99,8 +101,9 @@ def test_redis_lock_loss_bails_without_writing() -> None:
     """Concurrent cron fires race; loser of the Redis SETNX bails before INSERT."""
     eng = _fake_engine(existing_row=False)
     rd = _fake_redis(lock_wins=False)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is False
@@ -112,8 +115,9 @@ def test_insert_race_loss_returns_false() -> None:
     RETURNING id is empty and we report no-op back."""
     eng = _fake_engine(existing_row=False, insert_returns_row=False)
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is False
@@ -124,8 +128,9 @@ def test_freeze_payload_includes_per_player() -> None:
     inspecting the INSERT bind params."""
     eng = _fake_engine(existing_row=False, insert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
-    with patch.object(job2, "get_engine", return_value=eng), patch.object(
-        job2, "get_redis", return_value=rd
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     insert_call = eng.begin.return_value.__enter__.return_value.execute.call_args

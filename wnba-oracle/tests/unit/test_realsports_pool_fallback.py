@@ -1,11 +1,8 @@
-"""D72 / R6: the targeted-search fallback in `fetch_pool_for_date`.
+"""Targeted-search fallback in `fetch_pool_for_date`.
 
 The single-letter a..z prefix sweep caps results per query (Real Sports'
 search endpoint returns the top N matches per call), so players deep in
-the alphabetical ordering for the matched letter were dropped. The audit
-(`research/internal/_menu_scrape_gap_pool.csv`) showed 8 of 13 live
-slates had >= 1 winning-lineup pick missing from the optimizer's pool,
-all draftable players the prefix sweep silently lost.
+the alphabetical ordering for the matched letter were dropped.
 
 Fix: after a..z, query each per-game-union player NOT yet in `rated_by_id`
 by the ASCII-folded first 3 chars of their last name. These tests mock
@@ -87,6 +84,7 @@ def _player(pid: str, first: str, last: str, *, mb: float | None = 1.0) -> dict:
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
     """Strip the antibot jitter so tests run instantly."""
+
     async def _noop() -> None:
         return None
 
@@ -109,9 +107,7 @@ async def test_fallback_recovers_unmatched_player_by_last_name() -> None:
         "ste": [_player("711", "Azura", "Stevens", mb=2.5)],
     }
 
-    transport = _build_mock_transport(
-        union_players=union, rated_per_query=rated_per_query
-    )
+    transport = _build_mock_transport(union_players=union, rated_per_query=rated_per_query)
     async with httpx.AsyncClient(transport=transport, base_url=realsports.BASE) as client:
         out = await fetch_pool_for_date(
             "2026-06-07",
@@ -121,8 +117,7 @@ async def test_fallback_recovers_unmatched_player_by_last_name() -> None:
 
     ids = sorted(p.platform_id for p in out)
     assert ids == ["100", "711"], (
-        "fallback should add Stevens (pid 711) on top of the a..z-matched Wilson; "
-        f"got {ids}"
+        f"fallback should add Stevens (pid 711) on top of the a..z-matched Wilson; got {ids}"
     )
     boosts = {p.platform_id: p.multiplier_bonus for p in out}
     assert boosts["711"] == 2.5
@@ -138,9 +133,7 @@ async def test_fallback_ascii_folds_accented_lastname() -> None:
         # truncates the response.
         "joc": [_player("4322799", "Justė", "Jocytė", mb=2.8)],
     }
-    transport = _build_mock_transport(
-        union_players=union, rated_per_query=rated_per_query
-    )
+    transport = _build_mock_transport(union_players=union, rated_per_query=rated_per_query)
     async with httpx.AsyncClient(transport=transport, base_url=realsports.BASE) as client:
         out = await fetch_pool_for_date(
             "2026-06-07",
@@ -148,9 +141,7 @@ async def test_fallback_ascii_folds_accented_lastname() -> None:
             client,
         )
     ids = [p.platform_id for p in out]
-    assert ids == ["4322799"], (
-        f"ASCII-folded fallback should match Jocyte; got {ids}"
-    )
+    assert ids == ["4322799"], f"ASCII-folded fallback should match Jocyte; got {ids}"
 
 
 @pytest.mark.asyncio
@@ -162,9 +153,7 @@ async def test_fallback_skips_when_no_lastname_or_firstname() -> None:
         {"id": "999", "team": {"key": "LAS"}, "position": "F", "primaryRanking": 99},
     ]
     rated_per_query = {"a": [_player("100", "Aja", "Wilson", mb=2.0)]}
-    transport = _build_mock_transport(
-        union_players=union, rated_per_query=rated_per_query
-    )
+    transport = _build_mock_transport(union_players=union, rated_per_query=rated_per_query)
     async with httpx.AsyncClient(transport=transport, base_url=realsports.BASE) as client:
         out = await fetch_pool_for_date(
             "2026-06-07",

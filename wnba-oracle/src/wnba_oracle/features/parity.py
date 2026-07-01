@@ -29,9 +29,7 @@ class ParityFailure(AssertionError):
 
 def assert_parity(left: pl.DataFrame, right: pl.DataFrame) -> None:
     if left.shape != right.shape:
-        raise ParityFailure(
-            f"shape mismatch: train={left.shape} serve={right.shape}"
-        )
+        raise ParityFailure(f"shape mismatch: train={left.shape} serve={right.shape}")
     if set(left.columns) != set(right.columns):
         diff_l = set(left.columns) - set(right.columns)
         diff_r = set(right.columns) - set(left.columns)
@@ -52,9 +50,7 @@ def assert_parity(left: pl.DataFrame, right: pl.DataFrame) -> None:
                     for i, (lv, rv) in enumerate(zip(left_vals, right_vals, strict=False))
                     if lv != rv
                 ][:5]
-                raise ParityFailure(
-                    f"value mismatch in column {col!r} (first 5): {mism}"
-                )
+                raise ParityFailure(f"value mismatch in column {col!r} (first 5): {mism}")
         raise ParityFailure("frames differ but per-column equality could not localize it")
 
 
@@ -97,6 +93,4 @@ def feature_inputs_signature(
         "odds": odds_count,
         "lineups": lineups_count,
     }
-    return hashlib.blake2b(
-        json.dumps(payload, sort_keys=True).encode(), digest_size=10
-    ).hexdigest()
+    return hashlib.blake2b(json.dumps(payload, sort_keys=True).encode(), digest_size=10).hexdigest()

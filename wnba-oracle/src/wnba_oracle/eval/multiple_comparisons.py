@@ -95,9 +95,7 @@ class CombinatorialPurgedCV:
                     test_idx.append(i)
                     continue
                 # Purge: drop train rows within embargo of any test block.
-                purged = any(
-                    (lo - embargo) <= d <= (hi + embargo) for lo, hi in test_ranges
-                )
+                purged = any((lo - embargo) <= d <= (hi + embargo) for lo, hi in test_ranges)
                 if not purged:
                     train_idx.append(i)
             if train_idx and test_idx:
@@ -128,9 +126,7 @@ def _sharpe(returns: np.ndarray) -> float:
     return float(np.mean(returns)) / sd
 
 
-def probabilistic_sharpe_ratio(
-    returns: np.ndarray, *, sr_benchmark: float = 0.0
-) -> float:
+def probabilistic_sharpe_ratio(returns: np.ndarray, *, sr_benchmark: float = 0.0) -> float:
     """PSR: P(true Sharpe > sr_benchmark), corrected for skew/kurtosis.
 
     Bailey & López de Prado: with observed per-obs Sharpe ``sr``, T observations,

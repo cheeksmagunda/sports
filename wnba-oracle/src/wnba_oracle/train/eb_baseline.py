@@ -44,10 +44,7 @@ class EBHierarchicalBaseline:
         if df.is_empty():
             return
         # Per-cohort mean
-        means = (
-            df.group_by(cohort_col)
-            .agg(pl.col(target).mean().alias("mu"))
-        ).to_dicts()
+        means = (df.group_by(cohort_col).agg(pl.col(target).mean().alias("mu"))).to_dicts()
         self.cohort_means = {str(r[cohort_col]): float(r["mu"]) for r in means}
 
         # Variance components
@@ -77,9 +74,7 @@ class EBHierarchicalBaseline:
         # Single linear pace effect (least-squares on residuals).
         if pace_col in df.columns:
             mean_pace = df.get_column(pace_col).mean()
-            league_pace = (
-                float(mean_pace) if isinstance(mean_pace, (int, float)) else 0.0
-            )
+            league_pace = float(mean_pace) if isinstance(mean_pace, (int, float)) else 0.0
         else:
             league_pace = 0.0
         self.league_pace = league_pace
@@ -87,8 +82,18 @@ class EBHierarchicalBaseline:
             x = (df.get_column(pace_col).to_numpy() - league_pace).astype(float)
             y = (
                 df.get_column(target).to_numpy()
-                - np.array([self.cohort_means.get(str(c), 0.0) for c in df.get_column(cohort_col).to_list()])
-                - np.array([self.player_alpha.get(int(p), 0.0) for p in df.get_column(player_col).to_list()])
+                - np.array(
+                    [
+                        self.cohort_means.get(str(c), 0.0)
+                        for c in df.get_column(cohort_col).to_list()
+                    ]
+                )
+                - np.array(
+                    [
+                        self.player_alpha.get(int(p), 0.0)
+                        for p in df.get_column(player_col).to_list()
+                    ]
+                )
             )
             if x.var() > 1e-9:
                 self.pace_beta = float(np.cov(x, y, ddof=0)[0, 1] / x.var())
@@ -99,7 +104,9 @@ class EBHierarchicalBaseline:
         if df.is_empty():
             return np.array([])
         cohorts = df.get_column("cohort").to_list() if "cohort" in df.columns else [None] * len(df)
-        players = df.get_column("player_id").to_list() if "player_id" in df.columns else [None] * len(df)
+        players = (
+            df.get_column("player_id").to_list() if "player_id" in df.columns else [None] * len(df)
+        )
         paces = (
             df.get_column("team_pace").to_numpy()
             if "team_pace" in df.columns

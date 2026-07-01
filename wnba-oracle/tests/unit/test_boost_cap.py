@@ -1,7 +1,8 @@
-"""D70 / R2: lineup boost caps. From research/internal/04_boost_economics.md
-(2.5-3.0 boost bucket has 8.2% hit rate / Sharpe 1.21 vs (2.0, 2.5] at 50.4%
-/ 2.01) and research/internal/01_winners_anatomy.md (median rank-1 total
-boost is 7.5; our recent freezes hit 12-15).
+"""Lineup boost caps.
+
+Historical failures showed high-total-boost lineups with thin minutes history
+are fragile, so the optimizer supports a lineup-wide boost cap and a per-pick
+boost cap.
 
 Two knobs, both default 0.0 = OFF so a bare OptimizeConfig() is unchanged:
   - boost_sum_cap: lineup-wide sum-of-card-boost ceiling
@@ -105,7 +106,11 @@ def test_optimize_lineup_uncapped_picks_highest_boost() -> None:
     samps, fields = _spec_pair(boost_grid=boosts)
     curve = default_curve_for_regime("top_20")
     cfg = OptimizeConfig(
-        top_n_filter=12, n_samples=200, n_field_lineups=20, seed=7, max_per_team=2,
+        top_n_filter=12,
+        n_samples=200,
+        n_field_lineups=20,
+        seed=7,
+        max_per_team=2,
         dynamic_team_cap=False,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
@@ -121,8 +126,13 @@ def test_optimize_lineup_boost_sum_cap_drops_high_boost() -> None:
     samps, fields = _spec_pair(boost_grid=boosts)
     curve = default_curve_for_regime("top_20")
     cfg = OptimizeConfig(
-        top_n_filter=12, n_samples=200, n_field_lineups=20, seed=7, max_per_team=2,
-        dynamic_team_cap=False, boost_sum_cap=9.0,
+        top_n_filter=12,
+        n_samples=200,
+        n_field_lineups=20,
+        seed=7,
+        max_per_team=2,
+        dynamic_team_cap=False,
+        boost_sum_cap=9.0,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     pid_to_boost = {f.player_id: f.card_boost for f in fields}
@@ -136,8 +146,13 @@ def test_optimize_lineup_max_single_boost_blocks_3p0_tier() -> None:
     samps, fields = _spec_pair(boost_grid=boosts)
     curve = default_curve_for_regime("top_20")
     cfg = OptimizeConfig(
-        top_n_filter=12, n_samples=200, n_field_lineups=20, seed=7, max_per_team=2,
-        dynamic_team_cap=False, max_single_boost=2.5,
+        top_n_filter=12,
+        n_samples=200,
+        n_field_lineups=20,
+        seed=7,
+        max_per_team=2,
+        dynamic_team_cap=False,
+        max_single_boost=2.5,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     pid_to_boost = {f.player_id: f.card_boost for f in fields}
@@ -152,8 +167,14 @@ def test_optimize_lineup_relaxes_when_jointly_infeasible() -> None:
     samps, fields = _spec_pair(boost_grid=boosts)
     curve = default_curve_for_regime("top_20")
     cfg = OptimizeConfig(
-        top_n_filter=12, n_samples=200, n_field_lineups=20, seed=7, max_per_team=2,
-        dynamic_team_cap=False, boost_sum_cap=7.5, max_single_boost=2.0,
+        top_n_filter=12,
+        n_samples=200,
+        n_field_lineups=20,
+        seed=7,
+        max_per_team=2,
+        dynamic_team_cap=False,
+        boost_sum_cap=7.5,
+        max_single_boost=2.0,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     assert len(rec.player_ids) == 5, "optimizer forfeited the slate"

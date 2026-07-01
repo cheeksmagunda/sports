@@ -72,14 +72,14 @@ def train_quantile_head(
     # the quantile heads would need a post-hoc projection or a separate rank
     # head (mlb-oracle pattern); deferred. Regularization is carried by
     # num_leaves / min_data_in_leaf / lambda_l2 instead.
-    mc_vec = tuple(
-        (monotone_constraints or {}).get(c, 0) for c in feature_columns
-    )
+    mc_vec = tuple((monotone_constraints or {}).get(c, 0) for c in feature_columns)
 
     # Materialize as numpy/pandas for LightGBM.
     X_train = train_df.select(list(feature_columns)).to_pandas()
     y_train = train_df.get_column(target).to_pandas()
-    X_valid = valid_df.select(list(feature_columns)).to_pandas() if not valid_df.is_empty() else None
+    X_valid = (
+        valid_df.select(list(feature_columns)).to_pandas() if not valid_df.is_empty() else None
+    )
     y_valid = valid_df.get_column(target).to_pandas() if not valid_df.is_empty() else None
 
     cat_cols = [c for c in categorical_features if c in feature_columns]

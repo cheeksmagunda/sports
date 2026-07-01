@@ -1,9 +1,8 @@
 """The Odds API client for `basketball_wnba`.
 
 Free-tier budget: 500 credits/month. Cache once per slate per market group
-(spread + total + h2h are one request; player props are separate). See
-DECISIONS D10 and Part 0.3 item 7. Degrade to most-recent-cached on
-quota burn; never auto-upgrade.
+(spread + total + h2h are one request; player props are separate). Degrade to
+most-recent-cached on quota burn; never auto-upgrade.
 
 Markets we consume:
 - `spreads` (point spread + price)
@@ -183,7 +182,7 @@ def odds_to_polars(odds: list[GameOdds]) -> pl.DataFrame:
 @dataclass(frozen=True)
 class PlayerProp:
     player_name: str
-    market: str   # "player_points", "player_rebounds", "player_assists"
+    market: str  # "player_points", "player_rebounds", "player_assists"
     line: float
     over_price: float | None
     under_price: float | None
@@ -264,21 +263,25 @@ def _parse_event_props(event: dict[str, Any], *, markets: tuple[str, ...]) -> li
                 if not name or point is None:
                     continue
                 if side == "over":
-                    out.append(PlayerProp(
-                        player_name=str(name),
-                        market=market_key,
-                        line=float(point),
-                        over_price=float(price) if price else None,
-                        under_price=None,
-                    ))
+                    out.append(
+                        PlayerProp(
+                            player_name=str(name),
+                            market=market_key,
+                            line=float(point),
+                            over_price=float(price) if price else None,
+                            under_price=None,
+                        )
+                    )
                 elif side == "under":
-                    out.append(PlayerProp(
-                        player_name=str(name),
-                        market=market_key,
-                        line=float(point),
-                        over_price=None,
-                        under_price=float(price) if price else None,
-                    ))
+                    out.append(
+                        PlayerProp(
+                            player_name=str(name),
+                            market=market_key,
+                            line=float(point),
+                            over_price=None,
+                            under_price=float(price) if price else None,
+                        )
+                    )
     return out
 
 
@@ -333,7 +336,9 @@ def fetch_player_props(
     # (not for the whole multi-day schedule) and never merge a player's line
     # across different game days.
     if slate_date:
-        events = [e for e in events if _event_in_slate_window(e.get("commence_time", ""), slate_date)]
+        events = [
+            e for e in events if _event_in_slate_window(e.get("commence_time", ""), slate_date)
+        ]
 
     out: list[PlayerProp] = []
     n_events_ok = 0
@@ -358,7 +363,9 @@ def fetch_player_props(
                 ev_json = r.json() or {}
             except Exception as exc:
                 # One event's failure must not lose the others' props.
-                log.warning("player_props_event_failed", event_id=str(eid)[:12], reason=str(exc)[:120])
+                log.warning(
+                    "player_props_event_failed", event_id=str(eid)[:12], reason=str(exc)[:120]
+                )
                 continue
             out.extend(_parse_event_props(ev_json, markets=market_tuple))
             n_events_ok += 1
@@ -368,7 +375,9 @@ def fetch_player_props(
     # failure does not poison the cache with an empty list for 3h.
     if use_cache and n_events_ok > 0:
         cache_put(cache_key, cache_params, {"rows": [p.__dict__ for p in out]})
-    log.info("player_props_fetched", n=len(out), n_events_ok=n_events_ok, n_events_total=len(events))
+    log.info(
+        "player_props_fetched", n=len(out), n_events_ok=n_events_ok, n_events_total=len(events)
+    )
     return out
 
 
@@ -390,6 +399,7 @@ def build_props_lookup(props: list[PlayerProp]) -> dict[tuple[str, str], dict[st
     for (norm_name, market), entries in groups.items():
         # Pick the modal line across bookmakers
         from collections import Counter
+
         line_counts = Counter(e.line for e in entries)
         modal_line = line_counts.most_common(1)[0][0]
         relevant = [e for e in entries if e.line == modal_line]

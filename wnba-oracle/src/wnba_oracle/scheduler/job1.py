@@ -29,16 +29,18 @@ from wnba_oracle.features.serving_features import (
     build_head_feature_lookup,
     build_opp_dvp_lookup,
 )
-from wnba_oracle.features.serving_features import (
-    lookup as head_feature_lookup,
-)
+from wnba_oracle.features.serving_features import lookup as head_feature_lookup
+from wnba_oracle.ingest.identity import build_resolver
 from wnba_oracle.ingest.minutes_features import (
     build_minutes_features,
     fetch_wnba_team_stats,
     lookup,
 )
-from wnba_oracle.ingest.identity import build_resolver
-from wnba_oracle.ingest.odds import build_props_lookup, fetch_odds_for_slate, fetch_player_props
+from wnba_oracle.ingest.odds import (
+    build_props_lookup,
+    fetch_odds_for_slate,
+    fetch_player_props,
+)
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
     capture_live_headers,
@@ -276,22 +278,16 @@ async def _do_pool_fetch(slate_date: str) -> tuple[list, list[str]]:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
-            pool = await fetch_pool_for_date(
-                slate_date, headers, client, refresh_headers=_refresh
-            )
+            pool = await fetch_pool_for_date(slate_date, headers, client, refresh_headers=_refresh)
         except PlatformAuthRequired:
             # One more chance: force-refresh and retry once.
             headers = await capture_live_headers(_device_uuid(), _device_name())
-            pool = await fetch_pool_for_date(
-                slate_date, headers, client, refresh_headers=_refresh
-            )
+            pool = await fetch_pool_for_date(slate_date, headers, client, refresh_headers=_refresh)
         # D83: per-game tip times feed the late-refreeze lock gate. Strictly
         # best-effort; a slate_meta miss degrades the gate to its deadline
         # fallback, never the pool fetch.
         try:
-            game_times = await fetch_slate_game_times(
-                headers, client, refresh_headers=_refresh
-            )
+            game_times = await fetch_slate_game_times(headers, client, refresh_headers=_refresh)
         except Exception as exc:
             log.warning("job1_game_times_failed", reason=str(exc)[:120])
             game_times = []
@@ -374,9 +370,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     # any nba_api failure -> job2 falls back to the boost predictor.
     year = int(sd[:4])
     try:
-        minutes_feats = build_minutes_features(
-            as_of_date=sd, seasons=[str(year), str(year - 1)]
-        )
+        minutes_feats = build_minutes_features(as_of_date=sd, seasons=[str(year), str(year - 1)])
     except Exception as exc:
         log.warning("job1_minutes_failed", reason=str(exc)[:120])
         minutes_feats = {}
@@ -425,7 +419,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     # Used for opp_dvp_guard/forward/center (same value per position until
     # game_logs gains a position column). Degrades to {} if game_logs failed.
     try:
-        opp_dvp_map = build_opp_dvp_lookup(game_logs_for_dvp) if game_logs_for_dvp is not None else {}
+        opp_dvp_map = (
+            build_opp_dvp_lookup(game_logs_for_dvp) if game_logs_for_dvp is not None else {}
+        )
     except Exception as exc:
         log.warning("job1_opp_dvp_failed", reason=str(exc)[:120])
         opp_dvp_map = {}
@@ -487,7 +483,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
                 if resolved_pid is not None and isinstance(head_feats, dict):
                     hf = head_feats.get(resolved_pid)
             except Exception as exc:
-                log.debug("job1_resolver_lookup_failed", player=p.display_name, reason=str(exc)[:60])
+                log.debug(
+                    "job1_resolver_lookup_failed", player=p.display_name, reason=str(exc)[:60]
+                )
         # Fallback to name-based lookup if Resolver lookup failed
         if hf is None:
             hf = head_feature_lookup(head_feats, display_name=p.display_name, team=p.team)
@@ -525,7 +523,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
             # logged as "unresolved" (Resolver could not place them) or "no_features"
             # (resolved but no corpus row yet).
             if resolved_pid is not None:
-                head_feature_misses.append(f"{p.display_name} ({p.team}) [no_features, pid={resolved_pid}]")
+                head_feature_misses.append(
+                    f"{p.display_name} ({p.team}) [no_features, pid={resolved_pid}]"
+                )
             else:
                 head_feature_misses.append(f"{p.display_name} ({p.team}) [unresolved]")
         # D74: player prop lines as projection cross-check signals.
@@ -600,9 +600,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     # lands in job1_enrichment for forensics, but the run is marked failed
     # so it can never silently masquerade as a healthy fire (the 2026-06-08
     # morning fire persisted 1 row / 1 team and looked "present").
-    degraded = pool_sanity(
-        rows, min_pool=settings.job1_min_pool, min_teams=settings.job1_min_teams
-    )
+    degraded = pool_sanity(rows, min_pool=settings.job1_min_pool, min_teams=settings.job1_min_teams)
     if degraded:
         log.error(
             "job1_pool_degraded",
@@ -640,14 +638,10 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_lineups=len(lineups),
         persisted=persisted,
     )
-    return Job1Result(
-        sd, len(pool), len(odds), len(lineups), persisted, tuple(degraded)
-    )
+    return Job1Result(sd, len(pool), len(odds), len(lineups), persisted, tuple(degraded))
 
 
-LITE_READ = text(
-    "SELECT id, name, team FROM job1_enrichment WHERE slate_date = :sd"
-)
+LITE_READ = text("SELECT id, name, team FROM job1_enrichment WHERE slate_date = :sd")
 LITE_PATCH = text(
     "UPDATE job1_enrichment "
     "SET features_json = features_json || CAST(:patch AS jsonb) "
@@ -671,7 +665,7 @@ def rotowire_patch(rw: LineupEntry) -> dict:
 
 
 def run_lite(slate_date: str | None = None) -> Job1Result:
-    """Credit-free confirmed-lineup refresh (D102, NEEDS_CLAUDE #27).
+    """Credit-free confirmed-lineup refresh.
 
     Re-scrapes RotoWire (free) and JSONB-merges only the RotoWire-authoritative
     fields onto the EXISTING enrichment rows -- no Odds/props/minutes/head
@@ -705,9 +699,7 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
             rw = idx.get(team or "", name or "")
             if rw is None:
                 continue
-            conn.execute(
-                LITE_PATCH, {"id": row_id, "patch": json.dumps(rotowire_patch(rw))}
-            )
+            conn.execute(LITE_PATCH, {"id": row_id, "patch": json.dumps(rotowire_patch(rw))})
             n_updated += 1
             n_confirmed += int(bool(rw.confirmed))
     log.info(

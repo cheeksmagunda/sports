@@ -27,17 +27,42 @@ EVENT_FIXTURE = {
                 {
                     "key": "player_points",
                     "outcomes": [
-                        {"name": "Over", "description": "Satou Sabally", "point": 12.5, "price": 1.90},
-                        {"name": "Under", "description": "Satou Sabally", "point": 12.5, "price": 1.90},
-                        {"name": "Over", "description": "Jonquel Jones", "point": 13.5, "price": 1.80},
-                        {"name": "Under", "description": "Jonquel Jones", "point": 13.5, "price": 2.00},
+                        {
+                            "name": "Over",
+                            "description": "Satou Sabally",
+                            "point": 12.5,
+                            "price": 1.90,
+                        },
+                        {
+                            "name": "Under",
+                            "description": "Satou Sabally",
+                            "point": 12.5,
+                            "price": 1.90,
+                        },
+                        {
+                            "name": "Over",
+                            "description": "Jonquel Jones",
+                            "point": 13.5,
+                            "price": 1.80,
+                        },
+                        {
+                            "name": "Under",
+                            "description": "Jonquel Jones",
+                            "point": 13.5,
+                            "price": 2.00,
+                        },
                     ],
                 },
                 {
                     # A non-points market must be ignored when markets=player_points.
                     "key": "player_rebounds",
                     "outcomes": [
-                        {"name": "Over", "description": "Satou Sabally", "point": 7.5, "price": 1.91},
+                        {
+                            "name": "Over",
+                            "description": "Satou Sabally",
+                            "point": 7.5,
+                            "price": 1.91,
+                        },
                     ],
                 },
             ],
@@ -48,8 +73,18 @@ EVENT_FIXTURE = {
                 {
                     "key": "player_points",
                     "outcomes": [
-                        {"name": "Over", "description": "Satou Sabally", "point": 12.5, "price": 1.86},
-                        {"name": "Under", "description": "Satou Sabally", "point": 12.5, "price": 1.94},
+                        {
+                            "name": "Over",
+                            "description": "Satou Sabally",
+                            "point": 12.5,
+                            "price": 1.86,
+                        },
+                        {
+                            "name": "Under",
+                            "description": "Satou Sabally",
+                            "point": 12.5,
+                            "price": 1.94,
+                        },
                     ],
                 }
             ],

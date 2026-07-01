@@ -107,20 +107,20 @@ def _get_name_to_team_map(conn: psycopg.Connection) -> dict:
 
 def _get_label_players(conn: psycopg.Connection, slate_date) -> list:
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT DISTINCT display_name, team_key, card_boost, platform_player_id
             FROM slate_labels
             WHERE slate_date = %s AND section = 'highestBoostedValuePlayers'
-        """, (slate_date,))
+        """,
+            (slate_date,),
+        )
         return cur.fetchall()
 
 
 def _get_leaderboard_players(conn: psycopg.Connection, slate_date) -> list:
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT lineup FROM contest_leaderboards WHERE slate_date = %s",
-            (slate_date,)
-        )
+        cur.execute("SELECT lineup FROM contest_leaderboards WHERE slate_date = %s", (slate_date,))
         rows = cur.fetchall()
     seen = {}
     for (lineup,) in rows:
@@ -156,12 +156,15 @@ def _inject_opp_dvp(hf: dict, opp: str, opp_dvp: dict) -> dict:
 
 def _process_existing_slate(engine, slate_date, head_feats: dict, opp_dvp: dict) -> int:
     with engine.connect() as db:
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT player_id, name, team, opponent FROM job1_enrichment
             WHERE slate_date = :sd
               AND (features_json->>'head_features' IS NULL
                    OR features_json->'head_features' = 'null'::jsonb)
-        """), {"sd": slate_date})
+        """),
+            {"sd": slate_date},
+        )
         rows = result.fetchall()
 
     updated = 0
@@ -171,11 +174,14 @@ def _process_existing_slate(engine, slate_date, head_feats: dict, opp_dvp: dict)
             if hf is None:
                 continue
             hf = _inject_opp_dvp(hf, r.opponent or "", opp_dvp)
-            db.execute(UPDATE_HEAD_SQL, {
-                "hf": json.dumps(hf),
-                "slate_date": slate_date,
-                "player_id": r.player_id,
-            })
+            db.execute(
+                UPDATE_HEAD_SQL,
+                {
+                    "hf": json.dumps(hf),
+                    "slate_date": slate_date,
+                    "player_id": r.player_id,
+                },
+            )
             updated += 1
     return updated
 
@@ -251,17 +257,20 @@ def _process_historical_slate(
             }
             if hf is not None:
                 features["head_features"] = hf
-            db.execute(UPSERT_SQL, {
-                "slate_date": slate_date,
-                "player_id": pid,
-                "real_sports_player_id": str(pid),
-                "name": p["name"],
-                "team": p["team"] or "",
-                "opponent": p["opponent"] or "",
-                "position": p["position"] or "G",
-                "card_boost": p["boost"],
-                "features_json": json.dumps(features),
-            })
+            db.execute(
+                UPSERT_SQL,
+                {
+                    "slate_date": slate_date,
+                    "player_id": pid,
+                    "real_sports_player_id": str(pid),
+                    "name": p["name"],
+                    "team": p["team"] or "",
+                    "opponent": p["opponent"] or "",
+                    "position": p["position"] or "G",
+                    "card_boost": p["boost"],
+                    "features_json": json.dumps(features),
+                },
+            )
             inserted += 1
     return inserted
 

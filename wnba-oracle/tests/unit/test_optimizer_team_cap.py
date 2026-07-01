@@ -62,7 +62,10 @@ def test_optimizer_respects_team_cap() -> None:
     # 3 teams here would trip the dynamic small-slate relaxation, so pin the
     # static path to test the cap mechanism in isolation.
     cfg = OptimizeConfig(
-        top_n_filter=10, n_samples=200, n_field_lineups=50, max_per_team=2,
+        top_n_filter=10,
+        n_samples=200,
+        n_field_lineups=50,
+        max_per_team=2,
         dynamic_team_cap=False,
     )
     rec = optimize_lineup(samp_specs, field_specs, curve, cfg=cfg)
@@ -105,7 +108,10 @@ def test_dynamic_cap_makes_one_game_slate_feasible() -> None:
     samp, fields = _two_team_pool()
     curve = default_curve_for_regime("top_20")
     cfg = OptimizeConfig(
-        top_n_filter=10, n_samples=150, n_field_lineups=40, max_per_team=2,
+        top_n_filter=10,
+        n_samples=150,
+        n_field_lineups=40,
+        max_per_team=2,
         dynamic_team_cap=True,
     )
     rec = optimize_lineup(samp, fields, curve, cfg=cfg)
@@ -118,7 +124,10 @@ def test_static_cap_one_game_slate_relaxed_by_feasibility_guard() -> None:
     samp, fields = _two_team_pool()
     curve = default_curve_for_regime("top_20")
     cfg = OptimizeConfig(
-        top_n_filter=10, n_samples=150, n_field_lineups=40, max_per_team=2,
+        top_n_filter=10,
+        n_samples=150,
+        n_field_lineups=40,
+        max_per_team=2,
         dynamic_team_cap=False,
     )
     rec = optimize_lineup(samp, fields, curve, cfg=cfg)
@@ -136,7 +145,10 @@ def test_two_team_slate_records_finite_payout_not_neg_inf() -> None:
     curve = default_curve_for_regime("top_20")
     for dynamic in (True, False):
         cfg = OptimizeConfig(
-            top_n_filter=10, n_samples=150, n_field_lineups=40, max_per_team=2,
+            top_n_filter=10,
+            n_samples=150,
+            n_field_lineups=40,
+            max_per_team=2,
             dynamic_team_cap=dynamic,
         )
         rec = optimize_lineup(samp, fields, curve, cfg=cfg)

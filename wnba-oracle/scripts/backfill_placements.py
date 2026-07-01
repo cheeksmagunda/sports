@@ -116,8 +116,7 @@ def main() -> int:
             else:
                 # NOTE: the captured board is the top ~20 of thousands, so
                 # "cracked top-20" is a top-~0.24% threshold, NOT a placement
-                # percentile. Do not read a 21/20 as "below median" (see
-                # research/internal/08_projection_paradox.md).
+                # percentile. Do not read a 21/20 as "below median".
                 n_above = sum(1 for s in lb_scores if s > our_score)
                 cracked = n_above < len(lb_scores)
                 fs = f"/{field_size}" if field_size else ""
@@ -142,8 +141,7 @@ def main() -> int:
         # The captured board is the top ~20 of thousands. "Cracked top-20" is a
         # top-~0.24% threshold, so these rates measure ELITE finishes only -- a
         # 0% top-1 rate does NOT mean below-median placement. The full finish
-        # distribution below rank 20 is not captured (see
-        # research/internal/08_projection_paradox.md).
+        # distribution below rank 20 is not captured.
         print(f"\nElite-finish rates vs the captured top-20 ({len(results)} slates):")
         print(f"  Cracked field top-10 (<=10): {n_beats_median}/{len(results)} ({100*n_beats_median/len(results):.0f}%)")
         print(f"  Cracked field top-5:         {n_beats_top5}/{len(results)} ({100*n_beats_top5/len(results):.0f}%)")

@@ -2,7 +2,7 @@
 
 LightGBM Booster pickles are not byte-stable even when the trained model is
 identical, so the determinism gate compares the canonical model serialization
-plus the EB baseline parameters instead of pickle SHAs (NEEDS_CLAUDE #14 fix).
+plus the EB baseline parameters instead of pickle SHAs.
 
 Usage:
     python scripts/compare_artifacts.py A.pkl B.pkl

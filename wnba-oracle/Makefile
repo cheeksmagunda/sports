@@ -1,6 +1,5 @@
-# wnba-oracle developer targets. Note: no `up` target — `railway up` is
-# blocked by the workspace-token CLI rejection (see DECISIONS). Use `deploy`
-# which routes through the use-railway skill or GraphQL.
+# wnba-oracle developer targets. Note: no `up` target. Railway CLI mutations
+# do not work with this workspace token; use GraphQL or the Railway app.
 
 .PHONY: help install test lint typecheck dev migrate deploy determinism-check rotation-check-help fmt
 
@@ -48,7 +47,7 @@ migrate:
 
 deploy:
 	@echo "Deploy via the use-railway skill or GraphQL push."
-	@echo "Workspace-token CLI is not supported (see DECISIONS.md)."
+	@echo "Workspace-token CLI is not supported."
 
 determinism-check:
 	@echo "Run 1..."

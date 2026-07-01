@@ -5,7 +5,7 @@ permitted at predict time. The default for an unknown column is REJECT,
 which prevents post-game leakage from accidentally being read into the
 serving feature matrix.
 
-Adding a feature is a deliberate act, recorded in DECISIONS.md.
+Adding a feature is a deliberate act that should include a focused test.
 
 The allowlist is enforced by `assert_predict_features_allowed(df)` which
 the predict pipeline calls before the LightGBM heads see the matrix.
@@ -123,5 +123,5 @@ def assert_predict_features_allowed(columns: list[str]) -> None:
     if bad:
         raise FeatureLeakageError(
             f"feature(s) not in PREGAME_FEATURES allowlist: {bad}. "
-            "Add to allowlist.py (and DECISIONS.md) if intentional; otherwise drop."
+            "Add to allowlist.py if intentional; otherwise drop."
         )

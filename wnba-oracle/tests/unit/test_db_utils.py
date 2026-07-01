@@ -9,15 +9,13 @@ from wnba_oracle.common.db_utils import normalize_postgres_url
 
 def test_postgres_legacy_scheme_gets_driver_suffix() -> None:
     assert (
-        normalize_postgres_url("postgres://u:p@h:5432/db")
-        == "postgresql+psycopg://u:p@h:5432/db"
+        normalize_postgres_url("postgres://u:p@h:5432/db") == "postgresql+psycopg://u:p@h:5432/db"
     )
 
 
 def test_postgresql_no_driver_gets_psycopg_suffix() -> None:
     assert (
-        normalize_postgres_url("postgresql://u:p@h:5432/db")
-        == "postgresql+psycopg://u:p@h:5432/db"
+        normalize_postgres_url("postgresql://u:p@h:5432/db") == "postgresql+psycopg://u:p@h:5432/db"
     )
 
 

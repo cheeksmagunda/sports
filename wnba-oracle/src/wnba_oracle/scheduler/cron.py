@@ -53,9 +53,7 @@ def main() -> int:
         env=settings.env,
         has_database_url=bool(settings.database_url),
         has_redis_url=bool(settings.redis_url),
-        has_realsports_creds=bool(
-            settings.real_sports_username and settings.real_sports_password
-        ),
+        has_realsports_creds=bool(settings.real_sports_username and settings.real_sports_password),
     )
 
     if args.job == "job1":
@@ -75,7 +73,7 @@ def main() -> int:
             log.exception("watchdog_failed", error=str(exc))
         return rc
     if args.job == "job1late":
-        # D102 (NEEDS_CLAUDE #27): credit-free confirmed-lineup refresh. Re-scrapes
+        # Credit-free confirmed-lineup refresh. Re-scrapes
         # RotoWire and JSONB-merges only the starter/confirmed fields onto the
         # existing enrichment, so afternoon slates pick up confirmed starters
         # before their T-40 freeze without burning Odds API credits. No watchdog

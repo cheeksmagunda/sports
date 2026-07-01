@@ -51,17 +51,13 @@ def test_parse_pool_missing_boost_hard_fails() -> None:
 
 
 def test_parse_pool_boost_out_of_range_hard_fails() -> None:
-    body = {
-        "players": [{"id": "1", "team": "LAS", "position": "G", "multiplierBonus": 5.0}]
-    }
+    body = {"players": [{"id": "1", "team": "LAS", "position": "G", "multiplierBonus": 5.0}]}
     with pytest.raises(RuntimeError, match="out of range"):
         _parse_pool(body)
 
 
 def test_parse_pool_accepts_alternate_key() -> None:
-    body = {
-        "players": [{"id": "1", "team": "LAS", "position": "G", "multiplier_bonus": 0.5}]
-    }
+    body = {"players": [{"id": "1", "team": "LAS", "position": "G", "multiplier_bonus": 0.5}]}
     out = _parse_pool(body)
     assert out[0].multiplier_bonus == 0.5
 

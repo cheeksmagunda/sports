@@ -1,13 +1,11 @@
 """contest_placements: closed-loop placement / calibration tracking (D90).
 
-Through D86 the project had a single live-results entry in RESULTS.md and no
-schema for tracking where the entered lineup actually finished. Every
-optimizer tune was driven by offline projection accuracy. The
-research/internal/07_placement_overhaul.md synthesis (2026 best-practice
-review) names the placement feedback loop as the keystone instrumentation
-phase: without it no later objective change can be calibrated, and small-
-sample overfitting on PROP_SIGNAL_SCALE / leverage / duplication weights is
-the dominant failure mode of every tuned parameter.
+Before this migration the project had no schema for tracking where the entered
+lineup actually finished. Every optimizer tune was driven by offline projection
+accuracy. The placement feedback loop is the keystone instrumentation phase:
+without it no later objective change can be calibrated, and small-sample
+overfitting on PROP_SIGNAL_SCALE / leverage / duplication weights is the
+dominant failure mode of every tuned parameter.
 
 This migration adds two append-only tables:
 

@@ -21,6 +21,7 @@ import datetime as dt
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from sqlalchemy import text
@@ -638,9 +639,7 @@ def _build_specs(
         # the T-40 freeze. This `eff_confirmed` flag feeds every role consumer
         # below (anchor, availability, blended minutes) so the starting five on
         # the slate's later games is honored from the 13:00 expected lineup.
-        eff_confirmed = _effective_confirmed(
-            f, use_expected=settings.starter_signal_use_expected
-        )
+        eff_confirmed = _effective_confirmed(f, use_expected=settings.starter_signal_use_expected)
         mf = _minutes_features(r.get("features_json")) if settings.minutes_model_enabled else None
         # Anchor flag (D57, Tier 1) -- computed regardless of the floor setting
         # so it always rides on the spec; the optimizer only enforces it when
@@ -818,7 +817,7 @@ def _build_specs(
 
     samps: list[PlayerSamplingSpec] = []
     fields: list[FieldPlayerSpec] = []
-    projection_by_pid: dict[int, dict] = {}
+    projection_by_pid: dict[int, dict[str, Any]] = {}
     for pid, pred in adjusted.items():
         r = rows_by_pid[pid]
         team = str(r.get("team", "") or "")
@@ -854,7 +853,9 @@ def _build_specs(
                 is_starter=is_starter_by_pid.get(pid, False),
                 blowout_prob=blowout_prob_by_pid.get(pid, 0.0),
                 is_anchor=is_anchor_by_pid.get(pid, False),
-                p_active=p_active_by_pid.get(pid, 1.0),  # D107 (Tier 2): P(active) for mixture-variance sampling
+                p_active=p_active_by_pid.get(
+                    pid, 1.0
+                ),  # D107 (Tier 2): P(active) for mixture-variance sampling
             )
         )
         # D86: when enabled, attach the real measured draft count so the field
@@ -908,10 +909,16 @@ def _build_specs(
         f = _features_dict(r.get("features_json"))
         hf = f.get("head_features") if isinstance(f, dict) else None
         hf = hf if isinstance(hf, dict) else {}
+        card_boost_raw = proj.get("card_boost", 0.0)
+        card_boost = (
+            float(card_boost_raw)
+            if isinstance(card_boost_raw, (int, float, str))
+            else 0.0
+        )
         archetype_inputs.append(
             ArchetypeInput(
                 player_id=pid,
-                card_boost=float(proj.get("card_boost", 0.0)),
+                card_boost=card_boost,
                 is_confirmed_starter=is_anchor_by_pid.get(pid, False),
                 is_anchor=is_anchor_by_pid.get(pid, False),
                 mins_l10=float(hf.get("mins_l10", 0.0) or 0.0),
@@ -976,9 +983,7 @@ FROZEN_APPEND = text(
 
 FROZEN_EXISTS = text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms")
 
-SLATE_LOCK_Q = text(
-    "SELECT contest_lock_utc, first_tip_utc FROM slate_meta WHERE slate_date = :sd"
-)
+SLATE_LOCK_Q = text("SELECT contest_lock_utc, first_tip_utc FROM slate_meta WHERE slate_date = :sd")
 
 
 def _load_slate_lock_time(slate_date: str) -> dt.datetime | None:
@@ -1024,9 +1029,7 @@ def _freeze_deadline_utc(
     return lock_time_utc - dt.timedelta(minutes=lead)
 
 
-def _in_pre_freeze_window(
-    now_utc: dt.datetime, deadline_utc: dt.datetime | None
-) -> bool:
+def _in_pre_freeze_window(now_utc: dt.datetime, deadline_utc: dt.datetime | None) -> bool:
     """True when this fire should be skipped because the slate has not reached
     its T-minus freeze deadline yet. A None deadline (tip unknown) never skips:
     the static late-refreeze fallback handles timing in that case. See E."""
@@ -1190,9 +1193,7 @@ def _freeze(
             return False
     else:
         with eng.connect() as conn:
-            existing = conn.execute(
-                FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}
-            ).first()
+            existing = conn.execute(FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}).first()
         if existing:
             log.info("job2_already_frozen", slate_date=slate_date, model_sha=model_sha)
             return False
@@ -1343,9 +1344,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         ceiling_tilt_slots=getattr(settings, "optimizer_ceiling_tilt_slots", False),
         field_same_game_boost=getattr(settings, "field_same_game_boost", 1.0),
         field_same_team_boost=getattr(settings, "field_same_team_boost", 1.0),
-        duplication_aware_payout=getattr(
-            settings, "optimizer_duplication_aware_payout", False
-        ),
+        duplication_aware_payout=getattr(settings, "optimizer_duplication_aware_payout", False),
     )
     mixture_variance_enabled = getattr(settings, "optimizer_mixture_variance_enabled", True)
     rec = optimize_lineup(
@@ -1422,9 +1421,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
                                 severity=SEVERITY_WARN,
                                 payload={
                                     "reason": gate_reason,
-                                    "lock_time_utc": (
-                                        lock_time.isoformat() if lock_time else None
-                                    ),
+                                    "lock_time_utc": (lock_time.isoformat() if lock_time else None),
                                 },
                             )
                         ]
@@ -1439,9 +1436,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     payout_curve_payload = {
         "regime": curve.regime,
         "cash_line_percentile": curve.cash_line_percentile,
-        "percentile_to_payout": {
-            str(k): float(v) for k, v in curve.percentile_to_payout.items()
-        },
+        "percentile_to_payout": {str(k): float(v) for k, v in curve.percentile_to_payout.items()},
     }
     serving_knobs_payload = {
         "n_samples": cfg.n_samples,
@@ -1471,7 +1466,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         payout_curve=payout_curve_payload,
         serving_knobs=serving_knobs_payload,
     )
-    status = "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")
+    status = (
+        "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")
+    )
     return Job2Result(sd, model_sha, rec, frozen, status)
 
 

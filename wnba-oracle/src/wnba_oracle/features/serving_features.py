@@ -28,10 +28,16 @@ from wnba_oracle.predict.scoring import REAL_SCORE_INTERCEPT, REAL_SCORE_WEIGHTS
 
 log = get_logger("oracle.features.serving")
 
+FeatureLookupKey = tuple[str, str, str] | int
+
 
 def _norm(s: str | None) -> str:
     return (
-        unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower().strip()
+        unicodedata.normalize("NFKD", str(s or ""))
+        .encode("ascii", "ignore")
+        .decode()
+        .lower()
+        .strip()
     )
 
 
@@ -142,7 +148,7 @@ def build_head_feature_lookup(
             continue
         games_by_pid[int(pid_val)] = grp
 
-    out: dict[tuple[str, str, str], dict[str, float]] = {}
+    out: dict[FeatureLookupKey, dict[str, float]] = {}
     rolling_dicts = rolling.to_dicts()
     for row in rolling_dicts:
         pid_raw = row.get("player_id")
@@ -199,7 +205,7 @@ def build_head_feature_lookup(
 
 
 def lookup(
-    feats: dict[tuple[str, str, str], dict[str, float]],
+    feats: dict[FeatureLookupKey, dict[str, float]],
     *,
     display_name: str,
     team: str,
@@ -234,8 +240,7 @@ def build_opp_dvp_lookup(game_logs: pl.DataFrame) -> dict[str, float]:
     for stat, w in REAL_SCORE_WEIGHTS.items():
         score_expr = score_expr + pl.lit(w) * pl.col(stat).fill_null(0.0)
     grouped = (
-        game_logs
-        .filter(pl.col("min").fill_null(0.0) >= 5.0)
+        game_logs.filter(pl.col("min").fill_null(0.0) >= 5.0)
         .with_columns(score_expr.alias("_est_rs"))
         .group_by("opponent")
         .agg(pl.col("_est_rs").mean().alias("mean_allowed"))

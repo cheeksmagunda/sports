@@ -9,6 +9,7 @@ because the upstream platform (Real Sports) is the same.
   uniform[0, capped] delay per retry, honor Retry-After.
 - BLAKE2b daily seed when callers need a deterministic-per-slate shuffle.
 """
+
 from __future__ import annotations
 
 import asyncio

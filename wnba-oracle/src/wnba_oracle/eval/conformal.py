@@ -58,9 +58,7 @@ class MondrianCQR:
         """Apply conformal correction to model quantiles."""
         out_lo = np.empty_like(q_lo, dtype=float)
         out_hi = np.empty_like(q_hi, dtype=float)
-        global_q = (
-            float(np.median(list(self.cell_q.values()))) if self.cell_q else 0.0
-        )
+        global_q = float(np.median(list(self.cell_q.values()))) if self.cell_q else 0.0
         for i, k in enumerate(cell_keys):
             q = self.cell_q.get(k, global_q)
             out_lo[i] = float(q_lo[i]) - q

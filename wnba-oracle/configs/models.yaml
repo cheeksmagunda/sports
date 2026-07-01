@@ -26,7 +26,7 @@ lightgbm:
   # offset (see train/pipeline.py), never as a split feature.
   categorical_features: []
 
-# Monotonicity (Part 6.4 + DECISIONS D14).
+# Monotonicity constraints.
 monotone_constraints:
   mins_l5: 1
   mins_l10: 1
@@ -102,7 +102,7 @@ rolling:
 adversarial:
   auc_hard_stop: 0.6
 
-# Low-data mode threshold (DECISIONS D11).
+# Low-data mode threshold.
 low_data_mode:
   min_labeled_rows: 2000
   fallback_lightgbm:

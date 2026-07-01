@@ -18,8 +18,21 @@ from wnba_oracle.predict.scoring import box_to_real_score
 # ---- scoring formula ----
 def test_box_to_real_score_reasonable() -> None:
     # A solid two-way line should land in the mid real_score range (~2.5-6).
-    rs = box_to_real_score({"pts": 18, "reb": 6, "ast": 4, "stl": 1, "blk": 1, "tov": 2,
-                            "fgm": 7, "fga": 14, "fg3m": 1, "ftm": 3, "fta": 4})
+    rs = box_to_real_score(
+        {
+            "pts": 18,
+            "reb": 6,
+            "ast": 4,
+            "stl": 1,
+            "blk": 1,
+            "tov": 2,
+            "fgm": 7,
+            "fga": 14,
+            "fg3m": 1,
+            "ftm": 3,
+            "fta": 4,
+        }
+    )
     assert 2.0 < rs < 8.0
 
 
@@ -83,18 +96,82 @@ def test_build_minutes_features_walkforward(monkeypatch) -> None:
 
     fake = [
         # A. Wilson: 3 prior games + 1 ON the slate date (must be excluded)
-        {"PLAYER_NAME": "A'ja Wilson", "TEAM_ABBREVIATION": "LVA", "GAME_DATE": "2026-05-20T00:00:00",
-         "MIN": 34, "PTS": 26, "REB": 9, "OREB": 2, "DREB": 7, "AST": 3, "STL": 1, "BLK": 2,
-         "TOV": 2, "FGM": 10, "FGA": 18, "FG3M": 0, "FTM": 6, "FTA": 7},
-        {"PLAYER_NAME": "A'ja Wilson", "TEAM_ABBREVIATION": "LVA", "GAME_DATE": "2026-05-22T00:00:00",
-         "MIN": 36, "PTS": 30, "REB": 11, "OREB": 3, "DREB": 8, "AST": 4, "STL": 2, "BLK": 1,
-         "TOV": 1, "FGM": 11, "FGA": 20, "FG3M": 1, "FTM": 7, "FTA": 8},
-        {"PLAYER_NAME": "A'ja Wilson", "TEAM_ABBREVIATION": "LVA", "GAME_DATE": "2026-05-24T00:00:00",
-         "MIN": 35, "PTS": 22, "REB": 8, "OREB": 2, "DREB": 6, "AST": 2, "STL": 1, "BLK": 1,
-         "TOV": 3, "FGM": 8, "FGA": 17, "FG3M": 0, "FTM": 6, "FTA": 6},
-        {"PLAYER_NAME": "A'ja Wilson", "TEAM_ABBREVIATION": "LVA", "GAME_DATE": "2026-05-25T00:00:00",
-         "MIN": 99, "PTS": 99, "REB": 99, "OREB": 9, "DREB": 9, "AST": 9, "STL": 9, "BLK": 9,
-         "TOV": 0, "FGM": 9, "FGA": 9, "FG3M": 9, "FTM": 9, "FTA": 9},  # same-day: excluded
+        {
+            "PLAYER_NAME": "A'ja Wilson",
+            "TEAM_ABBREVIATION": "LVA",
+            "GAME_DATE": "2026-05-20T00:00:00",
+            "MIN": 34,
+            "PTS": 26,
+            "REB": 9,
+            "OREB": 2,
+            "DREB": 7,
+            "AST": 3,
+            "STL": 1,
+            "BLK": 2,
+            "TOV": 2,
+            "FGM": 10,
+            "FGA": 18,
+            "FG3M": 0,
+            "FTM": 6,
+            "FTA": 7,
+        },
+        {
+            "PLAYER_NAME": "A'ja Wilson",
+            "TEAM_ABBREVIATION": "LVA",
+            "GAME_DATE": "2026-05-22T00:00:00",
+            "MIN": 36,
+            "PTS": 30,
+            "REB": 11,
+            "OREB": 3,
+            "DREB": 8,
+            "AST": 4,
+            "STL": 2,
+            "BLK": 1,
+            "TOV": 1,
+            "FGM": 11,
+            "FGA": 20,
+            "FG3M": 1,
+            "FTM": 7,
+            "FTA": 8,
+        },
+        {
+            "PLAYER_NAME": "A'ja Wilson",
+            "TEAM_ABBREVIATION": "LVA",
+            "GAME_DATE": "2026-05-24T00:00:00",
+            "MIN": 35,
+            "PTS": 22,
+            "REB": 8,
+            "OREB": 2,
+            "DREB": 6,
+            "AST": 2,
+            "STL": 1,
+            "BLK": 1,
+            "TOV": 3,
+            "FGM": 8,
+            "FGA": 17,
+            "FG3M": 0,
+            "FTM": 6,
+            "FTA": 6,
+        },
+        {
+            "PLAYER_NAME": "A'ja Wilson",
+            "TEAM_ABBREVIATION": "LVA",
+            "GAME_DATE": "2026-05-25T00:00:00",
+            "MIN": 99,
+            "PTS": 99,
+            "REB": 99,
+            "OREB": 9,
+            "DREB": 9,
+            "AST": 9,
+            "STL": 9,
+            "BLK": 9,
+            "TOV": 0,
+            "FGM": 9,
+            "FGA": 9,
+            "FG3M": 9,
+            "FTM": 9,
+            "FTA": 9,
+        },  # same-day: excluded
     ]
     monkeypatch.setattr(mf, "_fetch_league_logs", lambda season: fake if season == "2026" else [])
     feats = mf.build_minutes_features(as_of_date="2026-05-25", seasons=["2026", "2025"])
@@ -120,7 +197,9 @@ def test_job2_minutes_features_extraction() -> None:
     from wnba_oracle.scheduler.job2 import _minutes_features
 
     assert _minutes_features("{}") is None
-    fj = json.dumps({"recent_minutes": 28.0, "per_min_rate": 0.1, "minutes_vol": 4.0, "n_min_games": 9})
+    fj = json.dumps(
+        {"recent_minutes": 28.0, "per_min_rate": 0.1, "minutes_vol": 4.0, "n_min_games": 9}
+    )
     out = _minutes_features(fj)
     assert out["recent_minutes"] == 28.0 and out["n_min_games"] == 9
 
@@ -130,11 +209,18 @@ def test_job2_cascade_redistributes_out_minutes() -> None:
 
     def row(pid, mins, is_out, pos="F"):
         return {
-            "real_sports_player_id": str(pid), "team": "LVA", "position": pos,
-            "features_json": json.dumps({
-                "recent_minutes": mins, "per_min_rate": 0.1, "minutes_vol": 4.0,
-                "n_min_games": 8, "is_out": int(is_out),
-            }),
+            "real_sports_player_id": str(pid),
+            "team": "LVA",
+            "position": pos,
+            "features_json": json.dumps(
+                {
+                    "recent_minutes": mins,
+                    "per_min_rate": 0.1,
+                    "minutes_vol": 4.0,
+                    "n_min_games": 8,
+                    "is_out": int(is_out),
+                }
+            ),
         }
 
     # Starter OUT (28 min) -> active teammates inherit some of it.

@@ -107,12 +107,8 @@ def test_quality_bounded() -> None:
 
 def test_custom_hot_threshold() -> None:
     """Custom threshold changes what counts as hot."""
-    strict = streak_quality(
-        fantasy_pts_l5=24.0, fantasy_pts_l10=20.0, hot_threshold=1.25
-    )
+    strict = streak_quality(fantasy_pts_l5=24.0, fantasy_pts_l10=20.0, hot_threshold=1.25)
     assert not strict.is_hot  # 1.2 < 1.25
 
-    lenient = streak_quality(
-        fantasy_pts_l5=24.0, fantasy_pts_l10=20.0, hot_threshold=1.10
-    )
+    lenient = streak_quality(fantasy_pts_l5=24.0, fantasy_pts_l10=20.0, hot_threshold=1.10)
     assert lenient.is_hot  # 1.2 >= 1.10

@@ -165,11 +165,10 @@ def ceiling_adjusted_sigma_log(
     """Environment-conditioned sigma scaling for the per-player marginal (D89,
     Phase 4 ceiling modeling).
 
-    The 2026 GPP-modelling synthesis (research/internal/07_placement_overhaul.md)
-    names per-player variance scaling -- not just mean -- as the primary
-    upper-tail signal for top-heavy contests. The codebase already samples
-    real_score from a lognormal on log(real_score + K); the calibrated band
-    width feeds `base_sigma_log`. This helper widens that sigma when:
+    Per-player variance scaling, not just mean, is the primary upper-tail
+    signal for top-heavy contests. The codebase already samples real_score
+    from a lognormal on log(real_score + K); the calibrated band width feeds
+    `base_sigma_log`. This helper widens that sigma when:
 
     - `blowout_prob` is non-trivial. Blowout games create role-uncertainty
       mass that the per-player band (fit on close-game samples) under-prices.
