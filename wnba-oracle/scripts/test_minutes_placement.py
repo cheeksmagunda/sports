@@ -19,6 +19,7 @@ import polars as pl
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from validate_minutes_model import load_joined
+from wnba_oracle.predict.form import boost_prior
 
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup
@@ -29,7 +30,6 @@ from wnba_oracle.picker.popularity import (
     slate_labels_to_popularity,
 )
 from wnba_oracle.picker.sample import PlayerSamplingSpec
-from wnba_oracle.predict.form import boost_prior
 from wnba_oracle.predict.minutes import (
     MinutesConfig,
     blended_real_score,

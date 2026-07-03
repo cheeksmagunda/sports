@@ -25,7 +25,6 @@ import asyncio
 import json
 import os
 import sys
-import time
 import uuid
 from pathlib import Path
 
@@ -74,11 +73,9 @@ async def amain():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
     from wnba_oracle.ingest.realsports import (
         BASE,
-        STORAGE_STATE_PATH,
         TOKEN_CACHE_PATH,
         _http_headers,
         capture_live_headers,
-        load_cached_headers,
     )
 
     device_uuid = os.environ.get("WNBA_DEVICE_UUID") or str(uuid.uuid4())

@@ -236,67 +236,80 @@ def _check_enrichment_freshness(
     ]
 
 
-# slate_date is DATE on job1_enrichment but VARCHAR on slate_labels, so the
-# shared :sd param needs an explicit cast at each site or Postgres fails to
-# type it ("operator does not exist: character varying = date").
+# Coverage universe: players referenced by the captured top-20 leaderboard
+# lineups. They provably participated in the contest, so a missing label is
+# always an ingestion gap, never noise. The job1_enrichment pool cannot be
+# the universe -- it is structurally ~3x wider than contest label coverage
+# (pool ~90 vs labels ~30 on a 3-game slate), so comparing against it fired
+# a false ERROR on every healthy day. slate_date is VARCHAR on both tables
+# here; cast the shared :sd param explicitly so Postgres types it.
 LABEL_COVERAGE_Q = text(
     """
+    WITH lb_players AS (
+        SELECT DISTINCT (p->>'playerId')::int AS pid
+        FROM contest_leaderboards cl,
+             jsonb_array_elements(cl.lineup) p
+        WHERE cl.slate_date = CAST(:sd AS varchar)
+    )
     SELECT
-        (SELECT COUNT(*)::int FROM job1_enrichment e
-         WHERE e.slate_date = CAST(:sd AS date)) AS n_pool,
-        (SELECT COUNT(*)::int FROM job1_enrichment e
-         WHERE e.slate_date = CAST(:sd AS date)
-           AND NOT EXISTS (
-               SELECT 1 FROM slate_labels l
-               WHERE l.slate_date = CAST(:sd AS varchar)
-                 AND l.platform_player_id = e.player_id
-           )) AS n_missing
+        (SELECT COUNT(*)::int FROM lb_players) AS n_contest,
+        (SELECT COUNT(*)::int FROM lb_players lp
+         WHERE NOT EXISTS (
+             SELECT 1 FROM slate_labels l
+             WHERE l.slate_date = CAST(:sd AS varchar)
+               AND l.platform_player_id = lp.pid
+         )) AS n_missing
     """
 )
 
 LABEL_MISSING_SAMPLE_Q = text(
     """
-    SELECT e.player_id, e.name FROM job1_enrichment e
-    WHERE e.slate_date = CAST(:sd AS date)
+    SELECT DISTINCT (p->>'playerId')::int AS pid,
+           MAX(p->>'displayName') AS name
+    FROM contest_leaderboards cl,
+         jsonb_array_elements(cl.lineup) p
+    WHERE cl.slate_date = CAST(:sd AS varchar)
       AND NOT EXISTS (
           SELECT 1 FROM slate_labels l
           WHERE l.slate_date = CAST(:sd AS varchar)
-            AND l.platform_player_id = e.player_id
+            AND l.platform_player_id = (p->>'playerId')::int
       )
-    ORDER BY e.player_id
+    GROUP BY (p->>'playerId')::int
+    ORDER BY pid
     LIMIT 10
     """
 )
 
 
 def _check_label_coverage(slate_date: str) -> list[WatchdogEvent]:
-    """D85: pool players missing from slate_labels lose training labels
+    """D85: contest players missing from slate_labels lose training labels
     permanently (the Loyd/Boston gap on 2026-06-08).
 
-    Compares the slate's job1_enrichment universe against slate_labels
-    after dayclose finalizes the contest. Error above 20% missing, warn
-    on any gap. Called from the dayclose path, not the cron loop: labels
-    only exist after contest finalization.
+    Compares the players referenced by the captured top-20 leaderboard
+    lineups against slate_labels after dayclose finalizes the contest.
+    Any gap in that set is a real ingestion failure: error above 20%
+    missing, warn on any gap. Called from the dayclose path, not the cron
+    loop: labels and leaderboards only exist after contest finalization.
     """
     eng = get_engine()
     with eng.connect() as conn:
         row = conn.execute(LABEL_COVERAGE_Q, {"sd": slate_date}).first()
-        n_pool = int(row[0]) if row and row[0] is not None else 0
+        n_contest = int(row[0]) if row and row[0] is not None else 0
         n_missing = int(row[1]) if row and row[1] is not None else 0
-        if n_pool == 0 or n_missing == 0:
+        if n_contest == 0 or n_missing == 0:
             return []
         sample = [
             {"player_id": int(r[0]), "name": str(r[1])}
             for r in conn.execute(LABEL_MISSING_SAMPLE_Q, {"sd": slate_date})
         ]
-    frac = n_missing / n_pool
+    frac = n_missing / n_contest
     return [
         WatchdogEvent(
             slate_date=slate_date,
             trigger="label_coverage_gap",
             severity=SEVERITY_ERROR if frac > 0.20 else SEVERITY_WARN,
             payload={
-                "n_pool": n_pool,
+                "n_contest": n_contest,
                 "n_missing": n_missing,
                 "missing_frac": round(frac, 3),
                 "sample": sample,

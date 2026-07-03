@@ -178,7 +178,11 @@ async def login_and_seed_storage(
         if "Attempts exceeded" in snippet or "Forgot password" in snippet[:120]:
             await browser.close()
             raise RuntimeError(
-                f"Real Sports login rejected (rate-limit or wrong creds). Body: {snippet!r}"
+                "Real Sports login rejected. Since ~2026-06-27 POST /login "
+                "returns 403 for scripted Chromium (bot detection) -- expected "
+                "headless, not a credentials problem. Recover via the "
+                "Playwright MCP browser flow in AGENTS.md, section "
+                f"'Real Sports'. Body: {snippet!r}"
             )
         if not any(t in snippet for t in ("WNBA", "MLB", "Home", "Sport")):
             await browser.close()

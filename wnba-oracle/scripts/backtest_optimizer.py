@@ -24,7 +24,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.optimize import (
     DEFAULT_SLOT_MULTIPLIERS,
-    MAX_SLOT_MULT,
     OptimizeConfig,
     optimize_lineup,
 )

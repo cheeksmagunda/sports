@@ -75,7 +75,7 @@ def predictor_quality(corpus: pd.DataFrame, slates: list[str]) -> None:
         if len(pool) < 6:
             continue
         boost_by = {int(r.player_id): float(r.card_boost) for r in pool.itertuples()}
-        prior = prior_by_player(history)
+        prior_by_player(history)
         realized = np.array([r.real_score * (2.0 + r.card_boost) for r in pool.itertuples()])
         top8 = set(np.argsort(realized)[::-1][:8].tolist())
         preds = {

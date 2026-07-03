@@ -12,9 +12,8 @@ Run: uv run python scripts/validate_minutes_model.py
 """
 from __future__ import annotations
 
-import unicodedata
-
 import sys
+import unicodedata
 from pathlib import Path
 
 import numpy as np

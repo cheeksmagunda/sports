@@ -30,7 +30,8 @@ os.environ.setdefault("PAYOUT_REGIME", "top_20")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
 os.environ.setdefault("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
 
-import structlog  # noqa: E402
+import structlog
+
 structlog.configure(processors=[structlog.dev.ConsoleRenderer()])  # reduce noise
 
 from wnba_oracle.picker.optimize import (  # noqa: E402
@@ -40,7 +41,6 @@ from wnba_oracle.picker.optimize import (  # noqa: E402
 )
 from wnba_oracle.picker.payout import default_curve_for_regime  # noqa: E402
 from wnba_oracle.scheduler.job2 import _build_specs  # noqa: E402
-
 
 GRID = list(product(
     [1.0, 2.0, 3.0, 4.0],   # field_same_game_boost
@@ -69,7 +69,7 @@ def main() -> int:
     lb = read_leaderboards()
 
     slates_2026 = {d for d in sl["slate_date"].unique().to_list() if str(d).startswith("2026-")}
-    lb_slates = {d for d in lb["slate_date"].unique().to_list()}
+    lb_slates = set(lb["slate_date"].unique().to_list())
     valid_slates = sorted(slates_2026 & lb_slates)
     print(f"Found {len(valid_slates)} 2026 slates with both labels and leaderboard data\n")
 
@@ -210,7 +210,7 @@ def main() -> int:
     print(f"  beat_top5_pct    = {best['beat_top5_pct']:.1f}%")
     print(f"  beat_top1_pct    = {best['beat_top1_pct']:.1f}%")
     print(f"  mean_gap_vs_top1 = {best['mean_gap']:.2f}")
-    print(f"\nRecommended Railway env vars:")
+    print("\nRecommended Railway env vars:")
     print(f"  FIELD_SAME_GAME_BOOST={best['game_boost']}")
     print(f"  FIELD_SAME_TEAM_BOOST={best['team_boost']}")
     print(f"  OPTIMIZER_DUPLICATION_AWARE_PAYOUT={'true' if best['dup_payout'] else 'false'}")

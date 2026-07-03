@@ -96,11 +96,11 @@ def test_enrichment_freshness_quiet_before_20utc() -> None:
 
 
 def _engine_with_coverage(
-    n_pool: int, n_missing: int, sample: list[tuple] | None = None
+    n_contest: int, n_missing: int, sample: list[tuple] | None = None
 ) -> MagicMock:
     eng = MagicMock()
     cov_result = MagicMock()
-    cov_result.first.return_value = (n_pool, n_missing)
+    cov_result.first.return_value = (n_contest, n_missing)
     sample_result = iter(sample or [])
     conn = MagicMock()
     conn.execute.side_effect = [cov_result, sample_result]
@@ -133,7 +133,7 @@ def test_label_coverage_clean_no_event() -> None:
 
 
 def test_label_coverage_quiet_on_empty_pool() -> None:
-    """no_job1_pool owns the empty-pool signal; coverage stays silent."""
+    """dayclose ingest checks own the no-leaderboard signal; coverage stays silent."""
     eng = _engine_with_coverage(0, 0)
     with patch.object(watchdog, "get_engine", return_value=eng):
         assert watchdog._check_label_coverage("2026-06-08") == []

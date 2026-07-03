@@ -29,6 +29,15 @@ make migrate
 `scripts/dev.sh` checks local credentials. Railway config, database URL,
 Redis URL, and the served model SHA live in Railway.
 
+## Operations
+
+AGENTS.md is the operating manual: credential layers (local Claude Code,
+Railway production, cloud routines), Railway service IDs and schedules, the
+Real Sports session recovery procedure, and the two scheduled monitoring
+routines (pre-freeze guard at 13:30 UTC, dayclose verify at 07:00 UTC).
+Production state and troubleshooting live in STATUS.md. Escalations and the
+results ledger live in GitHub issues labeled `ops-guard` and `ops-results`.
+
 ## Runtime Shape
 
 - `oracle-cron --job job1`: scrape pool, odds, lineups, props, and features.

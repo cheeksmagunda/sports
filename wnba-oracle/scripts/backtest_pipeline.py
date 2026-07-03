@@ -44,13 +44,13 @@ os.environ.setdefault("CONTRARIAN_ENABLED", "true")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
 os.environ.setdefault("PAYOUT_REGIME", "top_20")
 
-from wnba_oracle.picker.optimize import (  # noqa: E402
+from wnba_oracle.picker.optimize import (
     DEFAULT_SLOT_MULTIPLIERS,
     OptimizeConfig,
     optimize_lineup,
 )
-from wnba_oracle.picker.payout import default_curve_for_regime  # noqa: E402
-from wnba_oracle.scheduler.job2 import _build_specs  # noqa: E402
+from wnba_oracle.picker.payout import default_curve_for_regime
+from wnba_oracle.scheduler.job2 import _build_specs
 
 
 def score_lineup_against_truth(
@@ -110,7 +110,7 @@ def main() -> int:
             })
 
         # Run the same pipeline cron-job2 runs
-        samps, fields, projection_by_pid = _build_specs(enrichment, slate_date=sd)
+        samps, fields, _projection_by_pid = _build_specs(enrichment, slate_date=sd)
         if len(samps) < 5:
             print(f"  {sd}  pool too small ({len(samps)}); skip")
             continue
@@ -141,7 +141,7 @@ def main() -> int:
         placement = sum(1 for s in all_scores if s >= our_score) + 1
 
         # Which players did we pick? Which did winners pick?
-        our_pids = set(int(p) for p in rec.player_ids)
+        our_pids = {int(p) for p in rec.player_ids}
         win_pids = set()
         if slate_lb.height:
             win_lineup = json.loads(slate_lb.row(0, named=True)["lineup_json"])

@@ -29,9 +29,10 @@ from sqlalchemy import text
 
 from wnba_oracle.features.serving_features import (
     build_head_feature_lookup,
+)
+from wnba_oracle.features.serving_features import (
     lookup as head_feature_lookup,
 )
-
 
 SELECT_ENRICHMENT = text(
     "SELECT player_id, real_sports_player_id, name, team, features_json "

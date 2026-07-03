@@ -41,7 +41,6 @@ import os
 import subprocess
 import sys
 
-
 PROJECT = "ab83f44c-0bbc-4a58-931c-37d9fbfda73a"
 ENV = "d57a759e-e189-439b-a612-bd220ef59c39"
 

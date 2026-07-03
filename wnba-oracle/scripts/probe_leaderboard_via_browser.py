@@ -25,11 +25,12 @@ TRAFFIC_LOG = OUT_DIR / "browser_traffic.jsonl"
 
 async def amain():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from playwright.async_api import async_playwright
+
     from wnba_oracle.ingest.realsports import (
         DEFAULT_USER_AGENT,
         STORAGE_STATE_PATH,
     )
-    from playwright.async_api import async_playwright
 
     if not STORAGE_STATE_PATH.exists():
         print("ERROR: storage_state.json missing")
@@ -99,7 +100,7 @@ async def amain():
                     await el.click(timeout=3000)
                     await page.wait_for_timeout(3500)
                     await page.screenshot(path=str(OUT_DIR / f"after_{pattern.lower().replace(' ', '_')}.png"))
-            except Exception as exc:
+            except Exception:
                 continue
 
         # Try navigating directly to a finalized contest URL

@@ -89,7 +89,7 @@ async def amain() -> int:
                 print(f"  HIT cid={cid} day={day}")
             time.sleep(0.20)
 
-    print(f"\n=== summary (cid 1..571, stride=3) ===")
+    print("\n=== summary (cid 1..571, stride=3) ===")
     print(f"sports seen: {sorted(seen_sports.items(), key=lambda x: -x[1])}")
     print(f"wnba hits: {len(wnba_hits)}")
     if wnba_hits:

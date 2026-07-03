@@ -52,7 +52,7 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
     manifest: dict = {
-        "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "generated_at_utc": datetime.datetime.now(datetime.UTC).isoformat(),
         "tables": {},
     }
     for table, query in CORPUS_QUERIES.items():
@@ -60,7 +60,7 @@ def main() -> int:
         df.to_csv(OUT / f"{table}.csv", index=False)
         sd = df["slate_date"].astype(str) if "slate_date" in df.columns else None
         manifest["tables"][table] = {
-            "rows": int(len(df)),
+            "rows": len(df),
             "slates": int(sd.nunique()) if sd is not None else None,
             "min_slate": (sd.min() if sd is not None and len(df) else None),
             "max_slate": (sd.max() if sd is not None and len(df) else None),

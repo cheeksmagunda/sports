@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import sys
-from collections import Counter
 from pathlib import Path
 
 import polars as pl
@@ -60,7 +59,7 @@ def main() -> int:
     from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
 
     lb = read_leaderboards()
-    sl = read_slate_labels()
+    read_slate_labels()
     pp = explode_lineups(lb)
     pp = pp.with_columns(
         pl.when(pl.col("rank") == 1).then(pl.lit("winner"))
@@ -122,7 +121,7 @@ def main() -> int:
     for r in per_entry_hit.iter_rows(named=True):
         picks = set(r["picks"])
         top3 = set(r["top3"])
-        hit_counts.append({"rank": r["rank"], "hit_top1": int(list(top3)[0] in picks if r["top3"] else False),
+        hit_counts.append({"rank": r["rank"], "hit_top1": int(next(iter(top3)) in picks if r["top3"] else False),
                             "n_top3_in_lineup": len(picks & top3)})
     hc = pl.DataFrame(hit_counts).with_columns(
         pl.when(pl.col("rank") == 1).then(pl.lit("winner"))
@@ -139,7 +138,7 @@ def main() -> int:
     # C. Where does the highest-boost card go? Slot distribution.
     section("C. Slot allocation of the highest-boost card per lineup")
     rows = []
-    for (sd, eid), grp in pp.group_by(["slate_date", "entry_id"]):
+    for (_sd, _eid), grp in pp.group_by(["slate_date", "entry_id"]):
         gl = list(grp.iter_rows(named=True))
         max_boost = max(gl, key=lambda r: r["multiplier_bonus"])
         rank = gl[0]["rank"]
@@ -159,7 +158,7 @@ def main() -> int:
     # D. Anchor vs leverage composition
     section("D. Anchor (low-boost) vs leverage (high-boost) ratio in winning lineups")
     boost_tiers_per_entry = []
-    for (sd, eid), grp in pp.group_by(["slate_date", "entry_id"]):
+    for (_sd, _eid), grp in pp.group_by(["slate_date", "entry_id"]):
         gl = list(grp.iter_rows(named=True))
         boosts = [r["multiplier_bonus"] for r in gl]
         boost_tiers_per_entry.append({

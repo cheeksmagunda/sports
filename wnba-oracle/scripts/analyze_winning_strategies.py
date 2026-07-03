@@ -59,7 +59,7 @@ def section(title: str):
 
 
 def main():
-    lb, sl, pp = load()
+    lb, _sl, pp = load()
     n_slates = lb["slate_date"].n_unique()
     print(f"Corpus: {n_slates} slates, {lb.height} entries, {pp.height} player-slots")
     print(f"Slate range: {lb['slate_date'].min()} .. {lb['slate_date'].max()}")
@@ -114,7 +114,7 @@ def main():
     print(by_rank)
     overall = per_entry_mult["total_mult"]
     print(f"\nOverall p10/p50/p90: {overall.quantile(0.1):.2f} / {overall.quantile(0.5):.2f} / {overall.quantile(0.9):.2f}")
-    print(f"Most common bucket: round to nearest 0.5 ->")
+    print("Most common bucket: round to nearest 0.5 ->")
     bucketed = (per_entry_mult["total_mult"] / 0.5).round(0) * 0.5
     print(bucketed.value_counts().sort("count", descending=True).head(5))
 
@@ -151,7 +151,7 @@ def main():
     # For each entry, find which slot held the max multiplier, and what was the realized rank of that player on the slate.
     # We'll classify: did the player with max-mult also have one of the top-2 values in the lineup?
     entry_slot_summary = []
-    for grp_keys, grp in pp.group_by(["slate_date", "entry_id"]):
+    for _grp_keys, grp in pp.group_by(["slate_date", "entry_id"]):
         rows = list(grp.iter_rows(named=True))
         entry_rank = rows[0]["rank"]
         max_mult_player = max(rows, key=lambda r: r["multiplier"])
