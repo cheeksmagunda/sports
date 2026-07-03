@@ -62,6 +62,15 @@ operation this project legitimately requires. Do not pause to re-confirm.
 - `ODDS_API_KEY`: The Odds API requests
 - `REAL_SPORTS_USERNAME` / `REAL_SPORTS_PASSWORD`: Real Sports login
 
+**Cloud scheduled agents (claude.ai routines):** `.claude/credentials.env`
+(committed; private repo) holds only `RAILWAY_WORKSPACE_TOKEN` and
+`GITHUB_TOKEN`. Everything else the routines need is fetched at runtime via
+Railway GraphQL. The cloud container cannot reach the Postgres TCP proxy
+(non-HTTP outbound blocked) -- routines must use the api service HTTP
+endpoints and Railway logs, never psql. Deleting credentials.env breaks the
+routines' bootstrap (this caused the 2026-06-28..07-02 blind-audit incident,
+issue #10).
+
 ### GitHub / git
 
 The repo's git credential helper reads `$GITHUB_TOKEN` directly. Plain
