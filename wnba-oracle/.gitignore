@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 credentials.md
+.codex/
 *.har
 *.pem
 *.key

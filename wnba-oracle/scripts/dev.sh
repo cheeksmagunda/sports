@@ -17,14 +17,14 @@ if [ ! -f "$SETTINGS_FILE" ]; then
 fi
 
 # Extract credentials from settings.local.json using python
-read -r GITHUB_TOKEN RAILWAY_TOKEN ODDS_API_KEY RS_USER RS_PASS < <(
+read -r GITHUB_TOKEN RW_WORKSPACE_TOKEN ODDS_API_KEY RS_USER RS_PASS < <(
   python3 -c "
 import json
 settings = json.load(open('$SETTINGS_FILE'))
 env = settings.get('env', {})
 print(
   env.get('GITHUB_TOKEN', ''),
-  env.get('RAILWAY_TOKEN', ''),
+  env.get('RAILWAY_WORKSPACE_TOKEN', ''),
   env.get('ODDS_API_KEY', ''),
   env.get('REAL_SPORTS_USERNAME', ''),
   env.get('REAL_SPORTS_PASSWORD', '')
@@ -51,22 +51,30 @@ else
   fi
 fi
 
-# Railway (GraphQL, not CLI)
-if [ -z "$RAILWAY_TOKEN" ]; then
-  fail "RAILWAY_TOKEN missing from settings.local.json"
+# Railway workspace token (GraphQL scripts: rwgql.sh)
+if [ -z "$RW_WORKSPACE_TOKEN" ]; then
+  fail "RAILWAY_WORKSPACE_TOKEN missing from settings.local.json"
 else
   resp=$(curl -sS -X POST https://backboard.railway.com/graphql/v2 \
-    -H "Authorization: Bearer $RAILWAY_TOKEN" \
+    -H "Authorization: Bearer $RW_WORKSPACE_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"query":"query{projects{edges{node{id name}}}}"}' \
     --max-time 10 || true)
   if echo "$resp" | grep -q 'wnba-oracle'; then
-    ok "RAILWAY_TOKEN (workspace token, wnba-oracle visible)"
+    ok "RAILWAY_WORKSPACE_TOKEN (GraphQL ok, wnba-oracle visible)"
   elif echo "$resp" | grep -q '"data"'; then
-    warn "RAILWAY_TOKEN GraphQL ok but wnba-oracle not in listing"
+    warn "RAILWAY_WORKSPACE_TOKEN GraphQL ok but wnba-oracle not in listing"
   else
-    fail "RAILWAY_TOKEN GraphQL probe failed"
+    fail "RAILWAY_WORKSPACE_TOKEN GraphQL probe failed"
   fi
+fi
+
+# Railway CLI / MCP (user OAuth from `railway login`, stored in ~/.railway)
+rw_user=$(env -u RAILWAY_TOKEN -u RAILWAY_API_TOKEN railway whoami 2>/dev/null || true)
+if [ -n "$rw_user" ]; then
+  ok "railway CLI user login ($(echo "$rw_user" | tail -1))"
+else
+  warn "railway CLI not logged in (MCP tools unavailable; run: railway login)"
 fi
 
 # Odds API

@@ -125,9 +125,9 @@ UNUSED_PER_SERVICE: dict[str, list[str]] = {
 
 
 def _post(payload: dict) -> dict:
-    token = os.environ.get("RAILWAY_TOKEN")
+    token = os.environ.get("RAILWAY_WORKSPACE_TOKEN") or os.environ.get("RAILWAY_TOKEN")
     if not token:
-        sys.exit("RAILWAY_TOKEN env var not set; source .env first")
+        sys.exit("RAILWAY_WORKSPACE_TOKEN env var not set (see .claude/settings.local.json)")
     r = subprocess.run(
         [
             "curl", "-sS",
