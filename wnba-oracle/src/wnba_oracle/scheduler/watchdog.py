@@ -236,16 +236,19 @@ def _check_enrichment_freshness(
     ]
 
 
+# slate_date is DATE on job1_enrichment but VARCHAR on slate_labels, so the
+# shared :sd param needs an explicit cast at each site or Postgres fails to
+# type it ("operator does not exist: character varying = date").
 LABEL_COVERAGE_Q = text(
     """
     SELECT
         (SELECT COUNT(*)::int FROM job1_enrichment e
-         WHERE e.slate_date = :sd) AS n_pool,
+         WHERE e.slate_date = CAST(:sd AS date)) AS n_pool,
         (SELECT COUNT(*)::int FROM job1_enrichment e
-         WHERE e.slate_date = :sd
+         WHERE e.slate_date = CAST(:sd AS date)
            AND NOT EXISTS (
                SELECT 1 FROM slate_labels l
-               WHERE l.slate_date = :sd
+               WHERE l.slate_date = CAST(:sd AS varchar)
                  AND l.platform_player_id = e.player_id
            )) AS n_missing
     """
@@ -254,10 +257,10 @@ LABEL_COVERAGE_Q = text(
 LABEL_MISSING_SAMPLE_Q = text(
     """
     SELECT e.player_id, e.name FROM job1_enrichment e
-    WHERE e.slate_date = :sd
+    WHERE e.slate_date = CAST(:sd AS date)
       AND NOT EXISTS (
           SELECT 1 FROM slate_labels l
-          WHERE l.slate_date = :sd
+          WHERE l.slate_date = CAST(:sd AS varchar)
             AND l.platform_player_id = e.player_id
       )
     ORDER BY e.player_id
