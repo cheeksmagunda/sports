@@ -88,19 +88,9 @@ conformal:
   target_coverage: 0.80
   band: [0.10, 0.90]
 
-# Optuna search (Part 6.13) - deferred. Hyperparameter search runs once
-# the corpus is large enough (>= 2000 labeled rows) that the inner-CV
-# folds carry signal. Until then the static `lightgbm:` block above
-# is the production hyperparameter set. When this lands, restore the
-# `optuna` dependency in pyproject.toml.
-
 # Rolling decay (Part 7).
 rolling:
   decay_half_life_slates: 20
-
-# Adversarial validation gate (Part 6.5).
-adversarial:
-  auc_hard_stop: 0.6
 
 # Low-data mode threshold.
 low_data_mode:
@@ -116,7 +106,6 @@ seeds:
   numpy: 1729
   lightgbm: 1729
   python: 1729
-  optuna: 1729
 
 # Picker / lineup optimizer (Part 1).
 picker:

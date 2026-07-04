@@ -48,6 +48,8 @@ data/parquet/
 models/*.pkl
 models/*.joblib
 models/*.bin
+models/*.sha256
+models/*.manifest.json
 models/artifacts/
 # Production-served artifact is committed by exception so the Railway
 # deploy ships it. To bump the served model: train a new artifact via
