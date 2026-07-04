@@ -1,8 +1,8 @@
 """Top-level training pipeline.
 
 Trains six multi-task heads per cohort + EB baseline + Mondrian CQR
-calibrator + adversarial validation. Output is a single artifact pickled
-to models/picker_<commit>_<ts>.pkl, with a SHA-256 sidecar.
+calibrator. Output is a single artifact pickled to
+models/picker_<commit>_<ts>.pkl, with a SHA-256 sidecar.
 
 Determinism: numpy / lightgbm / python seeds pinned. OMP_NUM_THREADS=1
 in the Makefile target. `assert_byte_equal_after_two_runs` is the gate.
@@ -196,9 +196,9 @@ def train_picker(
     valid_df: pl.DataFrame,
     *,
     label_train: pl.DataFrame | None = None,
-    label_valid: pl.DataFrame | None = None,
+    label_valid: pl.DataFrame | None = None,  # noqa: ARG001 -- reserved for EB valid split
     target_real_score: str = "real_score",
-    target_minutes: str = "minutes_played",
+    target_minutes: str = "minutes_played",  # noqa: ARG001 -- reserved for minutes head retarget
 ) -> PickerArtifact:
     """Train the multi-task ensemble.
 
@@ -348,8 +348,37 @@ def write_artifact(art: PickerArtifact, *, commit: str) -> Path:
     path.write_bytes(payload)
     sha = hashlib.sha256(payload).hexdigest()
     (path.with_suffix(".sha256")).write_text(sha)
+    _write_training_manifest(path=path, art=art, commit=commit, sha256=sha, ts=ts)
     log.info("artifact_written", path=str(path), sha256=sha)
     return path
+
+
+def _write_training_manifest(
+    *, path: Path, art: PickerArtifact, commit: str, sha256: str, ts: int
+) -> None:
+    """Provenance sidecar. Answers: which code, which corpus, which features
+    produced this pkl. Written next to the artifact as picker_<sha>.manifest.json.
+    The determinism gate (``make determinism-check``) compares .pkl content
+    only via scripts/compare_artifacts.py, so the manifest is free to embed
+    the training timestamp for provenance."""
+    import json
+
+    manifest = {
+        "artifact": path.name,
+        "artifact_sha256": sha256,
+        "commit": commit,
+        "git_sha": _git_sha_short(),
+        "trained_at_unix": ts,
+        "training_rows": int(art.training_rows),
+        "low_data_mode": bool(art.low_data_mode),
+        "feature_module_sha": art.feature_module_sha,
+        "cohorts_trained": sorted({c for (_, c) in art.heads}),
+        "heads_trained": sorted([f"{h}:{c}" for (h, c) in art.heads]),
+        "n_calibrators": len(art.calibrators),
+        "has_eb_baseline": art.eb_baseline is not None,
+    }
+    body = json.dumps(manifest, sort_keys=True, indent=2)
+    path.with_suffix(".manifest.json").write_text(body + "\n")
 
 
 def load_artifact(path: Path) -> PickerArtifact:

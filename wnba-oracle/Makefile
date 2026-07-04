@@ -50,20 +50,21 @@ deploy:
 	@echo "Workspace-token CLI is not supported."
 
 determinism-check:
-	@echo "Run 1..."
-	OMP_NUM_THREADS=1 uv run oracle-train --commit determ01 \
-	  --metrics-path /tmp/wnba_determ_run1.json | tail -3
-	@PKL1=$$(find models -name "picker_determ01_*.pkl" | head -1); \
-	  mv $$PKL1 /tmp/wnba_determ_run1.pkl
-	@echo "Run 2..."
-	OMP_NUM_THREADS=1 uv run oracle-train --commit determ02 \
-	  --metrics-path /tmp/wnba_determ_run2.json | tail -3
-	@PKL2=$$(find models -name "picker_determ02_*.pkl" | head -1); \
-	  mv $$PKL2 /tmp/wnba_determ_run2.pkl
-	@echo "Comparing trained model CONTENT (not pickle bytes -- LightGBM"; \
+	@D=$$(mktemp -d -t wnba_determ.XXXXXX); \
+	  echo "Scratch dir: $$D"; \
+	  echo "Run 1..."; \
+	  OMP_NUM_THREADS=1 uv run oracle-train --commit determ01 \
+	    --metrics-path $$D/run1.json | tail -3; \
+	  PKL1=$$(find models -name "picker_determ01_*.pkl" | head -1); \
+	  mv $$PKL1 $$D/run1.pkl; \
+	  echo "Run 2..."; \
+	  OMP_NUM_THREADS=1 uv run oracle-train --commit determ02 \
+	    --metrics-path $$D/run2.json | tail -3; \
+	  PKL2=$$(find models -name "picker_determ02_*.pkl" | head -1); \
+	  mv $$PKL2 $$D/run2.pkl; \
+	  echo "Comparing trained model CONTENT (not pickle bytes -- LightGBM"; \
 	  echo "Boosters pickle non-deterministically even when content is equal)..."; \
-	  uv run python scripts/compare_artifacts.py \
-	    /tmp/wnba_determ_run1.pkl /tmp/wnba_determ_run2.pkl
+	  uv run python scripts/compare_artifacts.py $$D/run1.pkl $$D/run2.pkl
 
 rotation-check-help:
 	uv run oracle-rotate-check --help

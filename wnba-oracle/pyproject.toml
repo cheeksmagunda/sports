@@ -46,17 +46,6 @@ dependencies = [
     "playwright>=1.59.0",
 ]
 
-# Deferred dependencies. None of these are imported in the current build.
-# Re-add to `dependencies` only when the feature ships.
-#   apscheduler        - if Railway cron is ever replaced with in-process scheduling
-#   asyncpg            - if any code path needs the asyncio postgres driver
-#   duckdb             - the experiments.parquet ad-hoc query path (Part 6.6)
-#   mapie              - swap-in for the pure-numpy MondrianCQR (Part 6.3)
-#   optuna             - hyperparameter search (Part 6.13)
-#   shap               - SHAP audit on each promotion candidate (Part 6.12)
-#   pbpstats           - possession-level enrichment (Phase 2)
-#   opentelemetry-*    - distributed tracing on Job 1 + Job 2
-
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0.3,<10.0",
@@ -69,7 +58,6 @@ dev = [
     "types-pyyaml>=6.0,<7.0",
     "bandit>=1.7,<2.0",
     "python-dotenv>=1.0,<2.0",
-    "pre-commit>=4.0,<5.0",
 ]
 
 [project.scripts]
@@ -102,7 +90,12 @@ markers = [
     "contract: external-API schema contract tests (network). Default excludes them; nightly runs `pytest -m contract` to catch upstream schema drift before a fire.",
 ]
 filterwarnings = [
-    "ignore::DeprecationWarning",
+    # Surface DeprecationWarnings by default so numpy 2 / pandas 3 rot
+    # shows up early. Ignore known third-party noise only, with a note.
+    "default::DeprecationWarning",
+    # pandas 2.x emits DeprecationWarning through pyarrow's date handling
+    # in Polars->pandas bridge code we don't own.
+    "ignore:.*Passing a BlockManager.*:DeprecationWarning",
 ]
 
 [tool.ruff]
@@ -116,8 +109,34 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W", "B", "C4", "UP", "SIM", "RUF"]
-ignore = ["E501", "B008", "B905", "RUF001", "RUF002", "RUF003", "SIM105"]
+select = [
+    "E", "F", "I", "W", "B", "C4", "UP", "SIM", "RUF",
+    "TCH",  # type-checking-only imports
+    "PT",   # pytest style
+    "RET",  # return-value hygiene
+    "PIE",  # misc anti-patterns
+    "TID",  # tidy imports
+    "PERF", # obvious perf antipatterns
+    "ARG",  # unused function args
+]
+ignore = [
+    "E501", "B008", "B905", "RUF001", "RUF002", "RUF003", "SIM105",
+    # PT011: broad `pytest.raises(Exception)` is fine in fuzz-style tests.
+    "PT011",
+    # ARG002: unused method args are common in FastAPI dep-injection sigs.
+    "ARG002",
+    # RET504: unnecessary assignment before return often aids debugging.
+    "RET504",
+    # TC001-3: moving imports under TYPE_CHECKING is negligible perf
+    # for meaningful diff churn on a small project. Skip.
+    "TC001", "TC002", "TC003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests are allowed to compose asserts and take handler args they don't use
+# (httpx respx handlers require the `request` positional even when ignored).
+# PERF401/PERF102 in tests is churn-for-churn.
+"tests/**" = ["PT018", "PT019", "ARG001", "PT017", "PERF401", "PERF102"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -126,7 +145,7 @@ ignore_missing_imports = true
 check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
-warn_unused_ignores = false
+warn_unused_ignores = true
 exclude = ["frontend/", "migrations/versions/"]
 
 [tool.bandit]

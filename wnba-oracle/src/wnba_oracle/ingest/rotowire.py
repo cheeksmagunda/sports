@@ -18,6 +18,7 @@ boxes carry class 'is-nba' (not 'is-wnba'). Verified by live curl.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 import polars as pl
@@ -49,7 +50,7 @@ class LineupEntry:
     confirmed: bool  # True if "Confirmed" badge present, else expected
 
 
-def _list_is_confirmed(list_el) -> bool:  # type: ignore[no-untyped-def]
+def _list_is_confirmed(list_el: Any) -> bool:
     """Whether one team's lineup list is CONFIRMED (vs the default Expected).
 
     RotoWire marks each team's `ul.lineup__list` with its own status li, e.g.

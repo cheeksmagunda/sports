@@ -95,9 +95,7 @@ def fetch_odds_for_slate(
         log.info("odds_quota", remaining=remaining, used=used)
         data = r.json() or []
 
-    out: list[GameOdds] = []
-    for game in data:
-        out.append(_reduce_game(game))
+    out: list[GameOdds] = [_reduce_game(game) for game in data]
     if use_cache:
         cache_put(
             cache_key,

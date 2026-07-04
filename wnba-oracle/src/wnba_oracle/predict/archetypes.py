@@ -97,7 +97,7 @@ def classify_archetype(inp: ArchetypeInput) -> ArchetypeLabel:
         ts_pct_l10=inp.ts_pct_l10,
     )
 
-    primary = _classify_primary(inp, leverage)
+    primary = _classify_primary(inp)
     confidence = _compute_confidence(inp, primary, streak, leverage)
 
     return ArchetypeLabel(
@@ -110,7 +110,7 @@ def classify_archetype(inp: ArchetypeInput) -> ArchetypeLabel:
     )
 
 
-def _classify_primary(inp: ArchetypeInput, leverage: float) -> Archetype:
+def _classify_primary(inp: ArchetypeInput) -> Archetype:
     """Decision tree for the primary archetype label."""
     is_starter = inp.is_confirmed_starter or inp.is_anchor
     high_minutes = inp.mins_l10 >= 24.0

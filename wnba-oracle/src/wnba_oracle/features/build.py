@@ -94,7 +94,7 @@ def build_slate_features(
 
     # 2) Compute per-player rolling features from each player's game log.
     rolling_rows: list[pl.DataFrame] = []
-    for _pid, log_df in game_logs_by_player.items():
+    for log_df in game_logs_by_player.values():
         if log_df is None or log_df.is_empty():
             continue
         roll = build_rolling_features(log_df, as_of_date=slate_date)

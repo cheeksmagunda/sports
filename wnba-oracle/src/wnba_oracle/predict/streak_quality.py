@@ -35,7 +35,7 @@ def streak_quality(
     *,
     fantasy_pts_l5: float = 0.0,
     fantasy_pts_l10: float = 0.0,
-    pts_per_min_l5: float = 0.0,
+    pts_per_min_l5: float = 0.0,  # noqa: ARG001 -- callsite consistency with fantasy_pts_l5 pair
     pts_per_min_l10: float = 0.0,
     ast_per_min_l10: float = 0.0,
     stl_blk_per_min_l10: float = 0.0,

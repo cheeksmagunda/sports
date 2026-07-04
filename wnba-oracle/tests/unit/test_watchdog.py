@@ -407,7 +407,7 @@ def test_config_drift_clean_when_env_matches_prod() -> None:
 
 
 def test_summarize_status_picks_highest_severity() -> None:
-    from wnba_oracle.api.watchdog import _summarize  # local import keeps test deps minimal
+    from wnba_oracle.api.watchdog_router import _summarize  # local import keeps test deps minimal
 
     assert _summarize([]) == "ok"
     assert _summarize([{"severity": "warn"}]) == "warn"
@@ -422,7 +422,7 @@ def test_route_order_today_before_slate_param() -> None:
     """FastAPI matches routes in declaration order. If /{slate_date} is
     declared before /today, requests to /watchdog/today silently bind
     slate_date='today' and return empty events. Pin the order."""
-    from wnba_oracle.api.watchdog import router
+    from wnba_oracle.api.watchdog_router import router
 
     watchdog_paths = [r.path for r in router.routes if hasattr(r, "path")]
     today_idx = watchdog_paths.index("/watchdog/today")
