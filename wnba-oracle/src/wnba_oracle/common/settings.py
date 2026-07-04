@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     job1_dry_run: bool = Field(default=False, alias="JOB1_DRY_RUN")
     job2_dry_run: bool = Field(default=False, alias="JOB2_DRY_RUN")
     model_artifact_sha: str = Field(default="", alias="WNBA_ORACLE_MODEL_ARTIFACT_SHA")
+    # Shadow-eval challenger. When set on cron-job2, run the challenger's
+    # heads over the same enrichment and log a model_shadow_runs row; prod
+    # freeze still uses model_artifact_sha. Dayclose backfills
+    # realized_value_delta once slate_labels finalize.
+    model_challenger_sha: str = Field(default="", alias="WNBA_ORACLE_MODEL_CHALLENGER_SHA")
 
     # Lineup optimizer config
     payout_regime: Literal["top_50", "top_20", "top_1"] = Field(

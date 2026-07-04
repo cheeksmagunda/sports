@@ -1142,6 +1142,33 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
 
     log.info("job2_start", slate_date=sd, model_sha=model_sha)
     enrichment_raw = _load_enrichment(sd)
+    # Serving-schema boundary check (warn-only rollout). Rejects the
+    # 2026-07-02-style degraded pool (all-G positions, null minutes) as
+    # watchdog events without blocking the freeze; escalate to strict
+    # after the count stays at zero for a rolling week.
+    try:
+        from wnba_oracle.features.serving_schema import validate_enrichment
+        from wnba_oracle.scheduler.watchdog import (
+            SEVERITY_WARN,
+            WatchdogEvent,
+            persist_events,
+        )
+
+        findings = validate_enrichment(enrichment_raw, strict=False)
+        if findings:
+            persist_events(
+                [
+                    WatchdogEvent(
+                        slate_date=sd,
+                        trigger=f.trigger,
+                        severity=SEVERITY_WARN,
+                        payload=f.payload,
+                    )
+                    for f in findings
+                ]
+            )
+    except Exception as schema_exc:
+        log.warning("serving_schema_check_failed", reason=str(schema_exc)[:160])
     # Injury cascade (D55): redistribute OUT players' recent minutes to active
     # teammates BEFORE dropping the OUT players from the pool (they are the
     # donors). job1 now ships recent_minutes per player, so the full D33/D29
@@ -1326,6 +1353,35 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     status = (
         "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")
     )
+    # Shadow-eval the challenger head against the same enrichment. Guarded:
+    # any failure logs and returns without touching the freeze result. The
+    # writer is idempotent per (slate_date, challenger_sha) via ON CONFLICT
+    # so the every-15-min cron cadence naturally dedups. Realized delta is
+    # backfilled in dayclose once slate_labels finalize.
+    if settings.model_challenger_sha:
+        try:
+            from wnba_oracle.scheduler.shadow import _maybe_run_shadow
+
+            # Reload the incumbent here rather than plumbing it out of
+            # _build_specs -- the artifact is cached by _load_model_artifact
+            # in practice, so this is a no-cost second call.
+            incumbent_art = _load_model_artifact(settings.model_artifact_sha)
+            incumbent_head = _predict_heads_for_pool(incumbent_art, enrichment)
+            boost_by_pid = {
+                int(r["real_sports_player_id"]): float(r.get("card_boost", 0.0) or 0.0)
+                for r in enrichment
+                if r.get("real_sports_player_id") is not None
+            }
+            _maybe_run_shadow(
+                sd,
+                enrichment,
+                incumbent_sha=model_sha,
+                incumbent_head=incumbent_head,
+                boost_by_pid=boost_by_pid,
+                challenger_sha=settings.model_challenger_sha,
+            )
+        except Exception as exc:
+            log.warning("shadow_run_wrapper_failed", reason=str(exc)[:160])
     return Job2Result(sd, model_sha, rec, frozen, status)
 
 
