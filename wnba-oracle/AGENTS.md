@@ -34,10 +34,14 @@ both`. See STATUS.md for current state; decision history lives in git.
 - Read files before editing. Preserve existing style.
 - Commit after every working increment with a descriptive message.
 - Keep code grep-able and consistent. Remove dead code and scratch files.
-- Docs policy (2026-07-01 cleanup): only README.md, STATUS.md, and this file
-  exist. Decision history goes in commit messages; operational history goes
-  in the ops GitHub issues; do not reintroduce DECISIONS.md, NEEDS_CLAUDE.md,
-  RESULTS.md, or other markdown ledgers.
+- Docs policy (2026-07-01 cleanup, amended 2026-07-03): prose docs are
+  README.md, STATUS.md, and this file. CLAUDE.md is a loader shim (Claude
+  Code auto-loads CLAUDE.md, not AGENTS.md; it imports this file) and
+  `.claude/skills/` holds operational procedures (Real Sports re-seed,
+  Railway redeploy) -- these are config, keep them. Decision history goes in
+  commit messages; operational history goes in the ops GitHub issues; do not
+  reintroduce DECISIONS.md, NEEDS_CLAUDE.md, RESULTS.md, or other markdown
+  ledgers.
 
 ## Output style
 
