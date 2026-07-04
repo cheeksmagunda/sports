@@ -418,6 +418,75 @@ def test_summarize_status_picks_highest_severity() -> None:
     )
 
 
+def test_pearson_basic() -> None:
+    assert watchdog._pearson([(1.0, 2.0), (2.0, 4.0), (3.0, 6.0)]) == 1.0
+    assert watchdog._pearson([(1.0, 6.0), (2.0, 4.0), (3.0, 2.0)]) == -1.0
+    assert watchdog._pearson([]) is None
+    assert watchdog._pearson([(1.0, 1.0), (1.0, 2.0)]) is None  # n<3
+    assert watchdog._pearson([(1.0, 5.0), (1.0, 5.0), (1.0, 5.0)]) is None  # zero variance
+
+
+def test_check_prediction_drift_fires_on_bad_corr(monkeypatch) -> None:
+    """Corr under DRIFT_CORR_WARN triggers a WARN."""
+
+    def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        return {
+            "n_slates": 10,
+            "n_pick_pairs": 50,
+            "pick_pred_vs_real_corr": 0.10,
+            "median_score_gap": -18.0,
+            "worst_score_gap": -30.0,
+            "best_score_gap": -5.0,
+        }
+
+    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    events = watchdog._check_prediction_drift("2026-07-03")
+    triggers = [e.trigger for e in events]
+    assert "prediction_calibration_drift" in triggers
+    assert "lineup_gap_regression" not in triggers  # gap above threshold
+
+
+def test_check_prediction_drift_fires_on_bad_gap(monkeypatch) -> None:
+    def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        return {
+            "n_slates": 10,
+            "n_pick_pairs": 50,
+            "pick_pred_vs_real_corr": 0.55,  # healthy
+            "median_score_gap": -30.0,  # regressed
+            "worst_score_gap": -40.0,
+            "best_score_gap": -12.0,
+        }
+
+    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    events = watchdog._check_prediction_drift("2026-07-03")
+    triggers = [e.trigger for e in events]
+    assert "lineup_gap_regression" in triggers
+    assert "prediction_calibration_drift" not in triggers
+
+
+def test_check_prediction_drift_silent_at_baseline(monkeypatch) -> None:
+    """At the loss-ledger baseline (~-17, ~0.554), the check must NOT fire.
+    Steady-state under baseline is knowingly poor -- alerting on it is spam."""
+
+    def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        return {
+            "n_slates": 10,
+            "n_pick_pairs": 50,
+            "pick_pred_vs_real_corr": 0.554,
+            "median_score_gap": -17.0,
+            "worst_score_gap": -25.0,
+            "best_score_gap": -7.0,
+        }
+
+    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    assert watchdog._check_prediction_drift("2026-07-03") == []
+
+
+def test_check_prediction_drift_silent_when_no_data(monkeypatch) -> None:
+    monkeypatch.setattr(watchdog, "compute_drift_metrics", lambda **_: None)
+    assert watchdog._check_prediction_drift("2026-07-03") == []
+
+
 def test_route_order_today_before_slate_param() -> None:
     """FastAPI matches routes in declaration order. If /{slate_date} is
     declared before /today, requests to /watchdog/today silently bind

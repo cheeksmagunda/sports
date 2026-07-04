@@ -233,13 +233,26 @@ def main() -> int:
     # never changes the dayclose exit code.
     yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
     try:
-        from wnba_oracle.scheduler.watchdog import _check_label_coverage, persist_events
+        from wnba_oracle.scheduler.watchdog import (
+            _check_label_coverage,
+            _check_prediction_drift,
+            persist_events,
+        )
 
         coverage_events = _check_label_coverage(yesterday)
         if coverage_events:
             persist_events(coverage_events)
         else:
             log.info("dayclose_label_coverage_clean", slate_date=yesterday)
+
+        # Loss-ledger-anchored drift alert (2026-07-03). Fires only on
+        # regression from the D77 walk-forward baseline / loss-ledger
+        # median gap; steady-state under baseline is intentionally silent.
+        drift_events = _check_prediction_drift(yesterday)
+        if drift_events:
+            persist_events(drift_events)
+        else:
+            log.info("dayclose_drift_clean", slate_date=yesterday)
     except Exception as exc:
         log.exception("dayclose_label_coverage_failed", error=str(exc))
 
@@ -250,6 +263,18 @@ def main() -> int:
             _auto_record_placement(yesterday)
         except Exception as exc:
             log.exception("dayclose_auto_placement_failed", error=str(exc))
+
+    # Fill model_shadow_runs.realized_value_delta for any pending shadow rows
+    # whose slate_labels are now finalized. Best-effort; never changes the
+    # dayclose exit code. Silent no-op when no challenger has been running.
+    try:
+        from wnba_oracle.scheduler.shadow import backfill_realized_value_delta
+
+        n = backfill_realized_value_delta(days_back=30)
+        if n:
+            log.info("dayclose_shadow_backfilled", n=n)
+    except Exception as exc:
+        log.exception("dayclose_shadow_backfill_failed", error=str(exc))
 
     # D102: keep wnba_game_logs (the head-training corpus AND the live Tier-0
     # head-feature source) fresh every night, so the rolling windows never go
