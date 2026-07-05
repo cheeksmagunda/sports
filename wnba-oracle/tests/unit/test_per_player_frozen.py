@@ -105,3 +105,37 @@ def test_per_player_handles_missing_projection_gracefully() -> None:
     assert out[0]["display_name"] == "Wilson"
     assert out[4]["display_name"] == "Player 505"
     assert out[4]["team"] == ""
+
+
+def test_per_player_passthrough_real_minutes_interval() -> None:
+    """When the predictor attaches pred_minutes_p{10,50,90}, _build_per_player
+    surfaces those values verbatim instead of the rank-aware fallback. This is
+    the contract the frontend interval bar reads — a slot-1 role player who
+    projects to 18 minutes should NOT be rendered as a 32-minute starter."""
+    rec = _rec()
+    proj = {
+        101: {
+            **_proj("Wilson", "LVA", "NYL", "F", 0.5, 42.0),
+            "pred_minutes_p10": 30.0,
+            "pred_minutes_p50": 33.5,
+            "pred_minutes_p90": 36.5,
+        },
+        202: {
+            **_proj("Boston", "IND", "CHI", "F", 0.3, 38.0),
+            "pred_minutes_p10": 12.0,
+            "pred_minutes_p50": 15.0,
+            "pred_minutes_p90": 20.0,
+        },
+        303: _proj("Ionescu", "NYL", "LVA", "G", 0.0, 33.0),
+        404: _proj("Clark", "IND", "CHI", "G", 0.75, 31.0),
+        505: _proj("Collier", "MIN", "SEA", "F", 0.2, 29.0),
+    }
+    out = _build_per_player(rec, proj)
+    assert out[0]["pred_minutes_p50"] == 33.5
+    assert out[0]["pred_minutes_p10"] == 30.0
+    assert out[0]["pred_minutes_p90"] == 36.5
+    # A slot-2 role player projects below the slot-2 default (30.5) — real
+    # data must win over the rank formula.
+    assert out[1]["pred_minutes_p50"] == 15.0
+    # Rows without a passed-through interval keep using the slot-aware fallback.
+    assert out[2]["pred_minutes_p50"] == 29.0  # 32 - 1.5*2

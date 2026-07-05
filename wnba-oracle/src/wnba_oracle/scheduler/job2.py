@@ -50,7 +50,13 @@ from wnba_oracle.picker.sample import PlayerSamplingSpec, ceiling_adjusted_sigma
 from wnba_oracle.predict.archetypes import ArchetypeInput, classify_pool
 from wnba_oracle.predict.availability import AvailabilityConfig, availability_probability
 from wnba_oracle.predict.base import player_volatility
-from wnba_oracle.predict.minutes import MinutesConfig, blended_real_score
+from wnba_oracle.predict.minutes import (
+    MinutesConfig,
+    blended_real_score,
+    minutes_interval_from_projection,
+    minutes_interval_from_role,
+    project_minutes_from_base,
+)
 from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
@@ -466,6 +472,12 @@ def _build_specs(
     rank_pred_by_pid: dict[int, float] = {}
     rows_by_pid: dict[int, dict] = {}
     minutes_vol_by_pid: dict[int, float] = {}
+    # Per-player projected (P10, P50, P90) MINUTES — surfaces the same minutes
+    # projection the predictor already computes so the frontend's minutes bar
+    # reflects the model, not a slot-position placeholder. Populated in each
+    # prediction tier; consumed in _build_specs' second loop when materializing
+    # projection_by_pid.
+    pred_minutes_by_pid: dict[int, tuple[float, float, float]] = {}
     gsm_enabled = settings.game_script_minutes_enabled
     gsm_cfg = GameScriptMinutesConfig()
     # When the role-aware blowout redistribution is on it OWNS the blowout
@@ -597,6 +609,32 @@ def _build_specs(
                 "p50": p50 * starter_mult,
                 "p90": p90 * starter_mult,
             }
+            # Real projected-minutes interval for the frozen per-player payload
+            # (frontend interval bar). The head predicts real_score, not
+            # minutes, so we anchor the interval on the same minutes machinery
+            # the D55 path uses when the player has recent minutes history;
+            # otherwise fall back to role anchors from the confirmed-starter
+            # signal so cold-start darts still get a plausible interval.
+            is_starter_flag = bool(int(f.get("is_starter", 0) or 0))
+            if mf is not None and mf["n_min_games"] >= mcfg.min_obs_for_history:
+                m50 = project_minutes_from_base(
+                    float(mf["recent_minutes"]),
+                    has_history=True,
+                    rotowire_confirmed=eff_confirmed,
+                    is_starter=is_starter_flag,
+                    injury_bonus_min=float(bonus.get(pid, 0.0)),
+                    blowout=False,
+                    cfg=mcfg,
+                )
+                pred_minutes_by_pid[pid] = minutes_interval_from_projection(
+                    m50, float(mf["minutes_vol"]), cfg=mcfg
+                )
+            else:
+                pred_minutes_by_pid[pid] = minutes_interval_from_role(
+                    rotowire_confirmed=eff_confirmed,
+                    is_starter=is_starter_flag,
+                    cfg=mcfg,
+                )
             n_head_predicted += 1
             rows_by_pid[pid] = r
             continue
@@ -619,6 +657,21 @@ def _build_specs(
             )
             pred_real_scores[pid] = max(0.5, base * gs_mult)
             minutes_vol_by_pid[pid] = mf["minutes_vol"] * mf["per_min_rate"]
+            # Tier-1 minutes interval: reuse the same projection blended_real_score
+            # applied internally, so the frontend interval matches what the model
+            # actually used to score the player.
+            m50_t1 = project_minutes_from_base(
+                float(mf["recent_minutes"]),
+                has_history=True,
+                rotowire_confirmed=eff_confirmed,
+                is_starter=bool(int(f.get("is_starter", 0) or 0)),
+                injury_bonus_min=float(bonus.get(pid, 0.0)),
+                blowout=False,
+                cfg=mcfg,
+            )
+            pred_minutes_by_pid[pid] = minutes_interval_from_projection(
+                m50_t1, float(mf["minutes_vol"]), cfg=mcfg
+            )
             n_minutes_predicted += 1
             rows_by_pid[pid] = r
             continue
@@ -644,6 +697,15 @@ def _build_specs(
             base = _heuristic_real_score(boost)
             n_heuristic_fallback += 1
         pred_real_scores[pid] = max(0.5, base * gs_mult * starter_mult)
+        # Tier-3 minutes interval: no per-player minutes history, so we anchor
+        # on the confirmed-role signal (starter -> ~30 min, bench -> ~13 min,
+        # unknown -> wide 20-min band). Consistent with how _starter_multiplier
+        # tilts the real_score in this same branch.
+        pred_minutes_by_pid[pid] = minutes_interval_from_role(
+            rotowire_confirmed=eff_confirmed,
+            is_starter=bool(int(f.get("is_starter", 0) or 0)),
+            cfg=mcfg,
+        )
         rows_by_pid[pid] = r
 
     if gsm_enabled and gsm_rows:
@@ -774,6 +836,12 @@ def _build_specs(
         if hq is not None:
             proj["pred_real_score_p10"] = float(hq["p10"])
             proj["pred_real_score_p90"] = float(hq["p90"])
+        mp = pred_minutes_by_pid.get(pid)
+        if mp is not None:
+            p10m, p50m, p90m = mp
+            proj["pred_minutes_p10"] = float(p10m)
+            proj["pred_minutes_p50"] = float(p50m)
+            proj["pred_minutes_p90"] = float(p90m)
         projection_by_pid[pid] = proj
 
     # D105: archetype classification. Surface the DFS value archetype for each
@@ -947,23 +1015,23 @@ def _build_per_player(
     render player names, teams, opponents, positions, boosts, and the
     minutes-quantile interval bar.
 
-    The picker does not yet produce per-player minutes quantiles (no
-    minutes model is trained against the slate-labels corpus). Until
-    that lands we synthesize a calibrated interval anchored on a
-    rank-aware default consistent with WNBA observed starter minutes
-    (high-floor starter centered ~30 with ~6 min spread). The minutes
-    field is documented as best-effort so a future model can swap in
-    without a schema change.
+    Minutes P10/P50/P90 pass through from the predictor (the same
+    project_minutes_from_base + minutes_vol the D55/D63 tiers use to score
+    the player). Rows without a projection map (missing pid, upstream
+    bug) fall back to a rank-aware default so the row still emits with
+    a plausible interval instead of crashing the freeze.
     """
     pid_order = list(rec.player_ids)
     out: list[dict] = []
     for slot_idx, pid in enumerate(pid_order):
         proj = projection_by_pid.get(int(pid), {})
-        # Rank-aware minutes default. Slot 1 (top value) leans starter
-        # heavy; slot 5 trails because boost-elevated benchers tend to
-        # land here. Symmetric ±4 spread anchors P10/P90 around the
-        # observed WNBA starter range.
-        p50 = max(22.0, 32.0 - 1.5 * slot_idx)
+        # Rank-aware minutes fallback used only when the predictor did not
+        # attach an interval (safe-default path — missing pid or a tier that
+        # skipped minutes projection). Slot 1 leans starter, slot 5 trails.
+        p50_default = max(22.0, 32.0 - 1.5 * slot_idx)
+        p10m = float(proj.get("pred_minutes_p10", p50_default - 4.0))
+        p50m = float(proj.get("pred_minutes_p50", p50_default))
+        p90m = float(proj.get("pred_minutes_p90", p50_default + 4.0))
         entry = {
             "player_id": int(pid),
             "display_name": proj.get("display_name", f"Player {pid}"),
@@ -972,14 +1040,12 @@ def _build_per_player(
             "position": proj.get("position", "F"),
             "card_boost": float(proj.get("card_boost", 0.0)),
             "pred_real_score_p50": float(proj.get("pred_real_score_p50", 0.0)),
-            "pred_minutes_p10": p50 - 4.0,
-            "pred_minutes_p50": p50,
-            "pred_minutes_p90": p50 + 4.0,
+            "pred_minutes_p10": p10m,
+            "pred_minutes_p50": p50m,
+            "pred_minutes_p90": p90m,
         }
         # D69 / Phase 2b: pass through the real_score interval when the
-        # trained heads served this player. The synthetic minutes interval
-        # above remains the placeholder until a minutes-quantile passthrough
-        # ships in a follow-up; absent fields are backward-compatible.
+        # trained heads served this player. Absent fields are backward-compatible.
         if "pred_real_score_p10" in proj:
             entry["pred_real_score_p10"] = float(proj["pred_real_score_p10"])
             entry["pred_real_score_p90"] = float(proj["pred_real_score_p90"])

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-07-03
+Last updated: 2026-07-05
 
 ## Production
 
@@ -70,8 +70,9 @@ day-close cron extends both nightly. All reads go through
 
 ## Active Railway env vars (cron-job2)
 
-Production model SHA is set on api, cron-job1, cron-job2 as
-`WNBA_ORACLE_MODEL_ARTIFACT_SHA`.
+Production model SHA is set on cron-job1, cron-job1-late, cron-job2 as
+`WNBA_ORACLE_MODEL_ARTIFACT_SHA`. The api reads frozen lineups from Postgres
+and never loads the artifact, so it does not need the SHA.
 
 | Var | Value | Decision |
 |-----|-------|----------|

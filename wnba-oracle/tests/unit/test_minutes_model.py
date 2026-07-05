@@ -7,6 +7,8 @@ import json
 from wnba_oracle.predict.minutes import (
     MinutesConfig,
     blended_real_score,
+    minutes_interval_from_projection,
+    minutes_interval_from_role,
     minutes_volatility,
     per_minute_rate,
     project_minutes,
@@ -88,6 +90,41 @@ def test_blend_leans_minutes_with_history() -> None:
 def test_minutes_volatility_band() -> None:
     assert minutes_volatility([30, 30, 30, 30]) >= 0.0
     assert minutes_volatility([10]) == 5.0  # thin -> default
+
+
+def test_minutes_interval_from_projection_symmetric_and_clamped() -> None:
+    """80% band centered on the projection, half-width clamped so a tight
+    starter still shows a readable spread and a two-game player's inflated
+    std does not blow the bar open."""
+    lo, mid, hi = minutes_interval_from_projection(30.0, 4.0)
+    assert mid == 30.0
+    assert lo < mid < hi
+    assert abs((hi - mid) - (mid - lo)) < 1e-9  # symmetric
+    # tight std collapses to the min half-width of 2.0
+    lo2, _, hi2 = minutes_interval_from_projection(30.0, 0.1)
+    assert (hi2 - lo2) / 2 == 2.0
+    # huge std caps at the max half-width of 8.0
+    lo3, _, hi3 = minutes_interval_from_projection(30.0, 20.0)
+    assert (hi3 - lo3) / 2 == 8.0
+    # bounds respect the config minutes floor/ceiling
+    lo4, _, _ = minutes_interval_from_projection(5.0, 5.0)
+    assert lo4 >= MinutesConfig().min_minutes
+
+
+def test_minutes_interval_from_role_anchors_by_confirmation() -> None:
+    """Confirmed starter -> starter_minutes anchor; confirmed bench ->
+    bench_minutes anchor; unknown role -> mid-rotation midpoint."""
+    cfg = MinutesConfig()
+    _, mid_s, _ = minutes_interval_from_role(rotowire_confirmed=True, is_starter=True)
+    assert mid_s == cfg.starter_minutes
+    _, mid_b, _ = minutes_interval_from_role(rotowire_confirmed=True, is_starter=False)
+    assert mid_b == cfg.bench_minutes
+    lo_u, mid_u, hi_u = minutes_interval_from_role(rotowire_confirmed=False, is_starter=False)
+    assert mid_u == 20.0
+    assert hi_u - lo_u > (
+        minutes_interval_from_role(rotowire_confirmed=True, is_starter=True)[2]
+        - minutes_interval_from_role(rotowire_confirmed=True, is_starter=True)[0]
+    )  # unknown widest
 
 
 # ---- ingest: build_minutes_features (walk-forward, monkeypatched fetch) ----

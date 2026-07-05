@@ -219,3 +219,48 @@ def minutes_volatility(
         return default
     m = sum(vals) / len(vals)
     return (sum((v - m) ** 2 for v in vals) / (len(vals) - 1)) ** 0.5
+
+
+# 80% central interval z-score (P10, P90 under normality).
+_INTERVAL_80_Z = 1.282
+
+
+def minutes_interval_from_projection(
+    p50: float,
+    minutes_std: float,
+    *,
+    cfg: MinutesConfig = MinutesConfig(),
+) -> tuple[float, float, float]:
+    """80% central minutes interval anchored on a point projection.
+
+    p50 is the projected minutes (from project_minutes_from_base); minutes_std
+    is the sample std of the player's recent minutes (from minutes_volatility).
+    The half-width is clamped to [2.0, 8.0] so a two-game player's inflated
+    std does not blow the bar open and a chalk starter's near-zero std still
+    shows a readable spread. Bounds clamp to cfg.[min_minutes, max_minutes].
+    """
+    half = max(2.0, min(8.0, _INTERVAL_80_Z * max(0.5, minutes_std)))
+    lo = max(cfg.min_minutes, p50 - half)
+    hi = min(cfg.max_minutes, p50 + half)
+    return (lo, p50, hi)
+
+
+def minutes_interval_from_role(
+    *,
+    rotowire_confirmed: bool = False,
+    is_starter: bool = False,
+    cfg: MinutesConfig = MinutesConfig(),
+) -> tuple[float, float, float]:
+    """Role-anchored interval when the player has no minutes history.
+
+    Confirmed starter anchors on cfg.starter_minutes with a tight ±5.
+    Confirmed bench anchors on cfg.bench_minutes with a wider ±6 (rotation
+    minutes are noisier than starter minutes). Unknown role has no anchor,
+    so we return the widest band around a mid-rotation midpoint."""
+    if rotowire_confirmed and is_starter:
+        p50, half = cfg.starter_minutes, 5.0
+    elif rotowire_confirmed and not is_starter:
+        p50, half = cfg.bench_minutes, 6.0
+    else:
+        p50, half = 20.0, 8.0
+    return (max(cfg.min_minutes, p50 - half), p50, min(cfg.max_minutes, p50 + half))
