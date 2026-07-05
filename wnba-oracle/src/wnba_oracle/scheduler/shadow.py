@@ -451,7 +451,20 @@ def _maybe_run_knob_shadow(
         except (TypeError, ValueError):
             continue
         features_by_pid[pid] = _features_dict(r.get("features_json"))
-    inc_rank = _score_rank(incumbent_head, boost_by_pid)
+    # Incumbent = the LIVE picker knobs, derived from the current settings so
+    # the shadow reflects what the freeze actually shipped (not a raw p50
+    # baseline). Challenger = the overlay JSON, so the row measures the
+    # effect of swapping one config for the other.
+    from wnba_oracle.common.settings import get_settings
+
+    settings = get_settings()
+    incumbent_overlay = {
+        "starter_unknown_fade": float(getattr(settings, "starter_unknown_fade", 1.0)),
+        "picker_boost_tail_lift": bool(getattr(settings, "picker_boost_tail_lift", False)),
+        "boost_tail_lift_threshold": float(getattr(settings, "boost_tail_lift_threshold", 2.0)),
+        "boost_tail_lift_factor": float(getattr(settings, "boost_tail_lift_factor", 1.5)),
+    }
+    inc_rank = _rank_with_overlay(incumbent_head, boost_by_pid, features_by_pid, incumbent_overlay)
     ch_rank = _rank_with_overlay(incumbent_head, boost_by_pid, features_by_pid, overlay)
     if not inc_rank or not ch_rank:
         return
@@ -482,6 +495,7 @@ def _maybe_run_knob_shadow(
             "incumbent_top5": result.incumbent_top5,
             "challenger_top5": result.challenger_top5,
             "overlay": overlay,
+            "incumbent_overlay": incumbent_overlay,
             "kind": "knob_shadow",
         }
     )
