@@ -61,6 +61,14 @@ from sqlalchemy import text  # noqa: E402
 from wnba_oracle.db.engine import get_engine  # noqa: E402
 
 SLOT_MULTIPLIERS = (2.0, 1.8, 1.6, 1.4, 1.2)
+MAX_SLOT_MULT = SLOT_MULTIPLIERS[0]
+
+# 2026-07-04 counterfactual knob values (see calibrate_starter_and_boost.py).
+STARTER_UNKNOWN_FADE = 0.75
+STARTER_MULT = 1.10
+CONFIRMED_BENCH_MULT = 0.82
+BOOST_TAIL_LIFT_THRESHOLD = 2.0
+BOOST_TAIL_LIFT_FACTOR = 1.5
 
 
 @dataclass
@@ -197,6 +205,229 @@ def build_pool_index(rows: list[dict]) -> dict[int, PlayerLine]:
         )
         out[pid] = line
     return out
+
+
+def _apply_overlay(
+    pred_p50: float,
+    pred_p90: float,
+    boost: float,
+    is_starter: int,
+    rotowire_confirmed: int,
+    overlay: str,
+) -> tuple[float, float]:
+    """Return (adjusted_pred, adjusted_p90) after applying the overlay.
+
+    - "starter-fade": unknowns (both flags 0) get STARTER_UNKNOWN_FADE; expected
+      starters keep the existing 1.10 boost; confirmed benches keep 0.82.
+    - "boost-lift": for boost >= BOOST_TAIL_LIFT_THRESHOLD, promote pred to p90
+      so the ranker sees ceiling.
+    - "both": stack both effects.
+
+    The output feeds a heuristic rank score adjusted_pred * (2 + boost) that
+    stands in for the picker's stage-1 filter without needing the full
+    optimizer.
+    """
+    # Starter multiplier
+    if is_starter == 0 and rotowire_confirmed == 0:
+        mult = STARTER_UNKNOWN_FADE if overlay in ("starter-fade", "both") else 1.0
+    elif rotowire_confirmed == 1 and is_starter == 0:
+        mult = CONFIRMED_BENCH_MULT
+    else:
+        mult = STARTER_MULT
+    # Boost-tail lift: multiplicative ceiling nudge (calibrated 1.5 =
+    # empirical mean_real/mean_p50 ratio at boost>=2.0), applied to the
+    # ranker's pred_p50. Matches src/wnba_oracle/scheduler/job2.py:572.
+    if overlay in ("boost-lift", "both") and boost >= BOOST_TAIL_LIFT_THRESHOLD:
+        rank_center = pred_p50 * BOOST_TAIL_LIFT_FACTOR
+    else:
+        rank_center = pred_p50
+    return rank_center * mult, pred_p90 * mult
+
+
+def _run_counterfactual(
+    ledger: list[SlateEntry],
+    overlay: str,
+    verbose: bool = False,
+) -> list[dict]:
+    """Re-pick top-5 for each slate under the overlay, score against realized
+    labels, return per-slate deltas. Uses the same current model artifact the
+    picker consumes in prod so pred_p50/p90 track live behavior.
+
+    Heuristic selection matches the picker's stage-1 filter:
+        score(pid) = adjusted_pred(pid, overlay) * (2 + card_boost)
+    Take the top-5 pids by that score, subject to no more than 2 per team
+    (matches OPTIMIZER_MAX_PER_TEAM=2), then contest-score them.
+    """
+    from wnba_oracle.scheduler.job2 import _load_model_artifact, _predict_heads_for_pool
+
+    sha = os.environ.get(
+        "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
+        "94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd",
+    )
+    art = _load_model_artifact(sha)
+    if art is None:
+        raise SystemExit(f"model artifact {sha[:12]} not resolvable; re-run oracle-train?")
+
+    eng = get_engine()
+    results: list[dict] = []
+    for e in ledger:
+        # Reload the pool + labels for this slate (ledger already dropped a few
+        # fields we need here).
+        with eng.connect() as conn:
+            labels = {
+                int(r._mapping["platform_player_id"]): (
+                    float(r._mapping["card_boost"] or 0.0),
+                    float(r._mapping["real_score"] or 0.0),
+                )
+                for r in conn.execute(
+                    text(
+                        "SELECT platform_player_id, card_boost, real_score "
+                        "FROM slate_labels WHERE slate_date = :sd "
+                        "AND real_score IS NOT NULL"
+                    ),
+                    {"sd": e.slate_date},
+                ).fetchall()
+            }
+            pool_rows = [
+                dict(r._mapping)
+                for r in conn.execute(
+                    text(
+                        "SELECT player_id, name, team, position, card_boost, features_json "
+                        "FROM job1_enrichment WHERE slate_date = :sd"
+                    ),
+                    {"sd": e.slate_date},
+                ).fetchall()
+            ]
+        if not pool_rows:
+            continue
+        enrichment = []
+        for r in pool_rows:
+            enrichment.append(
+                {
+                    "real_sports_player_id": r["player_id"],
+                    "team": r.get("team") or "",
+                    "opponent": "",
+                    "position": r.get("position") or "F",
+                    "card_boost": float(r.get("card_boost") or 0.0),
+                    "features_json": r.get("features_json"),
+                }
+            )
+        heads = _predict_heads_for_pool(art, enrichment)
+        if not heads:
+            if verbose:
+                print(f"[skip] {e.slate_date}: head empty")
+            continue
+
+        # Build candidate table: (pid, rank_score, boost, team, is_out)
+        candidates: list[tuple[int, float, float, str, bool]] = []
+        for r in pool_rows:
+            pid = int(r["player_id"])
+            hp = heads.get(pid)
+            if hp is None:
+                continue
+            fj = r.get("features_json") or {}
+            f = fj if isinstance(fj, dict) else json.loads(fj) if fj else {}
+            is_starter = int(f.get("is_starter", 0) or 0)
+            rotowire_conf = int(f.get("rotowire_confirmed", 0) or 0)
+            is_out = bool(int(f.get("is_out", 0) or 0))
+            if is_out:
+                continue
+            boost = float(r.get("card_boost") or 0.0)
+            adj_pred, _ = _apply_overlay(
+                pred_p50=hp["p50"],
+                pred_p90=hp["p90"],
+                boost=boost,
+                is_starter=is_starter,
+                rotowire_confirmed=rotowire_conf,
+                overlay=overlay,
+            )
+            rank_score = adj_pred * (MAX_SLOT_MULT + boost)
+            candidates.append((pid, rank_score, boost, r.get("team") or "", is_out))
+        candidates.sort(key=lambda t: t[1], reverse=True)
+
+        # Greedy top-5 with max 2 per team.
+        chosen: list[int] = []
+        team_count: dict[str, int] = {}
+        for pid, _rank, _boost, team, _out in candidates:
+            if len(chosen) == 5:
+                break
+            if team and team_count.get(team, 0) >= 2:
+                continue
+            chosen.append(pid)
+            if team:
+                team_count[team] = team_count.get(team, 0) + 1
+
+        if len(chosen) < 5:
+            if verbose:
+                print(f"[skip] {e.slate_date}: only {len(chosen)} eligible under team cap")
+            continue
+
+        # Score the new lineup.
+        new_lines: list[PlayerLine] = []
+        for pid in chosen:
+            boost_l, rs_l = labels.get(pid, (0.0, 0.0))
+            new_lines.append(
+                PlayerLine(
+                    pid=pid, name=f"pid={pid}", team="", position="",
+                    card_boost=boost_l, real_score=rs_l,
+                )
+            )
+        new_score = score_lineup(new_lines)
+        delta = new_score - e.our_score
+        gap_before = e.delta_vs_median if e.delta_vs_median is not None else 0.0
+        gap_after = (e.top20_median - new_score) if e.top20_median is not None else None
+        results.append(
+            {
+                "slate": e.slate_date,
+                "old": e.our_score,
+                "new": new_score,
+                "delta": delta,
+                "gap_before": gap_before,
+                "gap_after": gap_after,
+                "top20_median": e.top20_median,
+            }
+        )
+    return results
+
+
+def _print_counterfactual(overlay: str, rows: list[dict]) -> None:
+    print()
+    print(f"{'=' * 78}")
+    print(f"COUNTERFACTUAL: overlay = {overlay!r}")
+    print(f"{'=' * 78}")
+    if not rows:
+        print("no slates scored (missing head predictions or team-cap infeasible)")
+        return
+    print(f"{'slate':<12}{'old':>7}{'new':>7}{'delta':>8}{'gap→':>8}{'gap':>7}"
+          f"{'result':>12}")
+    n_up = n_down = n_median = 0
+    total_delta = 0.0
+    for r in rows:
+        gap_before = r["gap_before"]
+        gap_after = r["gap_after"]
+        if gap_after is not None and gap_after <= 0:
+            n_median += 1
+            tag = "BEAT_MED"
+        elif r["delta"] > 0:
+            tag = "up"
+        elif r["delta"] < 0:
+            tag = "down"
+        else:
+            tag = "flat"
+        if r["delta"] > 0:
+            n_up += 1
+        elif r["delta"] < 0:
+            n_down += 1
+        total_delta += r["delta"]
+        print(
+            f"{r['slate']:<12}{r['old']:>7.1f}{r['new']:>7.1f}"
+            f"{r['delta']:>+8.1f}{gap_before:>+8.1f}"
+            f"{(gap_after if gap_after is not None else 0.0):>+7.1f}"
+            f"{tag:>12}"
+        )
+    print()
+    print(f"Aggregate: n={len(rows)}  up={n_up}  down={n_down}  "
+          f"total_delta={total_delta:+.1f}  beat_top20_median={n_median}")
 
 
 def build_ledger(limit: int, verbose: bool = False) -> list[SlateEntry]:
@@ -491,9 +722,23 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=20, help="Number of slates.")
     ap.add_argument("--csv", type=str, default=None, help="Optional CSV output path.")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument(
+        "--counterfactual",
+        choices=("starter-fade", "boost-lift", "both"),
+        default=None,
+        help=(
+            "Re-pick top-5 for each slate under a hypothetical picker knob "
+            "overlay and report per-slate deltas. See "
+            "scripts/calibrate_starter_and_boost.py for how the multipliers "
+            "were derived."
+        ),
+    )
     args = ap.parse_args()
     ledger = build_ledger(args.limit, verbose=args.verbose)
     print_table(ledger)
+    if args.counterfactual:
+        rows = _run_counterfactual(ledger, args.counterfactual, verbose=args.verbose)
+        _print_counterfactual(args.counterfactual, rows)
     if args.csv:
         out_path = Path(args.csv)
         if not out_path.is_absolute():
