@@ -83,7 +83,7 @@ Production model SHA is set on api, cron-job1, cron-job2 as
 | OPTIMIZER_DYNAMIC_TEAM_CAP | true (code default) | D50 |
 | OPTIMIZER_N_FIELD_LINEUPS | 500 | D76 |
 | OPTIMIZER_BOOST_SUM_CAP | 9.0 | D70/R2 |
-| OPTIMIZER_MAX_SINGLE_BOOST | 2.5 | D70/R2 |
+| OPTIMIZER_MAX_SINGLE_BOOST | 3.0 | 2026-07-04 sweep_max_boost.py (+75 aggregate) |
 | OPTIMIZER_GAME_STACK_BONUS | 0.010 | D70/R3, D98 |
 | MINUTES_MODEL_ENABLED | true (code default) | D55 |
 | STARTER_SIGNAL_ENABLED | true (code default) | D71 |
@@ -100,9 +100,8 @@ Production model SHA is set on api, cron-job1, cron-job2 as
 | OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST | 0.20 | D89/D92 |
 | FREEZE_LEAD_MINUTES | 40 (code default) | D93 |
 | STARTER_UNKNOWN_FADE | 0.75 | 2026-07-04 corpus calibration |
-| PICKER_BOOST_TAIL_LIFT | true | 2026-07-04 corpus calibration |
-| BOOST_TAIL_LIFT_FACTOR | 1.5 (code default) | 2026-07-04 corpus calibration |
-| PICKER_KNOB_CHALLENGER_JSON | (unset by default) | 2026-07-04 knob-shadow input |
+| PICKER_BOOST_TAIL_LIFT | false | 2026-07-04 rolled back after -93 counterfactual |
+| PICKER_KNOB_CHALLENGER_JSON | knob-lift + fade | 2026-07-04, shadow-only for now |
 
 All flags reverse via env with no redeploy: set `*_ENABLED=false` or unset
 numeric knobs to revert to code defaults.

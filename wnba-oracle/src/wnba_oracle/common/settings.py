@@ -345,7 +345,6 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "lineup_anchor_floor": 2,  # D57/D58
     "prop_signal_scale": 0.3,  # D78
     "optimizer_boost_sum_cap": 9.0,  # D70/R2
-    "optimizer_max_single_boost": 2.5,  # D70/R2
     "optimizer_game_stack_bonus": 0.010,  # D70/R3, raised D98
     "field_same_game_boost": 3.0,  # D88/D91
     "field_same_team_boost": 2.0,  # D88/D91
@@ -354,7 +353,16 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "optimizer_ceiling_tilt_slots": True,  # D107/Phase 4, validated with two years data
     "optimizer_mixture_variance_enabled": True,  # D107/Tier 2, Bernoulli availability gating
     "starter_unknown_fade": 0.75,  # 2026-07-04, calibrate_starter_and_boost.py
-    "picker_boost_tail_lift": True,  # 2026-07-04, high-boost head under-predicts 57%
+    # 2026-07-04 late: rolled back after loss_ledger --counterfactual showed a
+    # -93 aggregate delta under live guardrails. Kept as a shadow overlay for
+    # ex-post measurement. The 1.5x lift over-weighted DNP-prone role players
+    # because the head under-predicts every boost tier, not just the tail.
+    "picker_boost_tail_lift": False,
+    # 2026-07-04 late: sweep_max_boost.py showed cap 3.0 aggregates +75 across
+    # 23 slates over cap 2.5. Winners routinely use boost-3.0 lottery cards
+    # (Madina Okot, Zia Cooke on 2026-06-22); OPTIMIZER_MAX_SINGLE_BOOST=2.5
+    # excluded them entirely.
+    "optimizer_max_single_boost": 3.0,
 }
 
 

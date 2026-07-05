@@ -70,6 +70,17 @@ CONFIRMED_BENCH_MULT = 0.82
 BOOST_TAIL_LIFT_THRESHOLD = 2.0
 BOOST_TAIL_LIFT_FACTOR = 1.5
 
+# Live picker constraints replicated in the counterfactual so its top-5
+# reflects what the freeze would actually ship. See STATUS.md
+# "Active Railway env vars" for the source of truth.
+LIVE_ANCHOR_FLOOR = 2  # LINEUP_ANCHOR_FLOOR
+LIVE_MAX_PER_TEAM = 2  # OPTIMIZER_MAX_PER_TEAM
+LIVE_MAX_SINGLE_BOOST = 2.5  # OPTIMIZER_MAX_SINGLE_BOOST
+LIVE_BOOST_SUM_CAP = 9.0  # OPTIMIZER_BOOST_SUM_CAP
+# Anchor definition mirrors job2.ANCHOR_MIN_GAMES / ANCHOR_MIN_MINUTES.
+LIVE_ANCHOR_MIN_GAMES = 3
+LIVE_ANCHOR_MIN_MINUTES = 20.0
+
 
 @dataclass
 class PlayerLine:
@@ -244,10 +255,15 @@ def _apply_overlay(
     return rank_center * mult, pred_p90 * mult
 
 
+_OFF_OVERLAY = "off"
+
+
 def _run_counterfactual(
     ledger: list[SlateEntry],
     overlay: str,
     verbose: bool = False,
+    max_single_boost: float = LIVE_MAX_SINGLE_BOOST,
+    boost_sum_cap: float = LIVE_BOOST_SUM_CAP,
 ) -> list[dict]:
     """Re-pick top-5 for each slate under the overlay, score against realized
     labels, return per-slate deltas. Uses the same current model artifact the
@@ -318,7 +334,7 @@ def _run_counterfactual(
                 print(f"[skip] {e.slate_date}: head empty")
             continue
 
-        # Build candidate table: (pid, rank_score, boost, team, is_out)
+        # Build candidate table: (pid, rank_score, boost, team, is_anchor)
         candidates: list[tuple[int, float, float, str, bool]] = []
         for r in pool_rows:
             pid = int(r["player_id"])
@@ -333,6 +349,24 @@ def _run_counterfactual(
             if is_out:
                 continue
             boost = float(r.get("card_boost") or 0.0)
+            # Max-single-boost cap: exclude players above the live picker's
+            # per-pick ceiling. Matches OptimizeConfig._exceeds_boost_cap
+            # (with the picker's "relax if infeasible" branch omitted; the
+            # counterfactual is a lower bound so we accept the tighter cap).
+            if max_single_boost > 0.0 and boost > max_single_boost:
+                continue
+            # Anchor definition mirrors job2._build_specs: an established
+            # rotation player (>= LIVE_ANCHOR_MIN_GAMES logging
+            # LIVE_ANCHOR_MIN_MINUTES) or an expected-confirmed starter.
+            recent_minutes = float(f.get("recent_minutes", 0.0) or 0.0)
+            n_min_games = int(f.get("n_min_games", 0) or 0)
+            has_rotation = (
+                n_min_games >= LIVE_ANCHOR_MIN_GAMES
+                and recent_minutes >= LIVE_ANCHOR_MIN_MINUTES
+            )
+            is_anchor = has_rotation or (
+                (rotowire_conf == 1 or is_starter == 1) and is_starter == 1
+            )
             adj_pred, _ = _apply_overlay(
                 pred_p50=hp["p50"],
                 pred_p90=hp["p90"],
@@ -342,24 +376,69 @@ def _run_counterfactual(
                 overlay=overlay,
             )
             rank_score = adj_pred * (MAX_SLOT_MULT + boost)
-            candidates.append((pid, rank_score, boost, r.get("team") or "", is_out))
+            candidates.append((pid, rank_score, boost, r.get("team") or "", is_anchor))
         candidates.sort(key=lambda t: t[1], reverse=True)
 
-        # Greedy top-5 with max 2 per team.
-        chosen: list[int] = []
-        team_count: dict[str, int] = {}
-        for pid, _rank, _boost, team, _out in candidates:
-            if len(chosen) == 5:
-                break
-            if team and team_count.get(team, 0) >= 2:
-                continue
-            chosen.append(pid)
-            if team:
-                team_count[team] = team_count.get(team, 0) + 1
+        # Greedy top-5 with the live picker's guardrails (D57, D70/R2).
+        # Order of constraints:
+        #  - <= LIVE_MAX_PER_TEAM per team
+        #  - sum(card_boost) <= LIVE_BOOST_SUM_CAP
+        #  - >= LIVE_ANCHOR_FLOOR anchors in the final five
+        # The anchor floor is enforced with a second-chance pass: after
+        # greedy fills five, if the anchor count is short, swap the
+        # lowest-ranked non-anchor for the highest-ranked anchor that
+        # doesn't already violate the team/boost caps.
+        def _pick_five(cands: list[tuple[int, float, float, str, bool]]) -> list[int]:
+            chosen_local: list[tuple[int, float, float, str, bool]] = []
+            team_local: dict[str, int] = {}
+            boost_sum = 0.0
+            for pid_c, rank_c, boost_c, team_c, anchor_c in cands:
+                if len(chosen_local) == 5:
+                    break
+                if team_c and team_local.get(team_c, 0) >= LIVE_MAX_PER_TEAM:
+                    continue
+                if boost_sum_cap > 0.0 and boost_sum + boost_c > boost_sum_cap:
+                    continue
+                chosen_local.append((pid_c, rank_c, boost_c, team_c, anchor_c))
+                boost_sum += boost_c
+                if team_c:
+                    team_local[team_c] = team_local.get(team_c, 0) + 1
+            # Anchor floor: promote anchors until we hit LIVE_ANCHOR_FLOOR.
+            n_anchors = sum(1 for _, _, _, _, a in chosen_local if a)
+            if n_anchors < LIVE_ANCHOR_FLOOR:
+                remaining = [c for c in cands if c[0] not in {p for p, *_ in chosen_local}]
+                anchors_pool = [c for c in remaining if c[4]]
+                for anchor in anchors_pool:
+                    if n_anchors >= LIVE_ANCHOR_FLOOR:
+                        break
+                    # Drop the lowest-ranked non-anchor pick that would let
+                    # the anchor swap in without violating caps.
+                    for i in range(len(chosen_local) - 1, -1, -1):
+                        _, _, boost_drop, team_drop, anchor_drop = chosen_local[i]
+                        if anchor_drop:
+                            continue
+                        new_boost = boost_sum - boost_drop + anchor[2]
+                        if boost_sum_cap > 0.0 and new_boost > boost_sum_cap:
+                            continue
+                        # Team cap check after swap.
+                        team_after = dict(team_local)
+                        if team_drop:
+                            team_after[team_drop] -= 1
+                        if anchor[3]:
+                            if team_after.get(anchor[3], 0) >= LIVE_MAX_PER_TEAM:
+                                continue
+                            team_after[anchor[3]] = team_after.get(anchor[3], 0) + 1
+                        chosen_local[i] = anchor
+                        boost_sum = new_boost
+                        team_local = team_after
+                        n_anchors += 1
+                        break
+            return [pid_c for pid_c, *_ in chosen_local]
 
+        chosen = _pick_five(candidates)
         if len(chosen) < 5:
             if verbose:
-                print(f"[skip] {e.slate_date}: only {len(chosen)} eligible under team cap")
+                print(f"[skip] {e.slate_date}: only {len(chosen)} eligible under caps")
             continue
 
         # Score the new lineup.
@@ -385,9 +464,12 @@ def _run_counterfactual(
                 "gap_before": gap_before,
                 "gap_after": gap_after,
                 "top20_median": e.top20_median,
+                "chosen": chosen,
             }
         )
     return results
+
+
 
 
 def _print_counterfactual(overlay: str, rows: list[dict]) -> None:
@@ -739,6 +821,37 @@ def main() -> int:
     if args.counterfactual:
         rows = _run_counterfactual(ledger, args.counterfactual, verbose=args.verbose)
         _print_counterfactual(args.counterfactual, rows)
+        # Pure ship effect: rerun with the overlay off (baseline top-5 under
+        # the same caps) and diff. Isolates the knob change from the picker's
+        # guardrails, which can otherwise dominate the counterfactual signal.
+        baseline_rows = _run_counterfactual(ledger, _OFF_OVERLAY, verbose=args.verbose)
+        by_slate = {r["slate"]: r for r in baseline_rows}
+        print()
+        print("=" * 78)
+        print("SHIP EFFECT: overlay ON vs overlay OFF (same guardrails)")
+        print("=" * 78)
+        print(f"{'slate':<12}{'off_new':>9}{'on_new':>8}{'ship_delta':>12}"
+              f"{'gap_off':>9}{'gap_on':>8}")
+        n_up = n_down = 0
+        total = 0.0
+        for r in rows:
+            base = by_slate.get(r["slate"])
+            if base is None:
+                continue
+            ship_delta = r["new"] - base["new"]
+            gap_off = base["gap_after"] if base["gap_after"] is not None else 0.0
+            gap_on = r["gap_after"] if r["gap_after"] is not None else 0.0
+            if ship_delta > 0.1:
+                n_up += 1
+            elif ship_delta < -0.1:
+                n_down += 1
+            total += ship_delta
+            print(
+                f"{r['slate']:<12}{base['new']:>9.1f}{r['new']:>8.1f}"
+                f"{ship_delta:>+12.1f}{gap_off:>+9.1f}{gap_on:>+8.1f}"
+            )
+        print()
+        print(f"ship_effect: up={n_up}  down={n_down}  total_delta={total:+.1f}")
     if args.csv:
         out_path = Path(args.csv)
         if not out_path.is_absolute():
