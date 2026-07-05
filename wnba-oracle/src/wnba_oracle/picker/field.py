@@ -55,6 +55,12 @@ class FieldPlayerSpec:
     # estimator back-fills it. When any spec carries a measured count the
     # field marginal is built from the real counts, not the estimator.
     measured_drafts: float | None = None
+    # 2026-07-04 boost-tail lift: optional override for the stage-1 ranker's
+    # visible_value. When None, stage-1 uses pred_real_score. When set, stage-1
+    # uses this instead so the ranker can prefer ceiling for high-boost head
+    # players without perturbing the sampler (mu still comes from pred_real_score).
+    # See scripts/calibrate_starter_and_boost.py + PICKER_BOOST_TAIL_LIFT.
+    rank_pred_override: float | None = None
 
 
 def _estimated_ownership_unnormalized(

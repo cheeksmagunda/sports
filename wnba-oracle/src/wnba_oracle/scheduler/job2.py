@@ -463,6 +463,7 @@ def _build_specs(
     # total + spread from features_json (Job 1 persisted them). Games
     # with no Vegas signal degrade to a neutral 1.0x.
     pred_real_scores: dict[int, float] = {}
+    rank_pred_by_pid: dict[int, float] = {}
     rows_by_pid: dict[int, dict] = {}
     minutes_vol_by_pid: dict[int, float] = {}
     gsm_enabled = settings.game_script_minutes_enabled
@@ -559,6 +560,7 @@ def _build_specs(
                 r.get("features_json"),
                 enabled=settings.starter_signal_enabled,
                 use_expected=settings.starter_signal_use_expected,
+                unknown_fade=float(getattr(settings, "starter_unknown_fade", 1.0)),
             )
             # Game-script multiplier still applies (Vegas tilt on top of the
             # head). Floor matches every other Tier so the downstream sampler
@@ -570,6 +572,20 @@ def _build_specs(
                 r.get("features_json"), scale=settings.prop_signal_scale
             )
             pred_real_scores[pid] = max(0.5, p50 * gs_mult * starter_mult * prop_mult)
+            # 2026-07-04 boost-tail lift: multiplicative ceiling nudge applied
+            # only to the stage-1 ranker (visible_value), not to the sampler.
+            # calibrate_starter_and_boost.py: mean_real / mean_p50 ratio at
+            # boost>=2.0 is 1.57 across 1202 pool-slates, so a lift factor of
+            # ~1.5 matches empirical without inflating the noisy head p90
+            # (p90 for boost-3 role players is a fabricated 10x ceiling; its
+            # training rows are too sparse to bound the tail). Off by default.
+            lift_enabled = bool(getattr(settings, "picker_boost_tail_lift", False))
+            lift_thresh = float(getattr(settings, "boost_tail_lift_threshold", 2.0))
+            lift_factor = float(getattr(settings, "boost_tail_lift_factor", 1.5))
+            if lift_enabled and boost >= lift_thresh:
+                rank_pred_by_pid[pid] = max(
+                    0.5, p50 * lift_factor * gs_mult * starter_mult * prop_mult
+                )
             # 80% interval (~2.56 sigma) -> additive real_score volatility. Same
             # semantic as `minutes_vol_by_pid` for the Tier-1 path so the
             # sampler's delta-method conversion works unchanged. starter_mult
@@ -612,6 +628,7 @@ def _build_specs(
             r.get("features_json"),
             enabled=settings.starter_signal_enabled,
             use_expected=settings.starter_signal_use_expected,
+            unknown_fade=float(getattr(settings, "starter_unknown_fade", 1.0)),
         )
         eb_pred = _eb_predict_one(art, pid, position)
         if eb_pred is not None:
@@ -737,6 +754,7 @@ def _build_specs(
                 pred_real_score=pred,
                 card_boost=boost,
                 measured_drafts=md,
+                rank_pred_override=rank_pred_by_pid.get(pid),
             )
         )
         enrichment_name = str(r.get("name", "") or "").strip()
@@ -1358,9 +1376,12 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # writer is idempotent per (slate_date, challenger_sha) via ON CONFLICT
     # so the every-15-min cron cadence naturally dedups. Realized delta is
     # backfilled in dayclose once slate_labels finalize.
-    if settings.model_challenger_sha:
+    if settings.model_challenger_sha or getattr(settings, "picker_knob_challenger_json", ""):
         try:
-            from wnba_oracle.scheduler.shadow import _maybe_run_shadow
+            from wnba_oracle.scheduler.shadow import (
+                _maybe_run_knob_shadow,
+                _maybe_run_shadow,
+            )
 
             # Reload the incumbent here rather than plumbing it out of
             # _build_specs -- the artifact is cached by _load_model_artifact
@@ -1372,14 +1393,25 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
                 for r in enrichment
                 if r.get("real_sports_player_id") is not None
             }
-            _maybe_run_shadow(
-                sd,
-                enrichment,
-                incumbent_sha=model_sha,
-                incumbent_head=incumbent_head,
-                boost_by_pid=boost_by_pid,
-                challenger_sha=settings.model_challenger_sha,
-            )
+            if settings.model_challenger_sha:
+                _maybe_run_shadow(
+                    sd,
+                    enrichment,
+                    incumbent_sha=model_sha,
+                    incumbent_head=incumbent_head,
+                    boost_by_pid=boost_by_pid,
+                    challenger_sha=settings.model_challenger_sha,
+                )
+            overlay_json = getattr(settings, "picker_knob_challenger_json", "")
+            if overlay_json:
+                _maybe_run_knob_shadow(
+                    sd,
+                    enrichment,
+                    incumbent_sha=model_sha,
+                    incumbent_head=incumbent_head,
+                    boost_by_pid=boost_by_pid,
+                    overlay_json=overlay_json,
+                )
         except Exception as exc:
             log.warning("shadow_run_wrapper_failed", reason=str(exc)[:160])
     return Job2Result(sd, model_sha, rec, frozen, status)

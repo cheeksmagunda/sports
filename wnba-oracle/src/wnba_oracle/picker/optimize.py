@@ -309,8 +309,17 @@ def optimize_lineup(
     # effective multiplier (when assigned to slot 2.0 by rearrangement).
     # Prior bug used (1.0 + card_boost) which under-weighted low-boost
     # players relative to high-boost ones, biasing the pool toward chalk.
+    # rank_pred_override lets the caller nudge stage-1 ranking without
+    # perturbing sampling. Used by the 2026-07-04 boost-tail lift: for
+    # head-served players with card_boost >= threshold, the caller sets
+    # this to pred_p90 * (mults) so the ranker prefers ceiling for the
+    # tail; the sampler still sees pred_p50 via pred_real_score.
     visible_value = np.array(
-        [s.pred_real_score * (MAX_SLOT_MULT + s.card_boost) for s in field_specs],
+        [
+            (s.rank_pred_override if s.rank_pred_override is not None else s.pred_real_score)
+            * (MAX_SLOT_MULT + s.card_boost)
+            for s in field_specs
+        ],
         dtype=float,
     )
     # kind='stable' so ties resolve in input order (the build-specs caller

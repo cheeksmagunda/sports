@@ -73,18 +73,29 @@ def _effective_confirmed(f: dict, *, use_expected: bool) -> bool:
 
 
 def _starter_multiplier(
-    features_json: object, *, enabled: bool, use_expected: bool = True
+    features_json: object,
+    *,
+    enabled: bool,
+    use_expected: bool = True,
+    unknown_fade: float = 1.0,
 ) -> float:
     """Real_score multiplier from the RotoWire starter signal (D52, D104).
 
     starter -> 1.10, faded (confirmed) non-starter -> 0.82. Unknown role
-    stays at 1.0.
+    stays at ``unknown_fade`` (default 1.0 = neutral, pre-2026-07-04). A
+    fade < 1.0 pushes DNP-prone role players down the stage-1 rank; the
+    fade is symmetric on the head's p10/p90 interval so sampling sigma
+    stays proportional.
+
+    2026-07-04 calibration (scripts/calibrate_starter_and_boost.py):
+    unknowns realize 0.685x the mean real_score of expected starters and
+    DNP at 5.8% vs 0.6%. STARTER_UNKNOWN_FADE=0.75 matches empirical.
     """
     if not enabled:
         return 1.0
     f = _features_dict(features_json)
     if not _effective_confirmed(f, use_expected=use_expected):
-        return 1.0
+        return unknown_fade
     return 1.10 if int(f.get("is_starter", 0) or 0) else 0.82
 
 

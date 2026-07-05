@@ -23,6 +23,35 @@ def test_unlisted_is_neutral() -> None:
     assert _starter_multiplier(fj, enabled=True) == 1.0
 
 
+def test_unknown_fade_applies_to_unlisted_only() -> None:
+    # 2026-07-04 STARTER_UNKNOWN_FADE: with the fade wired, unknowns get the
+    # fade multiplier while expected/confirmed starters and confirmed benches
+    # keep their existing multipliers.
+    unknown = json.dumps({"rotowire_confirmed": 0, "is_starter": 0})
+    expected_starter = json.dumps({"rotowire_confirmed": 0, "is_starter": 1})
+    confirmed_starter = json.dumps({"rotowire_confirmed": 1, "is_starter": 1})
+    confirmed_bench = json.dumps({"rotowire_confirmed": 1, "is_starter": 0})
+    assert _starter_multiplier(unknown, enabled=True, unknown_fade=0.75) == 0.75
+    assert _starter_multiplier(expected_starter, enabled=True, unknown_fade=0.75) == 1.10
+    assert _starter_multiplier(confirmed_starter, enabled=True, unknown_fade=0.75) == 1.10
+    assert _starter_multiplier(confirmed_bench, enabled=True, unknown_fade=0.75) == 0.82
+
+
+def test_unknown_fade_defaults_to_neutral() -> None:
+    # Backward-compat: unknown_fade=1.0 (the default) reproduces pre-2026-07-04
+    # behavior exactly, so bare callers see no change.
+    fj = json.dumps({"rotowire_confirmed": 0, "is_starter": 0})
+    assert _starter_multiplier(fj, enabled=True) == 1.0
+    assert _starter_multiplier(fj, enabled=True, unknown_fade=1.0) == 1.0
+
+
+def test_unknown_fade_ignored_when_disabled() -> None:
+    # STARTER_SIGNAL_ENABLED=false hard-overrides everything (including fade),
+    # so operators can disable the whole signal path via a single env flag.
+    fj = json.dumps({"rotowire_confirmed": 0, "is_starter": 0})
+    assert _starter_multiplier(fj, enabled=False, unknown_fade=0.5) == 1.0
+
+
 def test_expected_starter_boosts_by_default() -> None:
     # D104: a RotoWire EXPECTED starter (listed in the top five but not yet
     # flipped to "Confirmed") gets the starter boost -- confirmed lineups for

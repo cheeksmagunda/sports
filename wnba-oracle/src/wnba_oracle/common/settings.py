@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     # freeze still uses model_artifact_sha. Dayclose backfills
     # realized_value_delta once slate_labels finalize.
     model_challenger_sha: str = Field(default="", alias="WNBA_ORACLE_MODEL_CHALLENGER_SHA")
+    # 2026-07-04 knob-shadow. JSON overlay of picker knobs to shadow against
+    # the incumbent settings at freeze time. Same model SHA on both sides;
+    # the shadow row differentiates by a synthesized challenger_sha keyed on
+    # the overlay JSON, and payload.overlay records the actual knobs applied.
+    # Recognized keys: "starter_unknown_fade" (float, default 1.0),
+    # "picker_boost_tail_lift" (bool, default False), "boost_tail_lift_threshold"
+    # (float, default 2.0), "boost_tail_lift_factor" (float, default 1.5).
+    # Empty string disables. Dayclose backfills the realized delta. See
+    # src/wnba_oracle/scheduler/shadow.py:_maybe_run_knob_shadow.
+    picker_knob_challenger_json: str = Field(default="", alias="PICKER_KNOB_CHALLENGER_JSON")
 
     # Lineup optimizer config
     payout_regime: Literal["top_50", "top_20", "top_1"] = Field(
@@ -104,6 +114,16 @@ class Settings(BaseSettings):
     # average can't know tonight's starting five). Default on; set
     # STARTER_SIGNAL_ENABLED=false to disable. See D52.
     starter_signal_enabled: bool = Field(default=True, alias="STARTER_SIGNAL_ENABLED")
+    # starter_unknown_fade: multiplicative fade applied to head predictions
+    # for players with is_starter=0 AND rotowire_confirmed=0 (RotoWire has no
+    # opinion). Calibrated 2026-07-04 against 21 slates of D71+ enrichment:
+    # unknowns realize 0.685x the mean real_score of expected starters and DNP
+    # at 5.8% vs 0.6%. With the current starter mult of 1.10, an unknown mult
+    # of 0.75 matches the empirical ratio and pushes DNP-prone role players
+    # down the stage-1 rank. 1.0 disables (pre-2026-07-04 behavior). Applies
+    # symmetrically to the head p50 and the p10/p90 interval so the sampler's
+    # sigma stays proportional. See scripts/calibrate_starter_and_boost.py.
+    starter_unknown_fade: float = Field(default=1.0, alias="STARTER_UNKNOWN_FADE")
     # starter_signal_use_expected: act on RotoWire EXPECTED starters, not only
     # CONFIRMED ones. Confirmed lineups for every game on a slate are not all
     # posted by the T-40 freeze of the first tip (they land ~30-90 min before
@@ -225,6 +245,20 @@ class Settings(BaseSettings):
     optimizer_leverage_weight: float = Field(default=0.0, alias="OPTIMIZER_LEVERAGE_WEIGHT")
     optimizer_ceiling_weight: float = Field(default=0.0, alias="OPTIMIZER_CEILING_WEIGHT")
     optimizer_duplication_weight: float = Field(default=0.0, alias="OPTIMIZER_DUPLICATION_WEIGHT")
+    # picker_boost_tail_lift: when True, the stage-1 ranker multiplies the
+    # head's pred_p50 by boost_tail_lift_factor for players with card_boost
+    # >= boost_tail_lift_threshold. Calibrated 2026-07-04
+    # (scripts/calibrate_starter_and_boost.py): high-boost players realize
+    # 1.57x their p50 in the corpus (mean_real 1.92 vs mean_pred 1.23 at
+    # boost>=2.0), so ranking on the median median-under-values them. We use
+    # a multiplicative lift matched to that ratio rather than swapping to
+    # pred_p90 -- the head's p90 for role players is a noisy 10x ceiling
+    # (their training rows are too sparse to bound the tail). Sampling
+    # (mu, sigma) is untouched; only the ranker prefers ceiling for the
+    # tail. Off by default so bare Settings() matches pre-fix behaviour.
+    picker_boost_tail_lift: bool = Field(default=False, alias="PICKER_BOOST_TAIL_LIFT")
+    boost_tail_lift_threshold: float = Field(default=2.0, alias="BOOST_TAIL_LIFT_THRESHOLD")
+    boost_tail_lift_factor: float = Field(default=1.5, alias="BOOST_TAIL_LIFT_FACTOR")
     # D107 (Phase 4, ceiling-tilted slots): sort players by p90 percentile
     # instead of p50 median when assigning to slot multipliers. Prioritizes
     # upside in high-multiplier slots for top-heavy contests. Enabled by default
@@ -319,6 +353,8 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "ceiling_sigma_low_history_boost": 0.20,  # D89/D92
     "optimizer_ceiling_tilt_slots": True,  # D107/Phase 4, validated with two years data
     "optimizer_mixture_variance_enabled": True,  # D107/Tier 2, Bernoulli availability gating
+    "starter_unknown_fade": 0.75,  # 2026-07-04, calibrate_starter_and_boost.py
+    "picker_boost_tail_lift": True,  # 2026-07-04, high-boost head under-predicts 57%
 }
 
 
