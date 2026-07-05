@@ -99,6 +99,10 @@ Production model SHA is set on api, cron-job1, cron-job2 as
 | OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST | 0.15 | D89/D92 |
 | OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST | 0.20 | D89/D92 |
 | FREEZE_LEAD_MINUTES | 40 (code default) | D93 |
+| STARTER_UNKNOWN_FADE | 0.75 | 2026-07-04 corpus calibration |
+| PICKER_BOOST_TAIL_LIFT | true | 2026-07-04 corpus calibration |
+| BOOST_TAIL_LIFT_FACTOR | 1.5 (code default) | 2026-07-04 corpus calibration |
+| PICKER_KNOB_CHALLENGER_JSON | (unset by default) | 2026-07-04 knob-shadow input |
 
 All flags reverse via env with no redeploy: set `*_ENABLED=false` or unset
 numeric knobs to revert to code defaults.
