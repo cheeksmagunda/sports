@@ -99,6 +99,8 @@ and never loads the artifact, so it does not need the SHA.
 | FIELD_SAME_TEAM_BOOST | 2.0 | D88/D91 |
 | OPTIMIZER_CEILING_SIGMA_BLOWOUT_BOOST | 0.15 | D89/D92 |
 | OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST | 0.20 | D89/D92 |
+| OPTIMIZER_CEILING_TILT_SLOTS | true | D107/Phase 4 |
+| OPTIMIZER_MIXTURE_VARIANCE_ENABLED | true | D107/Tier 2 |
 | FREEZE_LEAD_MINUTES | 40 (code default) | D93 |
 | STARTER_UNKNOWN_FADE | 0.75 | 2026-07-04 corpus calibration |
 | PICKER_BOOST_TAIL_LIFT | false | 2026-07-04 rolled back after -93 counterfactual |
