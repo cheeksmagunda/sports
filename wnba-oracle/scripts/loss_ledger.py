@@ -69,13 +69,22 @@ STARTER_MULT = 1.10
 CONFIRMED_BENCH_MULT = 0.82
 BOOST_TAIL_LIFT_THRESHOLD = 2.0
 BOOST_TAIL_LIFT_FACTOR = 1.5
+# 2026-07-10 suite overlays. The starter-min-lift parameters live on
+# job2_scoring._starter_minutes_lift defaults; these two mirror the armed
+# PICKER_FLOOR_TILT_* prod values. Weight is deliberately gentle: the sweep
+# showed a cliff at 0.35 (suite total_delta -47.7) because a strong tilt
+# demotes stable veterans enough that minutes-lifted spike-tier players
+# (exempt from the tilt) flood the top-5; 0.2 keeps the suite at +12.5 vs
+# the fade-only incumbent with the best win rate (14 up / 9 down).
+FLOOR_TILT_WEIGHT = 0.2
+FLOOR_TILT_MAX_BOOST = 2.0
 
 # Live picker constraints replicated in the counterfactual so its top-5
 # reflects what the freeze would actually ship. See STATUS.md
 # "Active Railway env vars" for the source of truth.
 LIVE_ANCHOR_FLOOR = 2  # LINEUP_ANCHOR_FLOOR
 LIVE_MAX_PER_TEAM = 2  # OPTIMIZER_MAX_PER_TEAM
-LIVE_MAX_SINGLE_BOOST = 2.5  # OPTIMIZER_MAX_SINGLE_BOOST
+LIVE_MAX_SINGLE_BOOST = 3.0  # OPTIMIZER_MAX_SINGLE_BOOST (raised 2026-07-04, e1be74d)
 LIVE_BOOST_SUM_CAP = 9.0  # OPTIMIZER_BOOST_SUM_CAP
 # Anchor definition mirrors job2.ANCHOR_MIN_GAMES / ANCHOR_MIN_MINUTES.
 LIVE_ANCHOR_MIN_GAMES = 3
@@ -225,6 +234,8 @@ def _apply_overlay(
     is_starter: int,
     rotowire_confirmed: int,
     overlay: str,
+    pred_p10: float = 0.0,
+    features: dict | None = None,
 ) -> tuple[float, float]:
     """Return (adjusted_pred, adjusted_p90) after applying the overlay.
 
@@ -232,19 +243,34 @@ def _apply_overlay(
       starters keep the existing 1.10 boost; confirmed benches keep 0.82.
     - "boost-lift": for boost >= BOOST_TAIL_LIFT_THRESHOLD, promote pred to p90
       so the ranker sees ceiling.
-    - "both": stack both effects.
+    - "both": stack starter-fade + boost-lift.
+    - "starter-min-lift": starter-fade + the 2026-07-10 minutes-conditional
+      starter lift (expected starters with lagging recent minutes get
+      blended up toward the starter norm; the Kuier/Harris fix).
+    - "floor-tilt": starter-fade + blend non-spike candidates' rank center
+      toward p10 (the Ogunbowale-vs-Shepard fix).
+    - "suite": starter-fade + starter-min-lift + floor-tilt (boost-lift
+      stays off, matching its 2026-07-04 prod rollback).
 
     The output feeds a heuristic rank score adjusted_pred * (2 + boost) that
     stands in for the picker's stage-1 filter without needing the full
     optimizer.
     """
+    from wnba_oracle.scheduler.job2_scoring import (
+        _floor_tilt_multiplier,
+        _starter_minutes_lift,
+    )
+
+    fade_on = overlay in ("starter-fade", "both", "starter-min-lift", "floor-tilt", "suite")
     # Starter multiplier
     if is_starter == 0 and rotowire_confirmed == 0:
-        mult = STARTER_UNKNOWN_FADE if overlay in ("starter-fade", "both") else 1.0
+        mult = STARTER_UNKNOWN_FADE if fade_on else 1.0
     elif rotowire_confirmed == 1 and is_starter == 0:
         mult = CONFIRMED_BENCH_MULT
     else:
         mult = STARTER_MULT
+    if overlay in ("starter-min-lift", "suite"):
+        mult *= _starter_minutes_lift(features or {}, enabled=True)
     # Boost-tail lift: multiplicative ceiling nudge (calibrated 1.5 =
     # empirical mean_real/mean_p50 ratio at boost>=2.0), applied to the
     # ranker's pred_p50. Matches src/wnba_oracle/scheduler/job2.py:572.
@@ -252,6 +278,10 @@ def _apply_overlay(
         rank_center = pred_p50 * BOOST_TAIL_LIFT_FACTOR
     else:
         rank_center = pred_p50
+    if overlay in ("floor-tilt", "suite"):
+        rank_center *= _floor_tilt_multiplier(
+            pred_p10, pred_p50, boost, weight=FLOOR_TILT_WEIGHT, max_boost=FLOOR_TILT_MAX_BOOST
+        )
     return rank_center * mult, pred_p90 * mult
 
 
@@ -374,6 +404,8 @@ def _run_counterfactual(
                 is_starter=is_starter,
                 rotowire_confirmed=rotowire_conf,
                 overlay=overlay,
+                pred_p10=float(hp.get("p10", 0.0)),
+                features=f,
             )
             rank_score = adj_pred * (MAX_SLOT_MULT + boost)
             candidates.append((pid, rank_score, boost, r.get("team") or "", is_anchor))
@@ -806,7 +838,7 @@ def main() -> int:
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument(
         "--counterfactual",
-        choices=("starter-fade", "boost-lift", "both"),
+        choices=("starter-fade", "boost-lift", "both", "starter-min-lift", "floor-tilt", "suite"),
         default=None,
         help=(
             "Re-pick top-5 for each slate under a hypothetical picker knob "

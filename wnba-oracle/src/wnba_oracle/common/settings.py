@@ -133,6 +133,33 @@ class Settings(BaseSettings):
     # expected bench order is noisy) -- only a CONFIRMED bench is faded. Default
     # on; set STARTER_SIGNAL_USE_EXPECTED=false to restore confirmed-only. See D104.
     starter_signal_use_expected: bool = Field(default=True, alias="STARTER_SIGNAL_USE_EXPECTED")
+    # starter_minutes_lift (2026-07-10, the Kuier/Harris fix): for expected
+    # starters whose recent minutes lag the starter norm, lift the head's
+    # quantiles by blended_minutes / recent_minutes (blended = pull toward
+    # STARTER_MINUTES_NORM at STARTER_MINUTES_LIFT_WEIGHT), capped at
+    # STARTER_MINUTES_LIFT_CAP. The Tier-0 head is blind to a same-day
+    # promotion (its features carry pre-promotion minutes); Tier-1 already
+    # anchors minutes on the confirmed role, so this closes the same gap on
+    # the head path. Corpus: expected starters with recent_minutes < 21
+    # realize 1.66x naive projection at the median (n=37); the class cost us
+    # the slate on 2026-07-05 (Kuier), 07-07 (Kuier), and 07-09 (Harris).
+    # Default off so bare Settings() is byte-identical; arm via
+    # STARTER_MINUTES_LIFT_ENABLED=true on cron-job2.
+    starter_minutes_lift_enabled: bool = Field(default=False, alias="STARTER_MINUTES_LIFT_ENABLED")
+    starter_minutes_norm: float = Field(default=25.0, alias="STARTER_MINUTES_NORM")
+    starter_minutes_lift_weight: float = Field(default=0.6, alias="STARTER_MINUTES_LIFT_WEIGHT")
+    starter_minutes_lift_cap: float = Field(default=1.3, alias="STARTER_MINUTES_LIFT_CAP")
+    # picker_floor_tilt (2026-07-10, the Ogunbowale-vs-Shepard fix): blend the
+    # sampling/rank center of NON-spike candidates (card_boost <
+    # PICKER_FLOOR_TILT_MAX_BOOST) toward their p10 floor:
+    # center = (1-w)*p50 + w*p10. Winners' mid slots (1.8/1.6/1.4 multipliers)
+    # are floor plays; a wide-interval ceiling candidate fades proportional to
+    # its downside spread while a locked-in starter is barely touched. The
+    # spike tier (boost >= max_boost) keeps its ceiling treatment. 0.0
+    # disables (default); also exposed as a knob-shadow overlay key
+    # ("floor_tilt_weight"/"floor_tilt_max_boost") for live A/B before arming.
+    picker_floor_tilt_weight: float = Field(default=0.0, alias="PICKER_FLOOR_TILT_WEIGHT")
+    picker_floor_tilt_max_boost: float = Field(default=2.0, alias="PICKER_FLOOR_TILT_MAX_BOOST")
     # minutes_model_enabled: use the D55 minutes x rate blended predictor for
     # players job1 matched to nba_api game logs. The one signal orthogonal to
     # card_boost (corr 0.554 vs boost 0.246 walk-forward). Default on; set
@@ -363,6 +390,16 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     # (Madina Okot, Zia Cooke on 2026-06-22); OPTIMIZER_MAX_SINGLE_BOOST=2.5
     # excluded them entirely.
     "optimizer_max_single_boost": 3.0,
+    # 2026-07-10 suite (loss_ledger --counterfactual suite, 23 slates): the
+    # minutes-conditional starter lift fixes the recurring top-miss class
+    # (Kuier 07-05/07-07, Harris 07-09; expected starters at 16-25 recent
+    # minutes realize up to 2x the live center), and the 0.2 floor tilt
+    # fades wide-interval ceiling plays out of the non-spike slots. Combined
+    # +12.5 vs the fade-only incumbent with 14 up / 9 down. Tilt weight has
+    # a cliff at 0.35 (-47.7, see scripts/loss_ledger.py) -- do not raise it
+    # without re-running the sweep.
+    "starter_minutes_lift_enabled": True,
+    "picker_floor_tilt_weight": 0.2,
 }
 
 

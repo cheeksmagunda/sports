@@ -86,10 +86,12 @@ from wnba_oracle.scheduler.job2_scoring import (  # noqa: E402
     _cascade_bonuses,
     _effective_confirmed,
     _features_dict,
+    _floor_tilt_multiplier,
     _heuristic_real_score,
     _is_out_from_features,
     _minutes_features,
     _prop_signal_multiplier,
+    _starter_minutes_lift,
     _starter_multiplier,
     _vegas_from_features,
 )
@@ -98,10 +100,12 @@ __all__ = [
     "_cascade_bonuses",
     "_effective_confirmed",
     "_features_dict",
+    "_floor_tilt_multiplier",
     "_heuristic_real_score",
     "_is_out_from_features",
     "_minutes_features",
     "_prop_signal_multiplier",
+    "_starter_minutes_lift",
     "_starter_multiplier",
     "_vegas_from_features",
 ]
@@ -574,6 +578,20 @@ def _build_specs(
                 use_expected=settings.starter_signal_use_expected,
                 unknown_fade=float(getattr(settings, "starter_unknown_fade", 1.0)),
             )
+            # 2026-07-10: minutes-conditional starter lift. The head's
+            # features carry pre-promotion minutes, so an expected starter
+            # coming off a bench stretch is systematically under-projected
+            # (Kuier 07-05/07-07, Harris 07-09 -- each the slate's top missed
+            # swap). Folded into starter_mult so it rides every place the
+            # starter signal already touches (p50, interval, rank).
+            starter_mult *= _starter_minutes_lift(
+                r.get("features_json"),
+                enabled=settings.starter_minutes_lift_enabled,
+                use_expected=settings.starter_signal_use_expected,
+                norm=settings.starter_minutes_norm,
+                weight=settings.starter_minutes_lift_weight,
+                cap=settings.starter_minutes_lift_cap,
+            )
             # Game-script multiplier still applies (Vegas tilt on top of the
             # head). Floor matches every other Tier so the downstream sampler
             # never sees a non-positive mean.
@@ -583,7 +601,18 @@ def _build_specs(
             prop_mult = _prop_signal_multiplier(
                 r.get("features_json"), scale=settings.prop_signal_scale
             )
-            pred_real_scores[pid] = max(0.5, p50 * gs_mult * starter_mult * prop_mult)
+            # 2026-07-10 floor tilt: blend the sampling/rank center of
+            # non-spike candidates toward their p10 so wide-interval ceiling
+            # plays fade out of the mid slots (winners' 1.8/1.6/1.4 slots are
+            # floor plays). Spike tier (boost >= max_boost) is untouched.
+            floor_mult = _floor_tilt_multiplier(
+                p10,
+                p50,
+                boost,
+                weight=settings.picker_floor_tilt_weight,
+                max_boost=settings.picker_floor_tilt_max_boost,
+            )
+            pred_real_scores[pid] = max(0.5, p50 * gs_mult * starter_mult * prop_mult * floor_mult)
             # 2026-07-04 boost-tail lift: multiplicative ceiling nudge applied
             # only to the stage-1 ranker (visible_value), not to the sampler.
             # calibrate_starter_and_boost.py: mean_real / mean_p50 ratio at
@@ -596,7 +625,7 @@ def _build_specs(
             lift_factor = float(getattr(settings, "boost_tail_lift_factor", 1.5))
             if lift_enabled and boost >= lift_thresh:
                 rank_pred_by_pid[pid] = max(
-                    0.5, p50 * lift_factor * gs_mult * starter_mult * prop_mult
+                    0.5, p50 * lift_factor * gs_mult * starter_mult * prop_mult * floor_mult
                 )
             # 80% interval (~2.56 sigma) -> additive real_score volatility. Same
             # semantic as `minutes_vol_by_pid` for the Tier-1 path so the

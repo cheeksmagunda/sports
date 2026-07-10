@@ -99,6 +99,72 @@ def _starter_multiplier(
     return 1.10 if int(f.get("is_starter", 0) or 0) else 0.82
 
 
+def _starter_minutes_lift(
+    features_json: object,
+    *,
+    enabled: bool,
+    use_expected: bool = True,
+    norm: float = 25.0,
+    weight: float = 0.6,
+    cap: float = 1.3,
+) -> float:
+    """Minutes-conditional lift for expected starters whose minutes history
+    lags their role (2026-07-10, the Kuier/Harris class).
+
+    The Tier-1 blended path already pulls projected minutes toward the
+    starter anchor via ``project_minutes_from_base`` (confirm_weight=0.6
+    toward 30), but the Tier-0 head path bypasses it entirely: the head
+    predicts from game-log features, so a player promoted to the starting
+    five carries pre-promotion minutes into tonight's p50 and gets only the
+    flat 1.10 starter nudge. Corpus (through 2026-07-07): expected starters
+    with recent_minutes < 21 realize 1.66x their naive projection at the
+    median (n=37) vs ~1.02x for established starters -- the single most
+    under-projected class, and exactly where large card boosts live.
+
+    lift = blended / recent, blended = (1 - weight) * recent + weight * norm,
+    clamped to [1.0, cap]. Neutral for non-starters, unknown roles, players
+    at/above the norm, and players with no recent-minutes feature.
+    """
+    if not enabled:
+        return 1.0
+    f = _features_dict(features_json)
+    if not int(f.get("is_starter", 0) or 0):
+        return 1.0
+    if not _effective_confirmed(f, use_expected=use_expected):
+        return 1.0
+    rmin = float(f.get("recent_minutes", 0.0) or 0.0)
+    if rmin <= 0.0 or rmin >= norm:
+        return 1.0
+    blended = (1.0 - weight) * rmin + weight * norm
+    return min(cap, max(1.0, blended / rmin))
+
+
+def _floor_tilt_multiplier(
+    p10: float,
+    p50: float,
+    boost: float,
+    *,
+    weight: float,
+    max_boost: float = 2.0,
+) -> float:
+    """Floor-blended sampling/rank center for non-spike candidates
+    (2026-07-10, the Ogunbowale-vs-Shepard fix).
+
+    Winning lineups' mid slots (the 1.8/1.6/1.4 multipliers) are floor
+    plays; the spike slot is where ceiling belongs. Blending the center
+    toward p10 fades a candidate proportional to their downside spread:
+    a locked-in starter with a tight interval is barely touched, a
+    wide-interval ceiling play drops. Applies only when card_boost <
+    ``max_boost`` so the boost tail (the spike tier) keeps its ceiling
+    treatment. Returns the multiplier on p50 (1.0 when weight=0, p50<=0,
+    or the candidate is spike-tier).
+    """
+    if weight <= 0.0 or boost >= max_boost or p50 <= 0.0:
+        return 1.0
+    blended = (1.0 - weight) * p50 + weight * min(p10, p50)
+    return max(0.0, blended / p50)
+
+
 def _prop_signal_multiplier(features_json: object, *, scale: float) -> float:
     """Real_score multiplier from sportsbook player-prop over/under (D78).
 

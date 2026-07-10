@@ -337,6 +337,13 @@ _KNOB_DEFAULTS: dict[str, object] = {
     "picker_boost_tail_lift": False,
     "boost_tail_lift_threshold": 2.0,
     "boost_tail_lift_factor": 1.5,
+    # 2026-07-10 suite: minutes-conditional starter lift + mid-slot floor tilt.
+    "starter_minutes_lift_enabled": False,
+    "starter_minutes_norm": 25.0,
+    "starter_minutes_lift_weight": 0.6,
+    "starter_minutes_lift_cap": 1.3,
+    "floor_tilt_weight": 0.0,
+    "floor_tilt_max_boost": 2.0,
 }
 
 
@@ -350,24 +357,31 @@ def _overlay_challenger_sha(overlay: dict) -> str:
 
 
 def _apply_knob_overlay(
-    p50: float,
+    pred: dict,
     boost: float,
     features: dict,
     overlay: dict,
 ) -> float:
     """Return the challenger stage-1 rank score for a single pool player.
 
-    Mirrors src/wnba_oracle/scheduler/job2.py:572 (head-served path):
-        pred_real_score = p50 * starter_mult
+    Mirrors the head-served path in src/wnba_oracle/scheduler/job2.py:
+        pred_real_score = p50 * starter_mult * minutes_lift * floor_tilt
         rank_pred       = pred_real_score, unless boost >= threshold and
                           boost_tail_lift is on -- then p50 is multiplied
                           by lift_factor first.
 
-    Only the stage-1 filter portion is reproduced here -- gs_mult and
-    prop_mult are neutral in the overlay path (they still apply upstream
-    identically for incumbent and challenger, so they cancel in the RBO/NDCG
-    ordering).
+    ``pred`` is the head quantile dict ({p10, p50, p90}). Only the stage-1
+    filter portion is reproduced here -- gs_mult and prop_mult are neutral
+    in the overlay path (they still apply upstream identically for
+    incumbent and challenger, so they cancel in the RBO/NDCG ordering).
     """
+    from wnba_oracle.scheduler.job2_scoring import (
+        _floor_tilt_multiplier,
+        _starter_minutes_lift,
+    )
+
+    p50 = float(pred.get("p50") or 0.0)
+    p10 = float(pred.get("p10") or 0.0)
     fade = float(overlay.get("starter_unknown_fade", _KNOB_DEFAULTS["starter_unknown_fade"]))
     lift_on = bool(overlay.get("picker_boost_tail_lift", _KNOB_DEFAULTS["picker_boost_tail_lift"]))
     lift_thresh = float(
@@ -384,8 +398,34 @@ def _apply_knob_overlay(
         starter_mult = 0.82
     else:
         starter_mult = 1.10
+    starter_mult *= _starter_minutes_lift(
+        features,
+        enabled=bool(
+            overlay.get(
+                "starter_minutes_lift_enabled", _KNOB_DEFAULTS["starter_minutes_lift_enabled"]
+            )
+        ),
+        norm=float(overlay.get("starter_minutes_norm", _KNOB_DEFAULTS["starter_minutes_norm"])),
+        weight=float(
+            overlay.get(
+                "starter_minutes_lift_weight", _KNOB_DEFAULTS["starter_minutes_lift_weight"]
+            )
+        ),
+        cap=float(
+            overlay.get("starter_minutes_lift_cap", _KNOB_DEFAULTS["starter_minutes_lift_cap"])
+        ),
+    )
+    floor_mult = _floor_tilt_multiplier(
+        p10,
+        p50,
+        boost,
+        weight=float(overlay.get("floor_tilt_weight", _KNOB_DEFAULTS["floor_tilt_weight"])),
+        max_boost=float(
+            overlay.get("floor_tilt_max_boost", _KNOB_DEFAULTS["floor_tilt_max_boost"])
+        ),
+    )
     center = p50 * lift_factor if (lift_on and boost >= lift_thresh) else p50
-    return max(0.5, center * starter_mult)
+    return max(0.5, center * starter_mult * floor_mult)
 
 
 def _rank_with_overlay(
@@ -405,7 +445,7 @@ def _rank_with_overlay(
             continue
         boost = float(boost_by_pid.get(int(pid), 0.0))
         features = features_by_pid.get(int(pid), {})
-        rank = _apply_knob_overlay(float(p50), boost, features, overlay)
+        rank = _apply_knob_overlay(pred, boost, features, overlay)
         scored.append((int(pid), rank * (MAX_SLOT_MULT + boost)))
     scored.sort(key=lambda t: t[1], reverse=True)
     return [pid for pid, _ in scored]
@@ -463,6 +503,14 @@ def _maybe_run_knob_shadow(
         "picker_boost_tail_lift": bool(getattr(settings, "picker_boost_tail_lift", False)),
         "boost_tail_lift_threshold": float(getattr(settings, "boost_tail_lift_threshold", 2.0)),
         "boost_tail_lift_factor": float(getattr(settings, "boost_tail_lift_factor", 1.5)),
+        "starter_minutes_lift_enabled": bool(
+            getattr(settings, "starter_minutes_lift_enabled", False)
+        ),
+        "starter_minutes_norm": float(getattr(settings, "starter_minutes_norm", 25.0)),
+        "starter_minutes_lift_weight": float(getattr(settings, "starter_minutes_lift_weight", 0.6)),
+        "starter_minutes_lift_cap": float(getattr(settings, "starter_minutes_lift_cap", 1.3)),
+        "floor_tilt_weight": float(getattr(settings, "picker_floor_tilt_weight", 0.0)),
+        "floor_tilt_max_boost": float(getattr(settings, "picker_floor_tilt_max_boost", 2.0)),
     }
     inc_rank = _rank_with_overlay(incumbent_head, boost_by_pid, features_by_pid, incumbent_overlay)
     ch_rank = _rank_with_overlay(incumbent_head, boost_by_pid, features_by_pid, overlay)

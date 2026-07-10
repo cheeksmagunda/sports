@@ -51,10 +51,35 @@ def test_is_out_status_rejects_questionable_and_empty() -> None:
 
 
 def test_normalize_name_strips_suffixes_and_case() -> None:
-    assert job1._normalize_name("A'ja Wilson") == "a'ja wilson"
+    assert job1._normalize_name("A'ja Wilson") == "aja wilson"
     assert job1._normalize_name("Kelsey Plum Jr.") == "kelsey plum"
     assert job1._normalize_name("Bob III") == "bob"
     assert job1._normalize_name("") == ""
+
+
+def test_normalize_name_folds_diacritics_hyphens_apostrophes() -> None:
+    """Cross-source spelling variants must land on one join key. The
+    2026-07-07 PHO slot-1 hole: 'M. Akoa-Makani' (RotoWire) never matched
+    'Monique Akoa Makani' (Real Sports), so an expected starter was
+    silently labeled bench and took the unknown-role fade."""
+    assert job1._normalize_name("Noémie Brochant") == job1._normalize_name("Noemie Brochant")
+    assert job1._normalize_name("Akoa-Makani") == "akoa makani"
+    assert job1._normalize_name("A'ja") == job1._normalize_name("A’ja")
+    assert job1._normalize_name("M. Akoa-Makani") == "m akoa makani"
+
+
+def test_index_rotowire_bridges_hyphenated_abbreviated_starter() -> None:
+    """Regression for the 2026-07-07 miss: abbreviated + hyphenated RotoWire
+    name must resolve against the full Real Sports name via the
+    first-initial + last-token key."""
+    entries = [_entry("PHO", "M. Akoa-Makani", slot=1, status="")]
+    idx = job1._index_rotowire(entries)
+    hit = idx.get("PHO", "Monique Akoa Makani")
+    assert hit is not None and hit.starter_slot == 1
+    # Diacritic variant of the same player also resolves.
+    entries2 = [_entry("PHO", "Noémie Brochant", slot=5, status="GTD")]
+    idx2 = job1._index_rotowire(entries2)
+    assert idx2.get("PHO", "Noemie Brochant") is not None
 
 
 def test_index_rotowire_keys_by_team_normalized_name() -> None:
@@ -68,7 +93,7 @@ def test_index_rotowire_keys_by_team_normalized_name() -> None:
     stew = idx.get("NYL", "Breanna Stewart")
     assert stew is not None and stew.injury_status == "OUT"
     # __contains__ back-compat on (team, normalized_name).
-    assert ("LVA", "a'ja wilson") in idx
+    assert ("LVA", "aja wilson") in idx
     assert idx.get("LVA", "Unknown Player") is None
 
 

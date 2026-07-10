@@ -17,6 +17,7 @@ import asyncio
 import datetime as dt
 import json
 import os
+import unicodedata
 from dataclasses import dataclass
 
 import httpx
@@ -169,15 +170,25 @@ _OUT_STATUS_TOKENS = {"OUT", "IL", "INJ", "INACTIVE", "NA"}
 def _normalize_name(name: str) -> str:
     """Case-fold + strip suffixes for RotoWire <-> Real Sports name matching.
 
-    Real Sports often returns "A'ja Wilson"; RotoWire returns "A'ja Wilson"
-    too but occasionally with a Jr./Sr./III suffix. Normalize for a stable
-    join key.
+    Beyond case + Jr./Sr./III suffixes, folds the three cross-source spelling
+    hazards that silently mislabel starters as bench (the 2026-07-07 PHO
+    slot-1 hole: RotoWire "M. Akoa-Makani" vs Real Sports "Monique Akoa
+    Makani" missed BOTH join keys, so an expected starter took the
+    unknown-role fade):
+      - diacritics:  "Noémie" == "Noemie" (NFKD ASCII fold)
+      - hyphens:     "Akoa-Makani" == "Akoa Makani" (split BEFORE stripping
+        punctuation so double surnames keep a last-token join key)
+      - apostrophes/periods: "A'ja" == "Aja", "M." == "M"
     """
     if not name:
         return ""
-    parts = [p for p in name.strip().split() if p]
-    suffixes = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv"}
-    parts = [p for p in parts if p.lower().rstrip(".") not in suffixes]
+    nfkd = unicodedata.normalize("NFKD", name)
+    folded = "".join(c for c in nfkd if not unicodedata.combining(c))
+    folded = folded.replace("-", " ").replace("/", " ")
+    cleaned = "".join(c for c in folded if c.isalnum() or c.isspace())
+    parts = [p for p in cleaned.strip().split() if p]
+    suffixes = {"jr", "sr", "ii", "iii", "iv"}
+    parts = [p for p in parts if p.lower() not in suffixes]
     return " ".join(parts).lower()
 
 
