@@ -104,7 +104,9 @@ and never loads the artifact, so it does not need the SHA.
 | FREEZE_LEAD_MINUTES | 40 (code default) | D93 |
 | STARTER_UNKNOWN_FADE | 0.75 | 2026-07-04 corpus calibration |
 | PICKER_BOOST_TAIL_LIFT | false | 2026-07-04 rolled back after -93 counterfactual |
-| PICKER_KNOB_CHALLENGER_JSON | knob-lift + fade | 2026-07-04, shadow-only for now |
+| STARTER_MINUTES_LIFT_ENABLED | true | 2026-07-10 Kuier/Harris fix; +12.5 suite counterfactual |
+| PICKER_FLOOR_TILT_WEIGHT | 0.2 | 2026-07-10; cliff at 0.35, do not raise without re-sweep |
+| PICKER_KNOB_CHALLENGER_JSON | pre-suite config (fade only) | 2026-07-10, measures the suite's marginal effect ex post |
 
 All flags reverse via env with no redeploy: set `*_ENABLED=false` or unset
 numeric knobs to revert to code defaults.
