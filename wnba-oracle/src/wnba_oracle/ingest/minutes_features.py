@@ -176,7 +176,7 @@ _WNBA_NAME_TO_ABBR: dict[str, str] = {
     "las vegas aces": "LVA",
     "minnesota lynx": "MIN",
     "new york liberty": "NYL",
-    "portland thorns": "PDX",
+    "portland fire": "PDX",
     "phoenix mercury": "PHX",
     "seattle storm": "SEA",
     "toronto tempo": "TOR",

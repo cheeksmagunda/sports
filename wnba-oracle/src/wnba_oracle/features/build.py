@@ -414,6 +414,7 @@ WNBA_TEAM_NAME_TO_KEY: dict[str, str] = {
     "Seattle Storm": "SEA",
     "Washington Mystics": "WAS",
     "Golden State Valkyries": "GSV",
+    "Portland Fire": "POR",
 }
 
 
