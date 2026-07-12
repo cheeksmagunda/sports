@@ -784,11 +784,23 @@ def _check_config_drift(slate_date: str, *, settings: object | None = None) -> l
     ]
 
 
-def run_watchdog(slate_date: str, *, now_utc: dt.datetime | None = None) -> list[WatchdogEvent]:
+def run_watchdog(
+    slate_date: str,
+    *,
+    now_utc: dt.datetime | None = None,
+    check_config_drift: bool = True,
+) -> list[WatchdogEvent]:
     """Run all checks for the slate; persist deduplicated events.
 
     Returns the full event list for caller-side logging / API surface.
     Persistence is idempotent within 6h per (slate, trigger).
+
+    ``check_config_drift`` gates the EXPECTED_PROD_CONFIG comparison. That
+    config describes cron-job2's env only (see EXPECTED_PROD_CONFIG docstring);
+    running it from job1's process reads job1's environment, which never has
+    those job2-only optimizer/model knobs set, so every call would misreport
+    them as reverted-to-default drift. Callers outside job2's own dispatch
+    should pass False.
     """
     log.info("watchdog_run", slate_date=slate_date)
     events: list[WatchdogEvent] = []
@@ -798,7 +810,8 @@ def run_watchdog(slate_date: str, *, now_utc: dt.datetime | None = None) -> list
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
     events.extend(_check_model_artifact(slate_date))
     events.extend(_check_feature_content(slate_date))
-    events.extend(_check_config_drift(slate_date))
+    if check_config_drift:
+        events.extend(_check_config_drift(slate_date))
     if events:
         persist_events(events)
         _ping_on_critical(events)

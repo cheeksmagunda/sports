@@ -68,7 +68,9 @@ def main() -> int:
         # the job2 freeze fire (or the operator's screenshot). Wrapped so a
         # watchdog crash never masks job1's exit code.
         try:
-            run_watchdog(dt.date.today().isoformat())
+            # config_drift describes cron-job2's env only; job1's process
+            # never has those knobs set, so skip it here (see run_watchdog).
+            run_watchdog(dt.date.today().isoformat(), check_config_drift=False)
         except Exception as exc:
             log.exception("watchdog_failed", error=str(exc))
         return rc
