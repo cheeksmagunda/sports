@@ -10,7 +10,12 @@
 
 set -e
 
-RW_TOKEN="${RAILWAY_WORKSPACE_TOKEN:-${RAILWAY_TOKEN:-}}"
+# Deliberately RAILWAY_WORKSPACE_TOKEN only, no RAILWAY_TOKEN fallback (see
+# header comment above): a silent fallback to the ambient, narrower-scoped
+# RAILWAY_TOKEN masked an empty workspace token for a full day (issue #17,
+# 2026-07-06) before anyone noticed queries were degrading to "Not
+# Authorized". Fail loud instead.
+RW_TOKEN="${RAILWAY_WORKSPACE_TOKEN:-}"
 
 if [ -z "$RW_TOKEN" ]; then
   REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,12 +24,12 @@ if [ -z "$RW_TOKEN" ]; then
     # shellcheck disable=SC1091
     source "$REPO_ROOT/.env"
     set +a
-    RW_TOKEN="${RAILWAY_WORKSPACE_TOKEN:-${RAILWAY_TOKEN:-}}"
+    RW_TOKEN="${RAILWAY_WORKSPACE_TOKEN:-}"
   fi
 fi
 
 if [ -z "$RW_TOKEN" ]; then
-  echo '{"error":"RAILWAY_WORKSPACE_TOKEN missing"}' >&2
+  echo '{"error":"RAILWAY_WORKSPACE_TOKEN missing or empty"}' >&2
   exit 1
 fi
 
