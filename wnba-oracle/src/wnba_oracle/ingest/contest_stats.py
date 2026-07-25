@@ -43,7 +43,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
-import polars as pl
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.ingest.realsports import (
@@ -387,10 +386,6 @@ def labels_from_leaderboard_entries(
                 )
             )
     return dedupe_by_player(out)
-
-
-def labels_to_polars(labels: list[ContestLabel]) -> pl.DataFrame:
-    return pl.from_dicts([label.__dict__ for label in labels]) if labels else pl.DataFrame()
 
 
 def dedupe_by_player(labels: list[ContestLabel]) -> list[ContestLabel]:

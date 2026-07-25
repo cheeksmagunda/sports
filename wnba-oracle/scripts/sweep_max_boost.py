@@ -19,8 +19,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.loss_ledger import _OFF_OVERLAY, _run_counterfactual, build_ledger
-
+from scripts.loss_ledger import _OFF_OVERLAY, _run_counterfactual, build_ledger  # noqa: E402
 
 CAPS = [2.5, 3.0, 0.0]  # 0.0 = disabled (uncapped)
 

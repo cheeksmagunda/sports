@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-import polars as pl
 from bs4 import BeautifulSoup
 
 from wnba_oracle.common.logging import get_logger
@@ -147,7 +146,3 @@ def parse_lineups_html(html: str) -> list[LineupEntry]:
                     )
                 )
     return entries
-
-
-def lineups_to_polars(entries: list[LineupEntry]) -> pl.DataFrame:
-    return pl.from_dicts([e.__dict__ for e in entries]) if entries else pl.DataFrame()

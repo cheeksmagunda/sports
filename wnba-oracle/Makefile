@@ -31,7 +31,7 @@ test-all:
 	uv run python -m pytest tests/ -m contract -v
 
 lint:
-	uv run ruff check src/ tests/
+	uv run ruff check src/ tests/ scripts/
 
 typecheck:
 	uv run mypy src/

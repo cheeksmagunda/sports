@@ -10,8 +10,7 @@ signal orthogonal to card_boost. corr(next real_score, ...) walk-forward on
 So even the recency baseline beats the boost, and the gap up to 0.554 is what
 same-day role signals close.
 
-Walk-forward PLACEMENT (scripts/test_minutes_placement.py), vs boost: the
-history-weighted blend (boost prior shrinking toward minutes x rate as a
+Walk-forward PLACEMENT vs boost: the history-weighted blend (boost prior shrinking toward minutes x rate as a
 player accumulates games) tripled wins (1 -> 3 of 16), took best top-5 (4),
 best gap-to-winner (11.44), best winner-overlap (1.56). That blend is what
 ships, via `blended_real_score`.

@@ -161,9 +161,8 @@ def _device_name() -> str:
 
 
 # RotoWire status strings that mean "do not draft" — matches the same
-# token set used by features/build.py's injury cascade so the two paths
-# agree on what "OUT" means even when the cascade itself isn't on the
-# prod path yet.
+# token set used by features/injury_cascade.py so the two paths agree on
+# what "OUT" means.
 _OUT_STATUS_TOKENS = {"OUT", "IL", "INJ", "INACTIVE", "NA"}
 
 
@@ -351,7 +350,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     # Game-script-relevant Vegas signals (total, abs(spread)) are written
     # into features_json so Job 2 + the game-script multiplier can read them
     # without re-querying The Odds API.
-    from wnba_oracle.features.build import team_key_from_full_name
+    from wnba_oracle.features.game_features import team_key_from_full_name
 
     team_to_opp: dict[str, str] = {}
     team_to_vegas: dict[str, dict[str, float]] = {}

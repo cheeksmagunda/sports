@@ -35,10 +35,10 @@ from wnba_oracle.features.game_features import (
     TARGET_COLUMNS,
     add_schedule_features,
     add_targets,
+    compute_opp_dvp_map,
     to_nba_api_schema,
 )
 from wnba_oracle.features.rolling import build_rolling_features
-from wnba_oracle.predict.scoring import REAL_SCORE_INTERCEPT, REAL_SCORE_WEIGHTS
 
 log = get_logger("oracle.features.corpus")
 
@@ -150,24 +150,9 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
 
     # -- opp_dvp from game_logs (season-wide mean real_score allowed per opponent) --
     dvp_map: dict[str, float] = {}
-    needed = [*REAL_SCORE_WEIGHTS, "opponent", "min"]
-    if (
-        game_logs is not None
-        and not game_logs.is_empty()
-        and all(c in game_logs.columns for c in needed)
-    ):
+    if game_logs is not None:
         try:
-            score_expr = pl.lit(float(REAL_SCORE_INTERCEPT))
-            for stat, w in REAL_SCORE_WEIGHTS.items():
-                score_expr = score_expr + pl.lit(w) * pl.col(stat).fill_null(0.0)
-            grouped = (
-                game_logs.filter(pl.col("min").fill_null(0.0) >= 5.0)
-                .with_columns(score_expr.alias("_est_rs"))
-                .group_by("opponent")
-                .agg(pl.col("_est_rs").mean().alias("mean_allowed"))
-                .filter(pl.col("opponent").is_not_null() & (pl.col("opponent") != ""))
-            )
-            dvp_map = {row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()}
+            dvp_map = compute_opp_dvp_map(game_logs)
             log.info("corpus_dvp_computed", n_teams=len(dvp_map))
         except Exception as exc:
             log.warning("corpus_dvp_failed", error=str(exc))

@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-import polars as pl
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import get_settings
@@ -171,10 +170,6 @@ def _reduce_game(game: dict[str, Any]) -> GameOdds:
         total_over_price=_median_nonnull(tot_op),
         total_under_price=_median_nonnull(tot_up),
     )
-
-
-def odds_to_polars(odds: list[GameOdds]) -> pl.DataFrame:
-    return pl.from_dicts([g.__dict__ for g in odds]) if odds else pl.DataFrame()
 
 
 @dataclass(frozen=True)

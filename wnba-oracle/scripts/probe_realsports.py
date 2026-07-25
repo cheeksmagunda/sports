@@ -62,7 +62,8 @@ async def _amain(args: argparse.Namespace) -> int:
     except StorageStateMissing as exc:
         print(f"[BLOCK] {exc}", file=sys.stderr)
         print(
-            "Run `uv run python scripts/realsports_login.py` first, then re-run the probe.",
+            "Real Sports session missing. Recover it via the /reseed-realsports "
+            "skill (Playwright MCP login), then re-run the probe.",
             file=sys.stderr,
         )
         return 78

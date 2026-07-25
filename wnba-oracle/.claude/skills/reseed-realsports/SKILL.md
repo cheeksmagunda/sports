@@ -9,7 +9,7 @@ disable-model-invocation: true
 Sessions die server-side after roughly three weeks. Symptom: 401 from every
 `web.realapp.com` endpoint while the web app still renders (guest fallback).
 
-**Never run `scripts/realsports_login.py` or any scripted/headless login.**
+**Never attempt a scripted or headless login.**
 `POST /login` bot-blocks plain scripted Chromium with a 403 regardless of UA
 masking. Only the Playwright MCP browser passes the check (verified
 2026-07-02).

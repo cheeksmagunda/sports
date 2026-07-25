@@ -127,7 +127,7 @@ not the heads' training corpus (the pre-D63 bug).
 |---|---|
 | Frontend shows countdown past freeze time | Railway logs for cron-job2. Most likely `pool_too_small` (job1 wrote no rows) or `job2_failed` (DB / Redis hiccup) |
 | Frontend shows ErrorState | `curl https://api-production-7033.up.railway.app/health`; if 200, check api Railway logs |
-| Pool empty / 401s from web.realapp.com | Real Sports session died (they last ~3 weeks). Operator recovery only -- AGENTS.md, "Real Sports". Do NOT run `scripts/realsports_login.py` headless; the site bot-blocks scripted login |
+| Pool empty / 401s from web.realapp.com | Real Sports session died (they last ~3 weeks). Operator recovery only -- AGENTS.md, "Real Sports". Do NOT attempt a scripted/headless login; the site bot-blocks it |
 | Odds API 429 / 401 | Quota or rotated key. Job1 degrades to empty odds; lineup still ships without the Vegas tilt |
 | Watchdog `label_coverage_gap` | A contest player referenced in the top-20 leaderboard has no slate_labels row -- a real ingestion gap since 2026-07-03 (the check compares against leaderboard players, not the 3x-wider job1 pool) |
 

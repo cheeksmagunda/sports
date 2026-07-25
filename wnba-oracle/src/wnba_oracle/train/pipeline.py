@@ -28,7 +28,7 @@ import polars as pl
 import yaml
 
 from wnba_oracle.common.logging import get_logger
-from wnba_oracle.features.parity import feature_module_sha
+from wnba_oracle.features.provenance import feature_module_sha
 from wnba_oracle.features.spec import (
     HEAD_SPECS,
     Cohort,
@@ -196,18 +196,16 @@ def train_picker(
     valid_df: pl.DataFrame,
     *,
     label_train: pl.DataFrame | None = None,
-    label_valid: pl.DataFrame | None = None,  # noqa: ARG001 -- reserved for EB valid split
     target_real_score: str = "real_score",
-    target_minutes: str = "minutes_played",  # noqa: ARG001 -- reserved for minutes head retarget
 ) -> PickerArtifact:
     """Train the multi-task ensemble.
 
     ``train_df``/``valid_df`` are the *heads* frame (the dense per-player-game
     corpus with the head target columns; see features/corpus.build_gamelog_corpus).
-    ``label_train``/``label_valid`` are the *contest-label* frame the EB baseline
-    fits on (card_boost + real_score per player-slate). When the label frames are
-    omitted they default to the heads frame, preserving the single-corpus
-    behaviour for callers that pass one frame.
+    ``label_train`` is the *contest-label* frame the EB baseline fits on
+    (card_boost + real_score per player-slate). When omitted it defaults to
+    the heads frame, preserving the single-corpus behaviour for callers that
+    pass one frame.
     """
     cfg = _load_config()
     if label_train is None:

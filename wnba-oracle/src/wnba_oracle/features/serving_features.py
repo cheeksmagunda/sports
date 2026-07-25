@@ -22,9 +22,8 @@ from datetime import date, datetime
 import polars as pl
 
 from wnba_oracle.common.logging import get_logger
-from wnba_oracle.features.game_features import to_nba_api_schema
+from wnba_oracle.features.game_features import compute_opp_dvp_map, to_nba_api_schema
 from wnba_oracle.features.rolling import build_rolling_features
-from wnba_oracle.predict.scoring import REAL_SCORE_INTERCEPT, REAL_SCORE_WEIGHTS
 
 log = get_logger("oracle.features.serving")
 
@@ -228,22 +227,5 @@ def build_opp_dvp_lookup(game_logs: pl.DataFrame) -> dict[str, float]:
     per position; position-specific DvP needs a position column in game_logs
     which the current schema lacks). Better than zero because model attention
     on a constant (0) is effectively disabled; any signal helps.
-
-    Filters to games where the player logged >= 5 min to exclude DNP/garbage.
     """
-    if game_logs.is_empty():
-        return {}
-    needed = [*REAL_SCORE_WEIGHTS, "opponent", "min"]
-    if not all(c in game_logs.columns for c in needed):
-        return {}
-    score_expr = pl.lit(float(REAL_SCORE_INTERCEPT))
-    for stat, w in REAL_SCORE_WEIGHTS.items():
-        score_expr = score_expr + pl.lit(w) * pl.col(stat).fill_null(0.0)
-    grouped = (
-        game_logs.filter(pl.col("min").fill_null(0.0) >= 5.0)
-        .with_columns(score_expr.alias("_est_rs"))
-        .group_by("opponent")
-        .agg(pl.col("_est_rs").mean().alias("mean_allowed"))
-        .filter(pl.col("opponent").is_not_null() & (pl.col("opponent") != ""))
-    )
-    return {row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()}
+    return compute_opp_dvp_map(game_logs)

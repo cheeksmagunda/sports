@@ -41,15 +41,16 @@ def main() -> int:
 
     print(f"Slate {SLATE}: {sl.height} players, {lb.height} leaderboard entries")
 
-    pool = []
-    for r in sl.iter_rows(named=True):
-        pool.append({
+    pool = [
+        {
             "player_id": int(r["platform_player_id"]),
             "name": r["display_name"],
             "team": r["team_key"],
             "card_boost": float(r["card_boost"]),
             "real_score": float(r["real_score"] or 0.0),
-        })
+        }
+        for r in sl.iter_rows(named=True)
+    ]
     # Filter to players with non-zero real_score (DNP players)
     pool = [p for p in pool if p["real_score"] != 0.0]
     print(f"Active pool (real_score != 0): {len(pool)}")

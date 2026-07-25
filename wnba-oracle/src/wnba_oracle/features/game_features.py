@@ -20,9 +20,39 @@ Three things live here:
 
 from __future__ import annotations
 
+from typing import Final
+
 import polars as pl
 
 from wnba_oracle.predict.scoring import REAL_SCORE_INTERCEPT, REAL_SCORE_WEIGHTS
+
+# Real Sports full team name -> game-log-corpus abbreviation. Explicit
+# entries win; anything unmapped falls back to name[:3].upper() (verified
+# against fixtures to match the Real Sports key for current franchises).
+WNBA_TEAM_NAME_TO_KEY: Final[dict[str, str]] = {
+    "Las Vegas Aces": "LVA",
+    "New York Liberty": "NYL",
+    "Phoenix Mercury": "PHO",
+    "Chicago Sky": "CHI",
+    "Toronto Tempo": "TOR",
+    "Minnesota Lynx": "MIN",
+    "Atlanta Dream": "ATL",
+    "Indiana Fever": "IND",
+    "Connecticut Sun": "CON",
+    "Dallas Wings": "DAL",
+    "Los Angeles Sparks": "LAS",
+    "Seattle Storm": "SEA",
+    "Washington Mystics": "WAS",
+    "Golden State Valkyries": "GSV",
+    "Portland Fire": "POR",
+}
+
+
+def team_key_from_full_name(name: str) -> str:
+    if name in WNBA_TEAM_NAME_TO_KEY:
+        return WNBA_TEAM_NAME_TO_KEY[name]
+    return name[:3].upper()
+
 
 # Stored game-log (lowercase) -> nba_api column names that
 # rolling.build_rolling_features expects. Columns absent upstream
@@ -146,3 +176,29 @@ def add_schedule_features(
         ]
     )
     return out.drop(["_gd", "_days_rest_raw"])
+
+
+def compute_opp_dvp_map(game_logs: pl.DataFrame) -> dict[str, float]:
+    """Per-opponent mean real_score allowed (season-wide), from game_logs.
+
+    Filters to games where the player logged >= 5 min to exclude DNP/garbage.
+    Shared by the offline corpus enrichment (features/corpus.py) and the
+    live serve-time lookup (features/serving_features.py) so the two DvP
+    computations can't drift apart.
+    """
+    if game_logs.is_empty():
+        return {}
+    needed = [*REAL_SCORE_WEIGHTS, "opponent", "min"]
+    if not all(c in game_logs.columns for c in needed):
+        return {}
+    score_expr = pl.lit(float(REAL_SCORE_INTERCEPT))
+    for stat, w in REAL_SCORE_WEIGHTS.items():
+        score_expr = score_expr + pl.lit(w) * pl.col(stat).fill_null(0.0)
+    grouped = (
+        game_logs.filter(pl.col("min").fill_null(0.0) >= 5.0)
+        .with_columns(score_expr.alias("_est_rs"))
+        .group_by("opponent")
+        .agg(pl.col("_est_rs").mean().alias("mean_allowed"))
+        .filter(pl.col("opponent").is_not_null() & (pl.col("opponent") != ""))
+    )
+    return {row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()}

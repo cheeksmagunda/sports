@@ -19,7 +19,6 @@ from pathlib import Path
 import polars as pl
 
 from wnba_oracle.common.logging import get_logger
-from wnba_oracle.ingest.stats_wnba import get_wnba_static_players
 
 log = get_logger("oracle.ingest.identity")
 
@@ -61,7 +60,9 @@ class Resolver:
     """Resolves Real Sports player records to `nba_api` WNBA player ids."""
 
     def __init__(self) -> None:
-        catalog = get_wnba_static_players()
+        from nba_api.stats.static import players
+
+        catalog = list(players.get_wnba_players())
         self._by_norm_name: dict[str, list[dict[str, object]]] = {}
         for p in catalog:
             key = _normalize_name(str(p.get("full_name", "")))

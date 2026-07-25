@@ -59,7 +59,7 @@ LEADERBOARD_CANDIDATES = [
 ]
 
 
-async def probe_one(client, base, headers, cid, path_tmpl, label):
+async def probe_one(client, base, headers, cid, path_tmpl):
     url = base + path_tmpl.format(cid=cid)
     try:
         r = await client.get(url, headers=headers, timeout=15.0)
@@ -97,7 +97,7 @@ async def amain():
         print(f"\n=== Phase 1: leaderboard endpoint probe on contest {cid} ===", flush=True)
         results = []
         for tmpl in LEADERBOARD_CANDIDATES:
-            r = await probe_one(client, BASE, h, cid, tmpl, "lb")
+            r = await probe_one(client, BASE, h, cid, tmpl)
             print(f"  {r['status']:>5}  {tmpl}", flush=True)
             results.append(r)
             await asyncio.sleep(0.4)

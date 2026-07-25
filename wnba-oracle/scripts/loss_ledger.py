@@ -346,18 +346,17 @@ def _run_counterfactual(
             ]
         if not pool_rows:
             continue
-        enrichment = []
-        for r in pool_rows:
-            enrichment.append(
-                {
-                    "real_sports_player_id": r["player_id"],
-                    "team": r.get("team") or "",
-                    "opponent": "",
-                    "position": r.get("position") or "F",
-                    "card_boost": float(r.get("card_boost") or 0.0),
-                    "features_json": r.get("features_json"),
-                }
-            )
+        enrichment = [
+            {
+                "real_sports_player_id": r["player_id"],
+                "team": r.get("team") or "",
+                "opponent": "",
+                "position": r.get("position") or "F",
+                "card_boost": float(r.get("card_boost") or 0.0),
+                "features_json": r.get("features_json"),
+            }
+            for r in pool_rows
+        ]
         heads = _predict_heads_for_pool(art, enrichment)
         if not heads:
             if verbose:

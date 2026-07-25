@@ -33,10 +33,18 @@ export function OracleLoader({
   freezeTargetUtc = null,
 }: Props) {
   const [idx, setIdx] = useState(0);
+  const [wasVisible, setWasVisible] = useState(visible);
+
+  // Reset to the first message whenever the loader (re)appears. Adjusted
+  // during render rather than in the effect below so it doesn't trigger
+  // a second cascading render (react-hooks/set-state-in-effect).
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setIdx(0);
+  }
 
   useEffect(() => {
     if (!visible) return;
-    setIdx(0);
     const id = setInterval(() => {
       setIdx((p) => (p + 1) % ROTATION.length);
     }, ROTATION_INTERVAL_MS);

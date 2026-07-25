@@ -121,18 +121,17 @@ def predict_pool_p50_by_slate(rows_by_slate: dict[str, list[dict]]) -> dict[tupl
         raise SystemExit(f"model artifact {sha[:12]} not resolvable; run oracle-train?")
     out: dict[tuple[str, int], dict[str, float]] = {}
     for sd, rows in rows_by_slate.items():
-        enrichment = []
-        for r in rows:
-            enrichment.append(
-                {
-                    "real_sports_player_id": r["pid"],
-                    "team": r["team"] or "",
-                    "opponent": r["opponent"] or "",
-                    "position": r["position"] or "F",
-                    "card_boost": float(r.get("label_boost") or r.get("enrich_boost") or 0.0),
-                    "features_json": r["features_json"],
-                }
-            )
+        enrichment = [
+            {
+                "real_sports_player_id": r["pid"],
+                "team": r["team"] or "",
+                "opponent": r["opponent"] or "",
+                "position": r["position"] or "F",
+                "card_boost": float(r.get("label_boost") or r.get("enrich_boost") or 0.0),
+                "features_json": r["features_json"],
+            }
+            for r in rows
+        ]
         try:
             head = _predict_heads_for_pool(art, enrichment)
         except Exception as exc:
@@ -248,9 +247,10 @@ def main() -> int:
         p50 = float(pred["p50"])
         if is_starter == 0 and rotowire_conf == 0:
             unknown_pairs.append((p50, real))
-        elif is_starter == 1 or rotowire_conf == 1:
-            if not (rotowire_conf == 1 and is_starter == 0):
-                starter_pairs.append((p50, real))
+        elif (is_starter == 1 or rotowire_conf == 1) and not (
+            rotowire_conf == 1 and is_starter == 0
+        ):
+            starter_pairs.append((p50, real))
     print(f"  starters n={len(starter_pairs)}  unknowns n={len(unknown_pairs)}")
     if starter_pairs:
         preds = np.array([p for p, _ in starter_pairs])

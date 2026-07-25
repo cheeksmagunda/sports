@@ -126,11 +126,11 @@ def main() -> int:
     heads_train, heads_valid = _split_last_fold(heads_df, "heads", date_col=heads_date_col)
     if label_df is not None and not label_df.is_empty():
         label_date_col = "game_date" if args.corpus_mode == "gamelog" else "slate_date"
-        label_train, label_valid = _split_last_fold(label_df, "label", date_col=label_date_col)
+        label_train, _label_valid = _split_last_fold(label_df, "label", date_col=label_date_col)
     else:
-        label_train, label_valid = None, None
+        label_train = None
 
-    art = train_picker(heads_train, heads_valid, label_train=label_train, label_valid=label_valid)
+    art = train_picker(heads_train, heads_valid, label_train=label_train)
     path = write_artifact(art, commit=args.commit)
 
     metrics = {

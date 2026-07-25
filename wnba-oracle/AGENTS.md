@@ -119,8 +119,9 @@ web app still renders (it falls back to guest).
 
 Re-login gotcha (2026-07-02): `POST /login` returns 403
 "Please refresh the page and try again" for plain scripted Chromium --
-including this repo's own `scripts/realsports_login.py` -- regardless of UA
-or automation-flag masking. The Playwright MCP browser passes the check. To
+verified against this repo's own scripted-login attempt (since removed) --
+regardless of UA or automation-flag masking. The Playwright MCP browser
+passes the check. To
 re-seed: log in via Playwright MCP, dump localStorage into Playwright
 storage-state format (cookies are empty; auth is all localStorage), write
 `scraper/storage_state.json`, then upsert the b64gz onto cron-job1 and

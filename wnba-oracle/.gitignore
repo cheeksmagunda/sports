@@ -1,7 +1,6 @@
 # Secrets and env
 .env
 .env.*
-!.env.example
 credentials.md
 .codex/
 *.har
