@@ -71,9 +71,12 @@ export function PickerPage() {
   const { theme, toggle } = useTheme();
   const intro = useFirstMountLoader();
   const { uiState, lineup, error, refresh } = useLineupData();
-  const { freezeTargetUtc } = useSlateTiming();
+  const { freezeTargetUtc, picksPaused, resumesOn } = useSlateTiming();
 
   const view = useMemo(() => {
+    if (picksPaused) {
+      return { kind: "paused" as const, resumesOn };
+    }
     if (uiState === "error") {
       return { kind: "error" as const, detail: error };
     }
@@ -84,7 +87,7 @@ export function PickerPage() {
       return { kind: "waiting" as const };
     }
     return { kind: "loading" as const };
-  }, [uiState, lineup, error]);
+  }, [picksPaused, resumesOn, uiState, lineup, error]);
 
   const slateDateDisplay = fmtSlateDate(
     view.kind === "lineup" ? view.lineup.slate_date : null,
@@ -134,6 +137,15 @@ export function PickerPage() {
               copy="The lineup API isn't responding. Check VITE_API_URL or wait a moment."
               detail={view.detail}
               onRetry={refresh}
+            />
+          ) : view.kind === "paused" ? (
+            <ErrorState
+              title="Picks are paused"
+              copy={
+                view.resumesOn
+                  ? `The oracle is taking a short break. Back for the ${fmtSlateDate(view.resumesOn)} slate.`
+                  : "The oracle is taking a short break. Check back soon."
+              }
             />
           ) : null}
         </main>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from functools import lru_cache
 from typing import Literal
 
@@ -37,6 +38,15 @@ class Settings(BaseSettings):
     # Operational toggles. Same alias-or-no-injection rule as above.
     job1_dry_run: bool = Field(default=False, alias="JOB1_DRY_RUN")
     job2_dry_run: bool = Field(default=False, alias="JOB2_DRY_RUN")
+    # 2026-07-25: operator-directed pause of the picking pipeline (no new
+    # picks for a few days). Both are ISO dates (inclusive); job1/job1late/
+    # job2 no-op on any day in [start, end] (scheduler/cron.py), and the
+    # /slate endpoint reports the pause so the frontend shows a clear
+    # "picks are paused" message instead of a stuck countdown. dayclose and
+    # backfill are unaffected -- the corpus keeps ingesting during the pause.
+    # Unset (empty) on both ends disables the pause entirely.
+    picks_pause_start: str = Field(default="", alias="PICKS_PAUSE_START")
+    picks_pause_end: str = Field(default="", alias="PICKS_PAUSE_END")
     model_artifact_sha: str = Field(default="", alias="WNBA_ORACLE_MODEL_ARTIFACT_SHA")
     # Shadow-eval challenger. When set on cron-job2, run the challenger's
     # heads over the same enrichment and log a model_shadow_runs row; prod
@@ -339,6 +349,27 @@ class Settings(BaseSettings):
     ceiling_sigma_low_history_boost: float = Field(
         default=0.0, alias="OPTIMIZER_CEILING_SIGMA_LOW_HISTORY_BOOST"
     )
+
+    def picks_paused_on(self, day: dt.date) -> bool:
+        """Whether the picking pipeline should no-op on `day`."""
+        if not self.picks_pause_start or not self.picks_pause_end:
+            return False
+        try:
+            start = dt.date.fromisoformat(self.picks_pause_start)
+            end = dt.date.fromisoformat(self.picks_pause_end)
+        except ValueError:
+            return False
+        return start <= day <= end
+
+    def picks_resume_date(self) -> str | None:
+        """The first day picks are expected to resume, or None if not paused."""
+        if not self.picks_pause_end:
+            return None
+        try:
+            end = dt.date.fromisoformat(self.picks_pause_end)
+        except ValueError:
+            return None
+        return (end + dt.timedelta(days=1)).isoformat()
 
     def config_drift(self) -> list[tuple[str, object, object]]:
         """Knobs whose ACTIVE value differs from the validated production

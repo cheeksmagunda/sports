@@ -44,6 +44,18 @@ def get_slate_meta(slate_date: str) -> dict[str, Any]:
     game times, which the frontend treats as "no timing yet" and shows a
     neutral waiting state rather than a misleading clock.
     """
+    settings = get_settings()
+    if settings.picks_paused_on(dt.date.today()):
+        return {
+            "slate_date": slate_date,
+            "first_tip_utc": None,
+            "contest_lock_utc": None,
+            "freeze_lead_minutes": settings.freeze_lead_minutes,
+            "freeze_target_utc": None,
+            "picks_paused": True,
+            "resumes_on": settings.picks_resume_date(),
+        }
+
     try:
         eng = get_engine()
     except RuntimeError as exc:
@@ -62,7 +74,7 @@ def get_slate_meta(slate_date: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="no slate timing for slate")
 
     lock = _as_utc(lock)
-    lead = int(get_settings().freeze_lead_minutes)
+    lead = int(settings.freeze_lead_minutes)
     freeze_target = lock - dt.timedelta(minutes=lead)
     return {
         "slate_date": slate_date,
@@ -70,4 +82,6 @@ def get_slate_meta(slate_date: str) -> dict[str, Any]:
         "contest_lock_utc": _as_utc(contest_lock).isoformat() if contest_lock else None,
         "freeze_lead_minutes": lead,
         "freeze_target_utc": freeze_target.isoformat(),
+        "picks_paused": False,
+        "resumes_on": None,
     }

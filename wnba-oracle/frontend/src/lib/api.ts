@@ -99,7 +99,9 @@ export type SlateTiming = {
   first_tip_utc: string | null;
   contest_lock_utc: string | null;
   freeze_lead_minutes: number;
-  freeze_target_utc: string;
+  freeze_target_utc: string | null;
+  picks_paused: boolean;
+  resumes_on: string | null;
 };
 
 export async function fetchSlateTiming(): Promise<SlateTiming | null> {

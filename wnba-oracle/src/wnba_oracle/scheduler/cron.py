@@ -12,6 +12,7 @@ Invoked by Railway's cron with:
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import os
 import sys
 
@@ -56,9 +57,18 @@ def main() -> int:
         has_realsports_creds=bool(settings.real_sports_username and settings.real_sports_password),
     )
 
-    if args.job == "job1":
-        import datetime as dt
+    # Operator-directed pause of the picking pipeline (PICKS_PAUSE_START/END).
+    # job1/job1late/job2 no-op; dayclose/backfill keep the corpus current.
+    if args.job in ("job1", "job1late", "job2") and settings.picks_paused_on(dt.date.today()):
+        log.info(
+            "picks_paused_skip",
+            job=args.job,
+            pause_start=settings.picks_pause_start,
+            pause_end=settings.picks_pause_end,
+        )
+        return 0
 
+    if args.job == "job1":
         from wnba_oracle.scheduler import job1
         from wnba_oracle.scheduler.watchdog import run_watchdog
 
@@ -84,8 +94,6 @@ def main() -> int:
 
         return job1.main_lite()
     if args.job == "job2":
-        import datetime as dt
-
         from wnba_oracle.scheduler import job2
         from wnba_oracle.scheduler.watchdog import run_watchdog
 

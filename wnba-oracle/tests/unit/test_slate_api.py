@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from wnba_oracle.api.app import app
+from wnba_oracle.common.settings import Settings
 
 FIRST_TIP = dt.datetime(2026, 6, 22, 23, 0, tzinfo=dt.UTC)
 
@@ -63,3 +64,31 @@ def test_404_when_row_has_no_timing() -> None:
     with patch("wnba_oracle.api.slate.get_engine", return_value=eng):
         resp = TestClient(app).get("/slate/2026-06-22")
     assert resp.status_code == 404
+
+
+def test_paused_returns_200_without_touching_the_db() -> None:
+    # Anchor the window to the real "today" (settings.picks_paused_on compares
+    # against dt.date.today()) so this test is timezone-independent.
+    today = dt.date.today()
+    end = today + dt.timedelta(days=1)
+    paused = Settings(PICKS_PAUSE_START=today.isoformat(), PICKS_PAUSE_END=end.isoformat())
+    with (
+        patch("wnba_oracle.api.slate.get_settings", return_value=paused),
+        patch("wnba_oracle.api.slate.get_engine") as mock_engine,
+    ):
+        resp = TestClient(app).get("/slate/2026-07-27")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["picks_paused"] is True
+    assert body["resumes_on"] == (end + dt.timedelta(days=1)).isoformat()
+    assert body["freeze_target_utc"] is None
+    mock_engine.assert_not_called()
+
+
+def test_not_paused_reports_picks_paused_false() -> None:
+    eng = _engine_first((None, FIRST_TIP))
+    with patch("wnba_oracle.api.slate.get_engine", return_value=eng):
+        resp = TestClient(app).get("/slate/2026-06-22")
+    body = resp.json()
+    assert body["picks_paused"] is False
+    assert body["resumes_on"] is None

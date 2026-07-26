@@ -9,8 +9,20 @@ import { fetchSlateTiming } from "../lib/api";
 
 const POLL_MS = 120_000;
 
-export function useSlateTiming(): { freezeTargetUtc: string | null } {
-  const [freezeTargetUtc, setTarget] = useState<string | null>(null);
+interface State {
+  freezeTargetUtc: string | null;
+  picksPaused: boolean;
+  resumesOn: string | null;
+}
+
+const INITIAL_STATE: State = {
+  freezeTargetUtc: null,
+  picksPaused: false,
+  resumesOn: null,
+};
+
+export function useSlateTiming(): State {
+  const [state, setState] = useState<State>(INITIAL_STATE);
 
   useEffect(() => {
     let stopped = false;
@@ -19,9 +31,15 @@ export function useSlateTiming(): { freezeTargetUtc: string | null } {
     const tick = async () => {
       try {
         const timing = await fetchSlateTiming();
-        if (!stopped) setTarget(timing?.freeze_target_utc ?? null);
+        if (!stopped) {
+          setState({
+            freezeTargetUtc: timing?.freeze_target_utc ?? null,
+            picksPaused: timing?.picks_paused ?? false,
+            resumesOn: timing?.resumes_on ?? null,
+          });
+        }
       } catch {
-        if (!stopped) setTarget(null);
+        if (!stopped) setState(INITIAL_STATE);
       }
       if (!stopped) timer = setTimeout(tick, POLL_MS);
     };
@@ -33,5 +51,5 @@ export function useSlateTiming(): { freezeTargetUtc: string | null } {
     };
   }, []);
 
-  return { freezeTargetUtc };
+  return state;
 }
