@@ -14,6 +14,15 @@ def configure_logging(level: str = "INFO") -> None:
         stream=sys.stdout,
         level=getattr(logging, level.upper(), logging.INFO),
     )
+    # httpx/httpcore log their own "HTTP Request: GET <url> ..." line at INFO,
+    # and the url includes query params -- The Odds API takes its API key as
+    # ?apiKey=..., so that line leaks the key into every ingest job's stdout
+    # (Railway log aggregation). The app already logs its own structured,
+    # secret-free events per request (odds_fetch, odds_quota, etc.); this
+    # generic line adds no signal those don't already carry. WARNING still
+    # surfaces httpx's own connection-level failures.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
