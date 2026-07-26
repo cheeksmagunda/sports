@@ -67,9 +67,9 @@ def test_404_when_row_has_no_timing() -> None:
 
 
 def test_paused_returns_200_without_touching_the_db() -> None:
-    # Anchor the window to the real "today" (settings.picks_paused_on compares
-    # against dt.date.today()) so this test is timezone-independent.
-    today = dt.date.today()
+    # Anchor the window to the real UTC "today" (slate.py compares against
+    # dt.datetime.now(dt.UTC).date()) so this test is timezone-independent.
+    today = dt.datetime.now(dt.UTC).date()
     end = today + dt.timedelta(days=1)
     paused = Settings(PICKS_PAUSE_START=today.isoformat(), PICKS_PAUSE_END=end.isoformat())
     with (

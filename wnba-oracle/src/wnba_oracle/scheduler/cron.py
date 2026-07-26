@@ -59,7 +59,12 @@ def main() -> int:
 
     # Operator-directed pause of the picking pipeline (PICKS_PAUSE_START/END).
     # job1/job1late/job2 no-op; dayclose/backfill keep the corpus current.
-    if args.job in ("job1", "job1late", "job2") and settings.picks_paused_on(dt.date.today()):
+    # UTC-explicit: cron schedules are all UTC (see AGENTS.md), and a naive
+    # dt.date.today() depends on the container's local TZ, which can disagree
+    # with the UTC calendar day by hours (see api/watchdog_router.py, which
+    # uses the same UTC-explicit pattern for the same reason).
+    today_utc = dt.datetime.now(dt.UTC).date()
+    if args.job in ("job1", "job1late", "job2") and settings.picks_paused_on(today_utc):
         log.info(
             "picks_paused_skip",
             job=args.job,
