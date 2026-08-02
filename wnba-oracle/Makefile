@@ -21,23 +21,23 @@ install:
 	uv run playwright install chromium
 
 test:
-	uv run python -m pytest tests/ -q
+	uv run --extra dev python -m pytest tests/ -q
 
 test-contract:
-	uv run python -m pytest tests/ -m contract -v
+	uv run --extra dev python -m pytest tests/ -m contract -v
 
 test-all:
-	uv run python -m pytest tests/ -q
-	uv run python -m pytest tests/ -m contract -v
+	uv run --extra dev python -m pytest tests/ -q
+	uv run --extra dev python -m pytest tests/ -m contract -v
 
 lint:
-	uv run ruff check src/ tests/ scripts/
+	uv run --extra dev ruff check src/ tests/ scripts/
 
 typecheck:
-	uv run mypy src/
+	uv run --extra dev mypy src/
 
 fmt:
-	uv run ruff format src/ tests/
+	uv run --extra dev ruff format src/ tests/
 
 dev:
 	uv run uvicorn wnba_oracle.api.app:app --reload --host 0.0.0.0 --port 8000

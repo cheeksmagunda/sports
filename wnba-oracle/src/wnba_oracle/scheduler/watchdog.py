@@ -204,16 +204,25 @@ def _check_enrichment_freshness(
 ) -> list[WatchdogEvent]:
     """D84: warn when the slate's enrichment is stale near freeze time.
 
-    After 20:00 UTC (an hour before the 21:00 freeze) the newest
-    job1_enrichment capture should be from today's 13:00 UTC fire or
+    After 20:00 UTC (an hour before the legacy 21:00 evening freeze) the
+    newest job1_enrichment capture should be from today's 13:00 UTC fire or
     later. An older capture means job1 silently never refreshed and job2
     is about to freeze on yesterday's universe.
+
+    The 20:00 UTC gate assumes an evening slate. An early tip-off (first
+    tip before ~17:00 UTC, D93 tip-relative freeze) already froze hours
+    before this check ever runs, on whatever was fresh at that time --
+    checking against a fixed 13:30 UTC floor at 20:00 UTC is a guaranteed
+    false positive for those slates. Skip once a lineup is already frozen;
+    the freeze already happened on today's universe by definition.
     """
     now_utc = now_utc or dt.datetime.now(dt.UTC)
     if now_utc.strftime("%Y-%m-%d") != slate_date or now_utc.hour < 20:
         return []
     eng = get_engine()
     with eng.connect() as conn:
+        if conn.execute(FROZEN_Q, {"sd": slate_date}).first() is not None:
+            return []
         row = conn.execute(POOL_SIZE_Q, {"sd": slate_date}).first()
     last_captured = row[2] if row else None
     if last_captured is None:

@@ -35,6 +35,26 @@ def _engine_with_freeze_row(row: tuple | None) -> MagicMock:
     return eng
 
 
+def _engine_for_enrichment_check(
+    n: int,
+    n_teams: int | None = None,
+    last_captured: dt.datetime | None = None,
+    frozen_row: tuple | None = None,
+) -> MagicMock:
+    """`_check_enrichment_freshness` queries FROZEN_Q then POOL_SIZE_Q, in
+    that order -- side_effect mirrors the two calls."""
+    eng = MagicMock()
+    frozen_result = MagicMock()
+    frozen_result.first.return_value = frozen_row
+    pool_result = MagicMock()
+    teams = n_teams if n_teams is not None else min(n, 12)
+    pool_result.first.return_value = (n, teams, last_captured)
+    conn = MagicMock()
+    conn.execute.side_effect = [frozen_result, pool_result]
+    eng.connect.return_value.__enter__.return_value = conn
+    return eng
+
+
 def test_no_job1_pool_triggers_critical() -> None:
     with patch.object(watchdog, "get_engine", return_value=_engine_with_pool_count(0)):
         events = watchdog._check_pool("2026-05-27")
@@ -64,7 +84,7 @@ def test_single_team_pool_triggers_critical() -> None:
 
 def test_enrichment_stale_after_20utc() -> None:
     stale = dt.datetime(2026, 5, 27, 9, 0, tzinfo=dt.UTC)
-    eng = _engine_with_pool_count(60, last_captured=stale)
+    eng = _engine_for_enrichment_check(60, last_captured=stale, frozen_row=None)
     with patch.object(watchdog, "get_engine", return_value=eng):
         events = watchdog._check_enrichment_freshness(
             "2026-05-27", now_utc=dt.datetime(2026, 5, 27, 20, 30, tzinfo=dt.UTC)
@@ -76,10 +96,24 @@ def test_enrichment_stale_after_20utc() -> None:
 
 def test_enrichment_fresh_no_event() -> None:
     fresh = dt.datetime(2026, 5, 27, 13, 40, tzinfo=dt.UTC)
-    eng = _engine_with_pool_count(60, last_captured=fresh)
+    eng = _engine_for_enrichment_check(60, last_captured=fresh, frozen_row=None)
     with patch.object(watchdog, "get_engine", return_value=eng):
         events = watchdog._check_enrichment_freshness(
             "2026-05-27", now_utc=dt.datetime(2026, 5, 27, 20, 30, tzinfo=dt.UTC)
+        )
+    assert events == []
+
+
+def test_enrichment_stale_quiet_when_already_frozen() -> None:
+    """Early tip-off (D93): the slate already froze hours before 20:00 UTC
+    on whatever was fresh at freeze time. The capture-recency check must not
+    second-guess a freeze that already happened successfully."""
+    stale = dt.datetime(2026, 8, 1, 13, 7, tzinfo=dt.UTC)
+    frozen_row = ({"player_ids": [1, 2, 3]}, 1.32, dt.datetime(2026, 8, 1, 16, 22, tzinfo=dt.UTC))
+    eng = _engine_for_enrichment_check(60, last_captured=stale, frozen_row=frozen_row)
+    with patch.object(watchdog, "get_engine", return_value=eng):
+        events = watchdog._check_enrichment_freshness(
+            "2026-08-01", now_utc=dt.datetime(2026, 8, 1, 20, 2, tzinfo=dt.UTC)
         )
     assert events == []
 

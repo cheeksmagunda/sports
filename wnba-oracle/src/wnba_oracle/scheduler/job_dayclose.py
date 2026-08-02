@@ -46,8 +46,9 @@ def _auto_record_placement(slate_date: str) -> None:
     import json as _json
 
     import polars as _pl
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import text
 
+    from wnba_oracle.db.engine import get_engine
     from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
     from wnba_oracle.scheduler.placements import auto_record_from_dayclose
 
@@ -70,7 +71,7 @@ def _auto_record_placement(slate_date: str) -> None:
         rs_by_pid[pid] = float(rs) if rs is not None else 0.0
         boost_by_pid[pid] = float(r["card_boost"])
 
-    engine = create_engine(settings.database_url, future=True)
+    engine = get_engine()
     with engine.connect() as conn:
         # Pull the most-recent frozen lineup for this slate
         row = conn.execute(
@@ -150,14 +151,16 @@ def _cleanup_append_only_tables(retention_days: int = 14) -> None:
     frozen_lineups: keep only the max freeze_seq per slate (the serving row);
         delete stale freeze attempts that the live path never reads.
     """
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import text
+
+    from wnba_oracle.db.engine import get_engine
 
     settings = get_settings()
     if not settings.database_url:
         return
 
     cutoff_date = (dt.date.today() - dt.timedelta(days=retention_days)).isoformat()
-    engine = create_engine(settings.database_url, future=True)
+    engine = get_engine()
     try:
         with engine.connect() as conn:
             # Truncate old watchdog_events
