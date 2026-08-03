@@ -461,12 +461,12 @@ def test_pearson_basic() -> None:
 
 
 def test_check_prediction_drift_fires_on_bad_corr(monkeypatch) -> None:
-    """Corr under DRIFT_CORR_WARN triggers a WARN."""
+    """Corr under DRIFT_CORR_WARN triggers a WARN, given enough pick pairs."""
 
     def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
         return {
-            "n_slates": 10,
-            "n_pick_pairs": 50,
+            "n_slates": 20,
+            "n_pick_pairs": watchdog.DRIFT_MIN_PICK_PAIRS,
             "pick_pred_vs_real_corr": 0.10,
             "median_score_gap": -18.0,
             "worst_score_gap": -30.0,
@@ -478,6 +478,29 @@ def test_check_prediction_drift_fires_on_bad_corr(monkeypatch) -> None:
     triggers = [e.trigger for e in events]
     assert "prediction_calibration_drift" in triggers
     assert "lineup_gap_regression" not in triggers  # gap above threshold
+
+
+def test_check_prediction_drift_silent_when_underpowered(monkeypatch) -> None:
+    """A bad corr on too few pick pairs must NOT fire (2026-08-03).
+
+    The alert ran for a month on 15-20 pairs, where the 95% CI spans both the
+    healthy pooled history and the D77 baseline it is compared against. Below
+    DRIFT_MIN_PICK_PAIRS the reading cannot separate the two, so it is noise
+    rather than a retrain signal.
+    """
+
+    def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        return {
+            "n_slates": 4,
+            "n_pick_pairs": watchdog.DRIFT_MIN_PICK_PAIRS - 1,
+            "pick_pred_vs_real_corr": 0.285,
+            "median_score_gap": -18.0,
+            "worst_score_gap": -30.0,
+            "best_score_gap": -5.0,
+        }
+
+    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    assert watchdog._check_prediction_drift("2026-07-03") == []
 
 
 def test_check_prediction_drift_fires_on_bad_gap(monkeypatch) -> None:

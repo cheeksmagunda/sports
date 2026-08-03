@@ -334,9 +334,27 @@ def _check_label_coverage(slate_date: str) -> list[WatchdogEvent]:
 # 2026-07-03 loss-ledger snapshot; alert only on materially worse than
 # baseline (silent when steady-state, even though steady-state is not
 # healthy -- an operator already knows).
-DRIFT_WINDOW = 10
+DRIFT_WINDOW = 20
 DRIFT_CORR_WARN = 0.35  # D77 walk-forward baseline was 0.554
 DRIFT_MEDIAN_GAP_WARN = -25.0  # loss-ledger baseline ~-17
+
+# 2026-08-03: the corr alert fired on 15-20 pick pairs for a month straight and
+# every reading was statistically indistinguishable from both the pooled history
+# (0.408 over 95 pairs) and the 0.554 baseline it was compared against. At
+# r=0.285, n=20 the 95% CI is [-0.180, +0.646], which also contains zero.
+#
+# Minimum n to separate DRIFT_CORR_WARN from the baseline at 95%, via Fisher z:
+#   atanh(0.554) - atanh(0.35) = 0.2589;  1.96 / sqrt(n - 3) <= 0.2589  =>  n >= 61
+#
+# DRIFT_WINDOW was 10, capping pairs at 50, so the check could never reach that
+# power. Window raised to 20 (max 100 pairs) and the alert now holds fire below
+# the threshold rather than reporting noise as a retrain signal.
+#
+# Note this correlation is taken over the five optimizer-selected picks only,
+# whose predicted spread is range-restricted (sd 1.072) against a full-width
+# realized spread. It is not the same estimator as the D77 full-corpus
+# walk-forward figure, so 0.35 remains a rough guide, not a like-for-like bound.
+DRIFT_MIN_PICK_PAIRS = 61
 
 DRIFT_WINDOW_Q = text(
     """
@@ -489,24 +507,36 @@ def _check_prediction_drift(slate_date: str, *, window: int = DRIFT_WINDOW) -> l
         return []
     events: list[WatchdogEvent] = []
     corr = m.get("pick_pred_vs_real_corr")
+    n_pairs = int(m.get("n_pick_pairs") or 0)
     if corr is not None and float(corr) < DRIFT_CORR_WARN:
-        events.append(
-            WatchdogEvent(
-                slate_date=slate_date,
-                trigger="prediction_calibration_drift",
-                severity=SEVERITY_WARN,
-                payload={
-                    "window": m["n_slates"],
-                    "corr": round(float(corr), 3),
-                    "threshold": DRIFT_CORR_WARN,
-                    "baseline_d77": 0.554,
-                    "note": (
-                        "10-slate rolling Pearson corr(pred_p50, realized) has "
-                        "dropped below the D77-baseline threshold; retrain candidate."
-                    ),
-                },
+        if n_pairs < DRIFT_MIN_PICK_PAIRS:
+            log.info(
+                "drift_corr_underpowered",
+                n_pick_pairs=n_pairs,
+                min_pairs=DRIFT_MIN_PICK_PAIRS,
+                corr=round(float(corr), 3),
             )
-        )
+        else:
+            events.append(
+                WatchdogEvent(
+                    slate_date=slate_date,
+                    trigger="prediction_calibration_drift",
+                    severity=SEVERITY_WARN,
+                    payload={
+                        "window": m["n_slates"],
+                        "n_pick_pairs": n_pairs,
+                        "corr": round(float(corr), 3),
+                        "threshold": DRIFT_CORR_WARN,
+                        "baseline_d77": 0.554,
+                        "note": (
+                            "Rolling Pearson corr(pred_p50, realized) over the five "
+                            "picks has dropped below the D77-baseline threshold on a "
+                            "sample large enough to separate the two; retrain candidate. "
+                            "Range-restricted estimator, not like-for-like with D77."
+                        ),
+                    },
+                )
+            )
     gap = m.get("median_score_gap")
     if gap is not None and float(gap) < DRIFT_MEDIAN_GAP_WARN:
         events.append(

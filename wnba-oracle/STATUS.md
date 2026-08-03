@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-07-05
+Last updated: 2026-08-03
 
 ## Production
 
@@ -130,9 +130,45 @@ not the heads' training corpus (the pre-D63 bug).
 | Pool empty / 401s from web.realapp.com | Real Sports session died (they last ~3 weeks). Operator recovery only -- AGENTS.md, "Real Sports". Do NOT attempt a scripted/headless login; the site bot-blocks it |
 | Odds API 429 / 401 | Quota or rotated key. Job1 degrades to empty odds; lineup still ships without the Vegas tilt |
 | Watchdog `label_coverage_gap` | A contest player referenced in the top-20 leaderboard has no slate_labels row -- a real ingestion gap since 2026-07-03 (the check compares against leaderboard players, not the 3x-wider job1 pool) |
+| No `slate_labels` rows for last night | Usually NOT a failure. `start_id = top_cid - 1` excludes the newest contest by design, so slates land late via window overlap. Measured lags: 07-12 +2d, 07-16 +5d, 07-19 +7d, 07-28 +5d, 07-29 +5d. Wait a week before investigating |
+| Railway logs show no structured JSON (`kept`, `dayclose_walk`) | Known log-visibility gap since 2026-07-17, NOT a crash. Confirm the run actually worked by checking `ingested_at` in `slate_labels` / `wnba_game_logs`, not by log absence. This gap caused a false CRITICAL on #17 (2026-08-03) |
 
 Railway dashboard:
 https://railway.com/project/ab83f44c-0bbc-4a58-931c-37d9fbfda73a
+
+## Known measurement gaps (2026-08-03)
+
+Findings from an interactive research session; full detail and method in the
+issue labeled `ops-results` (#15). No model change was made.
+
+- **No placement has ever been recorded.** `contest_placements` holds 16 rows
+  from one batch on 2026-06-13, all with `entry_rank = 21` (the "not in the
+  top-20 leaderboard" sentinel) and `entry_count` / `finish_percentile` /
+  `roi` fully NULL. Separate from the psycopg2 dialect bug fixed in `75f92f2`:
+  even with the write path working, no percentile is computable without
+  `entry_count`. The 2026-08-02 entry finished 16th of 7,400 and the system
+  captured nothing.
+- **`prediction_calibration_drift` was a false alarm for a month.** It
+  correlates over the five optimizer-selected picks only, whose predicted
+  spread is range-restricted, and compared that against the D77 full-corpus
+  walk-forward 0.554, a different estimator. Reproduced pooled value is 0.408
+  (n=95) with no trend. Alerts fired on 15-20 pairs where the 95% CI contains
+  zero, 0.408 and 0.554 alike. Guarded 2026-08-03 by `DRIFT_MIN_PICK_PAIRS`.
+- **Minutes intervals are symmetric by construction** (`predict/minutes.py`,
+  `p50 +/- half`, half clamped to [2, 8]). 268 of 270 frozen intervals are
+  exactly symmetric. Actuals land below p10 32.8% of the time against an
+  expected 10%, worst in blowout wins (56.3%). Display-only: `pred_minutes_*`
+  is read by the frontend and never by the optimizer, so this is a diagnostic.
+- **The blowout path gates on a hard 24-minute recent-minutes threshold** in
+  both `project_minutes_from_base` and `redistribute_game_script_minutes`. A
+  confirmed starter below that line is classified bench and has projection
+  *added* as a garbage-time recipient. This does reach the optimizer via
+  `pred_real_scores`. Queued, not changed: needs a corpus counterfactual, and
+  same-game counter-evidence exists (2026-08-02, Zandalasini fell, Stokes rose).
+- **The two corpora share no player key.** `frozen_lineups` uses Real Sports
+  pool ids, `wnba_game_logs` uses WNBA stats ids, zero overlap, and team codes
+  differ (POR vs PDX). Prediction-to-outcome analysis must join on names, which
+  hits 84.8%.
 
 ## Incident history
 
