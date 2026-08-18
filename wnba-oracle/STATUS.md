@@ -1,11 +1,11 @@
 # Status
 
-Last updated: 2026-08-03
+Last updated: 2026-08-18
 
 ## Production
 
-- State: live (recovered 2026-07-03 from the 06-28..07-02 outage; see
-  Incident history below)
+- State: live (recovered 2026-08-18 from the 08-15..08-18 trial-expiry
+  outage; see Incident history below)
 - Model artifact: `picker_e2ced9ec_1780873338.pkl`
 - Model SHA: `94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`
 - Backend: FastAPI on Railway
@@ -171,6 +171,27 @@ issue labeled `ops-results` (#15). No model change was made.
   hits 84.8%.
 
 ## Incident history
+
+- 2026-08-15..08-18: three-day outage, issue #17. Railway trial expired;
+  all services received a graceful stop at 2026-08-15T20:14Z and every
+  redeploy attempt returned "Your trial has expired. Please select a plan".
+  Billing is outside routine authorization, so the guard could only
+  escalate. 08-16 was a full game day missed (no pool, no freeze, no
+  ingest); 08-17 had no games. Recovered 2026-08-18: operator selected a
+  paid plan, all services redeployed ~21:13 UTC. Redeploying a cron
+  service only re-arms its schedule, so job1's missed 13:00 UTC fire was
+  recovered by temporarily moving cron-job1's schedule to 21:54 UTC for a
+  one-shot run, then restoring `0 13 * * *`. Recovery surfaced a second
+  latent break: every backend service's builder had drifted to RAILPACK
+  (ignoring railway.toml's DOCKERFILE), and Railpack's default Python moved
+  to 3.13, outside pyproject's `>=3.11,<3.13` pin, so every fresh source
+  build failed at `uv sync` while image-reuse redeploys kept succeeding.
+  Fixed by setting config-file `railway.toml` + `Dockerfile` path on api,
+  cron-job1, cron-job1-late, cron-job2, cron-dayclose, and
+  backfill-enrichment (frontend stays Railpack; it is the Node app).
+  Durable lessons: a Railway billing lapse stops every service at once,
+  crons do not catch up on their own after redeploy, and builder drift is
+  invisible until the next cold build.
 
 - 2026-06-27..07-03: five-day outage, issue #10. Root causes compounding:
   the Real Sports session died server-side (~3-week TTL) killing job1's
