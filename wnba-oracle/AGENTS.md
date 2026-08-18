@@ -9,8 +9,9 @@ removed in the 2026-07-01 doc cleanup and live in git history.
 
 The system is fully live. All major phases are wired and deployed on Railway.
 
-Active model: `picker_e2ced9ec_1780873338.pkl` (SHA `94f8e8606dab...`), trained
-on a 13,002-row corpus with team_pace + opponent DvP enrichment (D77). The
+Active model: `picker_e2ced9ec_1780873338.pkl` (SHA
+`94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`), trained on
+a 13,002-row corpus with team_pace + opponent DvP enrichment (D77). The
 LightGBM multi-task heads (minutes x per-minute-rate, cohort F) are wired into
 the `job2` Tier-0 prediction path (D69), with confirmed-starter multiplier (D71),
 sportsbook prop-signal multiplier (D78, PROP_SIGNAL_SCALE=0.3), late re-freeze
