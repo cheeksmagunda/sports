@@ -438,6 +438,44 @@ def record_placement(
     }
 
 
+def derive_placement_fields(
+    *,
+    entry_score: float,
+    leaderboard_scores: list[float],
+    field_size: int | None = None,
+) -> tuple[int | None, int | None, dict[str, Any]]:
+    """Rank an entry against the captured board. Returns (rank, count, metadata).
+
+    Split out of :func:`auto_record_from_dayclose` so the placement backfill
+    (scripts/backfill_placement_scores.py) derives these fields with THIS code
+    rather than a copy of it. A second implementation of a rule is how the
+    scoring bug this backfill repairs stayed invisible for three months.
+
+    See auto_record_from_dayclose for why a below-the-board entry gets a NULL
+    rank instead of a sentinel: the capture is right-censored at the top 20, so
+    "rank 21 of 20" is not a rank.
+    """
+    lb_sorted = sorted(leaderboard_scores, reverse=True)
+    n_captured = len(lb_sorted)
+    n_above = sum(1 for s in lb_sorted if s > entry_score)
+    in_board = n_above < n_captured  # at least one captured finisher at/below us
+
+    meta: dict[str, Any] = {
+        "measurement": "auto_dayclose",
+        "captured_board_size": n_captured,
+        "relative_rank_in_captured": n_above + 1,
+        "cracked_captured_board": in_board,
+    }
+    if field_size:
+        meta["field_size"] = int(field_size)
+
+    if in_board:
+        return n_above + 1, (int(field_size) if field_size else None), meta
+    if field_size:
+        meta["finish_percentile_floor"] = round((n_captured + 1) / float(field_size), 6)
+    return None, None, meta
+
+
 def auto_record_from_dayclose(
     conn: Connection,
     *,
@@ -475,28 +513,9 @@ def auto_record_from_dayclose(
     if frozen is None:
         return None
 
-    lb_sorted = sorted(leaderboard_scores, reverse=True)
-    n_captured = len(lb_sorted)
-    n_above = sum(1 for s in lb_sorted if s > entry_score)
-    in_board = n_above < n_captured  # at least one captured finisher at/below us
-
-    meta: dict[str, Any] = {
-        "measurement": "auto_dayclose",
-        "captured_board_size": n_captured,
-        "relative_rank_in_captured": n_above + 1,
-        "cracked_captured_board": in_board,
-    }
-    if field_size:
-        meta["field_size"] = int(field_size)
-
-    if in_board:
-        entry_rank: int | None = n_above + 1
-        entry_count = int(field_size) if field_size else None
-    else:
-        entry_rank = None
-        entry_count = None
-        if field_size:
-            meta["finish_percentile_floor"] = round((n_captured + 1) / float(field_size), 6)
+    entry_rank, entry_count, meta = derive_placement_fields(
+        entry_score=entry_score, leaderboard_scores=leaderboard_scores, field_size=field_size
+    )
 
     return record_placement(
         conn,

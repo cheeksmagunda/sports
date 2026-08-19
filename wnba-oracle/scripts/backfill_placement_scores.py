@@ -5,13 +5,12 @@ applying the slot multipliers, awarding the 2.0x base to whoever spiked. The
 slot order is committed before tip, so the stored number is an upper bound, not
 our result. See job_dayclose._auto_record_placement and commit 4f73668.
 
-This rewrites the affected columns for rows written before the fix. The derived
-placement fields move with the score, so they are recomputed the same way
-scheduler.placements.auto_record_from_dayclose derives them:
-
-    entry_rank        1 + (number of captured leaderboard scores strictly above)
-    finish_percentile entry_rank / entry_count, when entry_count is known
-    cashed / top_10pct / top_1pct   thresholds on finish_percentile
+This rewrites the affected columns for rows written before the fix. entry_rank
+and entry_count move with the score, and are recomputed by calling
+scheduler.placements.derive_placement_fields -- the same function
+auto_record_from_dayclose uses, not a copy of it. cashed is deliberately NOT
+touched: it keys off payout_received_cents, which is NULL on every auto-recorded
+row and is operator-supplied, not derivable from the score.
 
 DRY RUN BY DEFAULT. It prints the before/after table and writes nothing unless
 --apply is passed. With --apply the UPDATE runs in a single transaction.
@@ -43,6 +42,7 @@ from wnba_oracle.eval.contest_score import (  # noqa: E402
     DEFAULT_SLOT_BASES,
     committed_order_score,
 )
+from wnba_oracle.scheduler.placements import derive_placement_fields  # noqa: E402
 
 # cron-dayclose picked up the fix at this deploy (commit 4f73668). A bare date
 # would wrongly exempt the 2026-08-18 row, which dayclose recorded at 06:00 UTC
@@ -62,19 +62,6 @@ def _load_env() -> None:
         val = val.strip().strip('"').strip("'")
         if key.strip() == "DATABASE_PUBLIC_URL" and val:
             os.environ.setdefault("DATABASE_URL", val)
-
-
-def _derive(entry_score: float, board: list[float], entry_count: int | None) -> dict:
-    """Mirror auto_record_from_dayclose's derivation of the placement fields."""
-    rank = 1 + sum(1 for s in board if s > entry_score)
-    pct = (rank / entry_count) if entry_count else None
-    return {
-        "entry_rank": rank,
-        "finish_percentile": pct,
-        "cashed": (pct is not None and pct <= 0.20),
-        "top_10pct": (pct is not None and pct <= 0.10),
-        "top_1pct": (pct is not None and pct <= 0.01),
-    }
 
 
 def main() -> int:
@@ -151,14 +138,29 @@ def main() -> int:
                     {"sd": slate},
                 ).all()
             ]
-            derived = _derive(new_score, board, r["entry_count"])
+            field_size = conn.execute(
+                sa.text(
+                    "SELECT max(num_brawlers) FROM contest_leaderboards WHERE slate_date = :sd"
+                ),
+                {"sd": slate},
+            ).scalar()
+            rank, count, _meta = derive_placement_fields(
+                entry_score=new_score,
+                leaderboard_scores=board,
+                field_size=int(field_size) if field_size else None,
+            )
+            pct = (rank / count) if (rank is not None and count) else None
             updates.append(
                 {
                     "slate_date": slate,
                     "old_score": float(r["entry_score"]) if r["entry_score"] is not None else None,
                     "entry_score": new_score,
                     "old_rank": r["entry_rank"],
-                    **derived,
+                    "entry_rank": rank,
+                    "entry_count": count,
+                    "finish_percentile": pct,
+                    "top_10pct": bool(pct is not None and pct <= 0.10),
+                    "top_1pct": bool(pct is not None and pct <= 0.01),
                 }
             )
 
@@ -170,7 +172,7 @@ def main() -> int:
         print(
             f"{u['slate_date']:12s} {old if old is None else round(old, 2)!s:>9s} "
             f"{u['entry_score']:9.2f} {delta:+7.2f} "
-            f"{u['old_rank']!s:>8s} {u['entry_rank']:8d}"
+            f"{u['old_rank']!s:>8s} {u['entry_rank']!s:>8s}"
         )
     for slate, why in skipped:
         print(f"  skipped {slate}: {why}")
@@ -190,11 +192,12 @@ def main() -> int:
             conn.execute(
                 sa.text(
                     "UPDATE contest_placements SET entry_score = :entry_score, "
-                    "entry_rank = :entry_rank, finish_percentile = :finish_percentile, "
-                    "cashed = :cashed, top_10pct = :top_10pct, top_1pct = :top_1pct "
+                    "entry_rank = :entry_rank, entry_count = :entry_count, "
+                    "finish_percentile = :finish_percentile, "
+                    "top_10pct = :top_10pct, top_1pct = :top_1pct "
                     "WHERE slate_date = :slate_date"
                 ),
-                u,
+                {k: v for k, v in u.items() if k not in ("old_score", "old_rank")},
             )
     print(f"\nAPPLIED to {len(updates)} rows.")
     return 0
