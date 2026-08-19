@@ -411,6 +411,12 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "optimizer_ceiling_tilt_slots": True,  # D107/Phase 4, validated with two years data
     "optimizer_mixture_variance_enabled": True,  # D107/Tier 2, Bernoulli availability gating
     "starter_unknown_fade": 0.75,  # 2026-07-04, calibrate_starter_and_boost.py
+    # CAVEAT (2026-08-19): every loss_ledger delta quoted below (-93, +75,
+    # +12.5, the -47.7 tilt cliff) was measured while score_lineup re-sorted
+    # picks by realized value, which inflated swap gains. loss_ledger now scores
+    # the committed slot order. Re-derive any of these with scripts/lab.py
+    # before treating them as current; the signs may hold, the magnitudes will
+    # not.
     # 2026-07-04 late: rolled back after loss_ledger --counterfactual showed a
     # -93 aggregate delta under live guardrails. Kept as a shadow overlay for
     # ex-post measurement. The 1.5x lift over-weighted DNP-prone role players

@@ -96,3 +96,6 @@ scraper/
 .playwright-mcp/
 .pgssl/server.key
 data/backups/
+
+# Offline model-work corpus snapshot (scripts/snapshot_corpus.py)
+data/snapshot/

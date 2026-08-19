@@ -8,10 +8,11 @@ build next.
 For each finalized slate (has a frozen lineup AND slate_labels for its
 five picks AND a captured leaderboard):
 
-  1. Compute our realized lineup score using the same rearrangement-inequality
-     slot assignment as picker.sample.lineup_score_samples:
-         final = sum_i real_score_i * (card_boost_i + slot_mult_j)
-     with slot_mult in (2.0, 1.8, 1.6, 1.4, 1.2) assigned by real_score rank.
+  1. Compute our realized lineup score with the slots taken AS COMMITTED,
+     via wnba_oracle.eval.contest_score.committed_order_score:
+         final = sum_i real_score_i * (card_boost_i + slot_base_i)
+     with slot_base in (2.0, 1.8, 1.6, 1.4, 1.2) in frozen lineup order. See
+     score_lineup for why this is not ranked by real_score.
 
   2. Compare against the captured top-20 median score.
 
@@ -59,8 +60,9 @@ if _ENV_PATH.exists() and not os.environ.get("DATABASE_URL"):
 from sqlalchemy import text  # noqa: E402
 
 from wnba_oracle.db.engine import get_engine  # noqa: E402
+from wnba_oracle.eval.contest_score import DEFAULT_SLOT_BASES, committed_order_score  # noqa: E402
 
-SLOT_MULTIPLIERS = (2.0, 1.8, 1.6, 1.4, 1.2)
+SLOT_MULTIPLIERS = DEFAULT_SLOT_BASES
 MAX_SLOT_MULT = SLOT_MULTIPLIERS[0]
 
 # 2026-07-04 counterfactual knob values (see calibrate_starter_and_boost.py).
@@ -137,15 +139,29 @@ class SlateEntry:
 
 
 def score_lineup(players: list[PlayerLine]) -> float:
-    """Contest score for a five-player lineup using rearrangement-inequality
-    slot assignment. Matches picker.sample.lineup_score_samples."""
+    """Contest score for a five-player lineup, slots taken AS COMMITTED.
+
+    ``players`` must already be in slot order: index 0 holds the 2.0x base.
+    Every caller satisfies that. ``our_picks`` follows the frozen lineup's
+    ``player_ids``, which is the order we submitted; ``chosen`` comes out of the
+    counterfactual optimizer in its recommended order; the swap-one trial keeps
+    our order and replaces one slot in place.
+
+    Before 2026-08-19 this sorted by realized ``real_score`` first, mirroring
+    ``picker.sample.lineup_score_samples``. That is hindsight: it hands the 2.0x
+    slot to whoever happened to spike, which no entrant can do. It inflated
+    ``our_score``, and it inflated every swap gain more, because a substituted
+    player was silently re-slotted to wherever they scored best. Any tuning
+    number in git history that cites this script predates the fix and is not
+    comparable with a number produced after it.
+    """
     if len(players) != 5:
         return 0.0
-    sorted_by_rs = sorted(players, key=lambda p: p.real_score, reverse=True)
-    total = 0.0
-    for slot_idx, p in enumerate(sorted_by_rs):
-        total += p.real_score * (p.card_boost + SLOT_MULTIPLIERS[slot_idx])
-    return total
+    return committed_order_score(
+        [p.real_score for p in players],
+        [p.card_boost for p in players],
+        SLOT_MULTIPLIERS,
+    )
 
 
 def categorize_swap(pick: PlayerLine, alt: PlayerLine) -> str:

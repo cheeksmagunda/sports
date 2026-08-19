@@ -34,7 +34,7 @@ lint:
 	uv run --extra dev ruff check src/ tests/ scripts/
 
 typecheck:
-	uv run --extra dev mypy src/
+	uv run --extra dev python -m mypy src/
 
 fmt:
 	uv run --extra dev ruff format src/ tests/

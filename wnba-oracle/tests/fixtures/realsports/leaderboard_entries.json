@@ -1,0 +1,161 @@
+[
+  {
+    "slate_date": "2026-08-18",
+    "contest_id": 2078,
+    "rank": 1,
+    "platform_score": 59.03,
+    "lineup": [
+      {
+        "order": 0,
+        "displayName": "A. Wilson",
+        "playerId": 598,
+        "value": "5.161193633711732",
+        "multiplier": 2,
+        "multiplierBonus": 0,
+        "score": 10.322387267423464
+      },
+      {
+        "order": 1,
+        "displayName": "N. Cloud",
+        "playerId": 677,
+        "value": "6.640394655160413",
+        "multiplier": 2.7,
+        "multiplierBonus": 0.9,
+        "score": 17.929065568933115
+      },
+      {
+        "order": 2,
+        "displayName": "C. Leger-Walker",
+        "playerId": 4322872,
+        "value": "2.6771008229857727",
+        "multiplier": 3.9,
+        "multiplierBonus": 2.3,
+        "score": 10.440693209644513
+      },
+      {
+        "order": 3,
+        "displayName": "M. Timpson",
+        "playerId": 4322756,
+        "value": "2.231027364841701",
+        "multiplier": 4.199999999999999,
+        "multiplierBonus": 2.8,
+        "score": 9.370314932335143
+      },
+      {
+        "order": 4,
+        "displayName": "R. Allen",
+        "playerId": 673,
+        "value": "2.610367486840029",
+        "multiplier": 4.2,
+        "multiplierBonus": 3,
+        "score": 10.963543444728122
+      }
+    ]
+  },
+  {
+    "slate_date": "2026-08-18",
+    "contest_id": 2078,
+    "rank": 20,
+    "platform_score": 54.47,
+    "lineup": [
+      {
+        "order": 0,
+        "displayName": "A. Wilson",
+        "playerId": 598,
+        "value": "5.161193633711732",
+        "multiplier": 2,
+        "multiplierBonus": 0,
+        "score": 10.322387267423464
+      },
+      {
+        "order": 1,
+        "displayName": "S. Ionescu",
+        "playerId": 637,
+        "value": "4.48319633318826",
+        "multiplier": 2.3,
+        "multiplierBonus": 0.5,
+        "score": 10.311351566332997
+      },
+      {
+        "order": 2,
+        "displayName": "A. Morrow",
+        "playerId": 4322745,
+        "value": "3.708724529179596",
+        "multiplier": 2.6,
+        "multiplierBonus": 1,
+        "score": 9.64268377586695
+      },
+      {
+        "order": 3,
+        "displayName": "N. Cloud",
+        "playerId": 677,
+        "value": "6.640394655160413",
+        "multiplier": 2.3,
+        "multiplierBonus": 0.9,
+        "score": 15.272907706868947
+      },
+      {
+        "order": 4,
+        "displayName": "M. Timpson",
+        "playerId": 4322756,
+        "value": "2.231027364841701",
+        "multiplier": 4,
+        "multiplierBonus": 2.8,
+        "score": 8.924109459366804
+      }
+    ]
+  },
+  {
+    "slate_date": "2026-07-10",
+    "contest_id": 1989,
+    "rank": 1,
+    "platform_score": 66.67,
+    "lineup": [
+      {
+        "order": 0,
+        "displayName": "P. Bueckers",
+        "playerId": 4322740,
+        "value": "7.960712849369633",
+        "multiplier": 2.1,
+        "multiplierBonus": 0.1,
+        "score": 16.71749698367623
+      },
+      {
+        "order": 1,
+        "displayName": "A. Ogunbowale",
+        "playerId": 767,
+        "value": "4.030374279593245",
+        "multiplier": 3,
+        "multiplierBonus": 1.2,
+        "score": 12.091122838779734
+      },
+      {
+        "order": 2,
+        "displayName": "D. Hamby",
+        "playerId": 718,
+        "value": "3.942546602226311",
+        "multiplier": 2.2,
+        "multiplierBonus": 0.6,
+        "score": 8.673602524897886
+      },
+      {
+        "order": 3,
+        "displayName": "L. Ju\u0161kait\u0117",
+        "playerId": 4322852,
+        "value": "5.740786664907675",
+        "multiplier": 2.8,
+        "multiplierBonus": 1.4,
+        "score": 16.074202661741488
+      },
+      {
+        "order": 4,
+        "displayName": "E. Wheeler",
+        "playerId": 622,
+        "value": "4.523122860464573",
+        "multiplier": 2.9,
+        "multiplierBonus": 1.7,
+        "score": 13.117056295347261
+      }
+    ]
+  }
+]
