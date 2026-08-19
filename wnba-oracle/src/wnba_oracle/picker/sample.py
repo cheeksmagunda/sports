@@ -209,6 +209,7 @@ def lineup_score_samples(
     boosts: np.ndarray,
     lineup_indices: list[int],
     slot_multipliers: np.ndarray,
+    committed_order: bool = False,
 ) -> np.ndarray:
     """Compute lineup_score per sample for one candidate lineup.
 
@@ -217,20 +218,48 @@ def lineup_score_samples(
 
     `lineup_indices` is a list of 5 player indices into real_score_samples.
     `slot_multipliers` is the 5-vector of slot multipliers (descending).
-    Slot assignment is by rearrangement inequality: highest real_score
-    median → highest slot multiplier.
+
+    Two slot-assignment conventions, selected by `committed_order`:
+
+    - False (default, legacy): re-rank WITHIN EACH SAMPLE, so the highest
+      real_score in that particular draw takes the highest slot. This is
+      E[max over slot assignments]. An entrant fixes the slot order before tip
+      and cannot re-slot per outcome, so it overstates every lineup -- and
+      overstates high-dispersion lineups most, because they gain the most from
+      re-sorting. Used as an optimizer objective it therefore biases SELECTION
+      toward volatile combinations.
+    - True: fix the order ONCE by each player's mean across samples, then score
+      every draw under that fixed order. This is max over ex-ante orders of
+      E[score], which is what an entrant can actually achieve. Ranking on the
+      mean is exact rather than heuristic: the boost term sum(rs_i * boost_i) is
+      invariant to the pairing, so only sum(rs_i * slot_i) depends on it, and
+      the rearrangement inequality applied to E[rs] maximises its expectation.
+
+    See wnba_oracle.eval.contest_score for the same distinction on realized
+    values, and the fixture proving the platform pairs slots with the committed
+    order rather than the realized ranking.
     """
+    rs_per_player = real_score_samples[:, lineup_indices]
+    boosts_lineup = boosts[lineup_indices]
+
+    if committed_order:
+        # kind='stable' for deterministic tie-breaking by input order
+        order = np.argsort(rs_per_player.mean(axis=0), kind="stable")[::-1]
+        rs_ordered = rs_per_player[:, order]
+        effective = boosts_lineup[order] + slot_multipliers
+        # One fixed order for every draw, so this is a single vectorized
+        # contraction rather than a per-sample argsort.
+        return np.asarray((rs_ordered * effective).sum(axis=1), dtype=float)
+
     n_samples = real_score_samples.shape[0]
     lineup_samples = np.zeros(n_samples)
-    rs_per_player = real_score_samples[:, lineup_indices]
     # Rank players within each sample so the highest real_score gets the
     # highest slot. This is the rearrangement-inequality assignment.
-    boosts_lineup = boosts[lineup_indices]
     for s in range(n_samples):
         # kind='stable' for deterministic tie-breaking by input order
-        order = np.argsort(rs_per_player[s], kind="stable")[::-1]  # high to low
-        rs_sorted = rs_per_player[s, order]
-        boosts_sorted = boosts_lineup[order]
+        order_s = np.argsort(rs_per_player[s], kind="stable")[::-1]  # high to low
+        rs_sorted = rs_per_player[s, order_s]
+        boosts_sorted = boosts_lineup[order_s]
         # slot_multipliers already sorted high to low
         lineup_samples[s] = float(np.sum(rs_sorted * (boosts_sorted + slot_multipliers)))
     return lineup_samples

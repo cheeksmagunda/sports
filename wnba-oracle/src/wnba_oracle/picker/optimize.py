@@ -276,6 +276,15 @@ class OptimizeConfig:
     # equivalent to the synthesis prescription of E[payout(rank)/dup_count].
     # Default False so the math change is opt-in and byte-reversible.
     duplication_aware_payout: bool = False
+    # committed_order_objective: score each candidate under a slot order fixed
+    # ONCE from the per-player sample means, instead of re-slotting inside every
+    # Monte-Carlo draw. The legacy objective is E[max over slot assignments],
+    # which no entrant can realize and which flatters high-dispersion lineups
+    # most, biasing selection toward volatility. Applied to the field lineups
+    # too, so both sides of expected_payout describe the same world. Default
+    # False keeps the loop byte-identical; measure with
+    # `scripts/lab.py variant --set committed_order_objective=True`.
+    committed_order_objective: bool = False
 
 
 def optimize_lineup(
@@ -380,6 +389,7 @@ def optimize_lineup(
             keep_boosts,
             list(field_lineup_idx[r]),
             slot_multipliers,
+            committed_order=cfg.committed_order_objective,
         )
 
     # Stage 2: enumerate C(n_filtered, 5) lineups. Skip any that violate
@@ -477,7 +487,11 @@ def optimize_lineup(
                 n_skip_boost += 1
                 continue
             own_samples = lineup_score_samples(
-                real_score_samples, keep_boosts, list(combo), slot_multipliers
+                real_score_samples,
+                keep_boosts,
+                list(combo),
+                slot_multipliers,
+                committed_order=cfg.committed_order_objective,
             )
             ev = expected_payout(own_samples, field_scores, curve, field_size=field_size_total)
             # D88 (Phase 3): research-preferred duplication treatment.
