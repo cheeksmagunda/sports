@@ -27,7 +27,7 @@ import numpy as np
 from sqlalchemy import text
 
 from wnba_oracle.common.logging import configure_logging, get_logger
-from wnba_oracle.common.settings import get_settings
+from wnba_oracle.common.settings import Settings, get_settings
 from wnba_oracle.db.engine import get_engine, get_redis
 from wnba_oracle.features.game_script_minutes import (
     GameScriptInput,
@@ -382,6 +382,39 @@ def _predict_heads_for_pool(
         }
     log.info("head_predict", n_in=len(rows), n_out=len(out))
     return out
+
+
+def build_optimize_config(settings: Settings) -> OptimizeConfig:
+    """The OptimizeConfig production actually runs, from Settings.
+
+    Extracted so the offline lab (scripts/lab.py) can evaluate a change
+    against the SAME base configuration the freeze uses. A bare
+    ``OptimizeConfig()`` is not that: the dataclass defaults are
+    top_n_filter=30 / n_samples=5000 / n_field_lineups=1000, while Settings
+    serves 20 / 1000 / 500. Comparing "defaults+delta vs defaults" answers a
+    question nobody asked, and costs ~90x the compute doing it.
+    """
+    return OptimizeConfig(
+        top_n_filter=settings.optimizer_top_n_filter,
+        n_samples=settings.optimizer_n_samples,
+        n_field_lineups=settings.optimizer_n_field_lineups,
+        max_per_team=settings.optimizer_max_per_team,
+        dynamic_team_cap=settings.optimizer_dynamic_team_cap,
+        caveat_is_skip=settings.caveat_is_skip,
+        never_skip=settings.never_skip,
+        score_offset=settings.sampling_score_offset,
+        min_anchors=settings.lineup_anchor_floor,
+        boost_sum_cap=settings.optimizer_boost_sum_cap,
+        max_single_boost=settings.optimizer_max_single_boost,
+        game_stack_bonus=settings.optimizer_game_stack_bonus,
+        leverage_weight=getattr(settings, "optimizer_leverage_weight", 0.0),
+        ceiling_weight=getattr(settings, "optimizer_ceiling_weight", 0.0),
+        duplication_weight=getattr(settings, "optimizer_duplication_weight", 0.0),
+        ceiling_tilt_slots=getattr(settings, "optimizer_ceiling_tilt_slots", False),
+        field_same_game_boost=getattr(settings, "field_same_game_boost", 1.0),
+        field_same_team_boost=getattr(settings, "field_same_team_boost", 1.0),
+        duplication_aware_payout=getattr(settings, "optimizer_duplication_aware_payout", False),
+    )
 
 
 def _build_specs(
@@ -1322,27 +1355,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
 
     curve = load_curve_from_archive(sd) or default_curve_for_regime(settings.payout_regime)
-    cfg = OptimizeConfig(
-        top_n_filter=settings.optimizer_top_n_filter,
-        n_samples=settings.optimizer_n_samples,
-        n_field_lineups=settings.optimizer_n_field_lineups,
-        max_per_team=settings.optimizer_max_per_team,
-        dynamic_team_cap=settings.optimizer_dynamic_team_cap,
-        caveat_is_skip=settings.caveat_is_skip,
-        never_skip=settings.never_skip,
-        score_offset=settings.sampling_score_offset,
-        min_anchors=settings.lineup_anchor_floor,
-        boost_sum_cap=settings.optimizer_boost_sum_cap,
-        max_single_boost=settings.optimizer_max_single_boost,
-        game_stack_bonus=settings.optimizer_game_stack_bonus,
-        leverage_weight=getattr(settings, "optimizer_leverage_weight", 0.0),
-        ceiling_weight=getattr(settings, "optimizer_ceiling_weight", 0.0),
-        duplication_weight=getattr(settings, "optimizer_duplication_weight", 0.0),
-        ceiling_tilt_slots=getattr(settings, "optimizer_ceiling_tilt_slots", False),
-        field_same_game_boost=getattr(settings, "field_same_game_boost", 1.0),
-        field_same_team_boost=getattr(settings, "field_same_team_boost", 1.0),
-        duplication_aware_payout=getattr(settings, "optimizer_duplication_aware_payout", False),
-    )
+    cfg = build_optimize_config(settings)
     mixture_variance_enabled = getattr(settings, "optimizer_mixture_variance_enabled", True)
     rec = optimize_lineup(
         samps, fields, curve, cfg=cfg, mixture_variance_enabled=mixture_variance_enabled

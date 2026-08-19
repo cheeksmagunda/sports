@@ -141,6 +141,18 @@ https://railway.com/project/ab83f44c-0bbc-4a58-931c-37d9fbfda73a
 Findings from an interactive research session; full detail and method in the
 issue labeled `ops-results` (#15). No model change was made.
 
+- **`contest_placements.entry_score` is inflated on every row written before
+  2026-08-19** (and with it `entry_rank`, `finish_percentile`, `cashed`,
+  `top_10pct`, `top_1pct`, all derived from it). Dayclose ranked the five picks
+  by realized score before applying the slot multipliers, which awards the 2.0x
+  base to whoever spiked; the slot order is committed before tip, so that is an
+  upper bound, not our result. Measured against the corpus, the stored score
+  matches the hindsight number on 11 of 18 slates and the correct committed-order
+  number on 0 of 18, overstating by up to 2.4 points. Fixed and deployed in
+  `4f73668`; rows written from 2026-08-20 onward are correct. The existing rows
+  have NOT been backfilled -- use `scripts/backfill_placement_scores.py` (dry-run
+  by default) and log the run to the `ops-results` issue.
+
 - **No placement has ever been recorded.** `contest_placements` holds 16 rows
   from one batch on 2026-06-13, all with `entry_rank = 21` (the "not in the
   top-20 leaderboard" sentinel) and `entry_count` / `finish_percentile` /

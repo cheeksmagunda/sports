@@ -359,18 +359,21 @@ def run_variant(overrides: dict[str, object], last: int | None) -> None:
     Reuses ``job2._build_specs`` and ``picker.optimize_lineup`` directly so the
     variant path exercises production code rather than a reimplementation.
 
-    SLOW. ``optimize_lineup`` defaults to n_samples=5000 over C(30,5) = 142,506
-    candidate lineups, and each slate is optimized twice (base and variant), so
-    budget minutes per slate and keep ``--last`` small.
+    Cost scales as n_samples * C(top_n_filter, 5), doubled because each slate is
+    optimized twice. Under the production config (20 / 1000 / 500) that is
+    C(20,5) = 15,504 lineups; under the bare dataclass defaults it was C(30,5) =
+    142,506 at 5x the samples, which is where the original unusable runtime came
+    from.
     """
     from dataclasses import replace
 
     sha = arm_model_artifact()
     print(f"model artifact armed: {sha[:12]}")
 
-    from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup
+    from wnba_oracle.common.settings import get_settings
+    from wnba_oracle.picker.optimize import optimize_lineup
     from wnba_oracle.picker.payout import default_curve_for_regime, load_curve_from_archive
-    from wnba_oracle.scheduler.job2 import _build_specs
+    from wnba_oracle.scheduler.job2 import _build_specs, build_optimize_config
 
     book = build_value_book()
     enrich = _load("job1_enrichment")
@@ -384,14 +387,40 @@ def run_variant(overrides: dict[str, object], last: int | None) -> None:
     if last:
         slates = slates[-last:]
 
-    base_cfg = OptimizeConfig()
+    # The base arm must be what production serves, not the dataclass defaults.
+    # OptimizeConfig() alone is top_n_filter=30 / n_samples=5000 /
+    # n_field=1000; Settings serves 20 / 1000 / 500, so a bare default both
+    # measures a config the freeze never runs and costs ~90x the compute.
+    base_cfg = build_optimize_config(get_settings())
+    print(
+        f"base config: top_n={base_cfg.top_n_filter} n_samples={base_cfg.n_samples} "
+        f"n_field={base_cfg.n_field_lineups} min_anchors={base_cfg.min_anchors}",
+        flush=True,
+    )
     unknown = [k for k in overrides if not hasattr(base_cfg, k)]
     if unknown:
         raise SystemExit(f"unknown OptimizeConfig field(s): {unknown}")
-    var_cfg = replace(base_cfg, **overrides)
+
+    # Per-slate serving knobs, recorded into the frozen lineup at freeze time.
+    # These beat any locally-reconstructed config: they are what that night
+    # actually ran, including the Railway-only values local Settings does not
+    # carry (min_anchors 2 vs the local default 0, game_stack_bonus 0.01,
+    # field_same_game_boost 3.0). Slates without them fall back to Settings and
+    # are marked so in the output.
+    knobs_by_slate: dict[str, dict] = {}
+    for _, fr_row in latest_freeze_per_slate(_load("frozen_lineups")).iterrows():
+        lu = _jload(fr_row["lineup"]) or {}
+        knobs = lu.get("serving_knobs")
+        if isinstance(knobs, dict):
+            knobs_by_slate[str(fr_row["slate_date"])] = {
+                k: v for k, v in knobs.items() if hasattr(base_cfg, k)
+            }
 
     print(f"\n=== VARIANT {overrides} over {len(slates)} slates ===")
-    print(f"{'slate':12s} {'base':>7s} {'variant':>8s} {'delta':>7s} {'winner':>7s} {'min':>4s}")
+    print(
+        f"{'slate':12s} {'base':>7s} {'variant':>8s} {'delta':>7s} {'winner':>7s} "
+        f"{'min':>4s} {'cfg':>5s}"
+    )
     deltas: list[float] = []
     for slate in slates:
         rows = [
@@ -409,8 +438,11 @@ def run_variant(overrides: dict[str, object], last: int | None) -> None:
         # Same curve resolution job2 uses, so the variant is scored against the
         # payout structure that slate actually ran under.
         curve = load_curve_from_archive(slate) or default_curve_for_regime("top_20")
+        served = knobs_by_slate.get(slate)
+        slate_base = replace(base_cfg, **served) if served else base_cfg
+        slate_var = replace(slate_base, **overrides)
         scored: dict[str, float] = {}
-        for label, cfg in (("base", base_cfg), ("variant", var_cfg)):
+        for label, cfg in (("base", slate_base), ("variant", slate_var)):
             rec = optimize_lineup(samps, fields, curve, cfg=cfg)
             by_pid = {int(s.player_id): s for s in samps}
             vals, boos = [], []
@@ -426,7 +458,8 @@ def run_variant(overrides: dict[str, object], last: int | None) -> None:
         has_min = bool(regime["minutes_features_present"].get(slate, False))
         print(
             f"{slate:12s} {scored['base']:7.2f} {scored['variant']:8.2f} {d:+7.2f} "
-            f"{sorted(lb_by_slate[slate])[0][1]:7.2f} {'Y' if has_min else 'n':>4s}",
+            f"{sorted(lb_by_slate[slate])[0][1]:7.2f} {'Y' if has_min else 'n':>4s} "
+            f"{'served' if served else 'LOCAL':>5s}",
             flush=True,
         )
     if deltas:
