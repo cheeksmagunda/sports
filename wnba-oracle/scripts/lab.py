@@ -323,13 +323,50 @@ def _coerce(v: str) -> object:
         return v
 
 
+def arm_model_artifact() -> str:
+    """Point Settings at the local model artifact and confirm it loads.
+
+    The artifact SHA is Railway-only config, so a bare local run leaves
+    ``WNBA_ORACLE_MODEL_ARTIFACT_SHA`` empty and ``_build_specs`` falls back to
+    the heuristic predictor for every player: ``predictor_mix`` logs
+    ``n_head_predicted=0 n_heuristic_fallback=<pool size>``. It still produces
+    lineups, so the failure is silent, and a variant measured that way describes
+    a model production does not run. Refuse to continue instead.
+
+    Must be called before the first ``get_settings()``, which is lru_cached.
+    """
+    import os
+
+    from wnba_oracle.common.settings import get_settings
+
+    shas = sorted(SNAPSHOT.parent.parent.glob("models/*.sha256"))
+    if not shas:
+        raise SystemExit("no models/*.sha256 present; cannot replay the production predictor")
+    sha = shas[-1].read_text().strip()
+    os.environ["WNBA_ORACLE_MODEL_ARTIFACT_SHA"] = sha
+    get_settings.cache_clear()
+
+    from wnba_oracle.scheduler.job2 import _load_model_artifact
+
+    if _load_model_artifact(sha) is None:
+        raise SystemExit(f"model artifact {sha[:12]} did not load; refusing to score a fallback")
+    return sha
+
+
 def run_variant(overrides: dict[str, object], last: int | None) -> None:
     """Re-run the production optimizer under an OptimizeConfig override.
 
     Reuses ``job2._build_specs`` and ``picker.optimize_lineup`` directly so the
     variant path exercises production code rather than a reimplementation.
+
+    SLOW. ``optimize_lineup`` defaults to n_samples=5000 over C(30,5) = 142,506
+    candidate lineups, and each slate is optimized twice (base and variant), so
+    budget minutes per slate and keep ``--last`` small.
     """
     from dataclasses import replace
+
+    sha = arm_model_artifact()
+    print(f"model artifact armed: {sha[:12]}")
 
     from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup
     from wnba_oracle.picker.payout import default_curve_for_regime, load_curve_from_archive
@@ -389,7 +426,8 @@ def run_variant(overrides: dict[str, object], last: int | None) -> None:
         has_min = bool(regime["minutes_features_present"].get(slate, False))
         print(
             f"{slate:12s} {scored['base']:7.2f} {scored['variant']:8.2f} {d:+7.2f} "
-            f"{sorted(lb_by_slate[slate])[0][1]:7.2f} {'Y' if has_min else 'n':>4s}"
+            f"{sorted(lb_by_slate[slate])[0][1]:7.2f} {'Y' if has_min else 'n':>4s}",
+            flush=True,
         )
     if deltas:
         wins = sum(1 for d in deltas if d > 0)
