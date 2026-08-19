@@ -181,7 +181,10 @@ def latest_freeze_per_slate(frozen: pd.DataFrame) -> pd.DataFrame:
     the slate. The entry that actually stood at lock is the latest ``frozen_at``.
     """
     ordered = frozen.sort_values(["slate_date", "frozen_at"])
-    return ordered.groupby(ordered["slate_date"].astype(str), as_index=False).last()
+    # drop_duplicates, not groupby().last(): groupby takes the last NON-NULL
+    # value per column independently, which would splice a null-free column from
+    # the superseded row into the surviving one. This keeps whole rows.
+    return ordered.drop_duplicates(subset="slate_date", keep="last")
 
 
 def evaluate_frozen(

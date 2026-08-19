@@ -26,9 +26,9 @@ import os
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import get_settings
+from wnba_oracle.eval.contest_score import DEFAULT_SLOT_BASES, committed_order_score
 from wnba_oracle.ingest.backfill import run_historical_backfill
 from wnba_oracle.ingest.realsports import discover_wnba_contest_id
-from wnba_oracle.picker.optimize import DEFAULT_SLOT_MULTIPLIERS
 
 log = get_logger("oracle.dayclose")
 
@@ -88,15 +88,32 @@ def _auto_record_placement(slate_date: str) -> None:
         player_ids = [int(p) for p in lineup_json.get("player_ids", [])]
         if not player_ids:
             return
+        if len(player_ids) != len(DEFAULT_SLOT_BASES):
+            # committed_order_score requires a full slate of slots. A short
+            # lineup means the freeze itself was malformed; record nothing
+            # rather than a score computed against the wrong bases.
+            log.warning(
+                "auto_placement_bad_lineup_size",
+                slate_date=slate_date,
+                n_players=len(player_ids),
+            )
+            return
 
-        # Compute our realized lineup score via rearrangement
-        members = sorted(
-            ((pid, rs_by_pid.get(pid, 0.0)) for pid in player_ids),
-            key=lambda x: -x[1],
-        )
-        our_score = sum(
-            (DEFAULT_SLOT_MULTIPLIERS[i] + boost_by_pid.get(pid, 0.0)) * rs
-            for i, (pid, rs) in enumerate(members)
+        # Realized lineup score with the slots taken AS COMMITTED. player_ids is
+        # positionally paired with the lineup's slot_multipliers, so index 0 held
+        # the 2.0x base.
+        #
+        # Until 2026-08-19 this sorted picks by realized score first and then
+        # applied the multipliers down that ranking, which awards the 2.0x slot
+        # to whoever happened to spike. An entrant commits the order before tip
+        # and cannot do that, so the stored entry_score was an upper bound rather
+        # than our result: it read high on 11 of the 18 recorded placements, by
+        # up to 2.4 points. Because entry_score is what auto_record_from_dayclose
+        # compares against the leaderboard, entry_rank, finish_percentile,
+        # cashed, top_10pct and top_1pct inherited the same optimistic bias.
+        our_score = committed_order_score(
+            [rs_by_pid.get(pid, 0.0) for pid in player_ids],
+            [boost_by_pid.get(pid, 0.0) for pid in player_ids],
         )
 
         lb_scores = lb["score"].to_list()
