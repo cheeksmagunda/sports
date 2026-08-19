@@ -353,7 +353,9 @@ def arm_model_artifact() -> str:
     return sha
 
 
-def run_variant(overrides: dict[str, object], last: int | None) -> None:
+def run_variant(
+    overrides: dict[str, object], last: int | None, served_only: bool = True
+) -> None:
     """Re-run the production optimizer under an OptimizeConfig override.
 
     Reuses ``job2._build_specs`` and ``picker.optimize_lineup`` directly so the
@@ -384,8 +386,6 @@ def run_variant(overrides: dict[str, object], last: int | None) -> None:
         lb_by_slate.setdefault(str(r["slate_date"]), []).append((int(r["rank"]), float(r["score"])))
 
     slates = sorted({str(s) for s in enrich["slate_date"].unique()} & set(lb_by_slate))
-    if last:
-        slates = slates[-last:]
 
     # The base arm must be what production serves, not the dataclass defaults.
     # OptimizeConfig() alone is top_n_filter=30 / n_samples=5000 /
@@ -415,6 +415,18 @@ def run_variant(overrides: dict[str, object], last: int | None) -> None:
             knobs_by_slate[str(fr_row["slate_date"])] = {
                 k: v for k, v in knobs.items() if hasattr(base_cfg, k)
             }
+
+    if served_only:
+        # Default. Slates with no recorded serving_knobs are pre-deployment 2025
+        # history: the replay would run them under local Settings, which is not a
+        # config production ever served, and many have no realized values at all
+        # (they score 0.00 on both arms and only add noise). ~212 enrichment
+        # slates collapse to the ~60 we actually froze lineups for.
+        before = len(slates)
+        slates = [s for s in slates if s in knobs_by_slate]
+        print(f"served-only: {len(slates)} of {before} slates have recorded serving knobs")
+    if last:
+        slates = slates[-last:]
 
     print(f"\n=== VARIANT {overrides} over {len(slates)} slates ===")
     print(
@@ -478,7 +490,12 @@ def main() -> int:
     b.add_argument("--last", type=int, default=None)
     v = sub.add_parser("variant", help="re-run the optimizer with an OptimizeConfig override")
     v.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
-    v.add_argument("--last", type=int, default=20)
+    v.add_argument("--last", type=int, default=20, help="0 = every eligible slate")
+    v.add_argument(
+        "--all-slates",
+        action="store_true",
+        help="also replay slates with no recorded serving knobs (uses local Settings)",
+    )
     args = ap.parse_args()
 
     if args.mode == "baseline":
@@ -494,7 +511,7 @@ def main() -> int:
         overrides[k.strip()] = _coerce(val.strip())
     if not overrides:
         raise SystemExit("variant mode needs at least one --set KEY=VALUE")
-    run_variant(overrides, args.last)
+    run_variant(overrides, args.last, served_only=not args.all_slates)
     return 0
 
 
