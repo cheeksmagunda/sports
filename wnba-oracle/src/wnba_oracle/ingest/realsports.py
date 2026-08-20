@@ -86,6 +86,9 @@ class PlatformPlayer:
     multiplier_bonus: float  # card_boost
     primary_ranking: int | None
     injury_status: str
+    # Tip time of the game this player is rostered in ("2026-08-19T23:30:00.000Z",
+    # UTC). Empty when the slate payload carried no dateTime for their game.
+    game_start_utc: str = ""
 
 
 class PlatformAuthRequired(RuntimeError):
@@ -331,6 +334,85 @@ async def fetch_slate_game_times(
     return out
 
 
+async def _fetch_game_rosters(
+    slate_date: str,
+    h: dict[str, str],
+    client: httpx.AsyncClient,
+    *,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Union of tonight's per-game rosters, keyed by platform player id.
+
+    Each row carries `gameStartUtc`, the `dateTime` of the game it was
+    rostered in. That is the only place the platform ties a player to a
+    tip time: the pool endpoint is slate-wide and the /home payload lists
+    games without rosters. Downstream, features_json["game_start_utc"]
+    lets job2 scope the pool to games that have not started.
+    """
+    home_r = await _real_sports_get_with_retry(
+        client,
+        f"{BASE}/home/{SPORT}/next",
+        headers=h,
+        params={"cohort": 0},
+        refresh_headers=refresh_headers,
+    )
+    games = (home_r.json().get("latestDayContent") or {}).get("games") or []
+    game_ids: list[int] = []
+    start_by_game: dict[int, str] = {}
+    for g in games:
+        gid = g.get("id")
+        if gid is None:
+            continue
+        game_ids.append(int(gid))
+        start_by_game[int(gid)] = str(g.get("dateTime") or "").strip()
+    if not game_ids:
+        raise RuntimeError(f"no games found in /home/{SPORT}/next for slate_date={slate_date}")
+
+    sem = asyncio.Semaphore(4)
+
+    async def _one_game(gid: int) -> tuple[int, list[dict[str, Any]]]:
+        async with sem:
+            r = await _real_sports_get_with_retry(
+                client,
+                f"{BASE}/games/{gid}/sport/{SPORT}/players",
+                headers=h,
+                refresh_headers=refresh_headers,
+            )
+            return gid, (r.json().get("players", []) or [])
+
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(_one_game(gid)) for gid in game_ids]
+    union: dict[str, dict[str, Any]] = {}
+    for t in tasks:
+        gid, players = t.result()
+        for p in players:
+            pid = str(p.get("id", ""))
+            if not pid or pid in union:
+                continue
+            row = dict(p)
+            row["gameStartUtc"] = start_by_game.get(gid, "")
+            union[pid] = row
+    return union
+
+
+async def fetch_game_start_by_player(
+    slate_date: str,
+    headers: RequestHeaders,
+    client: httpx.AsyncClient,
+    *,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
+) -> dict[str, str]:
+    """Platform player id -> their game's tip time, for tonight's slate.
+
+    Cheap next to fetch_pool_for_date: one /home call plus one roster call
+    per game, no a..z card_boost sweep. Used to backfill game_start_utc
+    onto enrichment that a pre-tip-time job1 run persisted without it.
+    """
+    h = _http_headers(headers)
+    union = await _fetch_game_rosters(slate_date, h, client, refresh_headers=refresh_headers)
+    return {pid: str(p.get("gameStartUtc") or "") for pid, p in union.items()}
+
+
 async def fetch_pool_for_date(
     slate_date: str,
     headers: RequestHeaders,
@@ -351,44 +433,7 @@ async def fetch_pool_for_date(
     """
     h = _http_headers(headers)
 
-    home_r = await _real_sports_get_with_retry(
-        client,
-        f"{BASE}/home/{SPORT}/next",
-        headers=h,
-        params={"cohort": 0},
-        refresh_headers=refresh_headers,
-    )
-    games = (home_r.json().get("latestDayContent") or {}).get("games") or []
-    game_ids: list[int] = []
-    for g in games:
-        gid = g.get("id")
-        if gid is not None:
-            game_ids.append(int(gid))
-    if not game_ids:
-        raise RuntimeError(f"no games found in /home/{SPORT}/next for slate_date={slate_date}")
-
-    sem = asyncio.Semaphore(4)
-
-    async def _one_game(gid: int) -> list[dict[str, Any]]:
-        async with sem:
-            r = await _real_sports_get_with_retry(
-                client,
-                f"{BASE}/games/{gid}/sport/{SPORT}/players",
-                headers=h,
-                refresh_headers=refresh_headers,
-            )
-            return r.json().get("players", []) or []
-
-    async with asyncio.TaskGroup() as tg:
-        tasks = [tg.create_task(_one_game(gid)) for gid in game_ids]
-    union: dict[str, dict[str, Any]] = {}
-    for t in tasks:
-        for p in t.result():
-            pid = str(p.get("id", ""))
-            if not pid:
-                continue
-            if pid not in union:
-                union[pid] = p
+    union = await _fetch_game_rosters(slate_date, h, client, refresh_headers=refresh_headers)
 
     # Prefix-iterated card_boost overlay
     rated_by_id: dict[str, float] = {}
@@ -532,6 +577,7 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
                 multiplier_bonus=boost_f,
                 primary_ranking=p.get("primaryRanking"),
                 injury_status=p.get("injuryStatus") or "",
+                game_start_utc=str(p.get("gameStartUtc") or ""),
             )
         )
     return out

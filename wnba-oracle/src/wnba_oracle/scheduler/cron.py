@@ -4,6 +4,8 @@ Invoked by Railway's cron with:
   oracle-cron --job job1     # morning enrichment (13:00 UTC)
   oracle-cron --job job1late # credit-free RotoWire confirmed-lineup refresh
                              # (fan across the afternoon/evening; D102/#27)
+  oracle-cron --job job1games # backfill per-player game tip times onto tonight's
+                             # enrichment (credit-free; D109 pool scope)
   oracle-cron --job job2     # pre-tip optimizer (tip-relative T-40 freeze; cron fires */15 across 14-23,0-3 UTC)
   oracle-cron --job dayclose # corpus extension (06:00 UTC, captures
                              # the prior night's finalized contest)
@@ -25,7 +27,7 @@ def main() -> int:
     parser.add_argument(
         "--job",
         required=True,
-        choices=["job1", "job1late", "job2", "dayclose", "backfill"],
+        choices=["job1", "job1games", "job1late", "job2", "dayclose", "backfill"],
     )
     args = parser.parse_args()
 
@@ -64,7 +66,9 @@ def main() -> int:
     # with the UTC calendar day by hours (see api/watchdog_router.py, which
     # uses the same UTC-explicit pattern for the same reason).
     today_utc = dt.datetime.now(dt.UTC).date()
-    if args.job in ("job1", "job1late", "job2") and settings.picks_paused_on(today_utc):
+    if args.job in ("job1", "job1games", "job1late", "job2") and settings.picks_paused_on(
+        today_utc
+    ):
         log.info(
             "picks_paused_skip",
             job=args.job,
@@ -89,6 +93,14 @@ def main() -> int:
         except Exception as exc:
             log.exception("watchdog_failed", error=str(exc))
         return rc
+    if args.job == "job1games":
+        # D109: refresh features_json["game_start_utc"] without a full job1.
+        # On a Railway cron the D107 role guard applies, so this needs
+        # WNBA_CRON_ROLE=job1games (or unset) on the service that runs it.
+        from wnba_oracle.scheduler import job1
+
+        job1.run_game_starts(dt.datetime.now(dt.UTC).date().isoformat())
+        return 0
     if args.job == "job1late":
         # Credit-free confirmed-lineup refresh. Re-scrapes
         # RotoWire and JSONB-merges only the starter/confirmed fields onto the

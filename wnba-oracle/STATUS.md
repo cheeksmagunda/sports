@@ -107,9 +107,20 @@ and never loads the artifact, so it does not need the SHA.
 | STARTER_MINUTES_LIFT_ENABLED | true | 2026-07-10 Kuier/Harris fix; +12.5 suite counterfactual |
 | PICKER_FLOOR_TILT_WEIGHT | 0.2 | 2026-07-10; cliff at 0.35, do not raise without re-sweep |
 | PICKER_KNOB_CHALLENGER_JSON | pre-suite config (fade only) | 2026-07-10, measures the suite's marginal effect ex post |
+| POOL_EXCLUDE_STARTED_GAMES | unset (code default false) | D109; operator-directed late-entry scope, see below |
 
 All flags reverse via env with no redeploy: set `*_ENABLED=false` or unset
 numeric knobs to revert to code defaults.
+
+`POOL_EXCLUDE_STARTED_GAMES=true` scopes the optimizer pool to games that
+have not tipped, using the `game_start_utc` job1 writes per player. Before
+the slate's first tip it is a no-op, so freeze semantics are unchanged; once
+a game has started it appends one scoped freeze (`frozen_via =
+job2_upcoming_games_only`) gated by the lock buffer against the next game.
+It fails closed: a pool row with no known tip time is dropped, so enabling
+it on a slate whose enrichment predates D109 empties the pool. Backfill
+those rows first with `oracle-cron --job job1games`. Used live on
+2026-08-19 (freeze_seq 2, GSV/MIN only, after TOR@WAS had tipped).
 
 ## Two corpora, two roles -- DO NOT CONFUSE
 

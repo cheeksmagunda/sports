@@ -45,6 +45,7 @@ from wnba_oracle.ingest.odds import (
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
     capture_live_headers,
+    fetch_game_start_by_player,
     fetch_pool_for_date,
     fetch_slate_game_times,
     headers_or_capture,
@@ -553,6 +554,11 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
                 features[f"{short}_under_prob"] = prop_data["implied_under_prob"]
                 n_props_matched += 1
                 break  # count once per player
+        # Tip time of this player's game (D109). job2 reads it to scope the
+        # pool to games that have not started when POOL_EXCLUDE_STARTED_GAMES
+        # is on. Absent when the platform payload carried no dateTime.
+        if p.game_start_utc:
+            features["game_start_utc"] = p.game_start_utc
         rows.append(
             {
                 "slate_date": sd,
@@ -721,6 +727,63 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
         n_lineups=len(lineups),
     )
     return Job1Result(sd, n_existing, 0, len(lineups), n_updated)
+
+
+GAME_START_READ = text(
+    "SELECT id, real_sports_player_id FROM job1_enrichment WHERE slate_date = :sd"
+)
+
+
+def run_game_starts(slate_date: str | None = None) -> int:
+    """Backfill features_json["game_start_utc"] onto tonight's enrichment.
+
+    Credit-free (Real Sports only, no Odds API): one /home call plus one
+    roster call per game. Exists because a slate spans several tip times
+    and the pool rows a pre-D109 job1 persisted carry no game start, so
+    POOL_EXCLUDE_STARTED_GAMES has nothing to filter on. Returns the number
+    of rows patched.
+    """
+    sd = slate_date or dt.date.today().isoformat()
+    log.info("job1_game_starts_start", slate_date=sd)
+
+    async def _fetch() -> dict[str, str]:
+        headers = await headers_or_capture(_device_uuid(), _device_name())
+
+        async def _refresh():
+            return await capture_live_headers(_device_uuid(), _device_name())
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                return await fetch_game_start_by_player(
+                    sd, headers, client, refresh_headers=_refresh
+                )
+            except PlatformAuthRequired:
+                headers = await capture_live_headers(_device_uuid(), _device_name())
+                return await fetch_game_start_by_player(
+                    sd, headers, client, refresh_headers=_refresh
+                )
+
+    start_by_pid = {pid: t for pid, t in asyncio.run(_fetch()).items() if t}
+    if not start_by_pid:
+        log.warning("job1_game_starts_empty", slate_date=sd)
+        return 0
+    eng = get_engine()
+    n_patched = 0
+    with eng.begin() as conn:
+        for row_id, rs_pid in conn.execute(GAME_START_READ, {"sd": sd}).fetchall():
+            start = start_by_pid.get(str(rs_pid or ""))
+            if not start:
+                continue
+            conn.execute(LITE_PATCH, {"id": row_id, "patch": json.dumps({"game_start_utc": start})})
+            n_patched += 1
+    log.info(
+        "job1_game_starts_done",
+        slate_date=sd,
+        n_players=len(start_by_pid),
+        n_patched=n_patched,
+        n_distinct_starts=len(set(start_by_pid.values())),
+    )
+    return n_patched
 
 
 def main() -> int:

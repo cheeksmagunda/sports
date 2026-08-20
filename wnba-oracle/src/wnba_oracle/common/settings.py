@@ -211,6 +211,14 @@ class Settings(BaseSettings):
     # Requires cron-job2 to fire across the day (not just the evening window)
     # so a tick exists near T-40 for any tip time.
     freeze_lead_minutes: int = Field(default=40, alias="FREEZE_LEAD_MINUTES")
+    # Pool scope: restrict the optimizer to players whose game has not tipped
+    # yet. A WNBA slate spans several tip times; once the early game starts,
+    # its players are no longer enterable, so an operator entering late needs
+    # a lineup drawn only from the games still ahead. Fails closed: a pool row
+    # with no known game start is dropped, because "not yet started" cannot be
+    # verified for it. Off by default (the 13:00 pipeline drafts the whole
+    # slate before any tip); job1 writes features_json["game_start_utc"].
+    pool_exclude_started_games: bool = Field(default=False, alias="POOL_EXCLUDE_STARTED_GAMES")
     # D84 job1 pool sanity gate: a persisted pool below these floors is a
     # hard error (nonzero exit + critical watchdog event), not a quiet log
     # line. The 2026-06-08 morning fire persisted 1 row / 1 team and nothing

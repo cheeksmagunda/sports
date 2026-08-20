@@ -1016,6 +1016,61 @@ def _load_slate_lock_time(slate_date: str) -> dt.datetime | None:
     return lock.astimezone(dt.UTC)
 
 
+def _game_start_utc(row: dict) -> dt.datetime | None:
+    """The tip time of this pool row's game, from features_json (D109).
+
+    None when job1 persisted the row without one (pre-D109 enrichment, or a
+    platform payload with no dateTime). Callers that scope the pool treat
+    None as "cannot verify", not as "not started".
+    """
+    feats = row.get("features_json") or {}
+    if isinstance(feats, str):
+        try:
+            feats = json.loads(feats)
+        except (TypeError, ValueError):
+            return None
+    raw = str((feats or {}).get("game_start_utc") or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed.astimezone(dt.UTC)
+
+
+def scope_to_upcoming_games(
+    rows: list[dict], now_utc: dt.datetime
+) -> tuple[list[dict], dt.datetime | None, int, int]:
+    """Keep only players whose game has not tipped yet (D109).
+
+    A WNBA slate spans several tip times. Once the early game starts its
+    players are no longer enterable, so an operator drafting late needs a
+    pool drawn from the games still ahead. Fails closed: a row with no
+    known game start is dropped, because "has not started" cannot be
+    verified for it.
+
+    Returns (kept rows, earliest remaining tip, n_started, n_unknown).
+    """
+    kept: list[dict] = []
+    n_started = n_unknown = 0
+    earliest: dt.datetime | None = None
+    for r in rows:
+        start = _game_start_utc(r)
+        if start is None:
+            n_unknown += 1
+            continue
+        if start <= now_utc:
+            n_started += 1
+            continue
+        kept.append(r)
+        if earliest is None or start < earliest:
+            earliest = start
+    return kept, earliest, n_started, n_unknown
+
+
 def _freeze_deadline_utc(
     lock_time_utc: dt.datetime | None,
     settings,
@@ -1150,6 +1205,7 @@ def _freeze(
     force: bool = False,
     payout_curve: dict | None = None,
     serving_knobs: dict | None = None,
+    via: str | None = None,
 ) -> bool:
     """Idempotent freeze: first job2 fire writes, subsequent fires no-op.
 
@@ -1178,7 +1234,7 @@ def _freeze(
     Returns True iff this invocation appended a freeze record.
     """
     eng = get_engine()
-    frozen_via = "job2_late_refreeze" if force else "job2_first_fire"
+    frozen_via = via or ("job2_late_refreeze" if force else "job2_first_fire")
 
     if force:
         # D75 late re-freeze: use a separate Redis key so only the first
@@ -1288,6 +1344,31 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
 
     log.info("job2_start", slate_date=sd, model_sha=model_sha)
     enrichment_raw = _load_enrichment(sd)
+    # D109 pool scope: exclude players whose game already tipped. Applied
+    # before the injury cascade so OUT-minutes only redistribute inside the
+    # games still ahead. The earliest remaining tip becomes this run's lock
+    # time: the freeze deadline that matters is the first game we can still
+    # enter, not the slate's first tip (already in the past by definition).
+    now_utc = dt.datetime.now(dt.UTC)
+    upcoming_tip: dt.datetime | None = None
+    n_started = 0
+    if settings.pool_exclude_started_games:
+        scoped, upcoming_tip, n_started, n_unknown = scope_to_upcoming_games(
+            enrichment_raw, now_utc
+        )
+        log.info(
+            "job2_pool_scoped_to_upcoming",
+            slate_date=sd,
+            n_before=len(enrichment_raw),
+            n_after=len(scoped),
+            n_started=n_started,
+            n_unknown_start=n_unknown,
+            upcoming_tip_utc=upcoming_tip.isoformat() if upcoming_tip else None,
+        )
+        enrichment_raw = scoped
+        if not enrichment_raw:
+            log.warning("job2_no_upcoming_games", slate_date=sd, n_started=n_started)
+            return Job2Result(sd, model_sha, None, False, "no_upcoming_games")
     # Serving-schema boundary check (warn-only rollout). Rejects the
     # 2026-07-02-style degraded pool (all-G positions, null minutes) as
     # watchdog events without blocking the freeze; escalate to strict
@@ -1385,10 +1466,38 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # behaviour: freeze on the first fire + optional late re-freeze at
     # LATE_REFREEZE_AFTER_UTC (D75), gated by the D83 lock gate.
     now_utc = dt.datetime.now(dt.UTC)
-    lock_time = _load_slate_lock_time(sd)
+    lock_time = upcoming_tip or _load_slate_lock_time(sd)
     deadline = _freeze_deadline_utc(lock_time, settings)
 
     force_refreeze = False
+    frozen_via_override: str | None = None
+    if settings.pool_exclude_started_games and upcoming_tip is not None and n_started > 0:
+        # A game has tipped since the slate froze, so the frozen lineup was
+        # drawn partly from players nobody can still draft. Append a scoped
+        # freeze so the operator sees an enterable lineup, gated by the same
+        # D83 lock buffer against the game we are actually entering. Before
+        # the first tip (n_started == 0) the scope is a no-op and freeze
+        # semantics are untouched: one freeze per slate, never re-rolled.
+        try:
+            eng = get_engine()
+            with eng.connect() as conn:
+                already = conn.execute(FROZEN_EXISTS, {"sd": sd, "ms": model_sha}).first()
+        except Exception as exc:
+            log.warning("job2_frozen_exists_check_failed", reason=str(exc)[:120])
+            already = None
+        if already:
+            allowed, gate_reason = _late_refreeze_allowed(now_utc, upcoming_tip, settings)
+            if allowed:
+                force_refreeze = True
+                frozen_via_override = "job2_upcoming_games_only"
+            else:
+                log.warning(
+                    "job2_upcoming_refreeze_gated",
+                    slate_date=sd,
+                    reason=gate_reason,
+                    upcoming_tip_utc=upcoming_tip.isoformat(),
+                )
+                return Job2Result(sd, model_sha, rec, False, "upcoming_refreeze_gated")
     if deadline is not None:
         if _in_pre_freeze_window(now_utc, deadline):
             log.info(
@@ -1475,6 +1584,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         force=force_refreeze,
         payout_curve=payout_curve_payload,
         serving_knobs=serving_knobs_payload,
+        via=frozen_via_override,
     )
     status = (
         "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")
