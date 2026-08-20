@@ -9,3 +9,10 @@ condition = "AND"
 paths = ['''^\.sops\.yaml$''']
 regexTarget = "match"
 regexes = ['''age1hql2tgndcwx864dk6ee73u3ufemlucuzu6zurp8kvhusv396p5qq75j5d3''']
+
+[[allowlists]]
+description = "Railway service identifiers are public resource metadata, not credentials."
+condition = "AND"
+paths = ['''^\.github/workflows/wnba-pre-freeze-guard\.yml$''']
+regexTarget = "match"
+regexes = ['''[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}''']

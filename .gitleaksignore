@@ -1,0 +1,4 @@
+# These two historical findings are the literal Redis lease TTL, 24 * 3600.
+# They are not credentials. Fingerprints keep the exception commit and line exact.
+2d1decb9f6df6af22484c5c188c25a7e18979b6a:wnba-oracle/src/wnba_oracle/scheduler/job2.py:generic-api-key:1275
+2d1decb9f6df6af22484c5c188c25a7e18979b6a:wnba-oracle/src/wnba_oracle/scheduler/job2.py:generic-api-key:1297

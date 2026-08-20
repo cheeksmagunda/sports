@@ -1203,6 +1203,9 @@ def _build_per_player(
     return out
 
 
+FREEZE_LEASE_TTL_SECONDS = 24 * 3600
+
+
 def _release_freeze_lock(slate_date: str, force: bool, owner_token: str | None) -> None:
     """Drop the Redis freeze lock for a slate so the next fire can retry.
 
@@ -1272,7 +1275,10 @@ def _freeze(
         try:
             rd = get_redis()
             late_key = f"wnba.late_frozen.{slate_date}"
-            lease = RedisLeaseStore(rd, prefix="").acquire(late_key, ttl_seconds=24 * 3600)
+            lease = RedisLeaseStore(rd, prefix="").acquire(
+                late_key,
+                ttl_seconds=FREEZE_LEASE_TTL_SECONDS,
+            )
             lock_owner = lease.token if lease else None
             lock_acquired = lease is not None
         except Exception as redis_exc:
@@ -1294,7 +1300,10 @@ def _freeze(
             key = f"wnba.frozen.{slate_date}"
             # The 24h TTL covers a full slate window; if the writer crashes the
             # lock auto-releases for the next fire to retry.
-            lease = RedisLeaseStore(rd, prefix="").acquire(key, ttl_seconds=24 * 3600)
+            lease = RedisLeaseStore(rd, prefix="").acquire(
+                key,
+                ttl_seconds=FREEZE_LEASE_TTL_SECONDS,
+            )
             lock_owner = lease.token if lease else None
             lock_acquired = lease is not None
         except Exception as redis_exc:
