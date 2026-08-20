@@ -13,12 +13,18 @@ interface State {
   freezeTargetUtc: string | null;
   picksPaused: boolean;
   resumesOn: string | null;
+  // Distinguishes a genuine 404 (no slate row for today at all) from
+  // "slate exists but has no freeze target yet" -- both otherwise
+  // collapse to the same null freezeTargetUtc. useSlateLifecycle needs
+  // this split for NO_SLATE detection.
+  slateExists: boolean;
 }
 
 const INITIAL_STATE: State = {
   freezeTargetUtc: null,
   picksPaused: false,
   resumesOn: null,
+  slateExists: false,
 };
 
 export function useSlateTiming(): State {
@@ -36,6 +42,7 @@ export function useSlateTiming(): State {
             freezeTargetUtc: timing?.freeze_target_utc ?? null,
             picksPaused: timing?.picks_paused ?? false,
             resumesOn: timing?.resumes_on ?? null,
+            slateExists: timing !== null,
           });
         }
       } catch {

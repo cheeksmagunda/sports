@@ -1,3 +1,5 @@
+import { getDemoMode } from "./demo";
+
 export type Archetype =
   | "ceiling_anchor"
   | "efficient_producer"
@@ -111,7 +113,12 @@ export type WatchdogToday = {
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
-function localSlateDate(): string {
+// Local (not UTC) slate date -- matches /lineup/{today} and
+// /slate/{today}'s own concept of "today" so a browser near the UTC
+// rollover doesn't see a different day than the API does. lib/espn.ts
+// reuses this same value (reformatted) for its scoreboard query so both
+// layers agree on the slate boundary.
+export function localSlateDate(): string {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -119,11 +126,11 @@ function localSlateDate(): string {
   return `${y}-${m}-${day}`;
 }
 
-// ?demo=1 returns a synthetic frozen lineup so the UI can be screenshotted
-// before the first real cron-job1 fire. Defined inside the
-// import.meta.env.DEV block so esbuild drops the whole fixture + lookup
-// from production builds (verified: zero references to fixture players
-// in the prod chunk).
+// ?demo=1/live/final returns a synthetic frozen lineup so the UI can be
+// screenshotted or its live/final states exercised without a real slate.
+// Defined inside the import.meta.env.DEV block so esbuild drops the
+// whole fixture + lookup from production builds (verified: zero
+// references to fixture players in the prod chunk).
 let getDemoFixture: (() => FrozenLineup) | null = null;
 if (import.meta.env.DEV) {
   getDemoFixture = () => ({
@@ -156,8 +163,7 @@ if (import.meta.env.DEV) {
 
 function demoFixture(): FrozenLineup | null {
   if (!getDemoFixture) return null;
-  if (typeof window === "undefined") return null;
-  if (new URLSearchParams(window.location.search).get("demo") !== "1") return null;
+  if (getDemoMode() === null) return null;
   return getDemoFixture();
 }
 

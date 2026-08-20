@@ -823,7 +823,8 @@ a { color: var(--primary-text); }
 
 .slip-row__minutes .interval-bar { width: 100%; }
 
-/* Region 6: live -- placeholder until Phase 3. */
+/* Region 6: live. Pre-tip shows a neutral dash; live/final show the
+   reported box line or a "no live data" marker for an unmatched player. */
 
 .slip-row__live {
   grid-area: live;
@@ -833,6 +834,25 @@ a { color: var(--primary-text); }
   font-size: 12px;
   color: var(--text-muted);
   border-left: 1px solid var(--border-subtle);
+  padding: var(--space-2);
+}
+
+.slip-row__live-stats {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 2px var(--space-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.slip-row__live-nodata {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 /* Phone collapse: container query on the row's own inline size, not a
@@ -865,6 +885,12 @@ a { color: var(--primary-text); }
   .slip-row__minutes { border-left: 0; padding: 0; }
   .slip-row__minutes .interval-bar { width: 48px; }
   .slip-row__rank { font-size: clamp(20px, 9cqw, 28px); }
+  .slip-row__live { padding: 0 4px; }
+  .slip-row__live-stats {
+    grid-template-columns: repeat(2, auto);
+    gap: 1px 4px;
+    font-size: 9px;
+  }
 }
 
 /* ───────────────────────────────────────────────────────────── */
@@ -1003,6 +1029,15 @@ a { color: var(--primary-text); }
 
 .interval-bar--compact {
   height: 18px;
+}
+
+/* Live/final: minutes actually played, filled from the left edge behind
+   the predicted band -- the "is this working" signal at a glance. */
+.interval-bar__actual {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in oklab, var(--text-muted) 25%, transparent);
+  transition: width var(--dur-3) var(--ease-out);
 }
 
 .interval-bar__band {

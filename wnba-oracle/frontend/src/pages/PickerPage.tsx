@@ -1,6 +1,8 @@
 // Morning view. Operator opens this once per day. Header → SlateBand →
 // Slip → Footer. While the backend hasn't frozen today's lineup yet,
-// OracleLoader holds the canvas with a T-minus countdown.
+// OracleLoader holds the canvas with a T-minus countdown. Once a lineup
+// exists and its games start, useSlateLifecycle flips the view through
+// frozen_pre_tip -> live -> final as ESPN reports it.
 
 import { useEffect, useMemo, useState } from "react";
 import { ErrorState } from "../components/ErrorState";
@@ -8,8 +10,9 @@ import { OracleLoader } from "../components/OracleLoader";
 import { Shell } from "../components/Shell";
 import { SlateBand } from "../components/SlateBand";
 import { Slip } from "../components/Slip";
-import { useLineupData } from "../hooks/useLineupData";
-import { useSlateTiming } from "../hooks/useSlateTiming";
+import { useLiveBoxScores } from "../hooks/useLiveBoxScores";
+import { useSlateLifecycle } from "../hooks/useSlateLifecycle";
+import { combineBoxLines } from "../lib/playerMatch";
 
 // Brief intro animation on first paint so the page never flashes the
 // bare canvas before the first network round-trip resolves. Honors
@@ -64,24 +67,37 @@ function fmtFrozenAt(iso: string | null | undefined): string | null {
 
 export function PickerPage() {
   const intro = useFirstMountLoader();
-  const { uiState, lineup, error, refresh } = useLineupData();
-  const { freezeTargetUtc, picksPaused, resumesOn } = useSlateTiming();
+  const lifecycle = useSlateLifecycle();
+  const boxLines = useLiveBoxScores(lifecycle.games);
 
   const view = useMemo(() => {
-    if (picksPaused) {
-      return { kind: "paused" as const, resumesOn };
+    if (lifecycle.picksPaused) {
+      return { kind: "paused" as const, resumesOn: lifecycle.resumesOn };
     }
-    if (uiState === "error") {
-      return { kind: "error" as const, detail: error };
+    if (lifecycle.state === "error") {
+      return { kind: "error" as const, detail: lifecycle.error };
     }
-    if (lineup) {
-      return { kind: "lineup" as const, lineup };
+    if (lifecycle.lineup) {
+      return { kind: "lineup" as const, lineup: lifecycle.lineup };
     }
-    if (uiState === "no_lineup") {
+    if (lifecycle.state === "no_slate" || lifecycle.state === "pre_freeze") {
       return { kind: "waiting" as const };
     }
     return { kind: "loading" as const };
-  }, [picksPaused, resumesOn, uiState, lineup, error]);
+  }, [
+    lifecycle.picksPaused,
+    lifecycle.resumesOn,
+    lifecycle.state,
+    lifecycle.error,
+    lifecycle.lineup,
+  ]);
+
+  const combined = useMemo(() => {
+    if (view.kind !== "lineup") return undefined;
+    return combineBoxLines(view.lineup.lineup.per_player ?? [], boxLines);
+  }, [view, boxLines]);
+
+  const gamesRemaining = lifecycle.games.filter((g) => g.state !== "post").length;
 
   const slateDateDisplay = fmtSlateDate(
     view.kind === "lineup" ? view.lineup.slate_date : null,
@@ -108,27 +124,36 @@ export function PickerPage() {
         visible={loaderVisible}
         fading={loaderFading}
         mode={loaderMode}
-        freezeTargetUtc={freezeTargetUtc}
+        freezeTargetUtc={lifecycle.freezeTargetUtc}
       />
       <Shell
         slateDateDisplay={slateDateDisplay}
         frozenAtDisplay={frozenAtDisplay}
         lineup={view.kind === "lineup" ? view.lineup : null}
       >
-        <SlateBand lineup={view.kind === "lineup" ? view.lineup : null} />
+        <SlateBand
+          lineup={view.kind === "lineup" ? view.lineup : null}
+          lifecycleState={lifecycle.state}
+          combined={combined}
+          gamesRemaining={gamesRemaining}
+        />
         <main
           id="lineup"
           aria-label="Frozen morning lineup"
           aria-busy={view.kind === "loading" || view.kind === "waiting"}
         >
           {view.kind === "lineup" ? (
-            <Slip lineup={view.lineup} />
+            <Slip
+              lineup={view.lineup}
+              boxLines={boxLines}
+              lifecycleState={lifecycle.state}
+            />
           ) : view.kind === "error" ? (
             <ErrorState
               title="Can't reach the picker server"
               copy="The lineup API isn't responding. Check VITE_API_URL or wait a moment."
               detail={view.detail}
-              onRetry={refresh}
+              onRetry={lifecycle.refresh}
             />
           ) : view.kind === "paused" ? (
             <ErrorState

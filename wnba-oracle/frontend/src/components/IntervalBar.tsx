@@ -15,6 +15,10 @@ interface Props {
   // labels (no room for them at 120px wide) -- the full P10/P50/P90
   // values stay available via ariaLabel.
   compact?: boolean;
+  // Live/final: minutes actually played, drawn as a filled portion
+  // behind the predicted band -- "is this working" at a glance.
+  actual?: number | null;
+  actualColor?: string;
 }
 
 export function IntervalBar({
@@ -26,6 +30,8 @@ export function IntervalBar({
   unit = "",
   ariaLabel,
   compact = false,
+  actual = null,
+  actualColor,
 }: Props) {
   const span = Math.max(max - min, 1);
   const clamp = (v: number) => Math.max(0, Math.min(1, (v - min) / span)) * 100;
@@ -33,6 +39,7 @@ export function IntervalBar({
   const right = clamp(p90);
   const width = Math.max(2, right - left);
   const median = clamp(p50);
+  const actualPct = typeof actual === "number" ? clamp(actual) : null;
 
   const label =
     ariaLabel ??
@@ -44,6 +51,15 @@ export function IntervalBar({
       role="img"
       aria-label={label}
     >
+      {actualPct !== null ? (
+        <div
+          className="interval-bar__actual"
+          style={{
+            width: `${actualPct}%`,
+            ...(actualColor ? { background: actualColor } : {}),
+          }}
+        />
+      ) : null}
       <div
         className="interval-bar__band"
         style={{ left: `${left}%`, width: `${width}%` }}

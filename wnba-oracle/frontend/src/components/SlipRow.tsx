@@ -3,11 +3,15 @@
 // regions (rank, identity, slot, projection, minutes, live); a container
 // query (not a viewport media query, so this same component ports to
 // /slate/:date unchanged) collapses slot into the identity meta line and
-// merges projection+minutes into one block on narrow rows. The live
-// region is a placeholder until Phase 3 wires ESPN box scores.
+// merges projection+minutes into one block on narrow rows. Live/final
+// wire actual ESPN box score stats into region 6 and an actual-minutes
+// overlay onto region 5's bar; pre-tip (or no ESPN match) shows a
+// neutral placeholder -- never a fabricated score, never a blank row.
 
 import { Link } from "react-router-dom";
 import type { PlayerProjection } from "../lib/api";
+import type { SlateLifecycleState } from "../hooks/useSlateLifecycle";
+import type { PlayerBoxLine } from "../lib/espn";
 import { teamInk, teamPrimary } from "../lib/teams";
 import { BoostBadge } from "./BoostBadge";
 import { Headshot } from "./Headshot";
@@ -18,19 +22,30 @@ interface Props {
   slotMultiplier: number;
   player: PlayerProjection;
   slateDate: string;
+  boxLine?: PlayerBoxLine | null;
+  lifecycleState?: SlateLifecycleState;
 }
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-export function SlipRow({ rank, slotMultiplier, player, slateDate }: Props) {
+export function SlipRow({
+  rank,
+  slotMultiplier,
+  player,
+  slateDate,
+  boxLine = null,
+  lifecycleState,
+}: Props) {
   const teamColor = teamPrimary(player.team);
   const ink = teamInk(player.team);
   const hasBoost = player.card_boost > 0;
   const hasScoreBand =
     typeof player.pred_real_score_p10 === "number" &&
     typeof player.pred_real_score_p90 === "number";
+  const showLive = lifecycleState === "live" || lifecycleState === "final";
+  const isFinal = lifecycleState === "final";
 
   // Decorative-only spread indicator, not a scale with labeled ticks:
   // position/width are this player's own p10-p90 as a fraction of
@@ -47,6 +62,22 @@ export function SlipRow({ rank, slotMultiplier, player, slateDate }: Props) {
     bandWidthPct = Math.max(4, right - left);
   }
 
+  const actualMinutes = boxLine?.minutes ?? null;
+  const clearedMedian =
+    actualMinutes !== null && actualMinutes >= player.pred_minutes_p50;
+  const actualColor = isFinal
+    ? clearedMedian
+      ? "var(--beat)"
+      : "var(--miss)"
+    : undefined;
+
+  const liveSummary =
+    showLive && boxLine
+      ? ` ${isFinal ? "Final" : "Live"}: ${boxLine.points ?? 0} points, ${boxLine.rebounds ?? 0} rebounds, ${boxLine.assists ?? 0} assists, ${boxLine.minutes ?? 0} minutes.`
+      : showLive
+        ? " No live data for this player."
+        : "";
+
   return (
     <Link
       to={`/player/${slateDate}/${player.player_id}`}
@@ -55,7 +86,7 @@ export function SlipRow({ rank, slotMultiplier, player, slateDate }: Props) {
         ["--team-primary" as string]: teamColor,
         ["--team-ink" as string]: ink,
       }}
-      aria-label={`Rank ${rank}. ${player.display_name}, ${player.team} versus ${player.opponent || "unknown"}, ${player.position}. Slot multiplier ${slotMultiplier.toFixed(2)}. Projected ${player.pred_real_score_p50.toFixed(1)}.`}
+      aria-label={`Rank ${rank}. ${player.display_name}, ${player.team} versus ${player.opponent || "unknown"}, ${player.position}. Slot multiplier ${slotMultiplier.toFixed(2)}. Projected ${player.pred_real_score_p50.toFixed(1)}.${liveSummary}`}
     >
       <span className="slip-row__rank" aria-hidden="true">
         {rank}
@@ -105,13 +136,30 @@ export function SlipRow({ rank, slotMultiplier, player, slateDate }: Props) {
             min={0}
             max={40}
             unit="m"
-            ariaLabel={`Predicted minutes: P10 ${player.pred_minutes_p10.toFixed(0)}, median ${player.pred_minutes_p50.toFixed(0)}, P90 ${player.pred_minutes_p90.toFixed(0)}.`}
+            actual={actualMinutes}
+            actualColor={actualColor}
+            ariaLabel={`Predicted minutes: P10 ${player.pred_minutes_p10.toFixed(0)}, median ${player.pred_minutes_p50.toFixed(0)}, P90 ${player.pred_minutes_p90.toFixed(0)}.${actualMinutes !== null ? ` Actual: ${actualMinutes}.` : ""}`}
           />
         </span>
       </span>
 
       <span className="slip-row__live" aria-hidden="true">
-        <span className="slip-row__live-placeholder">&mdash;</span>
+        {showLive ? (
+          boxLine ? (
+            <span className="slip-row__live-stats">
+              <span>{boxLine.points ?? "–"}p</span>
+              <span>{boxLine.rebounds ?? "–"}r</span>
+              <span>{boxLine.assists ?? "–"}a</span>
+              <span>{boxLine.steals ?? "–"}s</span>
+              <span>{boxLine.blocks ?? "–"}b</span>
+              <span>{boxLine.turnovers ?? "–"}to</span>
+            </span>
+          ) : (
+            <span className="slip-row__live-nodata">No live data</span>
+          )
+        ) : (
+          <span className="slip-row__live-placeholder">&mdash;</span>
+        )}
       </span>
     </Link>
   );

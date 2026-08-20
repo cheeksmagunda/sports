@@ -2,13 +2,18 @@
 // readers announce rank first. Replaces the five-card grid.
 
 import type { FrozenLineup, PlayerProjection } from "../lib/api";
+import type { SlateLifecycleState } from "../hooks/useSlateLifecycle";
+import type { PlayerBoxLine } from "../lib/espn";
+import { resolveBoxLine } from "../lib/playerMatch";
 import { SlipRow } from "./SlipRow";
 
 interface Props {
   lineup: FrozenLineup;
+  boxLines?: PlayerBoxLine[];
+  lifecycleState?: SlateLifecycleState;
 }
 
-export function Slip({ lineup }: Props) {
+export function Slip({ lineup, boxLines = [], lifecycleState }: Props) {
   const projections = lineup.lineup.per_player ?? [];
   const ids = lineup.lineup.player_ids;
   const mults = lineup.lineup.slot_multipliers;
@@ -41,6 +46,8 @@ export function Slip({ lineup }: Props) {
             slotMultiplier={mults[i] ?? 1}
             player={p}
             slateDate={lineup.slate_date}
+            boxLine={resolveBoxLine(p.display_name, p.team, boxLines)}
+            lifecycleState={lifecycleState}
           />
         </li>
       ))}
