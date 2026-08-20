@@ -6,34 +6,28 @@ import datetime as dt
 from functools import lru_cache
 from typing import Literal
 
+from oracle_core.config import RuntimeConfig, SecretValue
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+class Settings(RuntimeConfig):
     """All env-driven config. Treats missing required values as a startup error."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=True,
-    )
-
-    # Identity / mode. Aliases are required because case_sensitive=True;
-    # without the alias pydantic-settings only matches `env` / `log_level`
-    # not `ENV` / `LOG_LEVEL` (the convention every container env follows).
-    env: Literal["dev", "prod"] = Field(default="dev", alias="ENV")
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-
     # External APIs
-    odds_api_key: str = Field(default="", alias="ODDS_API_KEY")
-    real_sports_username: str = Field(default="", alias="REAL_SPORTS_USERNAME")
-    real_sports_password: str = Field(default="", alias="REAL_SPORTS_PASSWORD")
+    odds_api_key: SecretValue = Field(default="", alias="ODDS_API_KEY")
+    real_sports_username: SecretValue = Field(default="", alias="REAL_SPORTS_USERNAME")
+    real_sports_password: SecretValue = Field(default="", alias="REAL_SPORTS_PASSWORD")
 
-    # Storage
-    database_url: str = Field(default="", alias="DATABASE_URL")
-    redis_url: str = Field(default="", alias="REDIS_URL")
+    @property
+    def odds_api_key_value(self) -> str:
+        return self.odds_api_key.get_secret_value()
+
+    @property
+    def has_legacy_realsports_credentials(self) -> bool:
+        return bool(
+            self.real_sports_username.get_secret_value()
+            and self.real_sports_password.get_secret_value()
+        )
 
     # Operational toggles. Same alias-or-no-injection rule as above.
     job1_dry_run: bool = Field(default=False, alias="JOB1_DRY_RUN")

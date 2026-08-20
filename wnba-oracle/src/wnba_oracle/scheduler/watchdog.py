@@ -581,12 +581,19 @@ def _ping_on_critical(events: list[WatchdogEvent]) -> None:
     if not any(ev.severity == SEVERITY_CRITICAL for ev in events):
         return
     try:
-        import httpx
+        from oracle_core.http import HttpxSyncTransport, RetryPolicy, request_with_retry
 
-        httpx.get(f"{url}/fail", timeout=5.0)
+        with HttpxSyncTransport() as transport:
+            request_with_retry(
+                transport,
+                "GET",
+                f"{url}/fail",
+                policy=RetryPolicy(max_attempts=2, base_delay=0.25, max_delay=1.0),
+                timeout=5.0,
+            )
         log.info("watchdog_ping_sent", url_suffix="/fail")
     except Exception as exc:
-        log.warning("watchdog_ping_failed", reason=str(exc)[:120])
+        log.warning("watchdog_ping_failed", error_type=type(exc).__name__)
 
 
 def _slate_freeze_deadline(slate_date: str, settings: object) -> dt.datetime | None:

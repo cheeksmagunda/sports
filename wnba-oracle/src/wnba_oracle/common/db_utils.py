@@ -5,23 +5,16 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from oracle_core.storage import normalize_postgres_url as _normalize_postgres_url
+
 _SSLROOTCERT = re.compile(r"(sslrootcert=)([^&\s]+)")
 
 
 def normalize_postgres_url(url: str) -> str:
-    """Coerce a Heroku-style or bare postgres:// URL into the
-    `postgresql+psycopg://` form SQLAlchemy 2 + psycopg 3 expect.
-
-    Returns the input unchanged if it already uses an explicit driver suffix
-    or is non-postgres.
-    """
-    if not url:
+    """Retain the WNBA pass-through contract over the strict core helper."""
+    if not url or not url.startswith(("postgres://", "postgresql://", "postgresql+")):
         return url
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg://", 1)
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+psycopg://", 1)
-    return url
+    return _normalize_postgres_url(url)
 
 
 def repair_local_sslrootcert(url: str, repo_root: Path) -> str:

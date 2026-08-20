@@ -187,10 +187,11 @@ def test_ping_fires_on_critical_when_url_set() -> None:
     settings = SimpleNamespace(watchdog_ping_url="https://hc.example/abc")
     with (
         patch("wnba_oracle.common.settings.get_settings", return_value=settings),
-        patch("httpx.get") as get,
+        patch("oracle_core.http.request_with_retry") as request,
     ):
         watchdog._ping_on_critical([_ev("critical")])
-    get.assert_called_once_with("https://hc.example/abc/fail", timeout=5.0)
+    request.assert_called_once()
+    assert request.call_args.args[1:3] == ("GET", "https://hc.example/abc/fail")
 
 
 def test_ping_skipped_without_critical() -> None:
@@ -199,10 +200,10 @@ def test_ping_skipped_without_critical() -> None:
     settings = SimpleNamespace(watchdog_ping_url="https://hc.example/abc")
     with (
         patch("wnba_oracle.common.settings.get_settings", return_value=settings),
-        patch("httpx.get") as get,
+        patch("oracle_core.http.request_with_retry") as request,
     ):
         watchdog._ping_on_critical([_ev("warn"), _ev("error")])
-    get.assert_not_called()
+    request.assert_not_called()
 
 
 def test_ping_noop_without_url() -> None:
@@ -211,10 +212,10 @@ def test_ping_noop_without_url() -> None:
     settings = SimpleNamespace(watchdog_ping_url="")
     with (
         patch("wnba_oracle.common.settings.get_settings", return_value=settings),
-        patch("httpx.get") as get,
+        patch("oracle_core.http.request_with_retry") as request,
     ):
         watchdog._ping_on_critical([_ev("critical")])
-    get.assert_not_called()
+    request.assert_not_called()
 
 
 def test_healthy_pool_no_events() -> None:
@@ -483,6 +484,7 @@ def test_check_prediction_drift_fires_on_bad_corr(monkeypatch) -> None:
     """Corr under DRIFT_CORR_WARN triggers a WARN, given enough pick pairs."""
 
     def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        assert window == watchdog.DRIFT_WINDOW
         return {
             "n_slates": 20,
             "n_pick_pairs": watchdog.DRIFT_MIN_PICK_PAIRS,
@@ -509,6 +511,7 @@ def test_check_prediction_drift_silent_when_underpowered(monkeypatch) -> None:
     """
 
     def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        assert window == watchdog.DRIFT_WINDOW
         return {
             "n_slates": 4,
             "n_pick_pairs": watchdog.DRIFT_MIN_PICK_PAIRS - 1,
@@ -524,6 +527,7 @@ def test_check_prediction_drift_silent_when_underpowered(monkeypatch) -> None:
 
 def test_check_prediction_drift_fires_on_bad_gap(monkeypatch) -> None:
     def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        assert window == watchdog.DRIFT_WINDOW
         return {
             "n_slates": 10,
             "n_pick_pairs": 50,
@@ -545,6 +549,7 @@ def test_check_prediction_drift_silent_at_baseline(monkeypatch) -> None:
     Steady-state under baseline is knowingly poor -- alerting on it is spam."""
 
     def _stub(window: int = watchdog.DRIFT_WINDOW) -> dict[str, object]:
+        assert window == watchdog.DRIFT_WINDOW
         return {
             "n_slates": 10,
             "n_pick_pairs": 50,

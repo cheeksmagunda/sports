@@ -8,11 +8,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-import redis
 import sqlalchemy as sa
-from sqlalchemy import create_engine
+from oracle_core.storage import PoolOptions, create_postgres_engine, create_redis_client
+from redis import Redis
 
-from wnba_oracle.common.db_utils import normalize_postgres_url
 from wnba_oracle.common.settings import get_settings
 
 
@@ -21,18 +20,15 @@ def get_engine() -> sa.Engine:
     settings = get_settings()
     if not settings.database_url:
         raise RuntimeError("DATABASE_URL not set")
-    return create_engine(
-        normalize_postgres_url(settings.database_url),
-        future=True,
-        pool_pre_ping=True,
-        pool_size=4,
-        max_overflow=2,
+    return create_postgres_engine(
+        settings.database_url,
+        pool=PoolOptions(pool_size=4, max_overflow=2),
     )
 
 
 @lru_cache(maxsize=1)
-def get_redis() -> redis.Redis:
+def get_redis() -> Redis:
     settings = get_settings()
     if not settings.redis_url:
         raise RuntimeError("REDIS_URL not set")
-    return redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    return create_redis_client(settings.redis_url, decode_responses=True)

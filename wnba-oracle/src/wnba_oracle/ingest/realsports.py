@@ -32,11 +32,15 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from oracle_core.http import (
+    HttpxAsyncTransport,
+    RetryPolicy,
+    async_request_with_retry,
+)
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.scheduler.antibot import (
     asleep_truncated_gaussian,
-    full_jitter_backoff,
 )
 
 SCRAPER_DIR = Path(__file__).resolve().parents[3] / "scraper"
@@ -241,24 +245,33 @@ async def _real_sports_get_with_retry(
     max_attempts: int = 5,
     timeout_s: float = 15.0,
 ) -> httpx.Response:
-    """Bounded Full-Jitter retry with optional auth-refresh.
+    """Bounded shared retry transport with one optional auth refresh.
 
     - 200: return.
     - 401 + refresh_headers + not yet refreshed: refresh in place, retry once.
       Subsequent 401 raises PlatformAuthRequired.
-    - 429/503: honor Retry-After capped by full_jitter_backoff(attempt).
+    - 429/503: honor Retry-After within the shared 60-second delay cap.
     - Transport error: backoff + retry.
     - Other: raise_for_status().
     """
-    last_status: int | None = None
     refreshed = False
-    for attempt in range(max_attempts):
-        try:
-            r = await client.get(url, params=params, headers=headers, timeout=timeout_s)
-        except httpx.HTTPError:
-            await asyncio.sleep(full_jitter_backoff(attempt))
-            continue
-        last_status = r.status_code
+    policy = RetryPolicy(
+        max_attempts=max_attempts,
+        base_delay=1.0,
+        max_delay=60.0,
+        retry_statuses=frozenset({429, 503}),
+    )
+    transport = HttpxAsyncTransport(client)
+    for _auth_attempt in range(2):
+        r = await async_request_with_retry(
+            transport,
+            "GET",
+            url,
+            policy=policy,
+            params=params,
+            headers=headers,
+            timeout=timeout_s,
+        )
         if r.status_code == 200:
             return r
         if r.status_code == 401:
@@ -269,14 +282,8 @@ async def _real_sports_get_with_retry(
                 refreshed = True
                 continue
             raise PlatformAuthRequired(f"401 on {url}")
-        if r.status_code in {429, 503}:
-            retry_after = float(r.headers.get("retry-after", "0") or 0)
-            await asyncio.sleep(max(retry_after, full_jitter_backoff(attempt)))
-            continue
         r.raise_for_status()
-    raise RuntimeError(
-        f"fetch failed after {max_attempts} attempts; last_status={last_status} url={url}"
-    )
+    raise PlatformAuthRequired(f"401 on {url}")
 
 
 async def _search_with_query(

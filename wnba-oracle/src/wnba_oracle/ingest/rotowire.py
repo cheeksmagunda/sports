@@ -22,6 +22,7 @@ from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
+from oracle_core.http import HttpxSyncTransport, RetryPolicy, request_with_retry
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.ingest.cache import cache_get, cache_put
@@ -84,7 +85,12 @@ def fetch_lineups(
 
     log.info("rotowire_fetch", url=URL)
     with httpx.Client(timeout=20.0, headers=DEFAULT_HEADERS) as client:
-        r = client.get(URL)
+        r = request_with_retry(
+            HttpxSyncTransport(client),
+            "GET",
+            URL,
+            policy=RetryPolicy(max_attempts=3, base_delay=0.5, max_delay=8.0),
+        )
         r.raise_for_status()
     entries = parse_lineups_html(r.text)
     if use_cache:

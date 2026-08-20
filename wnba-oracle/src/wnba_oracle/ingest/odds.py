@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from oracle_core.http import HttpxSyncTransport, RetryPolicy, request_with_retry
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import get_settings
@@ -34,6 +35,20 @@ SPORT_KEY = "basketball_wnba"
 DEFAULT_BOOKMAKERS = ("draftkings", "fanduel", "betmgm")
 DEFAULT_REGIONS = "us"
 DEFAULT_MARKETS = "h2h,spreads,totals"
+ODDS_RETRY_POLICY = RetryPolicy(max_attempts=3, base_delay=0.5, max_delay=8.0)
+
+
+def _get(client: httpx.Client, url: str, *, params: dict[str, Any]) -> httpx.Response:
+    response = request_with_retry(
+        HttpxSyncTransport(client),
+        "GET",
+        url,
+        policy=ODDS_RETRY_POLICY,
+        params=params,
+    )
+    if response.is_error:
+        raise RuntimeError(f"Odds API returned HTTP {response.status_code}")
+    return response
 
 
 @dataclass(frozen=True)
@@ -64,12 +79,12 @@ def fetch_odds_for_slate(
     WNBA game with a median-across-bookmakers reduction.
     """
     settings = get_settings()
-    if not settings.odds_api_key:
+    if not settings.odds_api_key_value:
         raise RuntimeError("ODDS_API_KEY not set; refusing to call The Odds API")
 
     url = f"{BASE}/sports/{SPORT_KEY}/odds"
     params: dict[str, Any] = {
-        "apiKey": settings.odds_api_key,
+        "apiKey": settings.odds_api_key_value,
         "regions": regions,
         "markets": markets,
         "oddsFormat": "decimal",
@@ -86,8 +101,7 @@ def fetch_odds_for_slate(
     with httpx.Client(timeout=20.0) as client:
         # Cache key intentionally excludes apiKey so the key rotation does
         # not invalidate cache. apiKey only travels with the live params.
-        r = client.get(url, params=params)
-        r.raise_for_status()
+        r = _get(client, url, params=params)
         # Credits remaining header surfaces budget; log it.
         remaining = r.headers.get("x-requests-remaining")
         used = r.headers.get("x-requests-used")
@@ -205,13 +219,12 @@ def fetch_wnba_events(*, timeout_s: float = 20.0) -> list[dict[str, Any]]:
     HTTP error so the caller can degrade to an empty prop list.
     """
     settings = get_settings()
-    if not settings.odds_api_key:
+    if not settings.odds_api_key_value:
         return []
     url = f"{BASE}/sports/{SPORT_KEY}/events"
-    params: dict[str, Any] = {"apiKey": settings.odds_api_key}
+    params: dict[str, Any] = {"apiKey": settings.odds_api_key_value}
     with httpx.Client(timeout=timeout_s) as client:
-        r = client.get(url, params=params)
-        r.raise_for_status()
+        r = _get(client, url, params=params)
         return r.json() or []
 
 
@@ -305,7 +318,7 @@ def fetch_player_props(
     quota burn, no markets available). Never blocks job1.
     """
     settings = get_settings()
-    if not settings.odds_api_key:
+    if not settings.odds_api_key_value:
         log.warning("fetch_player_props_no_key")
         return []
 
@@ -343,16 +356,15 @@ def fetch_player_props(
                 continue
             url = f"{BASE}/sports/{SPORT_KEY}/events/{eid}/odds"
             params: dict[str, Any] = {
-                "apiKey": settings.odds_api_key,
+                "apiKey": settings.odds_api_key_value,
                 "regions": regions,
                 "markets": markets,
                 "oddsFormat": "decimal",
                 "bookmakers": ",".join(bookmakers),
             }
             try:
-                r = client.get(url, params=params)
+                r = _get(client, url, params=params)
                 remaining = r.headers.get("x-requests-remaining", remaining)
-                r.raise_for_status()
                 ev_json = r.json() or {}
             except Exception as exc:
                 # One event's failure must not lose the others' props.

@@ -16,7 +16,7 @@ predictions until corpus grows.
 
 from __future__ import annotations
 
-import hashlib
+import json
 import pickle
 import random
 from dataclasses import dataclass, field
@@ -26,6 +26,13 @@ from typing import Any
 import numpy as np
 import polars as pl
 import yaml
+from oracle_core.artifacts import (
+    atomic_write_bytes,
+    verify_sha256,
+)
+from oracle_core.artifacts import (
+    write_artifact as persist_artifact,
+)
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.features.provenance import feature_module_sha
@@ -343,9 +350,9 @@ def write_artifact(art: PickerArtifact, *, commit: str) -> Path:
     ts = int(_time.time())
     path = MODELS_DIR / f"picker_{commit[:8]}_{ts}.pkl"
     payload = pickle.dumps(art, protocol=pickle.HIGHEST_PROTOCOL)
-    path.write_bytes(payload)
-    sha = hashlib.sha256(payload).hexdigest()
-    (path.with_suffix(".sha256")).write_text(sha)
+    info = persist_artifact(path, payload)
+    sha = info.sha256
+    atomic_write_bytes(path.with_suffix(".sha256"), sha.encode("ascii"))
     _write_training_manifest(path=path, art=art, commit=commit, sha256=sha, ts=ts)
     log.info("artifact_written", path=str(path), sha256=sha)
     return path
@@ -359,8 +366,6 @@ def _write_training_manifest(
     The determinism gate (``make determinism-check``) compares .pkl content
     only via scripts/compare_artifacts.py, so the manifest is free to embed
     the training timestamp for provenance."""
-    import json
-
     manifest = {
         "artifact": path.name,
         "artifact_sha256": sha256,
@@ -376,17 +381,16 @@ def _write_training_manifest(
         "has_eb_baseline": art.eb_baseline is not None,
     }
     body = json.dumps(manifest, sort_keys=True, indent=2)
-    path.with_suffix(".manifest.json").write_text(body + "\n")
+    atomic_write_bytes(path.with_suffix(".manifest.json"), f"{body}\n".encode())
 
 
 def load_artifact(path: Path) -> PickerArtifact:
-    payload = path.read_bytes()
     sha_path = path.with_suffix(".sha256")
     if sha_path.exists():
         expected = sha_path.read_text().strip()
-        actual = hashlib.sha256(payload).hexdigest()
-        if actual != expected:
-            raise RuntimeError(
-                f"artifact SHA mismatch for {path}: expected {expected}, got {actual}"
-            )
-    return pickle.loads(payload)
+        if not verify_sha256(path, expected):
+            raise RuntimeError(f"artifact SHA mismatch for {path}")
+    artifact = pickle.loads(path.read_bytes())
+    if not isinstance(artifact, PickerArtifact):
+        raise TypeError(f"artifact has unexpected type: {type(artifact).__name__}")
+    return artifact

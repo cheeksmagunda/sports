@@ -43,6 +43,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
+from oracle_core.http import HttpxSyncTransport, RetryPolicy, request_with_retry
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.ingest.realsports import (
@@ -153,7 +154,14 @@ def fetch_contest_stats(
 
     backoff_429 = 0
     while True:
-        r = client.get(url, headers=h, timeout=20.0)
+        r = request_with_retry(
+            HttpxSyncTransport(client),
+            "GET",
+            url,
+            policy=RetryPolicy(max_attempts=3, base_delay=0.5, max_delay=8.0),
+            headers=h,
+            timeout=20.0,
+        )
         if r.status_code == 401 and refresh_headers is not None and not refreshed:
             log.info("contest_stats_401_refresh", contest_id=contest_id)
             h = _http_headers(refresh_headers())
@@ -279,7 +287,15 @@ def fetch_contest_entries(
 
     backoff_429 = 0
     while True:
-        r = client.get(url, headers=h, params=params, timeout=20.0)
+        r = request_with_retry(
+            HttpxSyncTransport(client),
+            "GET",
+            url,
+            policy=RetryPolicy(max_attempts=3, base_delay=0.5, max_delay=8.0),
+            headers=h,
+            params=params,
+            timeout=20.0,
+        )
         if r.status_code == 401 and refresh_headers is not None and not refreshed:
             log.info("contest_entries_401_refresh", contest_id=contest_id)
             h = _http_headers(refresh_headers())
