@@ -323,7 +323,7 @@ def _coerce(v: str) -> object:
         return v
 
 
-def arm_model_artifact() -> str:
+def arm_model_artifact() -> tuple[str, Path]:
     """Point Settings at the local model artifact and confirm it loads.
 
     The artifact SHA is Railway-only config, so a bare local run leaves
@@ -334,12 +334,18 @@ def arm_model_artifact() -> str:
     a model production does not run. Refuse to continue instead.
 
     Must be called before the first ``get_settings()``, which is lru_cached.
+
+    Returns ``(sha, pkl_path)``. Hold on to the path: ``_build_specs`` re-resolves
+    the artifact on EVERY slate, so a long run can start armed and degrade to the
+    heuristic partway through if the file moves out from under it. That happened
+    on 2026-08-19 when the repo was relocated mid-run, and only one warning line
+    marked it. Call :func:`assert_artifact_present` each slate.
     """
     import os
 
     from wnba_oracle.common.settings import get_settings
 
-    shas = sorted(SNAPSHOT.parent.parent.glob("models/*.sha256"))
+    shas = sorted(REPO_ROOT.glob("models/*.sha256"))
     if not shas:
         raise SystemExit("no models/*.sha256 present; cannot replay the production predictor")
     sha = shas[-1].read_text().strip()
@@ -350,7 +356,16 @@ def arm_model_artifact() -> str:
 
     if _load_model_artifact(sha) is None:
         raise SystemExit(f"model artifact {sha[:12]} did not load; refusing to score a fallback")
-    return sha
+    return sha, shas[-1].with_suffix(".pkl")
+
+
+def assert_artifact_present(pkl_path: Path, slate: str) -> None:
+    """Abort rather than silently score a heuristic replay mid-run."""
+    if not pkl_path.exists():
+        raise SystemExit(
+            f"model artifact vanished before {slate} ({pkl_path}). "
+            "Every slate from here would silently score the heuristic fallback."
+        )
 
 
 def run_variant(
@@ -369,7 +384,7 @@ def run_variant(
     """
     from dataclasses import replace
 
-    sha = arm_model_artifact()
+    sha, artifact_path = arm_model_artifact()
     print(f"model artifact armed: {sha[:12]}")
 
     from wnba_oracle.common.settings import get_settings
@@ -435,6 +450,7 @@ def run_variant(
     )
     deltas: list[float] = []
     for slate in slates:
+        assert_artifact_present(artifact_path, slate)
         rows = [
             {k: (_jload(v) if k == "features_json" else v) for k, v in r.items()}
             for r in enrich[enrich["slate_date"].astype(str) == slate].to_dict("records")
