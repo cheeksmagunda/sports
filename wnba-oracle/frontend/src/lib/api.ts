@@ -1,11 +1,8 @@
-export type FrozenLineupPayload = {
-  player_ids: number[];
-  slot_multipliers: number[];
-  lineup_score_p10: number;
-  lineup_score_p50: number;
-  lineup_score_p90: number;
-  per_player?: PlayerProjection[];
-};
+export type Archetype =
+  | "ceiling_anchor"
+  | "efficient_producer"
+  | "leverage_spike"
+  | "baseline";
 
 export type PlayerProjection = {
   player_id: number;
@@ -18,6 +15,52 @@ export type PlayerProjection = {
   pred_minutes_p10: number;
   pred_minutes_p50: number;
   pred_minutes_p90: number;
+  // Only present when the trained multi-task heads served this player;
+  // absent on older freezes (and always on rows from /history predating
+  // the heads). Treat as progressive enhancement, never assume presence.
+  pred_real_score_p10?: number;
+  pred_real_score_p90?: number;
+  archetype?: Archetype;
+  streak_driver?: string;
+  streak_quality?: number;
+  stat_leverage?: number;
+};
+
+export type PayoutCurve = {
+  regime: string;
+  cash_line_percentile: number;
+  percentile_to_payout: Record<string, number>;
+};
+
+export type ServingKnobs = {
+  n_samples: number;
+  n_field_lineups: number;
+  top_n_filter: number;
+  max_per_team: number;
+  min_anchors: number;
+  boost_sum_cap: number;
+  max_single_boost: number;
+  game_stack_bonus: number;
+  leverage_weight: number;
+  ceiling_weight: number;
+  duplication_weight: number;
+  field_same_game_boost: number;
+  field_same_team_boost: number;
+  duplication_aware_payout: boolean;
+  never_skip: boolean;
+  caveat_is_skip: boolean;
+};
+
+export type FrozenLineupPayload = {
+  player_ids: number[];
+  slot_multipliers: number[];
+  lineup_score_p10: number;
+  lineup_score_p50: number;
+  lineup_score_p90: number;
+  per_player?: PlayerProjection[];
+  // Absent on freezes written before D90.
+  payout_curve?: PayoutCurve;
+  serving_knobs?: ServingKnobs;
 };
 
 export type FrozenLineup = {
@@ -29,6 +72,41 @@ export type FrozenLineup = {
   entry_recommendation: "enter" | "skip" | "enter_with_caveat";
   expected_payout: number;
   metadata_json: unknown;
+  freeze_seq: number;
+  frozen_via: string;
+  // Only present on GET /lineup/{date} (a window-function column scoped
+  // to that query); absent on rows from /lineup/{date}/history.
+  n_freezes?: number;
+};
+
+// GET /lineup?limit=N -- one row per (slate_date, model_sha), latest freeze
+// only. No per-player data and no `lineup` object at all: use
+// fetchLineupHistory/fetchLatestLineup for anything past this summary.
+export type SlateSummary = {
+  slate_date: string;
+  model_sha: string;
+  payout_regime: string;
+  frozen_at: string | null;
+  entry_recommendation: "enter" | "skip" | "enter_with_caveat";
+  expected_payout: number;
+  freeze_seq: number;
+  frozen_via: string;
+};
+
+export type WatchdogSeverity = "warn" | "error" | "critical";
+
+export type WatchdogEvent = {
+  trigger: string;
+  severity: WatchdogSeverity;
+  payload: unknown;
+  created_at: string | null;
+};
+
+export type WatchdogToday = {
+  slate_date: string;
+  checked_at_utc: string;
+  events: WatchdogEvent[];
+  status: "ok" | WatchdogSeverity;
 };
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -56,6 +134,9 @@ if (import.meta.env.DEV) {
     entry_recommendation: "enter",
     expected_payout: 1.42,
     metadata_json: null,
+    freeze_seq: 1,
+    frozen_via: "job2",
+    n_freezes: 1,
     lineup: {
       player_ids: [1, 2, 3, 4, 5],
       slot_multipliers: [1.5, 1.3, 1.2, 1.1, 1.0],
@@ -110,4 +191,33 @@ export async function fetchSlateTiming(): Promise<SlateTiming | null> {
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as SlateTiming;
+}
+
+// Every freeze appended for a slate, oldest first. 404 if the slate never
+// froze at all.
+export async function fetchLineupHistory(
+  date: string,
+): Promise<FrozenLineup[] | null> {
+  const r = await fetch(`${API_URL}/lineup/${date}/history`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()) as FrozenLineup[];
+}
+
+// Most recent slates, newest first, one row per (slate, model). No
+// per-player data -- see fetchLineupHistory for that.
+export async function fetchRecentSlates(
+  limit = 60,
+): Promise<SlateSummary[]> {
+  const r = await fetch(`${API_URL}/lineup?limit=${limit}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()) as SlateSummary[];
+}
+
+export async function fetchWatchdogToday(
+  severityMin: WatchdogSeverity = "warn",
+): Promise<WatchdogToday> {
+  const r = await fetch(`${API_URL}/watchdog/today?severity_min=${severityMin}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()) as WatchdogToday;
 }

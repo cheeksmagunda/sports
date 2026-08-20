@@ -8,7 +8,7 @@ import { BoostBadge } from "./BoostBadge";
 import { Headshot } from "./Headshot";
 import { IntervalBar } from "./IntervalBar";
 import type { PlayerProjection } from "../lib/api";
-import { teamPrimary } from "../lib/teamColors";
+import { teamPrimary } from "../lib/teams";
 
 interface Props {
   rank: number;
