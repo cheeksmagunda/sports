@@ -1,0 +1,52 @@
+{
+  "generated_at_utc": "2026-08-20T09:45:33+00:00",
+  "schema_version": 1,
+  "tables": {
+    "contest_leaderboards": {
+      "bytes": 12092332,
+      "columns": [
+        "contest_id",
+        "slate_date",
+        "entry_id",
+        "rank",
+        "paged_rank",
+        "user_id",
+        "score",
+        "lineup",
+        "num_brawlers",
+        "ingested_at"
+      ],
+      "file": "contest_leaderboards.csv",
+      "max_slate": "2026-08-18",
+      "min_slate": "2025-05-16",
+      "rows": 4160,
+      "sha256": "322b5e1277cfc9e6ed7e783664e67d7c83015bcbf99265b64594dcb989f5ecfd",
+      "slates": 208
+    },
+    "slate_labels": {
+      "bytes": 738227,
+      "columns": [
+        "contest_id",
+        "slate_date",
+        "section",
+        "platform_player_id",
+        "display_name",
+        "team_key",
+        "card_boost",
+        "drafts",
+        "real_score",
+        "ingested_at"
+      ],
+      "file": "slate_labels.csv",
+      "max_slate": "2026-08-18",
+      "min_slate": "2025-05-16",
+      "rows": 6235,
+      "sha256": "a6cac82abcfb5697d47395c56bfbdab21e3c2ecd2bc2090bbc0f36de02e4e7b9",
+      "slates": 208
+    }
+  },
+  "transaction": {
+    "isolation": "REPEATABLE READ",
+    "read_only": true
+  }
+}
