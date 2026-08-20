@@ -4,17 +4,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ErrorState } from "../components/ErrorState";
-import { Footer } from "../components/Footer";
-import { Header } from "../components/Header";
 import { LineupStack } from "../components/LineupStack";
 import { OracleLoader } from "../components/OracleLoader";
+import { Shell } from "../components/Shell";
 import { SlateBand } from "../components/SlateBand";
 import { useLineupData } from "../hooks/useLineupData";
 import { useSlateTiming } from "../hooks/useSlateTiming";
-import { useTheme } from "../hooks/useTheme";
-
-const APP_VERSION =
-  (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "v0.2.0";
 
 // Brief intro animation on first paint so the page never flashes the
 // bare canvas before the first network round-trip resolves. Honors
@@ -68,7 +63,6 @@ function fmtFrozenAt(iso: string | null | undefined): string | null {
 }
 
 export function PickerPage() {
-  const { theme, toggle } = useTheme();
   const intro = useFirstMountLoader();
   const { uiState, lineup, error, refresh } = useLineupData();
   const { freezeTargetUtc, picksPaused, resumesOn } = useSlateTiming();
@@ -116,13 +110,11 @@ export function PickerPage() {
         mode={loaderMode}
         freezeTargetUtc={freezeTargetUtc}
       />
-      <div className="app">
-        <Header
-          theme={theme}
-          onThemeToggle={toggle}
-          slateDateDisplay={slateDateDisplay}
-          frozenAtDisplay={frozenAtDisplay}
-        />
+      <Shell
+        slateDateDisplay={slateDateDisplay}
+        frozenAtDisplay={frozenAtDisplay}
+        lineup={view.kind === "lineup" ? view.lineup : null}
+      >
         {view.kind === "lineup" ? <SlateBand lineup={view.lineup} /> : null}
         <main
           id="lineup"
@@ -149,11 +141,7 @@ export function PickerPage() {
             />
           ) : null}
         </main>
-        <Footer
-          lineup={view.kind === "lineup" ? view.lineup : null}
-          appVersion={APP_VERSION}
-        />
-      </div>
+      </Shell>
     </>
   );
 }
