@@ -1,0 +1,86 @@
+import { test, expect } from "@playwright/test";
+
+const BASE_URL = "http://localhost:5173";
+const DESKTOP_VIEWPORT = { width: 1280, height: 800 };
+const PHONE_VIEWPORT = { width: 390, height: 844 };
+
+// Slate lifecycle states (Phase 6 full matrix)
+const DEMO_STATES = ["prefreeze", "frozen", "live", "final", "paused", "noslate", "error", "refrozen"] as const;
+
+test.describe("No-scroll gate", () => {
+  test.describe("desktop (1280x800)", () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize(DESKTOP_VIEWPORT);
+    });
+
+    DEMO_STATES.forEach((state) => {
+      test(`/picker with demo=${state} does not scroll`, async ({ page }) => {
+        await page.goto(`${BASE_URL}/?demo=${state}`);
+        await page.waitForLoadState("networkidle");
+
+        const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        const clientHeight = await page.evaluate(() => window.innerHeight);
+
+        expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1); // +1 for rounding
+      });
+    });
+
+    test("/history does not scroll", async ({ page }) => {
+      await page.goto(`${BASE_URL}/history`);
+      await page.waitForLoadState("networkidle");
+
+      const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      const clientHeight = await page.evaluate(() => window.innerHeight);
+
+      expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
+    });
+
+    test("/system does not scroll", async ({ page }) => {
+      await page.goto(`${BASE_URL}/system`);
+      await page.waitForLoadState("networkidle");
+
+      const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      const clientHeight = await page.evaluate(() => window.innerHeight);
+
+      expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
+    });
+  });
+
+  test.describe("phone (390x844)", () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize(PHONE_VIEWPORT);
+    });
+
+    DEMO_STATES.forEach((state) => {
+      test(`/picker with demo=${state} does not scroll`, async ({ page }) => {
+        await page.goto(`${BASE_URL}/?demo=${state}`);
+        await page.waitForLoadState("networkidle");
+
+        const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        const clientHeight = await page.evaluate(() => window.innerHeight);
+
+        expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
+      });
+    });
+
+    test("/history does not scroll", async ({ page }) => {
+      await page.goto(`${BASE_URL}/history`);
+      await page.waitForLoadState("networkidle");
+
+      const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      const clientHeight = await page.evaluate(() => window.innerHeight);
+
+      expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
+    });
+
+    test("/system does not scroll", async ({ page }) => {
+      await page.goto(`${BASE_URL}/system`);
+      await page.waitForLoadState("networkidle");
+
+      const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+      const clientHeight = await page.evaluate(() => window.innerHeight);
+
+      expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
+    });
+  });
+});
