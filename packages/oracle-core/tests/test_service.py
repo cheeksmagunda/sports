@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
+
 from oracle_core.service import (
     HealthCheck,
     ServiceMetadata,
@@ -114,6 +115,8 @@ def test_service_factory_provides_only_generic_routes_plus_application_routers()
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
     assert client.get("/domain-owned").json() == {"ok": True}
+    assert client.get("/docs").status_code == 200
+    assert client.get("/redoc").status_code == 200
     assert set(application.openapi()["paths"]) == {"/domain-owned"}
 
 
@@ -140,3 +143,28 @@ def test_service_payload_overrides_preserve_existing_contracts() -> None:
 
     assert client.get("/").json() == {"service": "existing", "version": "1.2.3"}
     assert client.get("/health").json() == {"status": "ok", "version": "1.2.3"}
+
+
+def test_service_factory_supports_application_docs_and_schema_compatibility() -> None:
+    application = create_service(
+        ServiceMetadata("test-service", "1.2.3"),
+        docs_url="/api/docs",
+        redoc_url=None,
+        root_include_in_schema=True,
+        health_include_in_schema=True,
+        root_response_model=dict[str, str],
+        health_response_model=dict[str, str],
+    )
+    client = TestClient(application)
+
+    assert client.get("/api/docs").status_code == 200
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    schema = application.openapi()
+    assert set(schema["paths"]) == {"/", "/health"}
+    assert schema["paths"]["/"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]["additionalProperties"] == {"type": "string"}
+    assert schema["paths"]["/health"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]["additionalProperties"] == {"type": "string"}

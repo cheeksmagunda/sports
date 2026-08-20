@@ -6,7 +6,7 @@ import inspect
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
@@ -113,19 +113,34 @@ def create_service(
     health_contributors: Sequence[HealthContributor] = (),
     routers: Sequence[APIRouter] = (),
     title: str | None = None,
+    docs_url: str | None = "/docs",
+    redoc_url: str | None = "/redoc",
     root_payload: Mapping[str, object] | None = None,
     health_payload_factory: Callable[[HealthStatus], Mapping[str, object]] | None = None,
+    root_include_in_schema: bool = False,
+    health_include_in_schema: bool = False,
+    root_response_model: Any | None = None,
+    health_response_model: Any | None = None,
 ) -> FastAPI:
     """Create a FastAPI app with generic root and health routes only.
 
-    Payload overrides let applications preserve an existing provider-neutral
-    response contract while core continues to own route construction and
-    health execution.
+    Payload, documentation, and schema overrides let applications preserve an
+    existing provider-neutral response contract while core continues to own
+    route construction and health execution.
     """
 
-    application = FastAPI(title=title or metadata.name, version=metadata.version)
+    application = FastAPI(
+        title=title or metadata.name,
+        version=metadata.version,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
+    )
 
-    @application.get("/", include_in_schema=False)
+    @application.get(
+        "/",
+        include_in_schema=root_include_in_schema,
+        response_model=root_response_model,
+    )
     async def root() -> dict[str, object]:
         if root_payload is not None:
             return dict(root_payload)
@@ -134,7 +149,11 @@ def create_service(
             payload["environment"] = metadata.environment
         return payload
 
-    @application.get("/health", include_in_schema=False)
+    @application.get(
+        "/health",
+        include_in_schema=health_include_in_schema,
+        response_model=health_response_model,
+    )
     async def health() -> JSONResponse:
         status = await run_health_checks(health_contributors)
         if health_payload_factory is None:
