@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 import pathlib
+from collections.abc import Mapping
 
 from ops_common import (
     Check,
@@ -14,11 +15,9 @@ from ops_common import (
     RunWindow,
     SafeRequestError,
     append_github_output,
-    contains_any,
     get_json,
-    log_messages,
+    parse_timestamp,
     perform_repair,
-    run_evidence_checks,
     safe_sha,
     summarize_status,
     write_report,
@@ -33,15 +32,6 @@ HARD_WATCHDOG_TRIGGERS = {
     "pool_degenerate_teams",
     "pool_too_small",
 }
-AUTH_FAILURE_MARKERS = (
-    "auth_required_stats",
-    "auth_required_entries",
-    "platformauthrequired",
-    "storage state not found",
-    "session has expired",
-    "did not capture authenticated headers",
-    "401 on",
-)
 
 
 def _api_is_healthy(api_base: str) -> bool:
@@ -52,7 +42,46 @@ def _api_is_healthy(api_base: str) -> bool:
     return status == 200 and isinstance(health, dict) and health.get("status") == "ok"
 
 
-def _api_checks(api_base: str, slate_date: str) -> tuple[list[Check], bool]:
+def _job1_durable_run_check(payload: object, *, window: RunWindow) -> Check:
+    """Validate Job 1 from the durable application-owned run ledger."""
+
+    if not isinstance(payload, Mapping):
+        return Check("Job 1 run", "alert", "The durable job-run payload is invalid.")
+    if str(payload.get("slate_date") or "") != window.slate_date:
+        return Check(
+            "Job 1 run", "alert", "The durable job-run payload reported the wrong slate date."
+        )
+    jobs = payload.get("jobs")
+    if not isinstance(jobs, Mapping):
+        return Check("Job 1 run", "alert", "The durable job-run payload omitted jobs.")
+    row = jobs.get(window.role)
+    if not isinstance(row, Mapping):
+        return Check(
+            "Job 1 run", "alert", "No durable Job 1 run was recorded in the requested window."
+        )
+    if row.get("role") != window.role:
+        return Check("Job 1 run", "alert", "The durable run reports the wrong service role.")
+    if str(row.get("status") or "").lower() != "success" or row.get("exit_code") != 0:
+        return Check("Job 1 run", "alert", "The durable Job 1 run did not complete successfully.")
+    started_at = parse_timestamp(row.get("started_at"))
+    completed_at = parse_timestamp(row.get("completed_at"))
+    if started_at is None or completed_at is None:
+        return Check("Job 1 run", "alert", "The durable Job 1 run omitted valid timestamps.")
+    if not window.contains(started_at) or not window.contains(completed_at):
+        return Check(
+            "Job 1 run", "alert", "The durable Job 1 run fell outside the requested window."
+        )
+    return Check(
+        "Job 1 run", "ok", "The durable Job 1 run completed successfully in the requested window."
+    )
+
+
+def _api_checks(
+    api_base: str,
+    slate_date: str,
+    *,
+    window: RunWindow,
+) -> tuple[list[Check], bool]:
     checks: list[Check] = []
     health_failed = False
     try:
@@ -61,7 +90,9 @@ def _api_checks(api_base: str, slate_date: str) -> tuple[list[Check], bool]:
             checks.append(Check("API health", "ok", "The public API returned OK."))
         else:
             health_failed = True
-            checks.append(Check("API health", "alert", f"The health endpoint returned HTTP {status}."))
+            checks.append(
+                Check("API health", "alert", f"The health endpoint returned HTTP {status}.")
+            )
     except SafeRequestError as exc:
         health_failed = True
         checks.append(Check("API health", "alert", str(exc)))
@@ -69,7 +100,9 @@ def _api_checks(api_base: str, slate_date: str) -> tuple[list[Check], bool]:
     try:
         status, payload = get_json(f"{api_base}/watchdog/{slate_date}?severity_min=warn")
         if status != 200 or not isinstance(payload, dict):
-            checks.append(Check("Pipeline watchdog", "alert", f"The endpoint returned HTTP {status}."))
+            checks.append(
+                Check("Pipeline watchdog", "alert", f"The endpoint returned HTTP {status}.")
+            )
         else:
             events = payload.get("events")
             event_list = events if isinstance(events, list) else []
@@ -82,13 +115,28 @@ def _api_checks(api_base: str, slate_date: str) -> tuple[list[Check], bool]:
             )
             hard = sorted(HARD_WATCHDOG_TRIGGERS.intersection(triggers))
             if hard:
-                checks.append(Check("Pipeline watchdog", "alert", f"Active triggers: {', '.join(hard)}."))
+                checks.append(
+                    Check("Pipeline watchdog", "alert", f"Active triggers: {', '.join(hard)}.")
+                )
             elif triggers:
-                checks.append(Check("Pipeline watchdog", "warn", f"Advisory triggers: {', '.join(triggers)}."))
+                checks.append(
+                    Check("Pipeline watchdog", "warn", f"Advisory triggers: {', '.join(triggers)}.")
+                )
             else:
                 checks.append(Check("Pipeline watchdog", "ok", "No pipeline events are active."))
     except SafeRequestError as exc:
         checks.append(Check("Pipeline watchdog", "alert", str(exc)))
+
+    try:
+        status, job_runs = get_json(f"{api_base}/watchdog/jobs/today")
+        if status != 200:
+            checks.append(
+                Check("Job 1 run", "alert", f"The durable job endpoint returned HTTP {status}.")
+            )
+        else:
+            checks.append(_job1_durable_run_check(job_runs, window=window))
+    except SafeRequestError as exc:
+        checks.append(Check("Job 1 run", "alert", str(exc)))
 
     try:
         status, slate = get_json(f"{api_base}/slate/{slate_date}")
@@ -115,38 +163,8 @@ def _railway_checks(
     job1_late_service_id: str,
     job2_service_id: str,
     expected_model_sha: str,
-    window: RunWindow,
 ) -> list[Check]:
     checks: list[Check] = []
-    try:
-        deployments, logs = railway.evidence_for_window(project_id, job1_service_id, window)
-    except SafeRequestError as exc:
-        checks.append(Check("Job 1 Railway check", "alert", str(exc)))
-    else:
-        checks.extend(
-            run_evidence_checks(
-                deployment_name="Job 1 deployment",
-                completion_name="Job 1 run",
-                completion_event="job1_done",
-                deployments=deployments,
-                logs=logs,
-                window=window,
-            )
-        )
-        messages = log_messages(logs)
-        if contains_any(messages, AUTH_FAILURE_MARKERS):
-            checks.append(Check("Real Sports session", "alert", "Job 1 logs contain an authentication failure."))
-        elif contains_any(messages, ("job1_failed", "job1_pool_degraded")):
-            checks.append(Check("Job 1 outcome", "alert", "Job 1 logs contain a failed or degraded run."))
-        else:
-            checks.append(
-                Check(
-                    "Job 1 outcome",
-                    "ok",
-                    "No authentication or degraded-run signature was found in the declared run window.",
-                )
-            )
-
     service_ids = {
         "job1": job1_service_id,
         "job1-late": job1_late_service_id,
@@ -160,7 +178,11 @@ def _railway_checks(
         present = {value for value in configured.values() if value}
         missing = sorted(name for name, value in configured.items() if not value)
         if missing:
-            checks.append(Check("Model configuration", "alert", f"Model SHA is unset on: {', '.join(missing)}."))
+            checks.append(
+                Check(
+                    "Model configuration", "alert", f"Model SHA is unset on: {', '.join(missing)}."
+                )
+            )
         elif len(present) != 1:
             shown = ", ".join(f"{name}={safe_sha(value)}" for name, value in configured.items())
             checks.append(Check("Model configuration", "alert", f"Service SHAs differ: {shown}."))
@@ -190,14 +212,24 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-base", default=os.environ.get("WNBA_API_BASE", ""))
     parser.add_argument("--project-id", default=os.environ.get("WNBA_RAILWAY_PROJECT_ID", ""))
-    parser.add_argument("--environment-id", default=os.environ.get("WNBA_RAILWAY_ENVIRONMENT_ID", ""))
-    parser.add_argument("--api-service-id", default=os.environ.get("WNBA_RAILWAY_API_SERVICE_ID", ""))
-    parser.add_argument("--job1-service-id", default=os.environ.get("WNBA_RAILWAY_JOB1_SERVICE_ID", ""))
+    parser.add_argument(
+        "--environment-id", default=os.environ.get("WNBA_RAILWAY_ENVIRONMENT_ID", "")
+    )
+    parser.add_argument(
+        "--api-service-id", default=os.environ.get("WNBA_RAILWAY_API_SERVICE_ID", "")
+    )
+    parser.add_argument(
+        "--job1-service-id", default=os.environ.get("WNBA_RAILWAY_JOB1_SERVICE_ID", "")
+    )
     parser.add_argument(
         "--job1-late-service-id", default=os.environ.get("WNBA_RAILWAY_JOB1_LATE_SERVICE_ID", "")
     )
-    parser.add_argument("--job2-service-id", default=os.environ.get("WNBA_RAILWAY_JOB2_SERVICE_ID", ""))
-    parser.add_argument("--expected-model-sha", default=os.environ.get("WNBA_EXPECTED_MODEL_SHA", ""))
+    parser.add_argument(
+        "--job2-service-id", default=os.environ.get("WNBA_RAILWAY_JOB2_SERVICE_ID", "")
+    )
+    parser.add_argument(
+        "--expected-model-sha", default=os.environ.get("WNBA_EXPECTED_MODEL_SHA", "")
+    )
     parser.add_argument("--slate-date", required=True)
     parser.add_argument("--run-start-utc", required=True)
     parser.add_argument("--run-end-utc", required=True)
@@ -239,7 +271,7 @@ def main() -> int:
         parser.error(str(exc))
 
     api_base = args.api_base.rstrip("/")
-    checks, health_failed = _api_checks(api_base, args.slate_date)
+    checks, health_failed = _api_checks(api_base, args.slate_date, window=window)
     token = os.environ.get("RAILWAY_WORKSPACE_TOKEN", "")
     if token:
         railway = RailwayClient(token)
@@ -252,12 +284,17 @@ def main() -> int:
                 job1_late_service_id=args.job1_late_service_id,
                 job2_service_id=args.job2_service_id,
                 expected_model_sha=args.expected_model_sha,
-                window=window,
             )
         )
         if args.repair:
             if not health_failed:
-                checks.append(Check("Allowlisted repair", "ok", "No repair was needed because API health passed."))
+                checks.append(
+                    Check(
+                        "Allowlisted repair",
+                        "ok",
+                        "No repair was needed because API health passed.",
+                    )
+                )
             else:
                 result = perform_repair(
                     lambda: railway.deploy_service(args.api_service_id, args.environment_id),
@@ -289,7 +326,8 @@ def main() -> int:
         f"WNBA pre-freeze guard for {args.slate_date}",
         checks,
         notes=[
-            f"Railway evidence was limited to {window.describe()}.",
+            f"Durable Job 1 evidence was limited to {window.describe()}.",
+            "Railway validates model configuration only, not cron execution evidence.",
             "Repair is manual, limited to API redeploys, and requires a health postcheck.",
             "Real Sports session recovery always requires the documented operator flow.",
         ],
