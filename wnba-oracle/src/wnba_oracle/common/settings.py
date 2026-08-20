@@ -6,17 +6,20 @@ import datetime as dt
 from functools import lru_cache
 from typing import Literal
 
-from oracle_core.config import RuntimeConfig, SecretValue
+from oracle_core.config import MissingRequiredEnvironmentError, RuntimeConfig, SecretValue
 from pydantic import Field
 
 
 class Settings(RuntimeConfig):
-    """All env-driven config. Treats missing required values as a startup error."""
+    """All environment-driven config with explicit role-specific validation."""
 
     # External APIs
-    odds_api_key: SecretValue = Field(default="", alias="ODDS_API_KEY")
-    real_sports_username: SecretValue = Field(default="", alias="REAL_SPORTS_USERNAME")
-    real_sports_password: SecretValue = Field(default="", alias="REAL_SPORTS_PASSWORD")
+    odds_api_key: SecretValue = Field(default=SecretValue(""), alias="ODDS_API_KEY")
+    real_sports_username: SecretValue = Field(default=SecretValue(""), alias="REAL_SPORTS_USERNAME")
+    real_sports_password: SecretValue = Field(default=SecretValue(""), alias="REAL_SPORTS_PASSWORD")
+    realsports_storage_state_b64gz: SecretValue = Field(
+        default=SecretValue(""), alias="REALSPORTS_STORAGE_STATE_B64GZ"
+    )
 
     @property
     def odds_api_key_value(self) -> str:
@@ -445,3 +448,42 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+_PRODUCTION_ROLE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "api": ("DATABASE_URL", "REDIS_URL"),
+    "job1": ("DATABASE_URL", "REALSPORTS_STORAGE_STATE_B64GZ"),
+    "job1games": ("DATABASE_URL", "REALSPORTS_STORAGE_STATE_B64GZ"),
+    "job1late": ("DATABASE_URL",),
+    "job2": ("DATABASE_URL", "REDIS_URL", "WNBA_ORACLE_MODEL_ARTIFACT_SHA"),
+    "dayclose": ("DATABASE_URL", "REALSPORTS_STORAGE_STATE_B64GZ"),
+    "backfill": ("DATABASE_URL",),
+}
+
+
+def validate_production_role(settings: Settings, role: str) -> None:
+    """Validate only the resources a known production role cannot run without.
+
+    This function is deliberately not called while importing settings. An
+    application entry point may call it immediately before starting a specific
+    production role, while development and test construction stay lightweight.
+    Errors contain variable names only and never reveal configured values.
+    """
+    if settings.env != "prod":
+        return
+    try:
+        required = _PRODUCTION_ROLE_REQUIREMENTS[role]
+    except KeyError as exc:
+        raise ValueError(f"Unknown WNBA production role: {role}") from exc
+
+    configured: dict[str, str] = {
+        "DATABASE_URL": settings.database_url,
+        "REDIS_URL": settings.redis_url,
+        "WNBA_ORACLE_MODEL_ARTIFACT_SHA": settings.model_artifact_sha,
+        "REALSPORTS_STORAGE_STATE_B64GZ": (
+            settings.realsports_storage_state_b64gz.get_secret_value()
+        ),
+    }
+    missing = [name for name in required if not configured[name].strip()]
+    if missing:
+        raise MissingRequiredEnvironmentError(missing)

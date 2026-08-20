@@ -13,6 +13,8 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from wnba_oracle.picker.optimize import LineupRecommendation
 from wnba_oracle.scheduler import job2
 
@@ -61,7 +63,7 @@ def _fake_redis(lock_wins: bool) -> MagicMock:
 
 
 def test_force_skips_postgres_existence_check() -> None:
-    """force=True never calls connect() — the existence check is bypassed."""
+    """force=True never calls connect(); the existence check is bypassed."""
     eng = _fake_engine_for_force(upsert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
     with (
@@ -79,18 +81,43 @@ def test_force_acquires_late_frozen_redis_key() -> None:
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=True)
     with (
+        patch("oracle_core.storage.secrets.token_urlsafe", return_value="late-owner-token"),
         patch.object(job2, "get_engine", return_value=eng),
         patch.object(job2, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     rd.set.assert_called_once_with(
-        "wnba.late_frozen.2026-06-07", "heuristic-v1", nx=True, ex=24 * 3600
+        "wnba.late_frozen.2026-06-07", "late-owner-token", nx=True, ex=24 * 3600
+    )
+
+
+def test_force_append_failure_releases_matching_owner_token() -> None:
+    """A failed append releases only the lease token acquired by this fire."""
+    eng = _fake_engine_for_force()
+    eng.begin.return_value.__enter__.return_value.execute.side_effect = RuntimeError("write failed")
+    rd = _fake_redis(lock_wins=True)
+    with (
+        patch("oracle_core.storage.secrets.token_urlsafe", return_value="late-owner-token"),
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
+        pytest.raises(RuntimeError, match="failed to append"),
+    ):
+        job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
+
+    rd.set.assert_called_once_with(
+        "wnba.late_frozen.2026-06-07", "late-owner-token", nx=True, ex=24 * 3600
+    )
+    assert rd.eval.call_count == 1
+    assert rd.eval.call_args.args[1:] == (
+        1,
+        "wnba.late_frozen.2026-06-07",
+        "late-owner-token",
     )
 
 
 def test_force_second_fire_bails_on_late_frozen_key() -> None:
     """If wnba.late_frozen.{sd} is already set, the second late-fire bails
-    without touching Postgres — prevents overwriting twice."""
+    without touching Postgres, which prevents overwriting twice."""
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=False)
     with (

@@ -58,18 +58,16 @@ def test_release_freeze_lock_first_fire_key() -> None:
     rd = MagicMock()
     with patch.object(job2, "get_redis", return_value=rd):
         job2._release_freeze_lock("2026-06-18", force=False, owner_token="owner-a")
-    rd.eval.assert_called_once_with(
-        job2._RELEASE_LOCK_IF_OWNER, 1, "wnba.frozen.2026-06-18", "owner-a"
-    )
+    assert rd.eval.call_count == 1
+    assert rd.eval.call_args.args[1:] == (1, "wnba.frozen.2026-06-18", "owner-a")
 
 
 def test_release_freeze_lock_late_refreeze_key() -> None:
     rd = MagicMock()
     with patch.object(job2, "get_redis", return_value=rd):
         job2._release_freeze_lock("2026-06-18", force=True, owner_token="owner-b")
-    rd.eval.assert_called_once_with(
-        job2._RELEASE_LOCK_IF_OWNER, 1, "wnba.late_frozen.2026-06-18", "owner-b"
-    )
+    assert rd.eval.call_count == 1
+    assert rd.eval.call_args.args[1:] == (1, "wnba.late_frozen.2026-06-18", "owner-b")
 
 
 def test_release_freeze_lock_swallows_redis_error() -> None:

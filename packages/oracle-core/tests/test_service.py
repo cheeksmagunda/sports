@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
-
 from oracle_core.service import (
     HealthCheck,
     ServiceMetadata,
@@ -162,9 +161,9 @@ def test_service_factory_supports_application_docs_and_schema_compatibility() ->
     assert client.get("/redoc").status_code == 404
     schema = application.openapi()
     assert set(schema["paths"]) == {"/", "/health"}
-    assert schema["paths"]["/"]["get"]["responses"]["200"]["content"][
-        "application/json"
-    ]["schema"]["additionalProperties"] == {"type": "string"}
-    assert schema["paths"]["/health"]["get"]["responses"]["200"]["content"][
-        "application/json"
-    ]["schema"]["additionalProperties"] == {"type": "string"}
+    assert schema["paths"]["/"]["get"]["responses"]["200"]["content"]["application/json"]["schema"][
+        "additionalProperties"
+    ] == {"type": "string"}
+    assert schema["paths"]["/health"]["get"]["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]["additionalProperties"] == {"type": "string"}

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
 
 revision: str = "20260820_0010"
 down_revision: str | None = "20260820_0009"
@@ -27,7 +28,7 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("exit_code", sa.Integer, nullable=True),
-        sa.Column("details_json", sa.dialects.postgresql.JSONB, nullable=False),
+        sa.Column("details_json", JSONB, nullable=False),
     )
     op.create_index("ix_job_runs_slate_date", "job_runs", ["slate_date"])
     op.create_index(

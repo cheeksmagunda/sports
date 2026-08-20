@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from wnba_oracle.train import pipeline
 from wnba_oracle.train.pipeline import PickerArtifact
 

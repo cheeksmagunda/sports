@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+from oracle_core.storage import Lease, RedisLeaseStore
 from sqlalchemy import text
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
@@ -1203,14 +1203,6 @@ def _build_per_player(
     return out
 
 
-_RELEASE_LOCK_IF_OWNER = """
-if redis.call('get', KEYS[1]) == ARGV[1] then
-    return redis.call('del', KEYS[1])
-end
-return 0
-"""
-
-
 def _release_freeze_lock(slate_date: str, force: bool, owner_token: str | None) -> None:
     """Drop the Redis freeze lock for a slate so the next fire can retry.
 
@@ -1225,7 +1217,7 @@ def _release_freeze_lock(slate_date: str, force: bool, owner_token: str | None) 
         return
     key = f"wnba.late_frozen.{slate_date}" if force else f"wnba.frozen.{slate_date}"
     try:
-        get_redis().eval(_RELEASE_LOCK_IF_OWNER, 1, key, owner_token)
+        RedisLeaseStore(get_redis(), prefix="").release(Lease(key=key, token=owner_token))
     except Exception as exc:
         log.warning("job2_freeze_lock_release_failed", slate_date=slate_date, error=str(exc)[:120])
 
@@ -1280,8 +1272,9 @@ def _freeze(
         try:
             rd = get_redis()
             late_key = f"wnba.late_frozen.{slate_date}"
-            lock_owner = uuid.uuid4().hex
-            lock_acquired = bool(rd.set(late_key, lock_owner, nx=True, ex=24 * 3600))
+            lease = RedisLeaseStore(rd, prefix="").acquire(late_key, ttl_seconds=24 * 3600)
+            lock_owner = lease.token if lease else None
+            lock_acquired = lease is not None
         except Exception as redis_exc:
             log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
             lock_owner = None
@@ -1301,8 +1294,9 @@ def _freeze(
             key = f"wnba.frozen.{slate_date}"
             # The 24h TTL covers a full slate window; if the writer crashes the
             # lock auto-releases for the next fire to retry.
-            lock_owner = uuid.uuid4().hex
-            lock_acquired = bool(rd.set(key, lock_owner, nx=True, ex=24 * 3600))
+            lease = RedisLeaseStore(rd, prefix="").acquire(key, ttl_seconds=24 * 3600)
+            lock_owner = lease.token if lease else None
+            lock_acquired = lease is not None
         except Exception as redis_exc:
             log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
             lock_owner = None

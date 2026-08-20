@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from oracle_core.jobs import JobContext, JobResult
+
 from wnba_oracle.api import watchdog_router
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.settings import Settings
