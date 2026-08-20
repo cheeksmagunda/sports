@@ -282,8 +282,18 @@ class OptimizeConfig:
     # which no entrant can realize and which flatters high-dispersion lineups
     # most, biasing selection toward volatility. Applied to the field lineups
     # too, so both sides of expected_payout describe the same world. Default
-    # False keeps the loop byte-identical; measure with
-    # `scripts/lab.py variant --set committed_order_objective=True`.
+    # False keeps the loop byte-identical.
+    #
+    # MEASURED 2026-08-19 over the 50 slates with recorded serving knobs:
+    # mean +1.040, sd 5.410, t=1.36, 95% CI [-0.459, +2.540]. NOT shipped -- the
+    # interval includes zero. It does survive dropping the best slate (+0.733)
+    # and both minutes regimes lean positive (+1.417 / +0.664), and per-slate
+    # swings are large (-13.98 to +16.12), so the change genuinely reshuffles
+    # selection; the NET is just not separable from noise at this corpus size.
+    # An n=20 preview read +1.76 and shrank as slates were added, which is
+    # regression to the mean -- do not re-ship on a partial run. Re-measure when
+    # the corpus grows:
+    # `scripts/lab.py variant --set committed_order_objective=True --last 0`
     committed_order_objective: bool = False
 
 
