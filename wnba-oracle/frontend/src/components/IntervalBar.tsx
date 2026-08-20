@@ -11,6 +11,10 @@ interface Props {
   max: number;
   unit?: string;
   ariaLabel?: string;
+  // Slip row minutes column: shrinks the bar and drops the on-bar text
+  // labels (no room for them at 120px wide) -- the full P10/P50/P90
+  // values stay available via ariaLabel.
+  compact?: boolean;
 }
 
 export function IntervalBar({
@@ -21,6 +25,7 @@ export function IntervalBar({
   max,
   unit = "",
   ariaLabel,
+  compact = false,
 }: Props) {
   const span = Math.max(max - min, 1);
   const clamp = (v: number) => Math.max(0, Math.min(1, (v - min) / span)) * 100;
@@ -34,17 +39,23 @@ export function IntervalBar({
     `Quantile interval. P10 ${p10.toFixed(1)}${unit}, median ${p50.toFixed(1)}${unit}, P90 ${p90.toFixed(1)}${unit}.`;
 
   return (
-    <div className="interval-bar" role="img" aria-label={label}>
+    <div
+      className={compact ? "interval-bar interval-bar--compact" : "interval-bar"}
+      role="img"
+      aria-label={label}
+    >
       <div
         className="interval-bar__band"
         style={{ left: `${left}%`, width: `${width}%` }}
       />
       <div className="interval-bar__median" style={{ left: `${median}%` }} />
-      <div className="interval-bar__labels" aria-hidden="true">
-        <span>P10 {p10.toFixed(0)}{unit}</span>
-        <span>P50 {p50.toFixed(0)}{unit}</span>
-        <span>P90 {p90.toFixed(0)}{unit}</span>
-      </div>
+      {compact ? null : (
+        <div className="interval-bar__labels" aria-hidden="true">
+          <span>P10 {p10.toFixed(0)}{unit}</span>
+          <span>P50 {p50.toFixed(0)}{unit}</span>
+          <span>P90 {p90.toFixed(0)}{unit}</span>
+        </div>
+      )}
     </div>
   );
 }

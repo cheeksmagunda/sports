@@ -53,6 +53,29 @@ const ESPN_COLORS: Record<string, string> = {
 
 const FALLBACK = "var(--primary)";
 
+// Which ink (near-black or white) clears WCAG AA (>=4.5:1) against each
+// team's rank-gutter fill. Computed from relative luminance, not eyeballed
+// -- worst case (Washington) is 4.62:1. Values reference the same
+// primitive tokens the rest of the file resolves through rather than
+// repeating the hex literals.
+const ESPN_INK: Record<string, "light" | "dark"> = {
+  ATL: "light",
+  CHI: "dark",
+  CON: "dark",
+  DAL: "light",
+  GS: "dark",
+  IND: "light",
+  LV: "dark",
+  LA: "light",
+  MIN: "light",
+  NY: "dark",
+  PHX: "light",
+  POR: "dark",
+  SEA: "light",
+  TOR: "light",
+  WSH: "dark",
+};
+
 export function espnCode(team: string | null | undefined): string | null {
   if (!team) return null;
   return TO_ESPN[team.toUpperCase().trim()] ?? null;
@@ -62,4 +85,10 @@ export function teamPrimary(team: string | null | undefined): string {
   const code = espnCode(team);
   if (!code) return FALLBACK;
   return ESPN_COLORS[code] ?? FALLBACK;
+}
+
+export function teamInk(team: string | null | undefined): string {
+  const code = espnCode(team);
+  const mode = code ? ESPN_INK[code] : undefined;
+  return mode === "dark" ? "var(--neutral-950)" : "var(--neutral-0)";
 }

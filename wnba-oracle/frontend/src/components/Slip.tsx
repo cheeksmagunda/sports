@@ -1,22 +1,22 @@
-// Five-card grid. Cards are emitted in the order they were optimized;
-// rank is purely positional (1..5). CSS animations stagger the entry.
+// Five ordered rows, read top to bottom as an ordered list so screen
+// readers announce rank first. Replaces the five-card grid.
 
 import type { FrozenLineup, PlayerProjection } from "../lib/api";
-import { PlayerCard } from "./PlayerCard";
+import { SlipRow } from "./SlipRow";
 
 interface Props {
   lineup: FrozenLineup;
 }
 
-export function LineupStack({ lineup }: Props) {
+export function Slip({ lineup }: Props) {
   const projections = lineup.lineup.per_player ?? [];
   const ids = lineup.lineup.player_ids;
   const mults = lineup.lineup.slot_multipliers;
 
-  // Fallback when API hasn't joined per-player projections (older slate
-  // freezes pre-D32). Render placeholder cards so the layout doesn't
-  // collapse, but with neutral data.
-  const cards: PlayerProjection[] =
+  // Fallback when the API hasn't joined per-player projections (older
+  // slate freezes pre-D32, still reachable via /lineup/{date}/history).
+  // Synthesize placeholder rows so the layout doesn't collapse.
+  const rows: PlayerProjection[] =
     projections.length === ids.length
       ? projections
       : ids.map((pid) => ({
@@ -33,20 +33,17 @@ export function LineupStack({ lineup }: Props) {
         }));
 
   return (
-    <div
-      role="list"
-      aria-label="Five-player frozen lineup"
-      className="grid"
-    >
-      {cards.map((p, i) => (
-        <div role="listitem" key={p.player_id}>
-          <PlayerCard
+    <ol className="slip" aria-label="Five-player frozen lineup, ranked">
+      {rows.map((p, i) => (
+        <li key={p.player_id} className="slip__item">
+          <SlipRow
             rank={i + 1}
             slotMultiplier={mults[i] ?? 1}
             player={p}
+            slateDate={lineup.slate_date}
           />
-        </div>
+        </li>
       ))}
-    </div>
+    </ol>
   );
 }

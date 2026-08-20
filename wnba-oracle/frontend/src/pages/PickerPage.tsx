@@ -1,13 +1,13 @@
 // Morning view. Operator opens this once per day. Header → SlateBand →
-// 5-card grid → Footer. While the backend hasn't frozen today's lineup
-// yet, OracleLoader holds the canvas with a T-minus countdown.
+// Slip → Footer. While the backend hasn't frozen today's lineup yet,
+// OracleLoader holds the canvas with a T-minus countdown.
 
 import { useEffect, useMemo, useState } from "react";
 import { ErrorState } from "../components/ErrorState";
-import { LineupStack } from "../components/LineupStack";
 import { OracleLoader } from "../components/OracleLoader";
 import { Shell } from "../components/Shell";
 import { SlateBand } from "../components/SlateBand";
+import { Slip } from "../components/Slip";
 import { useLineupData } from "../hooks/useLineupData";
 import { useSlateTiming } from "../hooks/useSlateTiming";
 
@@ -115,14 +115,14 @@ export function PickerPage() {
         frozenAtDisplay={frozenAtDisplay}
         lineup={view.kind === "lineup" ? view.lineup : null}
       >
-        {view.kind === "lineup" ? <SlateBand lineup={view.lineup} /> : null}
+        <SlateBand lineup={view.kind === "lineup" ? view.lineup : null} />
         <main
           id="lineup"
           aria-label="Frozen morning lineup"
           aria-busy={view.kind === "loading" || view.kind === "waiting"}
         >
           {view.kind === "lineup" ? (
-            <LineupStack lineup={view.lineup} />
+            <Slip lineup={view.lineup} />
           ) : view.kind === "error" ? (
             <ErrorState
               title="Can't reach the picker server"
