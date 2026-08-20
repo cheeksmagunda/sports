@@ -40,7 +40,10 @@ import sqlalchemy as sa
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from wnba_oracle.common.db_utils import normalize_postgres_url
+from wnba_oracle.common.db_utils import (
+    normalize_postgres_url,
+    repair_local_sslrootcert,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO_ROOT / "data" / "snapshot"
@@ -88,7 +91,7 @@ from job1_enrichment group by 1 order by 1
 
 def _engine(url: str) -> sa.Engine:
     return sa.create_engine(
-        normalize_postgres_url(url),
+        normalize_postgres_url(repair_local_sslrootcert(url, REPO_ROOT)),
         connect_args={"options": "-c default_transaction_read_only=on"},
     )
 

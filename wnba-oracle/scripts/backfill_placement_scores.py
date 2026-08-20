@@ -37,6 +37,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import sqlalchemy as sa  # noqa: E402
 
+from wnba_oracle.common.db_utils import repair_local_sslrootcert  # noqa: E402
 from wnba_oracle.db.engine import normalize_postgres_url  # noqa: E402
 from wnba_oracle.eval.contest_score import (  # noqa: E402
     DEFAULT_SLOT_BASES,
@@ -76,6 +77,7 @@ def main() -> int:
 
     # Read-only guard unless --apply, so a dry run cannot write even by mistake.
     connect_args = {} if args.apply else {"options": "-c default_transaction_read_only=on"}
+    url = repair_local_sslrootcert(url, REPO_ROOT)
     engine = sa.create_engine(normalize_postgres_url(url), connect_args=connect_args)
 
     updates: list[dict] = []

@@ -149,9 +149,14 @@ issue labeled `ops-results` (#15). No model change was made.
   upper bound, not our result. Measured against the corpus, the stored score
   matches the hindsight number on 11 of 18 slates and the correct committed-order
   number on 0 of 18, overstating by up to 2.4 points. Fixed and deployed in
-  `4f73668`; rows written from 2026-08-20 onward are correct. The existing rows
-  have NOT been backfilled -- use `scripts/backfill_placement_scores.py` (dry-run
-  by default) and log the run to the `ops-results` issue.
+  `4f73668`; rows written from 2026-08-20 onward are correct. Backfilled
+  2026-08-19 via `scripts/backfill_placement_scores.py --apply`: **11 rows
+  repaired** (mean -1.11, worst -2.45 on 2026-08-05; every row moved down, which
+  is the expected direction since a committed order can never beat a hindsight
+  one). **11 rows remain wrong and are not repairable** -- their picks have no
+  `slate_labels` row, so the realized values needed to recompute do not exist.
+  Those 11 also still carry the bogus `entry_rank = 21` sentinel. Treat any
+  pre-2026-08-19 placement row with a 21 rank as unusable, not merely imprecise.
 
 - **No placement has ever been recorded.** `contest_placements` holds 16 rows
   from one batch on 2026-06-13, all with `entry_rank = 21` (the "not in the
