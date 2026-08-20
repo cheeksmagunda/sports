@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.db.engine import get_engine
+from wnba_oracle.scheduler.job_runtime import JOB_NAMES
 
 router = APIRouter(prefix="/watchdog", tags=["watchdog"])
 
@@ -36,6 +37,41 @@ def get_watchdog_today(
     """
     today = current_slate_date().isoformat()
     return get_watchdog_for_slate(today, severity_min=severity_min)
+
+
+@router.get("/jobs/today")
+def get_job_runs_today() -> dict[str, Any]:
+    """Return durable latest-run facts for independent schedule monitoring."""
+
+    today = current_slate_date().isoformat()
+    try:
+        engine = get_engine()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    query = text(
+        "SELECT DISTINCT ON (job_name) job_name, role, status, started_at, "
+        "completed_at, exit_code FROM job_runs WHERE slate_date = :slate_date "
+        "ORDER BY job_name, started_at DESC"
+    )
+    with engine.connect() as connection:
+        rows = list(connection.execute(query, {"slate_date": today}))
+
+    latest: dict[str, Any] = dict.fromkeys(JOB_NAMES)
+    for row in rows:
+        values = row._mapping
+        latest[str(values["job_name"])] = {
+            "role": values["role"],
+            "status": values["status"],
+            "started_at": _isoformat(values.get("started_at")),
+            "completed_at": _isoformat(values.get("completed_at")),
+            "exit_code": values.get("exit_code"),
+        }
+    return {
+        "slate_date": today,
+        "checked_at_utc": dt.datetime.now(dt.UTC).isoformat(),
+        "jobs": latest,
+    }
 
 
 @router.get("/{slate_date}")
@@ -102,3 +138,7 @@ def _summarize(events: list[dict]) -> str:
     if "error" in severities:
         return "error"
     return "warn"
+
+
+def _isoformat(value: Any) -> str | None:
+    return value.isoformat() if value is not None else None
