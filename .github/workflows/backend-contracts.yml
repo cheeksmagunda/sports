@@ -1,0 +1,37 @@
+name: backend-contracts
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-contracts
+  cancel-in-progress: false
+
+jobs:
+  external-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          version: "0.11.13"
+
+      - name: Install workspace
+        run: uv sync --frozen --all-packages --all-extras
+
+      - name: Check live provider schemas
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: >-
+          uv run --package wnba-oracle python -m pytest
+          wnba-oracle/tests -m contract -v

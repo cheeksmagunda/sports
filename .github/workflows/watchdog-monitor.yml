@@ -1,0 +1,57 @@
+name: watchdog-monitor
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ALERT_LABEL: ops-guard
+  WATCHDOG_TITLE: WNBA Oracle watchdog alert
+  WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WATCHDOG_HEARTBEAT_URL: ${{ secrets.WATCHDOG_HEARTBEAT_URL }}
+
+concurrency:
+  group: watchdog-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Probe production
+        id: probe
+        run: >-
+          python wnba-oracle/scripts/watchdog_monitor.py
+          --report "$RUNNER_TEMP/watchdog-report.md"
+
+      - name: Open one issue per incident
+        if: steps.probe.outputs.status == 'alert'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$ALERT_LABEL" --color B60205 --description "Live watchdog alert" 2>/dev/null || true
+          number=$(gh issue list --label "$ALERT_LABEL" --state open --json number,title \
+            --jq '.[] | select(.title == "WNBA Oracle watchdog alert") | .number' | head -n 1)
+          if [ -z "$number" ]; then
+            gh issue create \
+              --label "$ALERT_LABEL" \
+              --title "$WATCHDOG_TITLE" \
+              --body-file "$RUNNER_TEMP/watchdog-report.md"
+          fi
+
+      - name: Close incident on recovery
+        if: steps.probe.outputs.status == 'ok'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for number in $(gh issue list --label "$ALERT_LABEL" --state open --json number,title \
+            --jq '.[] | select(.title == "WNBA Oracle watchdog alert") | .number'); do
+            gh issue comment "$number" --body "Production recovered at $(date -u +'%F %T') UTC."
+            gh issue close "$number"
+          done

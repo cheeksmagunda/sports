@@ -1,0 +1,100 @@
+name: corpus-backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_backup:
+        description: Confirm that this manual run may write the backups branch
+        required: true
+        type: boolean
+        default: false
+      allow_regression:
+        description: Allow an intentional row-count or maximum-slate regression
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: corpus-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: inputs.confirm_backup == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backup dependencies
+        run: >-
+          python -m pip install
+          "sqlalchemy==2.0.50"
+          "psycopg[binary]==3.3.4"
+          "pandas==2.3.3"
+
+      - name: Prepare TLS certificate
+        env:
+          PG_SSL_ROOT_CERT: ${{ secrets.PG_SSL_ROOT_CERT }}
+        run: |
+          umask 077
+          printf '%s' "$PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
+
+      - name: Load previous backup baseline
+        env:
+          PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
+        run: |
+          if git ls-remote --exit-code --heads origin backups >/dev/null 2>&1; then
+            git fetch origin backups
+            git show origin/backups:wnba-oracle/data/backups/manifest.json > "$PREVIOUS_MANIFEST"
+          fi
+
+      - name: Export corpus snapshot
+        env:
+          CORPUS_BACKUP_ALLOW_REGRESSION: ${{ inputs.allow_regression }}
+          CORPUS_BACKUP_DIR: ${{ runner.temp }}/corpus-backup
+          CORPUS_PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
+          DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
+        run: python wnba-oracle/scripts/backup_corpus.py
+
+      - name: Verify snapshot manifest and hashes
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
+        run: python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+
+      - name: Commit snapshot to backups branch
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
+        run: |
+          git config user.name "wnba-oracle-bot"
+          git config user.email "noreply@github.com"
+          if git ls-remote --exit-code --heads origin backups >/dev/null 2>&1; then
+            git fetch origin backups
+            git switch --force-create backups origin/backups
+          else
+            git switch --orphan backups
+            git rm -r --cached . || true
+          fi
+          mkdir -p wnba-oracle/data/backups
+          cp "$SNAPSHOT_DIR/slate_labels.csv" wnba-oracle/data/backups/
+          cp "$SNAPSHOT_DIR/contest_leaderboards.csv" wnba-oracle/data/backups/
+          cp "$SNAPSHOT_DIR/manifest.json" wnba-oracle/data/backups/
+          git add -f wnba-oracle/data/backups/slate_labels.csv
+          git add -f wnba-oracle/data/backups/contest_leaderboards.csv
+          git add -f wnba-oracle/data/backups/manifest.json
+          if git diff --cached --quiet; then
+            echo "no corpus changes; skipping commit"
+          else
+            git commit -m "backup: corpus snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin backups
+          fi

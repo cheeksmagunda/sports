@@ -1,0 +1,11 @@
+title = "sports secret-scanning configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "The checked-in SOPS age recipient is public encryption metadata."
+condition = "AND"
+paths = ['''^\.sops\.yaml$''']
+regexTarget = "match"
+regexes = ['''age1hql2tgndcwx864dk6ee73u3ufemlucuzu6zurp8kvhusv396p5qq75j5d3''']

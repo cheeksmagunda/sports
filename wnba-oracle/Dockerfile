@@ -1,6 +1,6 @@
-# WNBA Oracle backend image. Used by api and cron services.
-# Multi-stage: builder installs deps via uv; runtime adds Chromium for
-# Playwright Real Sports re-auth.
+# WNBA Oracle backend image. Used by API and cron services.
+# Build from the sports monorepo root with:
+#   docker build -f wnba-oracle/Dockerfile .
 
 FROM python:3.11-slim AS builder
 
@@ -16,13 +16,16 @@ ENV UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/opt/venv
 
-WORKDIR /app
-COPY pyproject.toml uv.lock README.md ./
-COPY src/ ./src/
-COPY migrations/ ./migrations/
-COPY alembic.ini ./
+WORKDIR /workspace
+COPY pyproject.toml uv.lock ./
+COPY packages/oracle-core/pyproject.toml packages/oracle-core/README.md ./packages/oracle-core/
+COPY packages/oracle-core/src/ ./packages/oracle-core/src/
+COPY wnba-oracle/pyproject.toml wnba-oracle/README.md ./wnba-oracle/
+COPY wnba-oracle/src/ ./wnba-oracle/src/
+COPY wnba-oracle/migrations/ ./wnba-oracle/migrations/
+COPY wnba-oracle/alembic.ini ./wnba-oracle/
 
-RUN uv sync --frozen --no-dev --no-editable
+RUN uv sync --frozen --no-dev --package wnba-oracle --no-editable
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 RUN /opt/venv/bin/playwright install chromium
@@ -68,26 +71,26 @@ ENV TZ=America/New_York \
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/playwright-browsers /opt/playwright-browsers
-WORKDIR /app
-COPY src/ ./src/
-COPY migrations/ ./migrations/
-COPY alembic.ini ./
-COPY models/ ./models/
-COPY data/ ./data/
-COPY scripts/seed_storage_state.py ./scripts/seed_storage_state.py
+WORKDIR /app/wnba-oracle
+COPY wnba-oracle/src/ ./src/
+COPY wnba-oracle/migrations/ ./migrations/
+COPY wnba-oracle/alembic.ini ./
+COPY wnba-oracle/models/ ./models/
+COPY wnba-oracle/data/ ./data/
+COPY wnba-oracle/scripts/seed_storage_state.py ./scripts/seed_storage_state.py
 
-ENV PYTHONPATH=/app/src \
+ENV PYTHONPATH=/app/wnba-oracle/src \
     PORT=8000
 
 RUN useradd --create-home --uid 10001 oracle \
-    && mkdir -p /app/scraper \
+    && mkdir -p /app/wnba-oracle/scraper \
     && chown -R oracle:oracle /app /opt/venv /opt/playwright-browsers
 USER oracle
 
 EXPOSE 8000
 
 # Default CMD is the API. Cron services override startCommand to:
-#   sh -c "python /app/scripts/seed_storage_state.py && oracle-cron --job jobN"
+#   sh -c "python /app/wnba-oracle/scripts/seed_storage_state.py && oracle-cron --job jobN"
 # Always wrap with sh -c so ${PORT} expands. See mlb-oracle for the silent-cron
 # regression that motivated this.
 CMD ["sh", "-c", "echo BOOT_PHASE=migrate && alembic upgrade head && echo BOOT_PHASE=uvicorn PORT=${PORT:-8000} && exec uvicorn wnba_oracle.api.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=* --log-level info"]

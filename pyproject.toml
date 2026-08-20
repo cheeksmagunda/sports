@@ -1,0 +1,18 @@
+[project]
+name = "sports-workspace"
+version = "0.1.0"
+description = "Shared technical platform and league applications for Sports Oracle."
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "packages/*",
+    "wnba-oracle",
+]
+
+[tool.uv.sources]
+oracle-core = { workspace = true }

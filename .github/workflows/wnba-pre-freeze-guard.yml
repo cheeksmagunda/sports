@@ -1,0 +1,84 @@
+name: wnba-pre-freeze-guard
+
+on:
+  workflow_dispatch:
+    inputs:
+      slate_date:
+        description: WNBA slate date that the pre-freeze run should have processed
+        required: true
+        type: string
+      run_start_utc:
+        description: Inclusive ISO-8601 UTC start for the expected Job 1 run
+        required: true
+        type: string
+      run_end_utc:
+        description: Inclusive ISO-8601 UTC end for the expected Job 1 run
+        required: true
+        type: string
+      repair:
+        description: Request the allowlisted API repair when health is down
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  OPS_LABEL: ops-guard
+  WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WNBA_RAILWAY_PROJECT_ID: ab83f44c-0bbc-4a58-931c-37d9fbfda73a
+  WNBA_RAILWAY_ENVIRONMENT_ID: d57a759e-e189-439b-a612-bd220ef59c39
+  WNBA_RAILWAY_API_SERVICE_ID: f4750eda-fd6c-432b-b6f5-34254013c271
+  WNBA_RAILWAY_JOB1_SERVICE_ID: 2e110589-9527-4541-a754-41c4719515ba
+  WNBA_RAILWAY_JOB1_LATE_SERVICE_ID: 2b0cd5aa-8793-45a5-bca0-e81c6d8455ff
+  WNBA_RAILWAY_JOB2_SERVICE_ID: 4a511ed2-10ad-441f-bf9a-3748c1e6b929
+  WNBA_EXPECTED_MODEL_SHA: ${{ vars.WNBA_EXPECTED_MODEL_SHA }}
+
+concurrency:
+  group: wnba-pre-freeze-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check production
+        id: guard
+        env:
+          INPUT_REPAIR: ${{ inputs.repair }}
+          INPUT_RUN_END_UTC: ${{ inputs.run_end_utc }}
+          INPUT_RUN_START_UTC: ${{ inputs.run_start_utc }}
+          INPUT_SLATE_DATE: ${{ inputs.slate_date }}
+          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+        run: |
+          repair_args=()
+          if [ "$INPUT_REPAIR" = "true" ]; then
+            repair_args+=(--repair)
+          fi
+          python wnba-oracle/scripts/pre_freeze_guard.py \
+            --slate-date "$INPUT_SLATE_DATE" \
+            --run-start-utc "$INPUT_RUN_START_UTC" \
+            --run-end-utc "$INPUT_RUN_END_UTC" \
+            --report "$RUNNER_TEMP/pre-freeze-report.md" \
+            "${repair_args[@]}"
+
+      - name: Escalate an unhealthy guard
+        if: steps.guard.outputs.status == 'alert'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$OPS_LABEL" --color B60205 --description "WNBA pre-freeze operations" 2>/dev/null || true
+          number=$(gh issue list --label "$OPS_LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/pre-freeze-report.md"
+          else
+            gh issue create \
+              --label "$OPS_LABEL" \
+              --title "WNBA pre-freeze operations" \
+              --body-file "$RUNNER_TEMP/pre-freeze-report.md"
+          fi

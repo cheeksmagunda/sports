@@ -1,0 +1,84 @@
+name: wnba-dayclose-verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      slate_date:
+        description: WNBA slate date that the day-close run should have processed
+        required: true
+        type: string
+      run_start_utc:
+        description: Inclusive ISO-8601 UTC start for the expected Railway run
+        required: true
+        type: string
+      run_end_utc:
+        description: Inclusive ISO-8601 UTC end for the expected Railway run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  RESULTS_LABEL: ops-results
+  GUARD_LABEL: ops-guard
+  WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WNBA_RAILWAY_PROJECT_ID: ab83f44c-0bbc-4a58-931c-37d9fbfda73a
+  WNBA_RAILWAY_DAYCLOSE_SERVICE_ID: 606d950d-7d7d-4f5a-a049-b9fa69799169
+
+concurrency:
+  group: wnba-dayclose-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify day-close
+        id: verify
+        env:
+          INPUT_RUN_END_UTC: ${{ inputs.run_end_utc }}
+          INPUT_RUN_START_UTC: ${{ inputs.run_start_utc }}
+          INPUT_SLATE_DATE: ${{ inputs.slate_date }}
+          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+        run: >-
+          python wnba-oracle/scripts/dayclose_verify.py
+          --slate-date "$INPUT_SLATE_DATE"
+          --run-start-utc "$INPUT_RUN_START_UTC"
+          --run-end-utc "$INPUT_RUN_END_UTC"
+          --report "$RUNNER_TEMP/dayclose-report.md"
+
+      - name: Append results digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$RESULTS_LABEL" --color 1D76DB --description "WNBA results ledger" 2>/dev/null || true
+          number=$(gh issue list --label "$RESULTS_LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/dayclose-report.md"
+          else
+            gh issue create \
+              --label "$RESULTS_LABEL" \
+              --title "WNBA results ledger" \
+              --body-file "$RUNNER_TEMP/dayclose-report.md"
+          fi
+
+      - name: Escalate day-close failure
+        if: steps.verify.outputs.status == 'alert'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$GUARD_LABEL" --color B60205 --description "WNBA production operations" 2>/dev/null || true
+          number=$(gh issue list --label "$GUARD_LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/dayclose-report.md"
+          else
+            gh issue create \
+              --label "$GUARD_LABEL" \
+              --title "WNBA production operations" \
+              --body-file "$RUNNER_TEMP/dayclose-report.md"
+          fi

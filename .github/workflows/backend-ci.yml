@@ -1,0 +1,134 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/oracle-core/**"
+      - "wnba-oracle/src/**"
+      - "wnba-oracle/tests/**"
+      - "wnba-oracle/scripts/**"
+      - "wnba-oracle/migrations/**"
+      - "wnba-oracle/pyproject.toml"
+      - "wnba-oracle/README.md"
+      - "wnba-oracle/alembic.ini"
+      - "wnba-oracle/Dockerfile"
+      - "wnba-oracle/railway.toml"
+      - "wnba-oracle/models/**"
+      - "wnba-oracle/data/**"
+      - ".dockerignore"
+      - ".gitleaks.toml"
+      - "scripts/check_import_boundaries.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "packages/oracle-core/**"
+      - "wnba-oracle/src/**"
+      - "wnba-oracle/tests/**"
+      - "wnba-oracle/scripts/**"
+      - "wnba-oracle/migrations/**"
+      - "wnba-oracle/pyproject.toml"
+      - "wnba-oracle/README.md"
+      - "wnba-oracle/alembic.ini"
+      - "wnba-oracle/Dockerfile"
+      - "wnba-oracle/railway.toml"
+      - "wnba-oracle/models/**"
+      - "wnba-oracle/data/**"
+      - ".dockerignore"
+      - ".gitleaks.toml"
+      - "scripts/check_import_boundaries.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Install pinned gitleaks
+        run: go install github.com/gitleaks/gitleaks/v8@v8.30.0
+
+      - name: Scan tracked history with redaction
+        run: >-
+          "$(go env GOPATH)/bin/gitleaks"
+          git --redact --config .gitleaks.toml --log-opts="--all"
+
+  test-and-quality:
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          version: "0.11.13"
+
+      - name: Verify workspace lock
+        run: uv lock --check
+
+      - name: Install workspace
+        run: uv sync --frozen --all-packages --all-extras
+
+      - name: Test oracle-core
+        run: uv run --package oracle-core python -m pytest packages/oracle-core/tests -q
+
+      - name: Test WNBA backend
+        run: uv run --package wnba-oracle python -m pytest wnba-oracle/tests -q
+
+      - name: Lint oracle-core
+        working-directory: packages/oracle-core
+        run: uv run --package oracle-core ruff check src tests
+
+      - name: Lint WNBA backend
+        working-directory: wnba-oracle
+        run: uv run --package wnba-oracle ruff check src tests scripts
+
+      - name: Typecheck oracle-core
+        run: >-
+          uv run --package oracle-core mypy
+          --config-file packages/oracle-core/pyproject.toml
+          packages/oracle-core/src
+
+      - name: Typecheck WNBA backend
+        run: >-
+          uv run --package wnba-oracle mypy
+          --config-file wnba-oracle/pyproject.toml
+          wnba-oracle/src
+
+      - name: Enforce package import boundaries
+        run: python scripts/check_import_boundaries.py
+
+      - name: Build Python packages
+        run: uv build --all-packages
+
+  docker:
+    needs: test-and-quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build WNBA backend image
+        run: docker build -f wnba-oracle/Dockerfile .
