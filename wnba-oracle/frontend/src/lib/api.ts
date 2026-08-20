@@ -111,7 +111,7 @@ export type WatchdogToday = {
   status: "ok" | WatchdogSeverity;
 };
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 // Local (not UTC) slate date -- matches /lineup/{today} and
 // /slate/{today}'s own concept of "today" so a browser near the UTC
