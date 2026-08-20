@@ -118,6 +118,20 @@ def test_backup_rejects_regression_against_previous_manifest(tmp_path) -> None:
     backup._assert_no_regression(current, previous_path, allow_regression=True)
 
 
+def test_backup_url_removes_only_the_machine_local_tls_root_path() -> None:
+    _load_common()
+    backup = _load_script("backup_corpus")
+
+    portable = backup._portable_database_url(
+        "postgresql://user:password@example.invalid:5432/database"
+        "?sslmode=verify-ca&sslrootcert=%2Fold%2Fmachine%2Froot.crt&application_name=backup"
+    )
+
+    assert "sslrootcert" not in portable
+    assert "sslmode=verify-ca" in portable
+    assert "application_name=backup" in portable
+
+
 def test_restore_entry_point_only_accepts_a_verified_snapshot(tmp_path) -> None:
     common = _load_common()
     _write_valid_snapshot(common, tmp_path)
