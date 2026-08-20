@@ -167,14 +167,25 @@ function demoFixture(): FrozenLineup | null {
   return getDemoFixture();
 }
 
-export async function fetchLatestLineup(): Promise<FrozenLineup | null> {
-  const demo = demoFixture();
-  if (demo) return demo;
-  const today = localSlateDate();
-  const r = await fetch(`${API_URL}/lineup/${today}`);
+// Backs both fetchLatestLineup (today, no model_sha) and the depth pages
+// that need an arbitrary past date (/slate/:date, /freezes/:date's diff
+// base, /player/:date/:playerId). modelSha pins a specific frozen
+// artifact per the API's optional ?model_sha= param; omit for "latest".
+export async function fetchLineupForDate(
+  date: string,
+  modelSha?: string,
+): Promise<FrozenLineup | null> {
+  const qs = modelSha ? `?model_sha=${encodeURIComponent(modelSha)}` : "";
+  const r = await fetch(`${API_URL}/lineup/${date}${qs}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as FrozenLineup;
+}
+
+export async function fetchLatestLineup(): Promise<FrozenLineup | null> {
+  const demo = demoFixture();
+  if (demo) return demo;
+  return fetchLineupForDate(localSlateDate());
 }
 
 // Slate timing for the pre-freeze countdown. freeze_target_utc is
