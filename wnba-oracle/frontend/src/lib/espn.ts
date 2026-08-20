@@ -107,8 +107,8 @@ function normalizeGame(event: unknown): ScoreboardGame | null {
 
 export async function fetchScoreboard(dateYyyymmdd: string): Promise<ScoreboardGame[]> {
   const demo = getDemoMode();
-  if (demo === "live") return demoGames("live");
-  if (demo === "final") return demoGames("final");
+  if (demo === "live" && getDemoGames) return getDemoGames("live");
+  if (demo === "final" && getDemoGames) return getDemoGames("final");
 
   const r = await fetch(`${ESPN_BASE}/scoreboard?dates=${dateYyyymmdd}`);
   if (!r.ok) throw new Error(`ESPN scoreboard HTTP ${r.status}`);
@@ -165,7 +165,9 @@ function normalizePlayerLine(athleteEntry: unknown, names: string[], team: strin
 
 export async function fetchSummary(eventId: string): Promise<PlayerBoxLine[]> {
   const demo = getDemoMode();
-  if (demo === "live" || demo === "final") return demoBoxLines(eventId);
+  if ((demo === "live" || demo === "final") && getDemoBoxLines) {
+    return getDemoBoxLines(eventId);
+  }
 
   const r = await fetch(`${ESPN_BASE}/summary?event=${eventId}`);
   if (!r.ok) throw new Error(`ESPN summary HTTP ${r.status}`);
@@ -186,25 +188,31 @@ export async function fetchSummary(eventId: string): Promise<PlayerBoxLine[]> {
   return out;
 }
 
-// ── Demo fixtures (?demo=live / ?demo=final), DEV-only via getDemoMode.
+// ── Demo fixtures (?demo=live / ?demo=final). Defined inside the
+// import.meta.env.DEV block, same pattern as api.ts's demo lineup, so
+// esbuild drops all of it (including the "A'ja Wilson" etc. literals)
+// from production builds -- a runtime getDemoMode() check alone isn't
+// enough for the bundler to prove this code is unreachable in prod.
 // Mirrors api.ts's demo lineup (Wilson/Stewart/Ionescu/Clark/Collier) so
 // the two demo layers join correctly. Sabrina Ionescu is deliberately
 // left out of the box lines to exercise the unmatched-player
 // degradation path Phase 3's acceptance criteria call for.
+let getDemoGames: ((mode: "live" | "final") => ScoreboardGame[]) | null = null;
+let getDemoBoxLines: ((eventId: string) => PlayerBoxLine[]) | null = null;
 
-const DEMO_EVENT_LV_NY = "demo-lv-ny";
-const DEMO_EVENT_IND_CHI = "demo-ind-chi";
-const DEMO_EVENT_MIN_SEA = "demo-min-sea";
+if (import.meta.env.DEV) {
+  const DEMO_EVENT_LV_NY = "demo-lv-ny";
+  const DEMO_EVENT_IND_CHI = "demo-ind-chi";
+  const DEMO_EVENT_MIN_SEA = "demo-min-sea";
 
-function demoGame(
-  eventId: string,
-  home: string,
-  away: string,
-  state: GameState,
-  homeScore: number,
-  awayScore: number,
-): ScoreboardGame {
-  return {
+  const demoGame = (
+    eventId: string,
+    home: string,
+    away: string,
+    state: GameState,
+    homeScore: number,
+    awayScore: number,
+  ): ScoreboardGame => ({
     eventId,
     tipUtc: new Date(0).toISOString(),
     shortName: `${away} @ ${home}`,
@@ -215,31 +223,29 @@ function demoGame(
     displayClock: state === "post" ? "0.0" : "5:12",
     home: { team: home, score: homeScore },
     away: { team: away, score: awayScore },
-  };
-}
+  });
 
-function demoGames(mode: "live" | "final"): ScoreboardGame[] {
-  if (mode === "final") {
+  getDemoGames = (mode) => {
+    if (mode === "final") {
+      return [
+        demoGame(DEMO_EVENT_LV_NY, "NY", "LV", "post", 90, 96),
+        demoGame(DEMO_EVENT_IND_CHI, "CHI", "IND", "post", 80, 88),
+        demoGame(DEMO_EVENT_MIN_SEA, "SEA", "MIN", "post", 88, 91),
+      ];
+    }
     return [
-      demoGame(DEMO_EVENT_LV_NY, "NY", "LV", "post", 90, 96),
-      demoGame(DEMO_EVENT_IND_CHI, "CHI", "IND", "post", 80, 88),
+      demoGame(DEMO_EVENT_LV_NY, "NY", "LV", "in", 78, 82),
+      demoGame(DEMO_EVENT_IND_CHI, "CHI", "IND", "in", 64, 70),
       demoGame(DEMO_EVENT_MIN_SEA, "SEA", "MIN", "post", 88, 91),
     ];
-  }
-  return [
-    demoGame(DEMO_EVENT_LV_NY, "NY", "LV", "in", 78, 82),
-    demoGame(DEMO_EVENT_IND_CHI, "CHI", "IND", "in", 64, 70),
-    demoGame(DEMO_EVENT_MIN_SEA, "SEA", "MIN", "post", 88, 91),
-  ];
-}
+  };
 
-function demoBoxLine(
-  id: string,
-  name: string,
-  team: string,
-  overrides: Partial<PlayerBoxLine> = {},
-): PlayerBoxLine {
-  return {
+  const demoBoxLine = (
+    id: string,
+    name: string,
+    team: string,
+    overrides: Partial<PlayerBoxLine> = {},
+  ): PlayerBoxLine => ({
     espnAthleteId: id,
     displayName: name,
     team,
@@ -256,22 +262,20 @@ function demoBoxLine(
     fgMade: 7,
     fgAttempted: 14,
     ...overrides,
+  });
+
+  const DEMO_BOX_LINES: Record<string, PlayerBoxLine[]> = {
+    [DEMO_EVENT_LV_NY]: [
+      demoBoxLine("d1", "A'ja Wilson", "LV", { points: 24, rebounds: 9, assists: 3, minutes: 31 }),
+      demoBoxLine("d2", "Breanna Stewart", "NY", { points: 21, rebounds: 8, assists: 5, minutes: 33 }),
+    ],
+    [DEMO_EVENT_IND_CHI]: [
+      demoBoxLine("d4", "Caitlin Clark", "IND", { points: 19, rebounds: 5, assists: 8, minutes: 30 }),
+    ],
+    [DEMO_EVENT_MIN_SEA]: [
+      demoBoxLine("d5", "Napheesa Collier", "MIN", { points: 22, rebounds: 10, assists: 2, minutes: 29 }),
+    ],
   };
-}
 
-const DEMO_BOX_LINES: Record<string, PlayerBoxLine[]> = {
-  [DEMO_EVENT_LV_NY]: [
-    demoBoxLine("d1", "A'ja Wilson", "LV", { points: 24, rebounds: 9, assists: 3, minutes: 31 }),
-    demoBoxLine("d2", "Breanna Stewart", "NY", { points: 21, rebounds: 8, assists: 5, minutes: 33 }),
-  ],
-  [DEMO_EVENT_IND_CHI]: [
-    demoBoxLine("d4", "Caitlin Clark", "IND", { points: 19, rebounds: 5, assists: 8, minutes: 30 }),
-  ],
-  [DEMO_EVENT_MIN_SEA]: [
-    demoBoxLine("d5", "Napheesa Collier", "MIN", { points: 22, rebounds: 10, assists: 2, minutes: 29 }),
-  ],
-};
-
-function demoBoxLines(eventId: string): PlayerBoxLine[] {
-  return DEMO_BOX_LINES[eventId] ?? [];
+  getDemoBoxLines = (eventId) => DEMO_BOX_LINES[eventId] ?? [];
 }
