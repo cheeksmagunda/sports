@@ -9,6 +9,9 @@ import { SystemPage } from "./pages/SystemPage";
 export function App() {
   return (
     <BrowserRouter>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       <Routes>
         <Route path="/" element={<PickerPage />} />
         <Route path="/player/:date/:playerId" element={<PlayerPage />} />

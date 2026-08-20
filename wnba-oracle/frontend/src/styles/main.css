@@ -676,7 +676,11 @@ a { color: var(--primary-text); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slip-row { animation: none; }
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Region 1: rank gutter -- the layout spine. */

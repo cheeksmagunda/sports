@@ -34,7 +34,9 @@ export function Shell({
         slateDateDisplay={slateDateDisplay}
         frozenAtDisplay={frozenAtDisplay}
       />
-      {children}
+      <main id="main-content">
+        {children}
+      </main>
       <Footer lineup={lineup} appVersion={APP_VERSION} />
     </div>
   );
