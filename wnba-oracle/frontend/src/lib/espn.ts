@@ -273,7 +273,10 @@ if (import.meta.env.DEV) {
       demoBoxLine("d4", "Caitlin Clark", "IND", { points: 19, rebounds: 5, assists: 8, minutes: 30 }),
     ],
     [DEMO_EVENT_MIN_SEA]: [
-      demoBoxLine("d5", "Napheesa Collier", "MIN", { points: 22, rebounds: 10, assists: 2, minutes: 29 }),
+      // Real ESPN athlete id (verified working headshot) -- the other
+      // four use fake ids so Phase 4's headshot fallback path (a forced
+      // 404) gets exercised in the same demo run as the success path.
+      demoBoxLine("3917450", "Napheesa Collier", "MIN", { points: 22, rebounds: 10, assists: 2, minutes: 29 }),
     ],
   };
 

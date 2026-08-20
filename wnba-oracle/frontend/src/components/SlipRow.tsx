@@ -93,7 +93,11 @@ export function SlipRow({
       </span>
 
       <span className="slip-row__identity">
-        <Headshot name={player.display_name} size={40} />
+        <Headshot
+          name={player.display_name}
+          size={40}
+          espnAthleteId={boxLine?.espnAthleteId ?? null}
+        />
         <span className="slip-row__identity-text">
           <span className="slip-row__name">{player.display_name}</span>
           <span className="slip-row__meta">

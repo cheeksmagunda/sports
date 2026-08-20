@@ -1015,6 +1015,16 @@ a { color: var(--primary-text); }
   background: var(--team-primary, var(--primary));
 }
 
+.headshot__img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  /* Matches .headshot__fallback's background so a slow-loading photo
+     doesn't flash transparent against the page behind it. */
+  background: var(--team-primary, var(--primary));
+}
+
 /* ── Interval bar ──────────────────────────────────────────── */
 
 .interval-bar {
