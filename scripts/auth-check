@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Report portable authentication capabilities without printing values."""
+"""Report portable authentication capabilities without printing values.
+
+This command inspects the current process environment and native CLI sessions.
+It does not decrypt optional local secret files. Use ``with-secrets`` explicitly
+when a live check should receive values stored with SOPS.
+"""
 
 from __future__ import annotations
 
@@ -70,64 +75,91 @@ def resolve_project(portfolio_root: Path, name: str) -> Path:
     return project_dir
 
 
-def check_secret_location(directory: Path, secret_file: Path, label: str) -> int:
-    errors = 0
-    if directory.exists():
+def inspect_secret_location(
+    directory: Path, secret_file: Path, label: str
+) -> tuple[bool, list[str]]:
+    issues: list[str] = []
+    if directory.exists() or directory.is_symlink():
         if directory.is_symlink() or not directory.is_dir():
-            status(f"{label} directory", "invalid")
-            return 1
-        if file_mode(directory) == 0o700:
-            status(f"{label} directory", "present, mode 0700")
-        else:
-            status(f"{label} directory", "invalid permissions")
-            errors += 1
-    else:
-        status(f"{label} directory", "not configured")
+            issues.append(f"{label} directory is invalid")
+        elif file_mode(directory) != 0o700:
+            issues.append(f"{label} directory must have mode 0700")
 
-    if secret_file.exists():
+    if secret_file.exists() or secret_file.is_symlink():
         if secret_file.is_symlink() or not secret_file.is_file():
-            status(f"{label} encrypted file", "invalid")
-            return errors + 1
-        if file_mode(secret_file) == 0o600:
-            status(f"{label} encrypted file", "present, mode 0600")
-        else:
-            status(f"{label} encrypted file", "invalid permissions")
-            errors += 1
-    else:
-        status(f"{label} encrypted file", "not configured")
-    return errors
+            issues.append(f"{label} encrypted file is invalid")
+        elif file_mode(secret_file) != 0o600:
+            issues.append(f"{label} encrypted file must have mode 0600")
+    return secret_file.is_file(), issues
 
 
-def check_age_identity(portfolio_root: Path) -> int:
+def check_age_identity(portfolio_root: Path) -> list[str]:
     configured = os.environ.get("SOPS_AGE_KEY_FILE", "").strip()
     if configured:
         try:
             path = Path(configured).expanduser().resolve(strict=True)
         except FileNotFoundError:
-            status("age private identity", "configured file missing")
-            return 1
+            return ["configured age identity is missing"]
         try:
             path.relative_to(portfolio_root)
         except ValueError:
             pass
         else:
-            status("age private identity", "invalid repository location")
-            return 1
+            return ["age identity must stay outside the repository"]
         if path.is_file() and file_mode(path) == 0o600:
-            status("age private identity", "external, mode 0600")
-            return 0
-        status("age private identity", "invalid permissions or file type")
-        return 1
+            return []
+        return ["configured age identity must be a mode 0600 file"]
 
     default_path = Path.home() / ".config" / "sops" / "age" / "keys.txt"
     if default_path.is_file():
         if file_mode(default_path) == 0o600:
-            status("age private identity", "standard location, mode 0600")
-            return 0
-        status("age private identity", "standard location has invalid permissions")
-        return 1
-    status("age private identity", "not configured")
+            return []
+        return ["standard age identity must have mode 0600"]
+    return []
+
+
+def check_optional_encrypted_helper(
+    portfolio_root: Path,
+    root_dir: Path,
+    root_file: Path,
+    app_dir: Path,
+    app_file: Path,
+) -> int:
+    root_configured, root_issues = inspect_secret_location(
+        root_dir, root_file, "root"
+    )
+    app_configured, app_issues = inspect_secret_location(
+        app_dir, app_file, "project"
+    )
+    configured = root_configured or app_configured
+    issues = root_issues + app_issues
+    if configured:
+        for tool in ("sops", "age"):
+            if shutil.which(tool) is None:
+                issues.append(f"{tool} is unavailable")
+        issues.extend(check_age_identity(portfolio_root))
+
+    if issues:
+        status("optional encrypted helper", "; ".join(issues))
+        return len(issues)
+    status("optional encrypted helper", "ready" if configured else "not configured")
     return 0
+
+
+def environment_capabilities() -> list[str]:
+    groups = (
+        ("database", ("DATABASE_URL", "DATABASE_PUBLIC_URL", "DATABASE_RESTORE_URL")),
+        ("redis", ("REDIS_URL",)),
+        ("Real Sports session", ("REALSPORTS_STORAGE_STATE_B64GZ",)),
+        ("odds provider", ("ODDS_API_KEY",)),
+        ("Railway HTTP", ("RAILWAY_WORKSPACE_TOKEN",)),
+        ("watchdog", ("WATCHDOG_PING_URL", "WATCHDOG_HEARTBEAT_URL")),
+    )
+    return [
+        label
+        for label, names in groups
+        if any(os.environ.get(name, "").strip() for name in names)
+    ]
 
 
 def main() -> None:
@@ -153,29 +185,13 @@ def main() -> None:
     root_file = root_dir / "common.sops.env"
     app_dir = project_dir / ".secrets"
     app_file = app_dir / "local.sops.env"
-    if (root_file.exists() or app_file.exists()) and os.environ.get(
-        "SPORTS_SECRETS_ACTIVE"
-    ) != project:
-        loader = script_dir / "with-secrets"
-        if not loader.is_file() or not os.access(loader, os.X_OK):
-            print("auth-check: executable secret loader is missing", file=sys.stderr)
-            raise SystemExit(69)
-        os.execv(
-            str(loader),
-            [str(loader), project, "--", str(Path(__file__).resolve()), project, mode],
-        )
-
     errors = 0
-    errors += check_secret_location(root_dir, root_file, "root")
-    errors += check_secret_location(app_dir, app_file, "project")
-
-    encrypted_present = root_file.is_file() or app_file.is_file()
-    for tool in ("sops", "age", "gh", "railway", "curl"):
-        available = shutil.which(tool) is not None
-        status(f"tool {tool}", "available" if available else "missing")
-        if encrypted_present and tool in {"sops", "age"} and not available:
-            errors += 1
-    errors += check_age_identity(portfolio_root)
+    errors += check_optional_encrypted_helper(
+        portfolio_root, root_dir, root_file, app_dir, app_file
+    )
+    status("GitHub CLI", "available" if shutil.which("gh") else "unavailable")
+    status("Railway CLI", "available" if shutil.which("railway") else "unavailable")
+    status("HTTPS client", "available" if shutil.which("curl") else "unavailable")
 
     root_declarations, root_errors = parse_example(root_example)
     app_declarations, app_errors = parse_example(app_example)
@@ -194,14 +210,15 @@ def main() -> None:
             errors += 1
             continue
         seen.add(name)
-        present = bool(os.environ.get(name, "").strip())
-        if present:
-            status(name, "present")
-        elif required:
-            status(name, "missing, required")
+        if required and not os.environ.get(name, "").strip():
+            status("required environment", f"{name} is missing")
             errors += 1
-        else:
-            status(name, "missing, optional")
+
+    capabilities = environment_capabilities()
+    status(
+        "process environment",
+        ", ".join(capabilities) if capabilities else "no auth capabilities configured",
+    )
 
     if errors:
         print(f"auth-check: failed with {errors} issue(s)", file=sys.stderr)
@@ -215,6 +232,7 @@ def main() -> None:
     if not hook.is_file() or not os.access(hook, os.X_OK):
         print("auth-check: executable live hook is unavailable", file=sys.stderr)
         raise SystemExit(69)
+    sys.stdout.flush()
     os.chdir(project_dir)
     os.execv(str(hook), [str(hook)])
 

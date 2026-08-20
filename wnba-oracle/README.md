@@ -20,16 +20,20 @@ make lint
 make typecheck
 ```
 
-Commands requiring local backend credentials run through the in-memory loader:
+Commands use the existing process environment and native `gh` and Railway CLI
+sessions. SOPS and age are optional at-rest helpers, not a normal command
+requirement. If optional encrypted local files are in use, the in-memory loader
+can inject them into one child process:
 
 ```sh
 scripts/with-secrets wnba-oracle -- make test
-scripts/auth-check wnba-oracle --live
+scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
 ```
 
-No plaintext `.env` file is needed. See root `README.md` and `.env.example` for
-the portable SOPS and age contract. Frontend login passwords remain in iCloud
-Passwords and are never backend environment variables.
+No plaintext `.env` file is needed. Do not duplicate native CLI credentials in
+SOPS. See root `README.md` and `.env.example` for the optional encrypted-file
+contract. Frontend login passwords remain in iCloud Passwords and are never
+backend environment variables.
 
 ## Runtime roles
 

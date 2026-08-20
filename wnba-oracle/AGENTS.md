@@ -54,13 +54,20 @@ make determinism-check
 python -m pytest tests/ -q`. Do not replace it with bare `uv run pytest`, which
 can omit project dependencies in a workspace.
 
-Commands needing local backend credentials should be invoked from the
-monorepo root:
+Commands normally use the existing process environment and native CLI sessions.
+Run capability checks from the monorepo root:
+
+```sh
+scripts/auth-check wnba-oracle --offline
+scripts/auth-check wnba-oracle --live
+```
+
+If an operator chose optional encrypted local storage, inject only those values
+into the child process:
 
 ```sh
 scripts/with-secrets wnba-oracle -- make dev
-scripts/auth-check wnba-oracle --offline
-scripts/auth-check wnba-oracle --live
+scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
 ```
 
 ## Verification bar
@@ -103,8 +110,10 @@ scripts/auth-check wnba-oracle --live
   parse `.env`, `.envrc`, `.claude/settings.local.json`, or
   `.claude/credentials.env`.
 - Variable names and purposes are declared without values in `.env.example`.
-  Application secrets live in `.secrets/local.sops.env`; common GitHub and
-  Railway automation values live in the root encrypted file.
+  SOPS files are optional local at-rest storage, not a runtime requirement.
+  Native `gh` and Railway CLI sessions stay in their native credential stores.
+  Do not duplicate them in SOPS. Separately scoped HTTP automation credentials
+  come from the process environment.
 - Backend provider credentials, database URLs, Redis URLs, webhook URLs, and
   derived Real Sports sessions are secrets. Never print them, include them in
   arguments, or place them in a URL visible to logs or process listings.

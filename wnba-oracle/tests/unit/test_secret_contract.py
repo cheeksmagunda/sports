@@ -170,6 +170,7 @@ def test_auth_check_output_is_value_free(
     portable_portfolio: tuple[Path, dict[str, str]],
 ) -> None:
     root, env = portable_portfolio
+    _write_executable(root.parent / "bin" / "sops", "#!/bin/sh\nexit 73\n")
     result = subprocess.run(
         [str(root / "scripts" / "auth-check"), "wnba-oracle", "--offline"],
         check=False,
@@ -184,6 +185,39 @@ def test_auth_check_output_is_value_free(
     assert "app-sentinel" not in combined
     assert "root-choice" not in combined
     assert "app-choice" not in combined
+    assert "ROOT_ONLY" not in combined
+    assert "APP_ONLY" not in combined
+    assert "SHARED" not in combined
+    assert len(combined.splitlines()) <= 8
+
+
+def test_secret_loader_is_a_passthrough_when_optional_files_are_absent(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "sports"
+    project = root / "wnba-oracle"
+    scripts = root / "scripts"
+    home = tmp_path / "home"
+    scripts.mkdir(parents=True)
+    project.mkdir()
+    key = home / ".config" / "sops" / "age" / "keys.txt"
+    key.parent.mkdir(parents=True)
+    key.write_text("unused", encoding="utf-8")
+    key.chmod(0o644)
+    loader = scripts / "with-secrets"
+    shutil.copy2(WORKSPACE_ROOT / "scripts" / "with-secrets", loader)
+    loader.chmod(0o755)
+    env = os.environ.copy()
+    env["HOME"] = str(home)
+    result = subprocess.run(
+        [str(loader), "wnba-oracle", "--", sys.executable, "-c", "print('ok')"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ok"
 
 
 def test_storage_state_seed_is_atomic_and_private(tmp_path: Path) -> None:
@@ -229,6 +263,37 @@ def test_invalid_storage_state_fails_without_writing(tmp_path: Path) -> None:
     )
     assert result.returncode == 78
     assert not (project / "scraper" / "storage_state.json").exists()
+
+
+def test_realsports_runtime_secret_files_are_atomic_and_private(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from wnba_oracle.ingest import realsports
+
+    scraper = tmp_path / "scraper"
+    scraper.mkdir(mode=0o755)
+    token_cache = scraper / "request_token_cache.json"
+    storage_state = scraper / "storage_state.json"
+    monkeypatch.setattr(realsports, "TOKEN_CACHE_PATH", token_cache)
+    monkeypatch.setattr(realsports.time, "time", lambda: 1234.0)
+
+    realsports._save_cached_headers(
+        {
+            "real-request-token": "token-sentinel",
+            "real-auth-info": "auth-sentinel",
+            "real-device-uuid": "device",
+        }
+    )
+    realsports._write_private_json(
+        storage_state,
+        {"cookies": [], "origins": [{"origin": "https://example.invalid"}]},
+    )
+
+    assert _mode(scraper) == 0o700
+    assert _mode(token_cache) == 0o600
+    assert _mode(storage_state) == 0o600
+    assert json.loads(token_cache.read_text(encoding="utf-8"))["captured_at"] == 1234.0
+    assert not list(scraper.glob(".*.tmp"))
 
 
 def test_railway_graphql_output_redacts_environment_and_variable_secrets(

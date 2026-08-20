@@ -3,12 +3,12 @@
 Adapted from the MLB Oracle precedent. The Real Sports API is sport-
 parameterized: every endpoint that takes `/sport/{sport}` accepts `wnba`.
 
-Two-stage auth, identical to MLB:
+Authentication uses an operator-seeded browser session:
 
-1. **Login (rare):** operator runs `oracle-realsports-login` once. Playwright
-   logs in with REAL_SPORTS_USERNAME / REAL_SPORTS_PASSWORD, saves
-   scraper/storage_state.json with the JWT in localStorage. The JWT is
-   long-lived; this only re-runs on rotation or 401-burn.
+1. **Operator recovery (rare):** the operator signs in with an ordinary
+   interactive browser and iCloud Autofill where applicable, then exports the
+   derived session to `scraper/storage_state.json`. Scripted password login is
+   rejected by the provider and is not a recovery path.
 2. **Capture (per slate):** Playwright reloads realsports.io with the stored
    state; the SPA emits authenticated requests immediately. We harvest
    `real-request-token` + `real-auth-info` from those headers and cache
@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from oracle_core.artifacts import atomic_write_json
 from oracle_core.http import (
     HttpxAsyncTransport,
     RetryPolicy,
@@ -43,10 +44,35 @@ from wnba_oracle.scheduler.antibot import (
     asleep_truncated_gaussian,
 )
 
+
+def _ensure_private_directory(path: Path) -> None:
+    if path.is_symlink():
+        raise RuntimeError("Real Sports secret directory must not be a symbolic link")
+    if path.exists() and not path.is_dir():
+        raise RuntimeError("Real Sports secret directory is not a directory")
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.chmod(0o700)
+
+
+def _ensure_private_file(path: Path) -> None:
+    if path.is_symlink() or not path.is_file():
+        raise RuntimeError("Real Sports secret path must be a regular file")
+    path.chmod(0o600)
+
+
+def _write_private_json(path: Path, payload: Any) -> None:
+    _ensure_private_directory(path.parent)
+    atomic_write_json(path, payload, mode=0o600)
+    path.chmod(0o600)
+
+
 SCRAPER_DIR = Path(__file__).resolve().parents[3] / "scraper"
-SCRAPER_DIR.mkdir(exist_ok=True)
+_ensure_private_directory(SCRAPER_DIR)
 STORAGE_STATE_PATH = SCRAPER_DIR / "storage_state.json"
 TOKEN_CACHE_PATH = SCRAPER_DIR / "request_token_cache.json"
+for _secret_path in (STORAGE_STATE_PATH, TOKEN_CACHE_PATH):
+    if _secret_path.exists() or _secret_path.is_symlink():
+        _ensure_private_file(_secret_path)
 
 TOKEN_TTL_SECONDS = 1800  # 30 min upper bound
 BASE = "https://web.realapp.com"
@@ -100,7 +126,7 @@ class PlatformAuthRequired(RuntimeError):
 
 
 class StorageStateMissing(RuntimeError):
-    """Storage state not seeded. Operator must run oracle-realsports-login first."""
+    """Storage state is absent and requires interactive operator recovery."""
 
 
 class StorageStateStale(RuntimeError):
@@ -110,7 +136,8 @@ class StorageStateStale(RuntimeError):
 def load_cached_headers() -> RequestHeaders | None:
     if not TOKEN_CACHE_PATH.exists():
         return None
-    raw = json.loads(TOKEN_CACHE_PATH.read_text())
+    _ensure_private_file(TOKEN_CACHE_PATH)
+    raw = json.loads(TOKEN_CACHE_PATH.read_text(encoding="utf-8"))
     if time.time() - raw.get("captured_at", 0) > TOKEN_TTL_SECONDS:
         return None
     if "real-request-token" not in raw or "real-auth-info" not in raw:
@@ -129,8 +156,9 @@ def load_cached_headers() -> RequestHeaders | None:
 
 
 def _save_cached_headers(h: dict[str, Any]) -> None:
-    h["captured_at"] = time.time()
-    TOKEN_CACHE_PATH.write_text(json.dumps(h, indent=2))
+    payload = dict(h)
+    payload["captured_at"] = time.time()
+    _write_private_json(TOKEN_CACHE_PATH, payload)
 
 
 async def capture_live_headers(
@@ -145,7 +173,11 @@ async def capture_live_headers(
     request is observed within 20s.
     """
     if not STORAGE_STATE_PATH.exists():
-        raise StorageStateMissing(f"{STORAGE_STATE_PATH} not found. Run `oracle-realsports-login`.")
+        raise StorageStateMissing(
+            "Real Sports storage state is missing. Recover it with an ordinary "
+            "interactive browser, then re-seed the derived session."
+        )
+    _ensure_private_file(STORAGE_STATE_PATH)
 
     from playwright.async_api import async_playwright
 
@@ -183,13 +215,14 @@ async def capture_live_headers(
             await browser.close()
             raise StorageStateStale(
                 "Did not capture authenticated headers within 20s. "
-                "storage_state.json's session has expired. Re-run "
-                "`oracle-realsports-login` locally and re-seed "
+                "storage_state.json's session has expired. Recover the session "
+                "with an ordinary interactive browser and re-seed "
                 "REALSPORTS_STORAGE_STATE_B64GZ on Railway."
             ) from exc
 
         # Persist any sliding-window cookies updated during this reload.
-        await ctx.storage_state(path=str(STORAGE_STATE_PATH))
+        refreshed_state = await ctx.storage_state()
+        _write_private_json(STORAGE_STATE_PATH, refreshed_state)
         await browser.close()
 
     captured["real-device-uuid"] = device_uuid

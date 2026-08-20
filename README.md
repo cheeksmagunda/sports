@@ -7,8 +7,9 @@ endpoints. `packages/oracle-core` owns reusable technical infrastructure only.
 
 ## Start in five minutes
 
-Requirements: Python 3.11 or 3.12, `uv`, and Git. Backend operations that need
-local credentials also require `sops` and `age`.
+Requirements: Python 3.11 or 3.12, `uv`, and Git. Use existing native `gh` and
+Railway CLI logins for those services. Runtime secrets come from the process
+environment.
 
 ```sh
 uv sync --all-packages --all-extras
@@ -32,17 +33,31 @@ scripts/                Portfolio operations, secret injection, boundary checks
 The dependency direction is application to core. Core cannot import an
 application, and applications cannot import one another.
 
-## Local backend secrets
+## Local backend authentication
 
-The repository never needs a plaintext `.env` file. Root-common secrets and
-WNBA-specific secrets are encrypted separately:
+Normal commands run directly. They use exported environment values, deployment
+environment values, and native CLI credential stores without copying secrets:
+
+```sh
+make test-wnba
+scripts/auth-check wnba-oracle --offline
+scripts/auth-check wnba-oracle --live
+```
+
+Do not copy a working `gh` or Railway CLI session into SOPS or another token
+file. HTTP automation may use a separately scoped environment credential when
+the API requires one.
+
+SOPS and age are optional for operators who want encrypted local persistence
+for environment-backed values. The repository never needs a plaintext `.env`
+file. Optional root-common and WNBA-specific files are separated:
 
 ```text
 .secrets/common.sops.env
 wnba-oracle/.secrets/local.sops.env
 ```
 
-Create or edit them with SOPS, then enforce permissions:
+If using them, create or edit them with SOPS, then enforce permissions:
 
 ```sh
 mkdir -p .secrets wnba-oracle/.secrets
@@ -56,18 +71,17 @@ The public age recipient is tracked in `.sops.yaml`. Set
 `SOPS_AGE_KEY_FILE` to a mode `0600` private identity outside this repository,
 or use the standard SOPS age identity location.
 
-Run a command with root-common and one application's secrets injected only into
-that child process:
+Run a command with root-common and one application's optional encrypted values
+injected only into that child process:
 
 ```sh
 scripts/with-secrets wnba-oracle -- make test
-scripts/auth-check wnba-oracle --offline
-scripts/auth-check wnba-oracle --live
+scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
 ```
 
 Explicitly exported variables take precedence over encrypted application
 values, and application values take precedence over root-common values. The
-loader decrypts in memory and does not create a plaintext file.
+optional loader decrypts in memory and does not create a plaintext file.
 
 Frontend login passwords are not backend secrets. They remain in iCloud
 Passwords and are entered through browser Autofill or user interaction.

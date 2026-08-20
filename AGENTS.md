@@ -67,18 +67,25 @@ commands, but cannot weaken this contract.
 - Applications and scripts read configuration from the process environment.
   Do not implicitly load `.env`, `.envrc`, agent settings, or vendor-specific
   credential files.
-- Root-common encrypted values live in `.secrets/common.sops.env`.
-  Application values live in `<project>/.secrets/local.sops.env`. Both
-  directories use mode `0700`; encrypted files use mode `0600` and remain
-  ignored. The age private identity stays outside the repository at mode
-  `0600`.
-- Invoke a command with only root-common and selected application values:
+- Native `gh` and Railway CLI sessions are the canonical authentication for
+  those CLIs. Do not copy their stored credentials into repository files or
+  duplicate them as local tokens merely to run normal commands. HTTP
+  automation receives only the scoped environment credential it requires.
+- SOPS and age are an optional at-rest helper for environment-backed values
+  that an operator chooses to persist locally. When used, root-common values
+  live in `.secrets/common.sops.env` and application values live in
+  `<project>/.secrets/local.sops.env`. Both directories use mode `0700`;
+  encrypted files use mode `0600` and remain ignored. The age private identity
+  stays outside the repository at mode `0600`.
+- Commands normally run directly with the existing process environment. When
+  optional encrypted files are needed, invoke
   `scripts/with-secrets <project> -- <command>`. An explicitly exported value
   wins over application values, which win over root-common values.
-- Use `scripts/auth-check <project> --offline` for local capability and
-  permission checks, then `--live` for value-free validation. These commands
-  must not print tokens, passwords, connection URLs, response bodies, or other
-  secret values.
+- Use `scripts/auth-check <project> --offline` for concise current-process and
+  local capability checks, then `--live` for value-free validation. It does
+  not decrypt optional files unless the operator explicitly wraps it with
+  `with-secrets`. These commands must not print tokens, passwords, connection
+  URLs, response bodies, or other secret values.
 - Never pass secrets in command arguments or logs. For a provider that requires
   query authentication, construct the request inside the process and redact
   the URL and errors.

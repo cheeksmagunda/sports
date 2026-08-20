@@ -24,17 +24,12 @@ def check_github() -> int:
     if gh is None:
         report("github", "not checked, gh is unavailable")
         return 0
-    env = os.environ.copy()
-    token = env.get("GITHUB_TOKEN", "").strip()
-    if token:
-        env["GH_TOKEN"] = token
     try:
         result = subprocess.run(
             [gh, "auth", "status", "--hostname", "github.com"],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            env=env,
             timeout=TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
@@ -44,7 +39,7 @@ def check_github() -> int:
         report("github", "authenticated")
         return 0
     report("github", "authentication failed")
-    return 1 if token else 0
+    return 1
 
 
 def check_railway_cli() -> int:
@@ -52,17 +47,12 @@ def check_railway_cli() -> int:
     if railway is None:
         report("railway CLI", "not checked, CLI is unavailable")
         return 0
-    env = os.environ.copy()
-    configured_token = bool(
-        env.get("RAILWAY_TOKEN", "").strip() or env.get("RAILWAY_API_TOKEN", "").strip()
-    )
     try:
         result = subprocess.run(
             [railway, "whoami"],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            env=env,
             timeout=TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
@@ -72,7 +62,7 @@ def check_railway_cli() -> int:
         report("railway CLI", "authenticated")
     else:
         report("railway CLI", "not authenticated")
-    return 1 if configured_token and result.returncode != 0 else 0
+    return int(result.returncode != 0)
 
 
 def check_railway_graphql() -> int:
@@ -128,42 +118,21 @@ def check_odds_api() -> int:
 
 
 def check_real_sports() -> int:
-    username = bool(os.environ.get("REAL_SPORTS_USERNAME", "").strip())
-    password = bool(os.environ.get("REAL_SPORTS_PASSWORD", "").strip())
-    errors = 0
-    if username and password:
-        report("Real Sports credentials", "present, interactive verification required")
-    elif username or password:
-        report("Real Sports credentials", "incomplete credential pair")
-        errors += 1
-    else:
-        report("Real Sports credentials", "not configured")
-
     encoded = os.environ.get("REALSPORTS_STORAGE_STATE_B64GZ", "").strip()
     if not encoded:
-        report("Real Sports derived session", "not configured")
-        return errors
+        report("Real Sports derived session", "not configured, browser recovery only")
+        return 0
     try:
         raw = gzip.decompress(base64.b64decode(encoded, validate=True))
         payload = json.loads(raw)
     except (ValueError, OSError, json.JSONDecodeError):
-        report("Real Sports derived session", "invalid encrypted payload")
-        return errors + 1
+        report("Real Sports derived session", "invalid payload")
+        return 1
     if isinstance(payload, dict) and isinstance(payload.get("origins"), list):
         report("Real Sports derived session", "payload structure valid")
-        return errors
+        return 0
     report("Real Sports derived session", "invalid storage-state structure")
-    return errors + 1
-
-
-def check_declared_storage() -> None:
-    for name, label in (
-        ("DATABASE_URL", "PostgreSQL internal URL"),
-        ("DATABASE_PUBLIC_URL", "PostgreSQL public URL"),
-        ("REDIS_URL", "Redis URL"),
-    ):
-        configured = bool(os.environ.get(name, "").strip())
-        report(label, "configured" if configured else "not configured")
+    return 1
 
 
 def main() -> int:
@@ -173,7 +142,6 @@ def main() -> int:
     errors += check_railway_graphql()
     errors += check_odds_api()
     errors += check_real_sports()
-    check_declared_storage()
     if errors:
         print(f"auth-check: live checks failed with {errors} issue(s)", file=sys.stderr)
         return 1
