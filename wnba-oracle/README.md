@@ -1,84 +1,79 @@
 # WNBA Oracle
 
-Real Sports WNBA daily-draft picker. It scrapes the slate pool, builds
-pre-tip features, predicts player distributions, optimizes a five-player
-lineup, and freezes the result to Redis plus Postgres.
+WNBA Oracle is the WNBA five-player daily-draft application. It collects the
+available pool and pre-tip signals, builds WNBA-owned features, predicts player
+distributions, optimizes a five-player lineup, freezes the result, and serves
+read-only slate and lineup data.
 
-The source of truth is code plus Postgres. Historical handoff logs and
-research dumps were removed because they had become stale and hard to audit.
+Current deployment, model, service, schedule, corpus, incident, and measurement
+facts are in `STATUS.md` and must be reverified before production work.
 
-## Current State
+## Local backend setup
 
-- Production model: `models/picker_e2ced9ec_1780873338.pkl`
-- Active model SHA: `94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`
-- Training command: `uv run oracle-train --corpus-mode both`
-- Serving path: Job 1 enrichment, Job 2 tip-relative freeze, FastAPI read surface
-- Canonical data: Postgres tables read through `src/wnba_oracle/db/reads.py`
-
-## Local Commands
+From the monorepo root:
 
 ```sh
-make install
-make test
+uv sync --all-packages --all-extras
+scripts/auth-check wnba-oracle --offline
+make test-wnba
 make lint
 make typecheck
-make dev
-make migrate
 ```
 
-`scripts/dev.sh` checks local credentials. Railway config, database URL,
-Redis URL, and the served model SHA live in Railway.
+Commands requiring local backend credentials run through the in-memory loader:
 
-## Operations
+```sh
+scripts/with-secrets wnba-oracle -- make test
+scripts/auth-check wnba-oracle --live
+```
 
-AGENTS.md is the operating manual: credential layers (local Claude Code,
-Railway production, cloud routines), Railway service IDs and schedules, the
-Real Sports session recovery procedure, and the two scheduled monitoring
-routines (pre-freeze guard at 13:30 UTC, dayclose verify at 07:00 UTC).
-Production state and troubleshooting live in STATUS.md. Escalations and the
-results ledger live in GitHub issues labeled `ops-guard` and `ops-results`.
+No plaintext `.env` file is needed. See root `README.md` and `.env.example` for
+the portable SOPS and age contract. Frontend login passwords remain in iCloud
+Passwords and are never backend environment variables.
 
-## Runtime Shape
+## Runtime roles
 
-- `oracle-cron --job job1`: scrape pool, odds, lineups, props, and features.
-- `oracle-cron --job job1late`: credit-free starter refresh before freeze.
-- `oracle-cron --job job2`: run prediction, optimization, and freeze.
-- `oracle-cron --job dayclose`: ingest finalized contests, refresh game logs,
-  record placements, and run retention cleanup.
-- `GET /lineup/{date}`: latest frozen lineup.
-- `GET /lineup/{date}/history`: all freezes for a slate.
-- `GET /slate/{date}`: first-tip and freeze timing metadata.
+- `oracle-cron --job job1`: collect pool, availability, odds, lineups, props,
+  and WNBA feature inputs; persist enrichment.
+- `oracle-cron --job job1late`: refresh late starter information without a
+  Real Sports fetch.
+- `oracle-cron --job job2`: run prediction and optimization, then append a
+  lock-aware freeze.
+- `oracle-cron --job dayclose`: ingest finalized contests and game logs, record
+  placements, and perform application retention work.
+- `GET /lineup/{date}`: return the latest valid freeze for a slate.
+- `GET /lineup/{date}/history`: return all freeze sequences for a slate.
+- `GET /slate/{date}`: return first-tip, lock, freeze, and pause metadata.
 
-## Data
+Exact production schedules are mutable and belong in `STATUS.md`.
 
-There are two distinct training frames.
+## Canonical data
 
-| Frame | Grain | Source | Consumer |
+PostgreSQL is the durable source. Redis is a cache and coordination service.
+
+| Frame | Grain | Source table | Primary consumer |
 | --- | --- | --- | --- |
-| Gamelog corpus | player-game | `wnba_game_logs` | LightGBM minutes and rate heads |
-| Label corpus | player-slate | `slate_labels` | EB baseline, blend, calibration |
+| Gamelog corpus | player-game | `wnba_game_logs` | Minutes and per-minute model heads |
+| Label corpus | player-slate | `slate_labels` | Baseline, blend, and calibration |
 
-Local parquet snapshots are not required. Refresh or inspect data through the
-Postgres helpers in `src/wnba_oracle/db/reads.py`.
+These frames use different identifiers and are not interchangeable. WNBA-owned
+identity resolution belongs in this application.
 
 ## Layout
 
 ```text
-src/wnba_oracle/api/        FastAPI app and read endpoints
-src/wnba_oracle/ingest/     Real Sports, WNBA stats, odds, RotoWire
+src/wnba_oracle/api/        WNBA routers and response contracts
+src/wnba_oracle/ingest/     WNBA provider implementations and parsers
 src/wnba_oracle/features/   Feature builders and rolling windows
-src/wnba_oracle/train/      LightGBM heads, EB baseline, artifact CLI
+src/wnba_oracle/train/      WNBA model training and artifact CLI
 src/wnba_oracle/predict/    Prediction and availability logic
-src/wnba_oracle/picker/     Field model, payout, optimizer
-src/wnba_oracle/scheduler/  Cron jobs, freezes, placements, watchdog
-src/wnba_oracle/db/         SQLAlchemy reads and engine helpers
-frontend/                   Vite React UI
-migrations/                 Alembic migrations
-tests/                      Unit and contract tests
+src/wnba_oracle/picker/     Field model, payout, and optimizer
+src/wnba_oracle/scheduler/  WNBA job orchestration and watchdogs
+src/wnba_oracle/db/         WNBA schemas, reads, and persistence adapters
+migrations/                 WNBA-owned Alembic migrations
+tests/                      Unit, integration, and contract tests
+frontend/                   Separately owned Vite React application
 ```
 
-## Cleanup Policy
-
-Keep documentation short and current. Prefer tests, schema, code comments,
-and Postgres facts over narrative logs. Do not reintroduce long handoff files,
-research dumps, local parquet snapshots, or markdown ledgers.
+Read `AGENTS.md` for exact commands, invariants, verification, provider rules,
+and production recovery requirements.

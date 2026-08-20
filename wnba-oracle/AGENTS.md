@@ -1,187 +1,180 @@
-# AGENTS.md (WNBA Oracle)
+# WNBA Oracle Instructions
 
-Operating manual for any agent working on this project: interactive Claude
-Code sessions on the operator's machine, and the two scheduled cloud
-routines. The original unattended-build handoff is finished; its logs were
-removed in the 2026-07-01 doc cleanup and live in git history.
+These are the stable operating rules for the WNBA application. Root
+`../AGENTS.md` is authoritative for portfolio boundaries, security, and shared
+infrastructure. Read both files, this project's `README.md`, and `STATUS.md`
+before acting. Reverify mutable facts in `STATUS.md` against code and live
+authoritative sources before production work.
 
-## Build state (D78, 2026-06-07)
+## Purpose and ownership
 
-The system is fully live. All major phases are wired and deployed on Railway.
+WNBA Oracle collects the available Real Sports WNBA pool and pre-tip signals,
+predicts player distributions, optimizes a five-player lineup, freezes the
+lineup before the applicable lock, and serves read-only slate and lineup data.
 
-Active model: `picker_e2ced9ec_1780873338.pkl` (SHA
-`94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`), trained on
-a 13,002-row corpus with team_pace + opponent DvP enrichment (D77). The
-LightGBM multi-task heads (minutes x per-minute-rate, cohort F) are wired into
-the `job2` Tier-0 prediction path (D69), with confirmed-starter multiplier (D71),
-sportsbook prop-signal multiplier (D78, PROP_SIGNAL_SCALE=0.3), late re-freeze
-at 23:00 UTC (D75), availability model (D73), lineup anchor floor of 2 (D57),
-game-stack bonus (D70/R3), boost caps (D70/R2), n_field=500 (D76), and
-targeted pool fallback for unmatched players (D72). Walk-forward corr 0.554 vs
-boost heuristic 0.246. Production training command: `oracle-train --corpus-mode
-both`. See STATUS.md for current state; decision history lives in git.
+WNBA owns all league models, feature engineering, strategy, scoring, calendars,
+provider adapters, provider payloads, database schemas, migrations, job names,
+schedules, pause rules, freeze rules, API routers, and recovery procedures.
+Only provider-neutral technical primitives belong in `oracle-core`.
 
-## Autonomy
+Do not change frontend source, dependencies, styling, components, tests, or
+build configuration during backend work. If another contributor is working on
+the frontend, import their final commit mechanically and verify tree identity.
 
-- Never stop to ask the human a question. Decide, act, and log the
-  reasoning in the commit message.
-- Dependencies: you are pre-authorized to add any dependency that is a
-  well-known PyPI or npm package, permissively licensed (MIT, BSD, Apache),
-  and needed for a real capability. Do not pause to confirm.
-- "Research" or "open question" means decide and log, never ask.
+## Exact local commands
 
-## Work hygiene
+Run workspace commands from the monorepo root:
 
-- Read files before editing. Preserve existing style.
-- Commit after every working increment with a descriptive message.
-- Keep code grep-able and consistent. Remove dead code and scratch files.
-- Docs policy (2026-07-01 cleanup, amended 2026-07-03): prose docs are
-  README.md, STATUS.md, and this file. CLAUDE.md is a loader shim (Claude
-  Code auto-loads CLAUDE.md, not AGENTS.md; it imports this file) and
-  `.claude/skills/` holds operational procedures (Real Sports re-seed,
-  Railway redeploy) -- these are config, keep them. Decision history goes in
-  commit messages; operational history goes in the ops GitHub issues; do not
-  reintroduce DECISIONS.md, NEEDS_CLAUDE.md, RESULTS.md, or other markdown
-  ledgers.
-
-## Output style
-
-- No em dashes. Vary sentence length. No emojis.
-- Distinguish verified facts from synthesized reasoning in commit messages
-  and issue comments.
-
-## Credentials and authorization
-
-Architecture: Single source of truth per layer. All development happens in
-Claude Code.
-
-**Local (Claude Code):** `.claude/settings.local.json` (gitignored,
-machine-local) holds 5 credentials in its `env` block. Claude Code exports
-them into the session environment, so every tool run sees them.
-
-**Production (Railway):** The same credentials plus all config (80+ env vars).
-Config values (DATABASE_URL, REDIS_URL, model artifact SHA, optimizer settings,
-etc.) live on Railway only and are not needed locally.
-
-The owner has granted blanket authorization to use these credentials for any
-operation this project legitimately requires. Do not pause to re-confirm.
-
-**Local credentials (.claude/settings.local.json env block):**
-- `GITHUB_TOKEN`: git + `gh` auth
-- `RAILWAY_WORKSPACE_TOKEN`: workspace token for scripted GraphQL (rwgql.sh)
-- `ODDS_API_KEY`: The Odds API requests
-- `REAL_SPORTS_USERNAME` / `REAL_SPORTS_PASSWORD`: Real Sports login
-
-**Cloud scheduled agents (claude.ai routines):** `.claude/credentials.env`
-(committed; private repo) holds only `RAILWAY_WORKSPACE_TOKEN` and
-`GITHUB_TOKEN`. Everything else the routines need is fetched at runtime via
-Railway GraphQL. The cloud container cannot reach the Postgres TCP proxy
-(non-HTTP outbound blocked) -- routines must use the api service HTTP
-endpoints and Railway logs, never psql. Deleting credentials.env breaks the
-routines' bootstrap (this caused the 2026-06-28..07-02 blind-audit incident,
-issue #10).
-
-### GitHub / git
-
-The repo's git credential helper reads `$GITHUB_TOKEN` directly. Plain
-`git push origin main` works without any prefix. `gh` works as-is: it picks
-up `$GITHUB_TOKEN` from the session env, and the same PAT is also stored in
-the macOS keyring for use outside Claude Code.
-
-### Railway
-
-Two auth paths, deliberately separate:
-
-1. **CLI + MCP tools (interactive):** user OAuth from `railway login`, stored
-   in `~/.railway/config.json`. `railway whoami`, `railway logs`, and the
-   Railway MCP server all use this. It only works because no `RAILWAY_TOKEN`
-   env var is exported -- the CLI prefers that variable over the stored login
-   and a workspace token in it breaks everything. Never add `RAILWAY_TOKEN`
-   back to the settings env block.
-2. **Scripted GraphQL:** `scripts/rwgql.sh` reads `RAILWAY_WORKSPACE_TOKEN`
-   and talks to backboard.railway.com directly. Use it for automation
-   (variable upserts, redeploys) where the CLI is awkward:
-
-```bash
-scripts/rwgql.sh '<graphql query>'
-scripts/rwgql.sh '<graphql query>' '<variables-json>'
+```sh
+uv sync --all-packages --all-extras
+make test-core
+make test-wnba
+make test-contract
+make lint
+make typecheck
+make build
+make check-boundaries
 ```
 
-Destructive ops (`railway down`, `railway delete`) are blocked at the
-settings layer.
+Run WNBA commands from this directory:
 
-### Real Sports
-
-Session state lives in `scraper/storage_state.json` (gitignored), seeded on
-Railway via `REALSPORTS_STORAGE_STATE_B64GZ` (gzip+base64 of that file, set
-on cron-job1 and cron-dayclose). Sessions die server-side after roughly three
-weeks; the symptom is 401s from every `web.realapp.com` endpoint while the
-web app still renders (it falls back to guest).
-
-Re-login gotcha (2026-07-02): `POST /login` returns 403
-"Please refresh the page and try again" for plain scripted Chromium --
-verified against this repo's own scripted-login attempt (since removed) --
-regardless of UA or automation-flag masking. The Playwright MCP browser
-passes the check. To
-re-seed: log in via Playwright MCP, dump localStorage into Playwright
-storage-state format (cookies are empty; auth is all localStorage), write
-`scraper/storage_state.json`, then upsert the b64gz onto cron-job1 and
-cron-dayclose and redeploy both.
-
-Railway IDs:
-- Project: `ab83f44c-0bbc-4a58-931c-37d9fbfda73a`
-- Production env: `d57a759e-e189-439b-a612-bd220ef59c39`
-- Services: cron-job1 `2e110589-9527-4541-a754-41c4719515ba`, cron-job1-late `2b0cd5aa-8793-45a5-bca0-e81c6d8455ff`, cron-job2 `4a511ed2-10ad-441f-bf9a-3748c1e6b929`, cron-dayclose `606d950d-7d7d-4f5a-a049-b9fa69799169`,
-  postgres `5e827da3-6df6-4349-97ad-a800ece2716d`, redis `bb131bec-4edd-4809-accd-e09e09aacbf6`, api `f4750eda-fd6c-432b-b6f5-34254013c271`, frontend `d56dccf4-85b3-4ba0-acaf-58ef0cced58c`
-- Cron schedules (UTC): cron-job1 `0 13 * * *`, cron-job1-late `*/30 16-23 * * *`
-  (start command `oracle-cron --job job1late`), cron-job2 `*/5 14-23,0-3 * * *`,
-  cron-dayclose `0 6 * * *`
-
-To redeploy a service:
-```bash
-scripts/rwgql.sh 'mutation { serviceInstanceDeployV2(serviceId: "SERVICE_ID", environmentId: "d57a759e-e189-439b-a612-bd220ef59c39") }'
+```sh
+make install
+make test
+make test-contract
+make lint
+make typecheck
+make fmt
+make dev
+make migrate
+make determinism-check
 ```
 
-### Local dev setup
+`make test` deliberately runs `uv run --package wnba-oracle --extra dev
+python -m pytest tests/ -q`. Do not replace it with bare `uv run pytest`, which
+can omit project dependencies in a workspace.
 
-Verify credentials are working before starting work:
+Commands needing local backend credentials should be invoked from the
+monorepo root:
 
-```bash
-bash scripts/dev.sh
+```sh
+scripts/with-secrets wnba-oracle -- make dev
+scripts/auth-check wnba-oracle --offline
+scripts/auth-check wnba-oracle --live
 ```
 
-This checks GitHub, Railway (both auth paths), Odds API, and Real Sports
-credential presence. It reads credentials from `.claude/settings.local.json`
-and validates they work.
+## Verification bar
 
-### Scheduled routines (cloud)
+- Backend code is not complete until the relevant focused tests pass, followed
+  by `make test`, `make lint`, and `make typecheck` from this directory.
+- Prediction, feature, model-loading, optimizer, or freeze changes also require
+  `make test-contract` and a compatibility check against the served artifact.
+- Migration changes require an upgrade from an empty PostgreSQL database and an
+  upgrade against a representative existing schema. Preserve table names, row
+  mappings, and application-owned migrations.
+- API changes require route, response-shape, and OpenAPI compatibility tests.
+- Workspace or packaging changes require root package builds, import-boundary
+  checks, and backend container smoke tests for the API and every cron role.
+- Operational scripts require failure-path tests and value-free logs. Production
+  changes require live verification after each service and a retained previous
+  deployment for rollback.
 
-Two routines run daily in Anthropic's cloud (manage at
-https://claude.ai/code/routines; push notifications enabled on both):
+## Domain and data invariants
 
-- **WNBA pre-freeze guard** (`trig_01FzJJAJ89ggeMgkgoPRTEzg`, 13:30 UTC,
-  30 min after cron-job1): verifies tonight's picks will freeze -- pool,
-  freeze machinery, model SHA, frontend regression. Self-heals redeploys and
-  documented values; escalates concisely to the rolling issue labeled
-  `ops-guard`; silent when healthy.
-- **WNBA dayclose verify** (`trig_015HXQzUQjAgVFwfv6b7q8y6`, 07:00 UTC,
-  1h after cron-dayclose): verifies corpus ingest, watches for the Real
-  Sports session-death signature six hours before job1, posts a results
-  digest to the issue labeled `ops-results` (the ledger that replaced
-  RESULTS.md).
+- Preserve the five-player draft and committed slot order. Never reorder a
+  frozen lineup using realized outcomes.
+- `frozen_lineups` is append-only audit history. A re-freeze appends a new
+  sequence and must never delete or rewrite earlier freezes.
+- Freeze and late re-freeze gates are business rules owned here. Fail closed
+  when lock or game-start eligibility cannot be established.
+- Canonical runtime data is PostgreSQL. Redis coordinates caches and leases but
+  is not the durable source of truth.
+- The gamelog corpus and label corpus have different grains and identifiers.
+  Do not join or substitute them without an explicit WNBA-owned identity map.
+- Domain tables, SQL migrations, provider row mappings, artifact formats, CLI
+  names, API paths, and existing environment variable names are compatibility
+  boundaries.
+- Keep slate-calendar and timezone decisions local. Inject clocks in tests and
+  cover UTC and WNBA slate-date boundaries.
 
-Routine design rules (violating these caused the June outage response to
-fail): HTTP-only checks (api endpoints + Railway GraphQL logs; the cloud
-container cannot reach Postgres), credential gate first, never scripted
-Real Sports login, never commit to main, never append to STATUS.md,
-expected values (model SHA, schedules) read from this file at runtime.
-The legacy routines (14:00 UTC readiness check, 12:00 UTC improvement
-agent) are disabled, not deleted.
+## Configuration and secrets
 
-### Constraints
+- Runtime configuration comes only from the process environment. Do not load or
+  parse `.env`, `.envrc`, `.claude/settings.local.json`, or
+  `.claude/credentials.env`.
+- Variable names and purposes are declared without values in `.env.example`.
+  Application secrets live in `.secrets/local.sops.env`; common GitHub and
+  Railway automation values live in the root encrypted file.
+- Backend provider credentials, database URLs, Redis URLs, webhook URLs, and
+  derived Real Sports sessions are secrets. Never print them, include them in
+  arguments, or place them in a URL visible to logs or process listings.
+- Frontend login passwords stay only in iCloud Passwords. Do not copy them into
+  SOPS, environment variables, browser scripts, agent configuration, or chat.
+- Standard `gh` and Railway CLI logins are valid ordinary interfaces. The
+  Railway GraphQL helper uses `RAILWAY_WORKSPACE_TOKEN` from the environment.
+  Never copy that workspace value into `RAILWAY_TOKEN`. A deliberately scoped
+  Railway project token may use `RAILWAY_TOKEN` for this application.
 
-- Never echo a credential value into a log, commit, chat message, comment,
-  or PR body. Reference by env var name only.
-- Do not store config in local files. Config lives on Railway only.
-- Never create new accounts or generate new long-lived credentials.
-  If a credential is missing or expired, escalate on the `ops-guard` issue.
+## Providers
+
+- Provider URLs, authentication, anti-bot constraints, retries, parsing,
+  contracts, rate limits, and fallback behavior remain in this application.
+- Provider requests must use bounded timeouts and retries, honor bounded
+  `Retry-After`, and redact sensitive headers, query values, URLs, and exception
+  text.
+- Real Sports derived storage state is a secret. Write
+  `scraper/storage_state.json` atomically with mode `0600`; never commit it.
+- Real Sports scripted login is known to be rejected. Session recovery requires
+  the operator to sign in using an ordinary interactive browser and iCloud
+  Autofill where applicable, then export the derived storage state without
+  displaying it. Browser automation or MCP may assist but cannot be the only
+  documented path.
+- Do not silently turn provider authentication failures into successful jobs.
+  Use explicit skipped, degraded, retryable-failure, or terminal-failure status.
+
+## Jobs and production operations
+
+- Job names, role guards, schedules, pause windows, preconditions, and
+  watchdog semantics remain WNBA-owned. `WNBA_CRON_ROLE` must match the selected
+  job in production.
+- A successful exit means required durable work completed. Optional provider
+  degradation may be reported as degraded, but database, freeze, role, or
+  artifact-integrity failures must return nonzero.
+- Use structured start, completion, and failure events. Watchdog and scheduled
+  guards must evaluate the current expected run window, not stale deployments
+  or logs.
+- Use `scripts/rwgql.sh` for scripted Railway GraphQL and standard Railway CLI
+  login for supported interactive operations. Send GraphQL variables on
+  standard input with `--variables-stdin`; never put secret values in arguments.
+- Repoint Railway services sequentially: API, job1, job1-late, job2, day-close,
+  backfill, automation, then frontend source only after its final commit is
+  imported. Verify each service before continuing and retain rollback.
+- Never repoint a live cron to the backfill role. Never mutate billing, delete a
+  service or database, rotate a credential, or alter a schedule without the
+  authority supplied by the task.
+
+## Incidents and recovery
+
+- Diagnose with code, current API responses, database facts, Railway deployment
+  state and logs, then `STATUS.md`. Do not infer health from a stale schedule or
+  deployment record.
+- API and guard checks may use HTTPS. Database verification uses ordinary
+  SQLAlchemy, PostgreSQL, or documented CLI access when available. No operation
+  may require a desktop connector.
+- Real Sports 401 responses across authenticated endpoints indicate a stale or
+  invalid derived session. Escalate for interactive reseeding; do not attempt a
+  scripted password login.
+- A cron redeploy re-arms its schedule but does not replay a missed run. Any
+  catch-up action must be scoped, reversible, and followed by restoration and
+  verification.
+- Production model SHA validation is fail-closed. Preserve the previous model
+  and deployment until a complete game-day cycle, day-close, backup, watchdog,
+  and scheduled guard cycle have succeeded.
+
+## Documentation
+
+- `README.md` explains the stable application shape and local entry points.
+- `STATUS.md` contains mutable artifacts, commits, service identifiers,
+  schedules, incidents, measurements, and known production gaps.
+- Keep decision rationale in code, tests, and commits. Do not recreate handoff,
+  results, needs-agent, or other markdown ledgers.

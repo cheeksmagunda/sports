@@ -1,6 +1,21 @@
 # Status
 
-Last updated: 2026-08-18
+Last updated: 2026-08-20
+
+This file is a mutable operational snapshot. Verify service state, schedules,
+repository commits, environment configuration, and artifact identity against
+GitHub, Railway, PostgreSQL, and the running API before changing production.
+
+## Monorepo cutover
+
+- Sports monorepo extraction: in progress; not yet the production source.
+- Operational WNBA source commit observed 2026-08-20:
+  `e82cd20806a117d407649b35f9b239f0faf1ae38`.
+- The frontend contributor reported all eight frontend phases passing at that
+  commit. The monorepo import still requires a mechanical commit import and
+  frontend tree-hash verification before its source is repointed.
+- Railway still requires sequential source repointing and a full acceptance
+  cycle before the original private WNBA repository can become read-only.
 
 ## Production
 
@@ -15,8 +30,8 @@ Last updated: 2026-08-18
 
 ## Monitoring and ops record
 
-Two scheduled cloud routines watch production daily (details and design
-rules in AGENTS.md, "Scheduled routines"):
+At the last verified snapshot, two scheduled cloud routines watched production
+daily:
 
 - WNBA pre-freeze guard, 13:30 UTC: tonight's picks. Escalates to the
   GitHub issue labeled `ops-guard`; silent when healthy.
@@ -26,6 +41,10 @@ rules in AGENTS.md, "Scheduled routines"):
 Operational history lives in those issues and in the routines' session
 logs (https://claude.ai/code/routines), not in this file. The pre-2026-07
 audit-log lines that used to accumulate here are preserved in git history.
+
+The monorepo migration adds equivalent WNBA-owned GitHub Actions. Do not disable
+the old routines or enable new schedules until manual runs and the required
+production acceptance cycle succeed.
 
 ## Canonical Data
 
@@ -48,6 +67,28 @@ day-close cron extends both nightly. All reads go through
 `src/wnba_oracle/db/reads.py`.
 
 ## Live services
+
+Recorded Railway identifiers:
+
+| Resource | Identifier |
+| --- | --- |
+| Project | `ab83f44c-0bbc-4a58-931c-37d9fbfda73a` |
+| Production environment | `d57a759e-e189-439b-a612-bd220ef59c39` |
+| api | `f4750eda-fd6c-432b-b6f5-34254013c271` |
+| frontend | `d56dccf4-85b3-4ba0-acaf-58ef0cced58c` |
+| cron-job1 | `2e110589-9527-4541-a754-41c4719515ba` |
+| cron-job1-late | `2b0cd5aa-8793-45a5-bca0-e81c6d8455ff` |
+| cron-job2 | `4a511ed2-10ad-441f-bf9a-3748c1e6b929` |
+| cron-dayclose | `606d950d-7d7d-4f5a-a049-b9fa69799169` |
+| postgres | `5e827da3-6df6-4349-97ad-a800ece2716d` |
+| redis | `bb131bec-4edd-4809-accd-e09e09aacbf6` |
+
+Recorded legacy routine identifiers:
+
+| Routine | Trigger | Schedule UTC |
+| --- | --- | --- |
+| WNBA pre-freeze guard | `trig_01FzJJAJ89ggeMgkgoPRTEzg` | `30 13 * * *` |
+| WNBA day-close verify | `trig_015HXQzUQjAgVFwfv6b7q8y6` | `0 7 * * *` |
 
 - api: https://api-production-7033.up.railway.app (`/health`, `/lineup/{date}`,
   `/slate/{date}`, `/watchdog/today`)

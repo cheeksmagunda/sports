@@ -1,28 +1,4 @@
 {
-  "permissions": {
-    "defaultMode": "bypassPermissions",
-    "additionalDirectories": [
-      "/Users/hanslarson/Desktop/mlb-oracle"
-    ],
-    "deny": [
-      "Bash(rm -rf:*)",
-      "Bash(sudo:*)",
-      "Bash(git push --force:*)",
-      "Bash(git push -f:*)",
-      "Bash(railway down:*)",
-      "Bash(railway delete:*)",
-      "Edit(/Users/hanslarson/Desktop/mlb-oracle/**)",
-      "Write(/Users/hanslarson/Desktop/mlb-oracle/**)",
-      "Read(./.env)",
-      "Read(./.env.*)",
-      "Read(**/credentials.md)"
-    ]
-  },
-  "enableAllProjectMcpServers": true,
-  "env": {
-    "API_TIMEOUT_MS": "1200000",
-    "BASH_DEFAULT_TIMEOUT_MS": "300000"
-  },
   "hooks": {
     "SessionStart": [
       {
@@ -30,18 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -x ./scripts/verify-creds.sh ] && bash ./scripts/verify-creds.sh || true"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ./scripts/hooks/format_on_edit.py"
+            "command": "../scripts/auth-check wnba-oracle --offline || true"
           }
         ]
       }

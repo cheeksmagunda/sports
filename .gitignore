@@ -1,0 +1,35 @@
+# Local secrets and credentials
+**/.secrets/
+**/*.sops.env
+**/.env
+**/.env.*
+!**/.env.example
+**/.envrc
+**/.claude/credentials.env
+**/.claude/settings.local.json
+**/age-identity.txt
+**/age-keys.txt
+**/*.key
+**/*.pem
+
+# Agent and editor state
+.codex/
+**/.claude/worktrees/
+**/.claude/sessions/
+**/.claude/snapshots/
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Common build and test artifacts
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+**/dist/
+**/build/
+**/*.log

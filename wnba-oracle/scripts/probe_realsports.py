@@ -10,8 +10,8 @@ the payout table under data/contest_payouts/. Skips gracefully on no-games
 days (off-season). Designed to be re-runnable.
 
 Usage:
-    set -a && source .env && set +a
-    uv run python scripts/probe_realsports.py [--date YYYY-MM-DD] [--device-uuid UUID]
+    scripts/with-secrets wnba-oracle -- uv run --package wnba-oracle \
+      python scripts/probe_realsports.py [--date YYYY-MM-DD] [--device-uuid UUID]
 """
 
 from __future__ import annotations

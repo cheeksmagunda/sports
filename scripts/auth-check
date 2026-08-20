@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""Report portable authentication capabilities without printing values."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import re
+import shutil
+import stat
+import sys
+
+
+USAGE = "Usage: scripts/auth-check <project> --offline|--live"
+PROJECT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+DECLARATION = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(.*)\Z")
+
+
+def file_mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def status(label: str, value: str) -> None:
+    print(f"{label}: {value}")
+
+
+def parse_example(path: Path) -> tuple[list[tuple[str, bool]], list[str]]:
+    declarations: list[tuple[str, bool]] = []
+    errors: list[str] = []
+    required = False
+    for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.rstrip("\r")
+        if line == "# auth:required":
+            required = True
+            continue
+        if line == "# auth:optional":
+            required = False
+            continue
+        if not line or line.startswith("#"):
+            continue
+        match = DECLARATION.fullmatch(line)
+        if match is None:
+            errors.append(f"{path.name} line {number}: invalid declaration")
+            continue
+        name, example_value = match.groups()
+        declarations.append((name, required))
+        if example_value:
+            errors.append(f"{name}: tracked example value must be empty")
+    return declarations, errors
+
+
+def resolve_project(portfolio_root: Path, name: str) -> Path:
+    if name in {".", ".."} or PROJECT_NAME.fullmatch(name) is None:
+        print("auth-check: project must be a top-level directory name", file=sys.stderr)
+        raise SystemExit(64)
+    candidate = portfolio_root / name
+    if candidate.is_symlink():
+        print(
+            "auth-check: project directory must not be a symbolic link", file=sys.stderr
+        )
+        raise SystemExit(78)
+    try:
+        project_dir = candidate.resolve(strict=True)
+    except FileNotFoundError:
+        print("auth-check: project directory not found", file=sys.stderr)
+        raise SystemExit(66)
+    if not project_dir.is_dir() or project_dir.parent != portfolio_root:
+        print("auth-check: project must be a top-level directory name", file=sys.stderr)
+        raise SystemExit(64)
+    return project_dir
+
+
+def check_secret_location(directory: Path, secret_file: Path, label: str) -> int:
+    errors = 0
+    if directory.exists():
+        if directory.is_symlink() or not directory.is_dir():
+            status(f"{label} directory", "invalid")
+            return 1
+        if file_mode(directory) == 0o700:
+            status(f"{label} directory", "present, mode 0700")
+        else:
+            status(f"{label} directory", "invalid permissions")
+            errors += 1
+    else:
+        status(f"{label} directory", "not configured")
+
+    if secret_file.exists():
+        if secret_file.is_symlink() or not secret_file.is_file():
+            status(f"{label} encrypted file", "invalid")
+            return errors + 1
+        if file_mode(secret_file) == 0o600:
+            status(f"{label} encrypted file", "present, mode 0600")
+        else:
+            status(f"{label} encrypted file", "invalid permissions")
+            errors += 1
+    else:
+        status(f"{label} encrypted file", "not configured")
+    return errors
+
+
+def check_age_identity(portfolio_root: Path) -> int:
+    configured = os.environ.get("SOPS_AGE_KEY_FILE", "").strip()
+    if configured:
+        try:
+            path = Path(configured).expanduser().resolve(strict=True)
+        except FileNotFoundError:
+            status("age private identity", "configured file missing")
+            return 1
+        try:
+            path.relative_to(portfolio_root)
+        except ValueError:
+            pass
+        else:
+            status("age private identity", "invalid repository location")
+            return 1
+        if path.is_file() and file_mode(path) == 0o600:
+            status("age private identity", "external, mode 0600")
+            return 0
+        status("age private identity", "invalid permissions or file type")
+        return 1
+
+    default_path = Path.home() / ".config" / "sops" / "age" / "keys.txt"
+    if default_path.is_file():
+        if file_mode(default_path) == 0o600:
+            status("age private identity", "standard location, mode 0600")
+            return 0
+        status("age private identity", "standard location has invalid permissions")
+        return 1
+    status("age private identity", "not configured")
+    return 0
+
+
+def main() -> None:
+    if len(sys.argv) != 3 or sys.argv[2] not in {"--offline", "--live"}:
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(64)
+
+    project = sys.argv[1]
+    mode = sys.argv[2]
+    script_dir = Path(__file__).resolve().parent
+    portfolio_root = script_dir.parent
+    project_dir = resolve_project(portfolio_root, project)
+
+    root_example = portfolio_root / ".env.example"
+    app_example = project_dir / ".env.example"
+    if not root_example.is_file() or not app_example.is_file():
+        print(
+            "auth-check: tracked environment declarations are missing", file=sys.stderr
+        )
+        raise SystemExit(66)
+
+    root_dir = portfolio_root / ".secrets"
+    root_file = root_dir / "common.sops.env"
+    app_dir = project_dir / ".secrets"
+    app_file = app_dir / "local.sops.env"
+    if (root_file.exists() or app_file.exists()) and os.environ.get(
+        "SPORTS_SECRETS_ACTIVE"
+    ) != project:
+        loader = script_dir / "with-secrets"
+        if not loader.is_file() or not os.access(loader, os.X_OK):
+            print("auth-check: executable secret loader is missing", file=sys.stderr)
+            raise SystemExit(69)
+        os.execv(
+            str(loader),
+            [str(loader), project, "--", str(Path(__file__).resolve()), project, mode],
+        )
+
+    errors = 0
+    errors += check_secret_location(root_dir, root_file, "root")
+    errors += check_secret_location(app_dir, app_file, "project")
+
+    encrypted_present = root_file.is_file() or app_file.is_file()
+    for tool in ("sops", "age", "gh", "railway", "curl"):
+        available = shutil.which(tool) is not None
+        status(f"tool {tool}", "available" if available else "missing")
+        if encrypted_present and tool in {"sops", "age"} and not available:
+            errors += 1
+    errors += check_age_identity(portfolio_root)
+
+    root_declarations, root_errors = parse_example(root_example)
+    app_declarations, app_errors = parse_example(app_example)
+    for message in (*root_errors, *app_errors):
+        print(message)
+        errors += 1
+
+    seen: set[str] = set()
+    declarations = root_declarations + app_declarations
+    if not declarations:
+        print("auth-check: no environment variables declared", file=sys.stderr)
+        errors += 1
+    for name, required in declarations:
+        if name in seen:
+            status(name, "declared more than once")
+            errors += 1
+            continue
+        seen.add(name)
+        present = bool(os.environ.get(name, "").strip())
+        if present:
+            status(name, "present")
+        elif required:
+            status(name, "missing, required")
+            errors += 1
+        else:
+            status(name, "missing, optional")
+
+    if errors:
+        print(f"auth-check: failed with {errors} issue(s)", file=sys.stderr)
+        raise SystemExit(1)
+
+    if mode == "--offline":
+        print("auth-check: offline checks passed")
+        return
+
+    hook = project_dir / "scripts" / "auth-check-live"
+    if not hook.is_file() or not os.access(hook, os.X_OK):
+        print("auth-check: executable live hook is unavailable", file=sys.stderr)
+        raise SystemExit(69)
+    os.chdir(project_dir)
+    os.execv(str(hook), [str(hook)])
+
+
+if __name__ == "__main__":
+    main()

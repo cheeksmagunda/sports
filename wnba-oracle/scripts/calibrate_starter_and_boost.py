@@ -10,7 +10,8 @@ across the full deployment window and reports:
      under-predicted by the head.
 
 Usage:
-    uv run --extra dev python scripts/calibrate_starter_and_boost.py
+    scripts/with-secrets wnba-oracle -- uv run --package wnba-oracle \
+      python scripts/calibrate_starter_and_boost.py
 
 Outputs: a compact table on stdout; the recommended env-var values are
 printed at the bottom.
@@ -27,16 +28,6 @@ from pathlib import Path
 import numpy as np
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_ENV_PATH = _REPO_ROOT / ".env"
-if _ENV_PATH.exists() and not os.environ.get("DATABASE_URL"):
-    for _line in _ENV_PATH.read_text().splitlines():
-        _line = _line.strip()
-        if not _line or _line.startswith("#") or "=" not in _line:
-            continue
-        _k, _v = _line.split("=", 1)
-        _v = _v.strip().strip('"').strip("'")
-        if _k.strip() == "DATABASE_PUBLIC_URL" and _v and not os.environ.get("DATABASE_URL"):
-            os.environ["DATABASE_URL"] = _v
 
 # Prod SHA -- calibrate against the model that will consume the knobs.
 os.environ.setdefault(
@@ -112,7 +103,9 @@ def features_for(fj: object) -> dict:
     return fj if isinstance(fj, dict) else {}
 
 
-def predict_pool_p50_by_slate(rows_by_slate: dict[str, list[dict]]) -> dict[tuple[str, int], dict[str, float]]:
+def predict_pool_p50_by_slate(
+    rows_by_slate: dict[str, list[dict]],
+) -> dict[tuple[str, int], dict[str, float]]:
     """Run the current model head over every historical pool. Returns
     {(slate_date, pid): {p10,p50,p90}} for pids the head produced."""
     sha = os.environ["WNBA_ORACLE_MODEL_ARTIFACT_SHA"]
@@ -160,8 +153,7 @@ def fit_multiplier_mse(pairs: list[tuple[float, float]]) -> tuple[float, float]:
 def main() -> int:
     print("Loading slate_labels + job1_enrichment...")
     rows = load_pool_rows()
-    print(f"  {len(rows)} player-slate rows across "
-          f"{len({r['slate_date'] for r in rows})} slates\n")
+    print(f"  {len(rows)} player-slate rows across {len({r['slate_date'] for r in rows})} slates\n")
 
     rows_by_slate: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
@@ -175,7 +167,9 @@ def main() -> int:
     # Buckets: expected_starter (is_starter=1 OR rotowire_confirmed=1),
     # confirmed_bench (rotowire_confirmed=1 AND is_starter=0),
     # unknown (both flags 0), out (drop).
-    buckets: dict[str, list[tuple[float, float, float]]] = defaultdict(list)  # (boost, pred_p50, real)
+    buckets: dict[str, list[tuple[float, float, float]]] = defaultdict(
+        list
+    )  # (boost, pred_p50, real)
     for r in rows:
         key = (r["slate_date"], int(r["pid"]))
         pred = p50_by_key.get(key)
@@ -200,8 +194,10 @@ def main() -> int:
     print(f"{'=' * 78}")
     print("STARTER FADE CALIBRATION")
     print(f"{'=' * 78}")
-    print(f"{'bucket':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'ratio':>8}"
-          f"{'p_dnp':>8}{'p_bomb':>8}{'mse_m=1':>10}")
+    print(
+        f"{'bucket':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'ratio':>8}"
+        f"{'p_dnp':>8}{'p_bomb':>8}{'mse_m=1':>10}"
+    )
     dnp_rate: dict[str, float] = {}
     for name in ("expected_starter", "confirmed_bench", "unknown"):
         rows_b = buckets.get(name, [])
@@ -217,8 +213,10 @@ def main() -> int:
         p_bomb = float(np.mean(reals <= 1.0))
         mse1 = float(np.mean((reals - preds) ** 2))
         dnp_rate[name] = p_dnp
-        print(f"{name:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}{ratio:>8.3f}"
-              f"{p_dnp:>8.2%}{p_bomb:>8.2%}{mse1:>10.3f}")
+        print(
+            f"{name:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}{ratio:>8.3f}"
+            f"{p_dnp:>8.2%}{p_bomb:>8.2%}{mse1:>10.3f}"
+        )
 
     print()
     # Fade calibration only trusts slates where either flag is nonzero at all
@@ -229,8 +227,10 @@ def main() -> int:
         f = features_for(r["features_json"])
         if int(f.get("is_starter", 0) or 0) or int(f.get("rotowire_confirmed", 0) or 0):
             slates_with_flags.add(r["slate_date"])
-    print(f"Restricting fade fit to {len(slates_with_flags)} slates that have "
-          f"at least one player with a nonzero starter flag.")
+    print(
+        f"Restricting fade fit to {len(slates_with_flags)} slates that have "
+        f"at least one player with a nonzero starter flag."
+    )
     starter_pairs: list[tuple[float, float]] = []
     unknown_pairs: list[tuple[float, float]] = []
     for r in rows:
@@ -255,13 +255,17 @@ def main() -> int:
     if starter_pairs:
         preds = np.array([p for p, _ in starter_pairs])
         reals = np.array([r for _, r in starter_pairs])
-        print(f"  starters: mean_real={np.mean(reals):.3f}  mean_pred={np.mean(preds):.3f}"
-              f"  p_dnp={np.mean(reals <= 0.01):.2%}")
+        print(
+            f"  starters: mean_real={np.mean(reals):.3f}  mean_pred={np.mean(preds):.3f}"
+            f"  p_dnp={np.mean(reals <= 0.01):.2%}"
+        )
     if unknown_pairs:
         preds = np.array([p for p, _ in unknown_pairs])
         reals = np.array([r for _, r in unknown_pairs])
-        print(f"  unknowns: mean_real={np.mean(reals):.3f}  mean_pred={np.mean(preds):.3f}"
-              f"  p_dnp={np.mean(reals <= 0.01):.2%}")
+        print(
+            f"  unknowns: mean_real={np.mean(reals):.3f}  mean_pred={np.mean(preds):.3f}"
+            f"  p_dnp={np.mean(reals <= 0.01):.2%}"
+        )
     if unknown_pairs:
         m_unknown, mse_unknown = fit_multiplier_mse(unknown_pairs)
         # sweep m for reference
@@ -273,7 +277,9 @@ def main() -> int:
             if mse < best_mse:
                 best_m, best_mse = float(cand), mse
         print(f"unknowns: OLS m = {m_unknown:.3f} (MSE {mse_unknown:.3f})")
-        print(f"unknowns: sweep min m in [0.30,1.00,step 0.05] -> {best_m:.2f} (MSE {best_mse:.3f})")
+        print(
+            f"unknowns: sweep min m in [0.30,1.00,step 0.05] -> {best_m:.2f} (MSE {best_mse:.3f})"
+        )
     if unknown_pairs and starter_pairs:
         mean_ratio = float(np.mean([r for _, r in unknown_pairs])) / float(
             np.mean([r for _, r in starter_pairs])
@@ -281,8 +287,9 @@ def main() -> int:
         # Existing starter mult is 1.10; so the "unknown mult vs starter mult" ratio implies
         # a starter mult-equivalent for unknowns of 1.10 * mean_ratio.
         print(f"ratio(mean_real unknown / mean_real starter) = {mean_ratio:.3f}")
-        print(f"  implied fade vs current starter mult 1.10 -> unknown mult = "
-              f"{1.10 * mean_ratio:.3f}")
+        print(
+            f"  implied fade vs current starter mult 1.10 -> unknown mult = {1.10 * mean_ratio:.3f}"
+        )
     print()
     if unknown_pairs:
         print(
@@ -305,8 +312,7 @@ def main() -> int:
             if name == "expected_starter":
                 tier_bucket_starters[tier].append((p50, real))
 
-    print(f"{'tier':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}"
-          f"{'resid':>10}{'ratio':>8}")
+    print(f"{'tier':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'resid':>10}{'ratio':>8}")
     tier_order = [name for _, _, name in BOOST_TIERS]
     for tier in tier_order:
         entries = tier_bucket.get(tier, [])
@@ -319,13 +325,11 @@ def main() -> int:
         mean_p = float(np.mean(preds))
         resid = mean_r - mean_p
         ratio = mean_r / mean_p if mean_p > 1e-9 else 0.0
-        print(f"{tier:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}"
-              f"{resid:>+10.3f}{ratio:>8.3f}")
+        print(f"{tier:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}{resid:>+10.3f}{ratio:>8.3f}")
 
     print()
     print("Starters-only (isolate the multiplier effect from the confirmed-bench fade):")
-    print(f"{'tier':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}"
-          f"{'resid':>10}{'ratio':>8}")
+    print(f"{'tier':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'resid':>10}{'ratio':>8}")
     for tier in tier_order:
         entries = tier_bucket_starters.get(tier, [])
         if not entries:
@@ -337,8 +341,7 @@ def main() -> int:
         mean_p = float(np.mean(preds))
         resid = mean_r - mean_p
         ratio = mean_r / mean_p if mean_p > 1e-9 else 0.0
-        print(f"{tier:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}"
-              f"{resid:>+10.3f}{ratio:>8.3f}")
+        print(f"{tier:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}{resid:>+10.3f}{ratio:>8.3f}")
 
     print()
     # Decide the boost-tail knob from the starters-only residual: if the

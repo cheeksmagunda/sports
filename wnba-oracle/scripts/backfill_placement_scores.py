@@ -19,9 +19,10 @@ Rows whose frozen lineup or slate_labels are missing cannot be recomputed and
 are reported as skipped rather than zeroed.
 
 Usage:
-    export DATABASE_URL=...
-    uv run --extra dev python scripts/backfill_placement_scores.py
-    uv run --extra dev python scripts/backfill_placement_scores.py --apply
+    scripts/with-secrets wnba-oracle -- uv run --package wnba-oracle \
+      python scripts/backfill_placement_scores.py
+    scripts/with-secrets wnba-oracle -- uv run --package wnba-oracle \
+      python scripts/backfill_placement_scores.py --apply
 """
 
 from __future__ import annotations
@@ -51,26 +52,11 @@ from wnba_oracle.scheduler.placements import derive_placement_fields  # noqa: E4
 FIX_DATE = "2026-08-19T22:29:16Z"
 
 
-def _load_env() -> None:
-    env = REPO_ROOT / ".env"
-    if os.environ.get("DATABASE_URL") or not env.exists():
-        return
-    for line in env.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        val = val.strip().strip('"').strip("'")
-        if key.strip() == "DATABASE_PUBLIC_URL" and val:
-            os.environ.setdefault("DATABASE_URL", val)
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="write the changes (default: dry run)")
     args = ap.parse_args()
 
-    _load_env()
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise SystemExit("DATABASE_URL is not set")
@@ -83,13 +69,17 @@ def main() -> int:
     updates: list[dict] = []
     skipped: list[tuple[str, str]] = []
     with engine.connect() as conn:
-        rows = conn.execute(
-            sa.text(
-                "SELECT slate_date, entry_score, entry_rank, entry_count, finish_percentile "
-                "FROM contest_placements WHERE recorded_at < :fix ORDER BY slate_date"
-            ),
-            {"fix": FIX_DATE},
-        ).mappings().all()
+        rows = (
+            conn.execute(
+                sa.text(
+                    "SELECT slate_date, entry_score, entry_rank, entry_count, finish_percentile "
+                    "FROM contest_placements WHERE recorded_at < :fix ORDER BY slate_date"
+                ),
+                {"fix": FIX_DATE},
+            )
+            .mappings()
+            .all()
+        )
 
         for r in rows:
             slate = str(r["slate_date"])
@@ -166,8 +156,10 @@ def main() -> int:
                 }
             )
 
-    print(f"{'slate':12s} {'old score':>9s} {'new score':>9s} {'delta':>7s} "
-          f"{'old rank':>8s} {'new rank':>8s}")
+    print(
+        f"{'slate':12s} {'old score':>9s} {'new score':>9s} {'delta':>7s} "
+        f"{'old rank':>8s} {'new rank':>8s}"
+    )
     for u in updates:
         old = u["old_score"]
         delta = (u["entry_score"] - old) if old is not None else float("nan")
@@ -182,8 +174,7 @@ def main() -> int:
     if updates:
         deltas = [u["entry_score"] - u["old_score"] for u in updates if u["old_score"] is not None]
         if deltas:
-            print(f"mean change {sum(deltas) / len(deltas):+.3f}, "
-                  f"most negative {min(deltas):+.3f}")
+            print(f"mean change {sum(deltas) / len(deltas):+.3f}, most negative {min(deltas):+.3f}")
 
     if not args.apply:
         print("\nDRY RUN. Nothing written. Re-run with --apply to commit.")

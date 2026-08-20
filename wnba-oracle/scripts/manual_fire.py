@@ -6,8 +6,8 @@ Steps:
 3. Watchdog: post-Job-2 trigger evaluation.
 
 Usage:
-    set -a && source .env && set +a
-    uv run python scripts/manual_fire.py
+    scripts/with-secrets wnba-oracle -- uv run --package wnba-oracle \
+      python scripts/manual_fire.py
 """
 
 from __future__ import annotations

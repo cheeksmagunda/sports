@@ -11,8 +11,8 @@ Idempotent. Re-running on the same slate overwrites. Pure addition: rows
 without a head match get features_json untouched.
 
 Usage:
-    set -a && source .env && set +a
-    uv run python scripts/backfill_head_features.py --slate-date 2026-06-06
+    scripts/with-secrets wnba-oracle -- uv run --package wnba-oracle \
+      python scripts/backfill_head_features.py --slate-date 2026-06-06
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ def main() -> int:
     print(f"matched: {n_matched}, skipped (no game-log history): {n_skipped}")
 
     if args.dry_run:
-        print("DRY RUN — no writes")
+        print("DRY RUN: no writes")
         return 0
 
     # 4) Apply updates.

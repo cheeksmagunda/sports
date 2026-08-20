@@ -1,6 +1,10 @@
 # Secrets and env
 .env
 .env.*
+!.env.example
+.envrc
+.secrets/
+*.sops.env
 credentials.md
 .codex/
 *.har
@@ -74,6 +78,7 @@ logs/
 
 # Local-only Claude settings (project settings.json is committed; *.local.json is per-machine)
 .claude/settings.local.json
+.claude/credentials.env
 .claude/sessions/
 .claude/agents/
 .claude/worktrees/

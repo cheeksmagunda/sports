@@ -42,20 +42,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Load .env so DATABASE_URL / DATABASE_PUBLIC_URL is available when the
-# script runs outside the Claude Code session env. Same pattern as other
-# on-demand scripts in this repo.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_ENV_PATH = _REPO_ROOT / ".env"
-if _ENV_PATH.exists() and not os.environ.get("DATABASE_URL"):
-    for _line in _ENV_PATH.read_text().splitlines():
-        _line = _line.strip()
-        if not _line or _line.startswith("#") or "=" not in _line:
-            continue
-        _k, _v = _line.split("=", 1)
-        _v = _v.strip().strip('"').strip("'")
-        if _k.strip() == "DATABASE_PUBLIC_URL" and _v and not os.environ.get("DATABASE_URL"):
-            os.environ["DATABASE_URL"] = _v
 
 from sqlalchemy import text  # noqa: E402
 
@@ -174,16 +161,16 @@ def categorize_swap(pick: PlayerLine, alt: PlayerLine) -> str:
     """
     if alt.card_boost > pick.card_boost + 0.15:
         return "boost_underweight"
-    alt_expected = bool(alt.is_starter) and (
-        bool(alt.rotowire_confirmed) or bool(alt.is_starter)
-    )
+    alt_expected = bool(alt.is_starter) and (bool(alt.rotowire_confirmed) or bool(alt.is_starter))
     pick_expected = bool(pick.is_starter) and (
         bool(pick.rotowire_confirmed) or bool(pick.is_starter)
     )
     if alt_expected and not pick_expected:
         return "starter_signal"
-    if alt.prop_over_prob is not None and alt.prop_over_prob >= 0.60 and (
-        pick.prop_over_prob is None or pick.prop_over_prob < alt.prop_over_prob - 0.05
+    if (
+        alt.prop_over_prob is not None
+        and alt.prop_over_prob >= 0.60
+        and (pick.prop_over_prob is None or pick.prop_over_prob < alt.prop_over_prob - 0.05)
     ):
         return "prop_signal_pos"
     if (
@@ -224,20 +211,12 @@ def build_pool_index(rows: list[dict]) -> dict[int, PlayerLine]:
                 else None
             ),
             prop_line=(
-                float(f["prop_points_line"])
-                if f.get("prop_points_line") is not None
-                else None
+                float(f["prop_points_line"]) if f.get("prop_points_line") is not None else None
             ),
             recent_minutes=(
-                float(f["recent_minutes"])
-                if f.get("recent_minutes") is not None
-                else None
+                float(f["recent_minutes"]) if f.get("recent_minutes") is not None else None
             ),
-            per_min_rate=(
-                float(f["per_min_rate"])
-                if f.get("per_min_rate") is not None
-                else None
-            ),
+            per_min_rate=(float(f["per_min_rate"]) if f.get("per_min_rate") is not None else None),
         )
         out[pid] = line
     return out
@@ -406,8 +385,7 @@ def _run_counterfactual(
             recent_minutes = float(f.get("recent_minutes", 0.0) or 0.0)
             n_min_games = int(f.get("n_min_games", 0) or 0)
             has_rotation = (
-                n_min_games >= LIVE_ANCHOR_MIN_GAMES
-                and recent_minutes >= LIVE_ANCHOR_MIN_MINUTES
+                n_min_games >= LIVE_ANCHOR_MIN_GAMES and recent_minutes >= LIVE_ANCHOR_MIN_MINUTES
             )
             is_anchor = has_rotation or (
                 (rotowire_conf == 1 or is_starter == 1) and is_starter == 1
@@ -494,8 +472,12 @@ def _run_counterfactual(
             boost_l, rs_l = labels.get(pid, (0.0, 0.0))
             new_lines.append(
                 PlayerLine(
-                    pid=pid, name=f"pid={pid}", team="", position="",
-                    card_boost=boost_l, real_score=rs_l,
+                    pid=pid,
+                    name=f"pid={pid}",
+                    team="",
+                    position="",
+                    card_boost=boost_l,
+                    real_score=rs_l,
                 )
             )
         new_score = score_lineup(new_lines)
@@ -517,8 +499,6 @@ def _run_counterfactual(
     return results
 
 
-
-
 def _print_counterfactual(overlay: str, rows: list[dict]) -> None:
     print()
     print(f"{'=' * 78}")
@@ -527,8 +507,7 @@ def _print_counterfactual(overlay: str, rows: list[dict]) -> None:
     if not rows:
         print("no slates scored (missing head predictions or team-cap infeasible)")
         return
-    print(f"{'slate':<12}{'old':>7}{'new':>7}{'delta':>8}{'gap→':>8}{'gap':>7}"
-          f"{'result':>12}")
+    print(f"{'slate':<12}{'old':>7}{'new':>7}{'delta':>8}{'gap→':>8}{'gap':>7}{'result':>12}")
     n_up = n_down = n_median = 0
     total_delta = 0.0
     for r in rows:
@@ -555,8 +534,10 @@ def _print_counterfactual(overlay: str, rows: list[dict]) -> None:
             f"{tag:>12}"
         )
     print()
-    print(f"Aggregate: n={len(rows)}  up={n_up}  down={n_down}  "
-          f"total_delta={total_delta:+.1f}  beat_top20_median={n_median}")
+    print(
+        f"Aggregate: n={len(rows)}  up={n_up}  down={n_down}  "
+        f"total_delta={total_delta:+.1f}  beat_top20_median={n_median}"
+    )
 
 
 def build_ledger(limit: int, verbose: bool = False) -> list[SlateEntry]:
@@ -661,8 +642,14 @@ def build_ledger(limit: int, verbose: bool = False) -> list[SlateEntry]:
                 # Not in enrichment: fabricate a stub so the loop keeps
                 # going. Boost/real_score come from labels if present.
                 boost, rs = labels.get(pid, (0.0, 0.0))
-                src = PlayerLine(pid=pid, name=f"pid={pid}", team="", position="",
-                                 card_boost=boost, real_score=rs)
+                src = PlayerLine(
+                    pid=pid,
+                    name=f"pid={pid}",
+                    team="",
+                    position="",
+                    card_boost=boost,
+                    real_score=rs,
+                )
             # Enforce realized score even if we found the pool line via
             # enrichment (the previous fill loop skipped missing labels).
             if pid in labels:
@@ -761,9 +748,8 @@ def print_table(ledger: list[SlateEntry]) -> None:
 
     # Aggregate view: how often does each category top the ledger?
     from collections import Counter
-    cats = Counter(
-        (e.top_swap.category if e.top_swap else "no_swap") for e in ledger
-    )
+
+    cats = Counter((e.top_swap.category if e.top_swap else "no_swap") for e in ledger)
     print()
     print(f"Category distribution across {len(ledger)} slates (top swap only):")
     for cat, n in cats.most_common():
@@ -793,9 +779,7 @@ def print_table(ledger: list[SlateEntry]) -> None:
     beat_med = sum(
         1 for e in ledger if e.top20_median is not None and e.our_score >= e.top20_median
     )
-    cracked = sum(
-        1 for e in ledger if e.top20_min is not None and e.our_score >= e.top20_min
-    )
+    cracked = sum(1 for e in ledger if e.top20_min is not None and e.our_score >= e.top20_min)
     print()
     print(
         f"Beat top-20 median: {beat_med}/{len(ledger)}   "
@@ -809,27 +793,46 @@ def write_csv(ledger: list[SlateEntry], path: Path) -> None:
         w = csv.writer(fh)
         w.writerow(
             [
-                "slate_date", "contest_id", "model_sha", "freeze_seq",
-                "our_score", "top20_median", "top20_min", "winner_score",
-                "delta_vs_median", "n_captured", "n_pool_scored",
-                "our_pids", "our_scores", "our_boosts",
-                "top_swap_slot", "top_swap_gain", "top_swap_category",
-                "top_swap_pick_name", "top_swap_alt_name",
-                "top_swap_pick_boost", "top_swap_alt_boost",
-                "top_swap_pick_rs", "top_swap_alt_rs",
+                "slate_date",
+                "contest_id",
+                "model_sha",
+                "freeze_seq",
+                "our_score",
+                "top20_median",
+                "top20_min",
+                "winner_score",
+                "delta_vs_median",
+                "n_captured",
+                "n_pool_scored",
+                "our_pids",
+                "our_scores",
+                "our_boosts",
+                "top_swap_slot",
+                "top_swap_gain",
+                "top_swap_category",
+                "top_swap_pick_name",
+                "top_swap_alt_name",
+                "top_swap_pick_boost",
+                "top_swap_alt_boost",
+                "top_swap_pick_rs",
+                "top_swap_alt_rs",
             ]
         )
         for e in ledger:
             ts = e.top_swap
             w.writerow(
                 [
-                    e.slate_date, e.contest_id, e.model_sha, e.freeze_seq,
+                    e.slate_date,
+                    e.contest_id,
+                    e.model_sha,
+                    e.freeze_seq,
                     f"{e.our_score:.2f}",
                     "" if e.top20_median is None else f"{e.top20_median:.2f}",
                     "" if e.top20_min is None else f"{e.top20_min:.2f}",
                     "" if e.winner_score is None else f"{e.winner_score:.2f}",
                     "" if e.delta_vs_median is None else f"{e.delta_vs_median:.2f}",
-                    e.n_captured, e.n_pool_scored,
+                    e.n_captured,
+                    e.n_pool_scored,
                     ";".join(str(p.pid) for p in e.our_picks),
                     ";".join(f"{p.real_score:.1f}" for p in e.our_picks),
                     ";".join(f"{p.card_boost:.2f}" for p in e.our_picks),
@@ -877,8 +880,9 @@ def main() -> int:
         print("=" * 78)
         print("SHIP EFFECT: overlay ON vs overlay OFF (same guardrails)")
         print("=" * 78)
-        print(f"{'slate':<12}{'off_new':>9}{'on_new':>8}{'ship_delta':>12}"
-              f"{'gap_off':>9}{'gap_on':>8}")
+        print(
+            f"{'slate':<12}{'off_new':>9}{'on_new':>8}{'ship_delta':>12}{'gap_off':>9}{'gap_on':>8}"
+        )
         n_up = n_down = 0
         total = 0.0
         for r in rows:

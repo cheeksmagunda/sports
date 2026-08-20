@@ -1,10 +1,5 @@
 {
   "mcpServers": {
-    "postgres": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
-    },
     "playwright": {
       "type": "stdio",
       "command": "npx",

@@ -1,54 +1,30 @@
 #!/usr/bin/env bash
-# One-shot bootstrap for a fresh cloud clone (Codespaces, cloud agent, etc.)
-# Usage: bash scripts/cloud_setup.sh
+# Portable backend bootstrap for a fresh clone or ordinary cloud shell.
+
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+portfolio_root="$(cd "$project_root/.." && pwd -P)"
+cd "$portfolio_root"
 
-# Install uv if not present
-if ! command -v uv &>/dev/null; then
-  echo "==> Installing uv"
+if ! command -v uv >/dev/null 2>&1; then
+  printf 'Installing uv\n'
   curl -LsSf https://astral.sh/uv/install.sh | sh
-  export PATH="$HOME/.cargo/bin:$PATH"
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 fi
 
-echo "==> Installing Python deps"
-uv sync --extra dev
+printf 'Installing workspace backend dependencies\n'
+uv sync --all-packages --all-extras
 
-echo "==> Installing Playwright Chromium (best-effort -- routines don't need it)"
-uv run playwright install chromium --with-deps 2>/dev/null \
-  || uv run playwright install chromium 2>/dev/null \
-  || echo "    WARN -- Playwright install failed (no sudo); skipping. JWT refresh will need a machine with Playwright."
+printf 'Installing Playwright Chromium when the host supports it\n'
+uv run --package wnba-oracle playwright install chromium --with-deps 2>/dev/null \
+  || uv run --package wnba-oracle playwright install chromium 2>/dev/null \
+  || printf 'Playwright browser install skipped; interactive session recovery needs a browser host\n'
 
-echo "==> Loading credentials"
-if [[ -f ".claude/credentials.env" ]]; then
-  set -a
-  eval "$(sed "s|REPO_ROOT|$REPO_ROOT|g" .claude/credentials.env | grep -v '^#' | grep -v '^$')"
-  export DATABASE_PUBLIC_URL="${DATABASE_PUBLIC_URL//REPO_ROOT/$REPO_ROOT}"
-  set +a
-  echo "    OK -- credentials loaded from .claude/credentials.env"
-else
-  echo "    WARN -- .claude/credentials.env not found; set DATABASE_PUBLIC_URL etc. manually"
-fi
+"$portfolio_root/scripts/auth-check" wnba-oracle --offline
 
-echo "==> Setting PGSSLROOTCERT"
-export PGSSLROOTCERT="$REPO_ROOT/.pgssl/server.crt"
-echo "    PGSSLROOTCERT=$PGSSLROOTCERT"
-
-echo "==> Installing frontend deps"
-if command -v npm &>/dev/null; then
-  (cd frontend && npm install)
-else
-  echo "    WARN -- npm not found; skipping frontend install"
-fi
-
-echo ""
-echo "Setup complete. Quick reference:"
-echo "  make dev          # start API on :8000"
-echo "  make test         # run test suite"
-echo "  make lint         # ruff"
-echo "  make typecheck    # mypy"
-echo "  cd frontend && npm run dev   # start frontend on :5173"
-echo ""
-echo "To persist env in this shell: source .claude/credentials.env && export DATABASE_PUBLIC_URL=\"\${DATABASE_PUBLIC_URL//REPO_ROOT/$REPO_ROOT}\" && export PGSSLROOTCERT=$REPO_ROOT/.pgssl/server.crt"
+printf '\nBackend setup complete.\n'
+printf '  make test-wnba\n'
+printf '  make lint\n'
+printf '  make typecheck\n'
+printf '  scripts/with-secrets wnba-oracle -- make dev\n'

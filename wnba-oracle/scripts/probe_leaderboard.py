@@ -15,8 +15,8 @@ What this does:
 
 Output: /tmp/wnba-probes/leaderboard_*.{json,txt} + a summary printed.
 Usage:
-    set -a && source .env && set +a
-    uv run python scripts/probe_leaderboard.py
+    scripts/with-secrets wnba-oracle -- uv run --package wnba-oracle \
+      python scripts/probe_leaderboard.py
 """
 
 from __future__ import annotations
