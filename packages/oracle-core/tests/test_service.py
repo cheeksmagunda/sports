@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
+
 from oracle_core.service import (
     HealthCheck,
     ServiceMetadata,

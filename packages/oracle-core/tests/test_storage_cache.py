@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from sqlalchemy import create_engine, text
+
 from oracle_core.cache import JsonTtlCache
 from oracle_core.storage import (
     Lease,
@@ -15,7 +17,6 @@ from oracle_core.storage import (
     normalize_postgres_url,
 )
 from oracle_core.testing import FakeKeyValueStore, FakeLeaseStore
-from sqlalchemy import create_engine, text
 
 
 def test_postgres_url_normalization() -> None:

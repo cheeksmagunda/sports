@@ -5,6 +5,7 @@ import stat
 from pathlib import Path
 
 import pytest
+
 from oracle_core.artifacts import (
     atomic_write_bytes,
     atomic_write_json,
