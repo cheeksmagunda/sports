@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 from wnba_oracle.api.app import app
+from wnba_oracle.common.clock import slate_date
 from wnba_oracle.common.settings import Settings
 
 FIRST_TIP = dt.datetime(2026, 6, 22, 23, 0, tzinfo=dt.UTC)
@@ -67,9 +68,7 @@ def test_404_when_row_has_no_timing() -> None:
 
 
 def test_paused_returns_200_without_touching_the_db() -> None:
-    # Anchor the window to the real UTC "today" (slate.py compares against
-    # dt.datetime.now(dt.UTC).date()) so this test is timezone-independent.
-    today = dt.datetime.now(dt.UTC).date()
+    today = slate_date()
     end = today + dt.timedelta(days=1)
     paused = Settings(PICKS_PAUSE_START=today.isoformat(), PICKS_PAUSE_END=end.isoformat())
     with (

@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 
+from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine
 
@@ -45,10 +46,7 @@ def get_slate_meta(slate_date: str) -> dict[str, Any]:
     neutral waiting state rather than a misleading clock.
     """
     settings = get_settings()
-    # UTC-explicit for the same reason as watchdog_router.get_watchdog_today:
-    # a naive dt.date.today() depends on the container's local TZ, which can
-    # disagree with the UTC calendar day the cron schedules are anchored to.
-    if settings.picks_paused_on(dt.datetime.now(dt.UTC).date()):
+    if settings.picks_paused_on(current_slate_date()):
         return {
             "slate_date": slate_date,
             "first_tip_utc": None,

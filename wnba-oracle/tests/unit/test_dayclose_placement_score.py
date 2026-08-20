@@ -102,3 +102,22 @@ def test_short_lineup_records_nothing() -> None:
     record = _run_dayclose([1, 2, 3])
 
     record.assert_not_called()
+
+
+def test_retention_cleanup_never_deletes_frozen_lineups() -> None:
+    """Day-close retention may prune events, never the lineup audit trail."""
+    conn = MagicMock()
+    conn.execute.return_value.rowcount = 3
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value = conn
+
+    with (
+        patch.object(job_dayclose, "get_settings", return_value=MagicMock(database_url="x")),
+        patch("wnba_oracle.db.engine.get_engine", return_value=engine),
+    ):
+        job_dayclose._cleanup_append_only_tables(retention_days=14)
+
+    statements = [str(call.args[0]) for call in conn.execute.call_args_list]
+    assert len(statements) == 1
+    assert "DELETE FROM watchdog_events" in statements[0]
+    assert all("frozen_lineups" not in statement for statement in statements)

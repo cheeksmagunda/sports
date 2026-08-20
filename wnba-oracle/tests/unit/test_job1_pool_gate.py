@@ -8,7 +8,7 @@ Railway cron run shows failed. The 2026-06-08 morning capture
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from wnba_oracle.scheduler import job1
 from wnba_oracle.scheduler.job1 import Job1Result, pool_sanity
@@ -63,3 +63,20 @@ def test_main_exits_zero_on_healthy_pool() -> None:
     healthy = Job1Result("2026-06-08", 60, 3, 30, 60)
     with patch.object(job1, "run", return_value=healthy):
         assert job1.main() == 0
+
+
+def test_valid_capture_replaces_the_whole_slate_atomically() -> None:
+    conn = MagicMock()
+    rows = [
+        {"slate_date": "2026-06-08", "player_id": 1},
+        {"slate_date": "2026-06-08", "player_id": 2},
+    ]
+
+    persisted = job1._replace_enrichment(conn, "2026-06-08", rows)
+
+    assert persisted == 2
+    assert conn.execute.call_count == 3
+    first = conn.execute.call_args_list[0]
+    assert str(first.args[0]) == str(job1.JOB1_DELETE_SLATE)
+    assert first.args[1] == {"slate_date": "2026-06-08"}
+    assert [call.args[1] for call in conn.execute.call_args_list[1:]] == rows

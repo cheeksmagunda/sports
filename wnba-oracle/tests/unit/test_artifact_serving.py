@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import hashlib
 import pickle
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -78,6 +80,25 @@ def test_load_model_artifact_empty_sha() -> None:
 
 def test_load_model_artifact_unknown_sha() -> None:
     assert _load_model_artifact("0000000000000000") is None
+
+
+def test_production_run_fails_closed_without_artifact_sha() -> None:
+    from wnba_oracle.scheduler import job2
+
+    settings = SimpleNamespace(
+        env="prod",
+        model_artifact_sha="",
+        pool_exclude_started_games=False,
+    )
+    with (
+        patch.object(job2, "get_settings", return_value=settings),
+        patch.object(job2, "_load_enrichment") as load_enrichment,
+    ):
+        result = job2.run("2026-06-21")
+
+    assert result.reason == "model_artifact_unset"
+    assert result.exit_code == 1
+    load_enrichment.assert_not_called()
 
 
 def test_load_model_artifact_roundtrip(tmp_path, monkeypatch) -> None:

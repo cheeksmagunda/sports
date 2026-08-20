@@ -24,17 +24,17 @@ def get_lineup(slate_date: str, model_sha: str = Query(default="")) -> dict[str,
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    # D82: frozen_lineups is append-only. Serve the latest freeze
-    # (max freeze_seq) and surface provenance so a re-frozen slate is
-    # visible without digging into metadata_json. n_freezes counts every
-    # row the WHERE clause matched, i.e. how many freezes this slate has.
+    # D82: frozen_lineups is append-only. ``freeze_seq`` is scoped to
+    # (slate_date, model_sha), so only use it as the primary ordering when a
+    # model is explicitly selected. Across model versions the actual freeze
+    # timestamp and row id define the latest operator-visible result.
     if model_sha:
         q = text(
             "SELECT slate_date, model_sha, payout_regime, frozen_at, lineup, "
             "entry_recommendation, expected_payout, metadata_json, "
             "freeze_seq, frozen_via, COUNT(*) OVER () AS n_freezes "
             "FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :sha "
-            "ORDER BY freeze_seq DESC, frozen_at DESC LIMIT 1"
+            "ORDER BY freeze_seq DESC, frozen_at DESC, id DESC LIMIT 1"
         )
         with eng.connect() as conn:
             row = conn.execute(q, {"sd": slate_date, "sha": model_sha}).first()
@@ -44,7 +44,7 @@ def get_lineup(slate_date: str, model_sha: str = Query(default="")) -> dict[str,
             "entry_recommendation, expected_payout, metadata_json, "
             "freeze_seq, frozen_via, COUNT(*) OVER () AS n_freezes "
             "FROM frozen_lineups WHERE slate_date = :sd "
-            "ORDER BY freeze_seq DESC, frozen_at DESC LIMIT 1"
+            "ORDER BY frozen_at DESC, id DESC LIMIT 1"
         )
         with eng.connect() as conn:
             row = conn.execute(q, {"sd": slate_date}).first()
@@ -76,7 +76,7 @@ def get_lineup_history(slate_date: str) -> list[dict[str, Any]]:
         "entry_recommendation, expected_payout, metadata_json, "
         "freeze_seq, frozen_via "
         "FROM frozen_lineups WHERE slate_date = :sd "
-        "ORDER BY freeze_seq ASC, frozen_at ASC"
+        "ORDER BY frozen_at ASC, id ASC"
     )
     with eng.connect() as conn:
         rows = list(conn.execute(q, {"sd": slate_date}))

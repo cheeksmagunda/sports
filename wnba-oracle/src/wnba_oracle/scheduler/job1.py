@@ -23,6 +23,7 @@ from dataclasses import dataclass
 import httpx
 from sqlalchemy import text
 
+from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine
@@ -87,6 +88,21 @@ JOB1_UPSERT = text(
         captured_at = now();
     """
 )
+
+JOB1_DELETE_SLATE = text("DELETE FROM job1_enrichment WHERE slate_date = :slate_date")
+
+
+def _replace_enrichment(conn, slate_date: str, rows: list[dict]) -> int:
+    """Atomically promote one complete, validated slate capture.
+
+    The transaction first removes the prior slate snapshot and then writes the
+    new rows. Callers must run ``pool_sanity`` before invoking this helper, so a
+    partial upstream response never mixes fresh timestamps with stale players.
+    """
+    conn.execute(JOB1_DELETE_SLATE, {"slate_date": slate_date})
+    for row in rows:
+        conn.execute(JOB1_UPSERT, row)
+    return len(rows)
 
 
 SLATE_META_UPSERT = text(
@@ -307,7 +323,7 @@ async def _do_pool_fetch(slate_date: str) -> tuple[list, list[str]]:
 
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     settings = get_settings()
-    sd = slate_date or dt.date.today().isoformat()
+    sd = slate_date or current_slate_date().isoformat()
     log.info("job1_start", slate_date=sd, dry_run=dry_run)
 
     pool, game_times = asyncio.run(_do_pool_fetch(sd))
@@ -600,23 +616,21 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
                 sample=head_feature_misses[:15],
             )
 
+    degraded = pool_sanity(rows, min_pool=settings.job1_min_pool, min_teams=settings.job1_min_teams)
     persisted = 0
-    if not dry_run and settings.database_url:
+    if not degraded and not dry_run and settings.database_url:
         try:
             eng = get_engine()
         except RuntimeError as exc:
             log.error("job1_no_db", reason=str(exc))
             return Job1Result(sd, len(pool), len(odds), len(lineups), 0)
         with eng.begin() as conn:
-            for row in rows:
-                conn.execute(JOB1_UPSERT, row)
-                persisted += 1
+            persisted = _replace_enrichment(conn, sd, rows)
 
-    # D84 sanity gate, AFTER persist on purpose: a degraded capture still
-    # lands in job1_enrichment for forensics, but the run is marked failed
-    # so it can never silently masquerade as a healthy fire (the 2026-06-08
-    # morning fire persisted 1 row / 1 team and looked "present").
-    degraded = pool_sanity(rows, min_pool=settings.job1_min_pool, min_teams=settings.job1_min_teams)
+    # D84 sanity gate. A rejected capture is logged and persisted as a
+    # watchdog event, but is never promoted into the optimizer's active pool.
+    # This keeps the last complete capture intact and its old captured_at
+    # visible to the freshness monitor.
     if degraded:
         log.error(
             "job1_pool_degraded",
@@ -691,7 +705,7 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
     if the slate has no enrichment yet (the 13:00 full run must seed it first).
     """
     settings = get_settings()
-    sd = slate_date or dt.date.today().isoformat()
+    sd = slate_date or current_slate_date().isoformat()
     log.info("job1_lite_start", slate_date=sd)
     try:
         lineups = fetch_lineups()
@@ -743,7 +757,7 @@ def run_game_starts(slate_date: str | None = None) -> int:
     POOL_EXCLUDE_STARTED_GAMES has nothing to filter on. Returns the number
     of rows patched.
     """
-    sd = slate_date or dt.date.today().isoformat()
+    sd = slate_date or current_slate_date().isoformat()
     log.info("job1_game_starts_start", slate_date=sd)
 
     async def _fetch() -> dict[str, str]:
@@ -789,7 +803,7 @@ def run_game_starts(slate_date: str | None = None) -> int:
 def main() -> int:
     configure_logging("INFO")
     settings = get_settings()
-    sd = dt.date.today().isoformat()
+    sd = current_slate_date().isoformat()
     try:
         result = run(sd, dry_run=settings.job1_dry_run)
     except Exception as exc:
@@ -804,7 +818,7 @@ def main() -> int:
 def main_lite() -> int:
     configure_logging("INFO")
     try:
-        run_lite(dt.date.today().isoformat())
+        run_lite(current_slate_date().isoformat())
     except Exception as exc:
         log.exception("job1_lite_failed", error=str(exc))
         return 1

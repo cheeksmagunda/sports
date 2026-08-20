@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
+from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.db.engine import get_engine
 
 router = APIRouter(prefix="/watchdog", tags=["watchdog"])
@@ -33,7 +34,7 @@ def get_watchdog_today(
     silently binds ``slate_date="today"`` and returns an empty event
     list against the bogus slate.
     """
-    today = dt.datetime.now(dt.UTC).date().isoformat()
+    today = current_slate_date().isoformat()
     return get_watchdog_for_slate(today, severity_min=severity_min)
 
 

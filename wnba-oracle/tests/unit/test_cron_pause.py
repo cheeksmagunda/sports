@@ -7,12 +7,11 @@ from unittest.mock import patch
 
 import pytest
 
+from wnba_oracle.common.clock import slate_date
 from wnba_oracle.common.settings import Settings
 from wnba_oracle.scheduler import cron
 
-# Anchored to the real UTC "today" (cron.py compares against
-# dt.datetime.now(dt.UTC).date()) so these tests are timezone-independent.
-_TODAY = dt.datetime.now(dt.UTC).date()
+_TODAY = slate_date()
 PAUSED = Settings(
     PICKS_PAUSE_START=(_TODAY - dt.timedelta(days=1)).isoformat(),
     PICKS_PAUSE_END=(_TODAY + dt.timedelta(days=1)).isoformat(),

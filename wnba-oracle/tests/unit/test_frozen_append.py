@@ -11,6 +11,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from wnba_oracle.picker.optimize import LineupRecommendation
 from wnba_oracle.scheduler import job2
 
@@ -98,9 +100,9 @@ def test_seq_race_gives_up_after_two_attempts() -> None:
     with (
         patch.object(job2, "get_engine", return_value=eng),
         patch.object(job2, "get_redis", return_value=rd),
+        pytest.raises(RuntimeError, match="sequence race"),
     ):
-        out = job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
-    assert out is False
+        job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
     insert_conn = eng.begin.return_value.__enter__.return_value
     assert insert_conn.execute.call_count == 2
 
@@ -110,5 +112,6 @@ def test_append_sql_computes_next_seq_from_existing_rows() -> None:
     and conflicts on the (slate_date, model_sha, freeze_seq) constraint."""
     sql = str(job2.FROZEN_APPEND)
     assert "COALESCE(MAX(freeze_seq), 0) + 1" in sql
-    assert "ON CONFLICT (slate_date, model_sha, freeze_seq) DO NOTHING" in sql
+    assert "operation_key" in sql
+    assert "ON CONFLICT DO NOTHING" in sql
     assert "RETURNING id, freeze_seq" in sql

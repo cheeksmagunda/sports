@@ -264,7 +264,7 @@ FROZEN_SNAPSHOT_SELECT_LATEST = text(
            metadata_json, freeze_seq
     FROM frozen_lineups
     WHERE slate_date = :sd
-    ORDER BY freeze_seq DESC, frozen_at DESC LIMIT 1
+    ORDER BY frozen_at DESC, id DESC LIMIT 1
     """
 )
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,7 @@ from typing import Any
 import numpy as np
 from sqlalchemy import text
 
+from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import Settings, get_settings
 from wnba_oracle.db.engine import get_engine, get_redis
@@ -77,6 +79,18 @@ class Job2Result:
     recommendation: LineupRecommendation | None
     frozen: bool
     reason: str
+
+    @property
+    def exit_code(self) -> int:
+        """Map operational outcomes to a stable process contract."""
+        failures = {
+            "model_artifact_unset",
+            "model_artifact_invalid",
+            "pool_too_small",
+            "specs_too_small",
+            "freeze_not_persisted",
+        }
+        return 1 if self.reason in failures else 0
 
 
 # Pure scoring/feature-extraction helpers live in job2_scoring so this
@@ -170,6 +184,13 @@ def _load_model_artifact(sha: str) -> PickerArtifact | None:
             art = load_artifact(pkl_path)
         except Exception as exc:
             log.exception("model_artifact_load_failed", path=str(pkl_path), error=str(exc))
+            return None
+        if not isinstance(art, PickerArtifact):
+            log.error(
+                "model_artifact_type_invalid",
+                path=str(pkl_path),
+                actual_type=type(art).__name__,
+            )
             return None
         log.info(
             "model_artifact_loaded",
@@ -972,21 +993,25 @@ FROZEN_APPEND = text(
     INSERT INTO frozen_lineups (
         slate_date, model_sha, payout_regime, frozen_at, lineup,
         entry_recommendation, expected_payout, metadata_json,
-        freeze_seq, frozen_via
+        freeze_seq, frozen_via, operation_key
     )
     SELECT
         :slate_date, CAST(:model_sha AS varchar), :payout_regime, now(),
         CAST(:lineup AS JSONB),
         :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB),
-        COALESCE(MAX(freeze_seq), 0) + 1, :frozen_via
+        COALESCE(MAX(freeze_seq), 0) + 1, :frozen_via, :operation_key
     FROM frozen_lineups
     WHERE slate_date = :slate_date AND model_sha = CAST(:model_sha AS varchar)
-    ON CONFLICT (slate_date, model_sha, freeze_seq) DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING id, freeze_seq;
     """
 )
 
 FROZEN_EXISTS = text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms")
+FROZEN_OPERATION_EXISTS = text(
+    "SELECT 1 FROM frozen_lineups "
+    "WHERE slate_date = :sd AND model_sha = :ms AND operation_key = :operation_key"
+)
 
 SLATE_LOCK_Q = text("SELECT contest_lock_utc, first_tip_utc FROM slate_meta WHERE slate_date = :sd")
 
@@ -1178,7 +1203,15 @@ def _build_per_player(
     return out
 
 
-def _release_freeze_lock(slate_date: str, force: bool) -> None:
+_RELEASE_LOCK_IF_OWNER = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0
+"""
+
+
+def _release_freeze_lock(slate_date: str, force: bool, owner_token: str | None) -> None:
     """Drop the Redis freeze lock for a slate so the next fire can retry.
 
     The lock (wnba.frozen.{sd} / wnba.late_frozen.{sd}) is taken with a 24h
@@ -1188,9 +1221,11 @@ def _release_freeze_lock(slate_date: str, force: bool) -> None:
     a transient append error costs one fire, not a day. Best-effort; a Redis
     error here is irrelevant because the lock auto-expires anyway.
     """
+    if not owner_token:
+        return
     key = f"wnba.late_frozen.{slate_date}" if force else f"wnba.frozen.{slate_date}"
     try:
-        get_redis().delete(key)
+        get_redis().eval(_RELEASE_LOCK_IF_OWNER, 1, key, owner_token)
     except Exception as exc:
         log.warning("job2_freeze_lock_release_failed", slate_date=slate_date, error=str(exc)[:120])
 
@@ -1235,6 +1270,8 @@ def _freeze(
     """
     eng = get_engine()
     frozen_via = via or ("job2_late_refreeze" if force else "job2_first_fire")
+    operation_key = frozen_via if force else "first"
+    lock_owner: str | None = None
 
     if force:
         # D75 late re-freeze: use a separate Redis key so only the first
@@ -1243,9 +1280,11 @@ def _freeze(
         try:
             rd = get_redis()
             late_key = f"wnba.late_frozen.{slate_date}"
-            lock_acquired = bool(rd.set(late_key, model_sha, nx=True, ex=24 * 3600))
+            lock_owner = uuid.uuid4().hex
+            lock_acquired = bool(rd.set(late_key, lock_owner, nx=True, ex=24 * 3600))
         except Exception as redis_exc:
             log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
+            lock_owner = None
             lock_acquired = True  # proceed; Postgres UPSERT is the canonical guard
         if not lock_acquired:
             log.info("job2_late_refreeze_already_done", slate_date=slate_date)
@@ -1262,9 +1301,11 @@ def _freeze(
             key = f"wnba.frozen.{slate_date}"
             # The 24h TTL covers a full slate window; if the writer crashes the
             # lock auto-releases for the next fire to retry.
-            lock_acquired = bool(rd.set(key, model_sha, nx=True, ex=24 * 3600))
+            lock_owner = uuid.uuid4().hex
+            lock_acquired = bool(rd.set(key, lock_owner, nx=True, ex=24 * 3600))
         except Exception as redis_exc:
             log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
+            lock_owner = None
             lock_acquired = True  # proceed; Postgres ON CONFLICT guards correctness
         if not lock_acquired:
             log.info(
@@ -1303,6 +1344,7 @@ def _freeze(
         # confirms it reads the column).
         "metadata_json": json.dumps({"frozen_via": frozen_via}),
         "frozen_via": frozen_via,
+        "operation_key": operation_key,
     }
     # One retry on an empty RETURNING: a concurrent appender took our seq.
     # The Redis locks make this near-impossible, but the constraint is the
@@ -1314,20 +1356,32 @@ def _freeze(
                 result = conn.execute(FROZEN_APPEND, payload).first()
             if result is not None:
                 break
+            with eng.connect() as conn:
+                duplicate = conn.execute(
+                    FROZEN_OPERATION_EXISTS,
+                    {"sd": slate_date, "ms": model_sha, "operation_key": operation_key},
+                ).first()
+            if duplicate:
+                log.info(
+                    "job2_freeze_operation_already_committed",
+                    slate_date=slate_date,
+                    operation_key=operation_key,
+                )
+                return False
             log.info("job2_lost_seq_race", slate_date=slate_date, attempt=attempt)
     except Exception as append_exc:
         # The append raised (e.g. a SQL/parameter error). Release the freeze
         # lock so the next fire retries immediately instead of deferring for
         # the 24h TTL, then surface the error to the caller.
-        _release_freeze_lock(slate_date, force)
+        _release_freeze_lock(slate_date, force, lock_owner)
         log.exception(
             "job2_freeze_append_error", slate_date=slate_date, error=str(append_exc)[:200]
         )
-        return False
+        raise RuntimeError("failed to append frozen lineup") from append_exc
     if result is None:
-        _release_freeze_lock(slate_date, force)
+        _release_freeze_lock(slate_date, force, lock_owner)
         log.warning("job2_freeze_append_failed", slate_date=slate_date, via=frozen_via)
-        return False
+        raise RuntimeError("freeze append lost its sequence race twice")
     log.info(
         "job2_late_refrozen" if force else "job2_frozen",
         slate_date=slate_date,
@@ -1339,10 +1393,17 @@ def _freeze(
 
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     settings = get_settings()
-    sd = slate_date or dt.date.today().isoformat()
+    sd = slate_date or current_slate_date().isoformat()
     model_sha = settings.model_artifact_sha or "heuristic-v1"
 
     log.info("job2_start", slate_date=sd, model_sha=model_sha)
+    if getattr(settings, "env", "dev") == "prod":
+        if not settings.model_artifact_sha:
+            log.error("job2_model_artifact_required", slate_date=sd)
+            return Job2Result(sd, model_sha, None, False, "model_artifact_unset")
+        if _load_model_artifact(settings.model_artifact_sha) is None:
+            log.error("job2_model_artifact_invalid", slate_date=sd, sha=model_sha[:12])
+            return Job2Result(sd, model_sha, None, False, "model_artifact_invalid")
     enrichment_raw = _load_enrichment(sd)
     # D109 pool scope: exclude players whose game already tipped. Applied
     # before the injury cascade so OUT-minutes only redistribute inside the
@@ -1369,6 +1430,21 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         if not enrichment_raw:
             log.warning("job2_no_upcoming_games", slate_date=sd, n_started=n_started)
             return Job2Result(sd, model_sha, None, False, "no_upcoming_games")
+
+    # Resolve the app-owned slate deadline before feature construction and
+    # optimization. Scheduled fires before the window have no committable
+    # output, so doing the expensive work first only wastes provider and CPU
+    # budget. Dry runs intentionally bypass this gate for diagnostics.
+    lock_time = upcoming_tip or _load_slate_lock_time(sd)
+    deadline = _freeze_deadline_utc(lock_time, settings)
+    if not dry_run and deadline is not None and _in_pre_freeze_window(now_utc, deadline):
+        log.info(
+            "job2_pre_freeze_window",
+            slate_date=sd,
+            deadline_utc=deadline.isoformat(),
+            now_utc=now_utc.isoformat(),
+        )
+        return Job2Result(sd, model_sha, None, False, "pre_freeze_window")
     # Serving-schema boundary check (warn-only rollout). Rejects the
     # 2026-07-02-style degraded pool (all-G positions, null minutes) as
     # watchdog events without blocking the freeze; escalate to strict
@@ -1465,10 +1541,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # When the tip is UNKNOWN (slate_meta empty), fall back to the legacy static
     # behaviour: freeze on the first fire + optional late re-freeze at
     # LATE_REFREEZE_AFTER_UTC (D75), gated by the D83 lock gate.
-    now_utc = dt.datetime.now(dt.UTC)
-    lock_time = upcoming_tip or _load_slate_lock_time(sd)
-    deadline = _freeze_deadline_utc(lock_time, settings)
-
     force_refreeze = False
     frozen_via_override: str | None = None
     if settings.pool_exclude_started_games and upcoming_tip is not None and n_started > 0:
@@ -1498,16 +1570,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
                     upcoming_tip_utc=upcoming_tip.isoformat(),
                 )
                 return Job2Result(sd, model_sha, rec, False, "upcoming_refreeze_gated")
-    if deadline is not None:
-        if _in_pre_freeze_window(now_utc, deadline):
-            log.info(
-                "job2_pre_freeze_window",
-                slate_date=sd,
-                deadline_utc=deadline.isoformat(),
-                now_utc=now_utc.isoformat(),
-            )
-            return Job2Result(sd, model_sha, rec, False, "pre_freeze_window")
-    elif settings.late_refreeze_enabled:
+    if deadline is None and settings.late_refreeze_enabled:
         # tip unknown: legacy static late-refreeze trigger (D75).
         try:
             h, m = (int(x) for x in settings.late_refreeze_after_utc.split(":"))
@@ -1586,9 +1649,17 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         serving_knobs=serving_knobs_payload,
         via=frozen_via_override,
     )
-    status = (
-        "ok" if frozen else ("already_frozen" if not force_refreeze else "late_refreeze_skipped")
-    )
+    if frozen:
+        status = "ok"
+    elif force_refreeze:
+        status = "late_refreeze_skipped"
+    else:
+        # A Redis lock miss is only an expected no-op if the canonical
+        # Postgres row now exists. Otherwise this run produced no durable
+        # lineup and must be retried as a failure, not mislabeled frozen.
+        with get_engine().connect() as conn:
+            persisted = conn.execute(FROZEN_EXISTS, {"sd": sd, "ms": model_sha}).first()
+        status = "already_frozen" if persisted else "freeze_not_persisted"
     # Shadow-eval the challenger head against the same enrichment. Guarded:
     # any failure logs and returns without touching the freeze result. The
     # writer is idempotent per (slate_date, challenger_sha) via ON CONFLICT
@@ -1638,12 +1709,17 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
 def main() -> int:
     configure_logging("INFO")
     settings = get_settings()
-    sd = dt.date.today().isoformat()
+    sd = current_slate_date().isoformat()
     try:
         result = run(sd, dry_run=settings.job2_dry_run)
     except Exception as exc:
         log.exception("job2_failed", error=str(exc))
         return 1
-    if result.recommendation is None:
-        return 0
-    return 0
+    log.info(
+        "job2_complete",
+        slate_date=result.slate_date,
+        outcome=result.reason,
+        frozen=result.frozen,
+        exit_code=result.exit_code,
+    )
+    return result.exit_code

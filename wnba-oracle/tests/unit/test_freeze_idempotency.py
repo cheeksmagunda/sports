@@ -13,6 +13,8 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from wnba_oracle.picker.optimize import LineupRecommendation
 from wnba_oracle.scheduler import job2
 
@@ -110,10 +112,26 @@ def test_redis_lock_loss_bails_without_writing() -> None:
     eng.begin.assert_not_called()
 
 
-def test_insert_race_loss_returns_false() -> None:
-    """If ON CONFLICT DO NOTHING fires (parallel writer slipped through),
-    RETURNING id is empty and we report no-op back."""
+def test_unresolved_insert_race_raises_for_retry() -> None:
+    """Two unexplained conflicts are a failed run, not a false success."""
     eng = _fake_engine(existing_row=False, insert_returns_row=False)
+    rd = _fake_redis(lock_wins=True)
+    with (
+        patch.object(job2, "get_engine", return_value=eng),
+        patch.object(job2, "get_redis", return_value=rd),
+        pytest.raises(RuntimeError, match="sequence race"),
+    ):
+        job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
+
+
+def test_same_operation_race_returns_expected_noop() -> None:
+    eng = _fake_engine(existing_row=False, insert_returns_row=False)
+    select_conn = eng.connect.return_value.__enter__.return_value
+    initial = MagicMock()
+    initial.first.return_value = None
+    duplicate = MagicMock()
+    duplicate.first.return_value = (1,)
+    select_conn.execute.side_effect = [initial, duplicate]
     rd = _fake_redis(lock_wins=True)
     with (
         patch.object(job2, "get_engine", return_value=eng),

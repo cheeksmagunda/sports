@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
+import pickle
 from unittest.mock import MagicMock, patch
 
 from wnba_oracle.scheduler import watchdog
@@ -368,10 +370,27 @@ def test_model_artifact_unresolved_is_critical(tmp_path) -> None:
 
 
 def test_model_artifact_resolves_clean(tmp_path) -> None:
-    sha = "abc123" * 8
+    from wnba_oracle.train.pipeline import PickerArtifact
+
+    payload = pickle.dumps(PickerArtifact(feature_module_sha="test", config={}))
+    sha = hashlib.sha256(payload).hexdigest()
     (tmp_path / "picker_x_1.sha256").write_text(sha)
-    (tmp_path / "picker_x_1.pkl").write_bytes(b"stub")
+    (tmp_path / "picker_x_1.pkl").write_bytes(payload)
     assert watchdog._check_model_artifact("2026-06-21", model_sha=sha, models_dir=tmp_path) == []
+
+
+def test_model_artifact_matching_sidecar_but_corrupt_pickle_is_critical(tmp_path) -> None:
+    payload = b"not a pickle"
+    sha = hashlib.sha256(payload).hexdigest()
+    (tmp_path / "picker_x_1.sha256").write_text(sha)
+    (tmp_path / "picker_x_1.pkl").write_bytes(payload)
+
+    events = watchdog._check_model_artifact(
+        "2026-06-21", model_sha=sha, models_dir=tmp_path
+    )
+
+    assert [event.trigger for event in events] == ["model_artifact_unresolved"]
+    assert events[0].severity == watchdog.SEVERITY_CRITICAL
 
 
 def _engine_with_feature_counts(n: int, n_odds: int, n_starter: int) -> MagicMock:

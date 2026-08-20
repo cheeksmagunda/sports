@@ -14,10 +14,10 @@ Invoked by Railway's cron with:
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import os
 import sys
 
+from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 
@@ -61,13 +61,9 @@ def main() -> int:
 
     # Operator-directed pause of the picking pipeline (PICKS_PAUSE_START/END).
     # job1/job1late/job2 no-op; dayclose/backfill keep the corpus current.
-    # UTC-explicit: cron schedules are all UTC (see AGENTS.md), and a naive
-    # dt.date.today() depends on the container's local TZ, which can disagree
-    # with the UTC calendar day by hours (see api/watchdog_router.py, which
-    # uses the same UTC-explicit pattern for the same reason).
-    today_utc = dt.datetime.now(dt.UTC).date()
+    today = current_slate_date()
     if args.job in ("job1", "job1games", "job1late", "job2") and settings.picks_paused_on(
-        today_utc
+        today
     ):
         log.info(
             "picks_paused_skip",
@@ -89,7 +85,7 @@ def main() -> int:
         try:
             # config_drift describes cron-job2's env only; job1's process
             # never has those knobs set, so skip it here (see run_watchdog).
-            run_watchdog(dt.date.today().isoformat(), check_config_drift=False)
+            run_watchdog(current_slate_date().isoformat(), check_config_drift=False)
         except Exception as exc:
             log.exception("watchdog_failed", error=str(exc))
         return rc
@@ -99,7 +95,7 @@ def main() -> int:
         # WNBA_CRON_ROLE=job1games (or unset) on the service that runs it.
         from wnba_oracle.scheduler import job1
 
-        job1.run_game_starts(dt.datetime.now(dt.UTC).date().isoformat())
+        job1.run_game_starts(current_slate_date().isoformat())
         return 0
     if args.job == "job1late":
         # Credit-free confirmed-lineup refresh. Re-scrapes
@@ -120,7 +116,7 @@ def main() -> int:
         # exactly when job2 cannot produce a freeze. Wrap so a watchdog
         # crash never masks the underlying job2 exit code.
         try:
-            run_watchdog(dt.date.today().isoformat())
+            run_watchdog(current_slate_date().isoformat())
         except Exception as exc:
             log.exception("watchdog_failed", error=str(exc))
         return rc

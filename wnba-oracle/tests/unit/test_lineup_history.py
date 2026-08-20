@@ -70,7 +70,16 @@ def test_get_lineup_serves_latest_with_provenance() -> None:
     assert body["frozen_via"] == "job2_late_refreeze"
     assert body["n_freezes"] == 2
     sql = str(eng.connect.return_value.__enter__.return_value.execute.call_args.args[0])
-    assert "ORDER BY freeze_seq DESC" in sql
+    assert "ORDER BY frozen_at DESC, id DESC" in sql
+
+
+def test_get_lineup_for_model_uses_model_scoped_sequence() -> None:
+    eng = _engine_first(_row(2, "job2_late_refreeze", FROZEN_AT_2, n_freezes=2))
+    with patch("wnba_oracle.api.lineup.get_engine", return_value=eng):
+        resp = TestClient(app).get("/lineup/2026-06-08?model_sha=sha-a")
+    assert resp.status_code == 200
+    sql = str(eng.connect.return_value.__enter__.return_value.execute.call_args.args[0])
+    assert "ORDER BY freeze_seq DESC, frozen_at DESC, id DESC" in sql
 
 
 def test_history_returns_all_rows_oldest_first() -> None:
@@ -87,7 +96,7 @@ def test_history_returns_all_rows_oldest_first() -> None:
     assert [r["frozen_via"] for r in body] == ["job2_first_fire", "job2_late_refreeze"]
     assert all("lineup" in r for r in body)
     sql = str(eng.connect.return_value.__enter__.return_value.execute.call_args.args[0])
-    assert "ORDER BY freeze_seq ASC" in sql
+    assert "ORDER BY frozen_at ASC, id ASC" in sql
 
 
 def test_history_404_when_no_rows() -> None:

@@ -67,6 +67,41 @@ def test_freeze_deadline_default_lead_when_unset() -> None:
     assert out == dt.datetime(2026, 6, 14, 22, 50, tzinfo=dt.UTC)
 
 
+def test_scheduled_run_skips_optimizer_before_freeze_window() -> None:
+    settings = SimpleNamespace(
+        env="dev",
+        model_artifact_sha="",
+        pool_exclude_started_games=False,
+    )
+    deadline = dt.datetime(2026, 6, 14, 22, 50, tzinfo=dt.UTC)
+    with (
+        patch.object(job2, "get_settings", return_value=settings),
+        patch.object(job2, "_load_enrichment", return_value=[]),
+        patch.object(job2, "_load_slate_lock_time", return_value=LOCK),
+        patch.object(job2, "_freeze_deadline_utc", return_value=deadline),
+        patch.object(job2, "_in_pre_freeze_window", return_value=True),
+        patch.object(job2, "_build_specs") as build_specs,
+        patch.object(job2, "optimize_lineup") as optimize,
+    ):
+        result = job2.run("2026-06-14")
+
+    assert result.reason == "pre_freeze_window"
+    assert result.exit_code == 0
+    build_specs.assert_not_called()
+    optimize.assert_not_called()
+
+
+def test_job2_result_maps_missing_durable_output_to_failure() -> None:
+    result = job2.Job2Result(
+        slate_date="2026-06-14",
+        model_sha="sha",
+        recommendation=None,
+        frozen=False,
+        reason="freeze_not_persisted",
+    )
+    assert result.exit_code == 1
+
+
 LOCK = dt.datetime(2026, 6, 8, 23, 30, tzinfo=dt.UTC)
 
 

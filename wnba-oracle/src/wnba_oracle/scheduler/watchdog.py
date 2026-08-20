@@ -153,7 +153,7 @@ FROZEN_Q = text(
     "SELECT lineup, expected_payout, frozen_at "
     "FROM frozen_lineups "
     "WHERE slate_date = :sd "
-    "ORDER BY freeze_seq DESC, frozen_at DESC LIMIT 1"
+    "ORDER BY frozen_at DESC, id DESC LIMIT 1"
 )
 
 
@@ -372,7 +372,7 @@ DRIFT_WINDOW_Q = text(
         WHERE l.slate_date = f.slate_date::text
           AND l.real_score IS NOT NULL
     )
-    ORDER BY f.slate_date DESC, f.freeze_seq DESC
+    ORDER BY f.slate_date DESC, f.frozen_at DESC, f.id DESC
     LIMIT :n
     """
 )
@@ -704,13 +704,22 @@ def _check_model_artifact(
     if mdir.exists():
         for sidecar in mdir.glob("picker_*.sha256"):
             try:
-                if (
-                    sidecar.read_text().strip().lower() == sha
-                    and sidecar.with_suffix(".pkl").exists()
-                ):
-                    resolved = True
-                    break
-            except OSError:
+                if sidecar.read_text().strip().lower() != sha:
+                    continue
+                artifact_path = sidecar.with_suffix(".pkl")
+                if not artifact_path.exists():
+                    continue
+                # ``load_artifact`` verifies the bytes against the sidecar
+                # before unpickling. A matching text file alone is not proof
+                # that the shipped artifact is readable or safe to serve.
+                from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
+
+                artifact = load_artifact(artifact_path)
+                if not isinstance(artifact, PickerArtifact):
+                    continue
+                resolved = True
+                break
+            except Exception:
                 continue
     if not resolved:
         return [
@@ -718,7 +727,10 @@ def _check_model_artifact(
                 slate_date=slate_date,
                 trigger="model_artifact_unresolved",
                 severity=SEVERITY_CRITICAL,
-                payload={"sha": sha[:12], "note": "no matching .pkl in models/; serving heuristic"},
+                payload={
+                    "sha": sha[:12],
+                    "note": "artifact missing, checksum-invalid, or unloadable; serving heuristic",
+                },
             )
         ]
     return []
