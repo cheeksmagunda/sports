@@ -28,7 +28,8 @@ export function PlayerPage() {
 
         // Find the player in the lineup
         const foundPlayer = (lineupData.lineup.per_player ?? []).find(
-          (p) => p.display_name.replace(/\s+/g, "-").toLowerCase() === playerId.toLowerCase()
+          (p) => String(p.player_id) === playerId ||
+            p.display_name.replace(/\s+/g, "-").toLowerCase() === playerId.toLowerCase(),
         );
 
         if (!foundPlayer) {
@@ -59,8 +60,8 @@ export function PlayerPage() {
     load();
   }, [date, playerId]);
 
-  if (loading) return <Shell slateDateDisplay={date?.toUpperCase()}><p>Loading...</p></Shell>;
-  if (error || !player) return <Shell slateDateDisplay={date?.toUpperCase()}><p>{error || "Player not found"}</p></Shell>;
+  if (loading) return <Shell slateDateDisplay={date?.toUpperCase()}><p className="player-page__message">Loading player details...</p></Shell>;
+  if (error || !player) return <Shell slateDateDisplay={date?.toUpperCase()}><p className="player-page__message player-page__message--error">{error || "Player not found"}</p></Shell>;
 
   const primaryColor = teamPrimary(player.team);
   const inkColor = teamInk(player.team);

@@ -1,19 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Shell } from "../components/Shell";
-import { API_URL } from "../lib/api";
-
-interface FreezeVersion {
-  freeze_seq: number;
-  frozen_at: string;
-  frozen_via: string;
-  per_player: Array<{
-    display_name: string;
-    team: string;
-    opponent: string;
-    position: string;
-  }>;
-}
+import { fetchLineupHistory, type FrozenLineup } from "../lib/api";
 
 interface FreezeDiff {
   version: number;
@@ -27,7 +15,7 @@ interface FreezeDiff {
 
 export function FreezesPage() {
   const { date } = useParams<{ date: string }>();
-  const [freezes, setFreezes] = useState<FreezeVersion[]>([]);
+  const [freezes, setFreezes] = useState<FrozenLineup[]>([]);
   const [diffs, setDiffs] = useState<Map<number, FreezeDiff>>(new Map());
   const [loading, setLoading] = useState(!!date);
   const [error, setError] = useState<string | null>(date ? null : "Invalid date");
@@ -37,32 +25,30 @@ export function FreezesPage() {
 
     const load = async () => {
       try {
-        const r = await fetch(`${API_URL}/freezes/${date}`);
-        if (r.status === 404) {
+        const data = await fetchLineupHistory(date);
+        if (!data) {
           setError("No freezes found for this date");
           setLoading(false);
           return;
         }
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const data = (await r.json()) as FreezeVersion[];
         setFreezes(data);
 
         // Compute diffs between consecutive freezes
         const diffMap = new Map<number, FreezeDiff>();
         for (let i = 1; i < data.length; i++) {
-          const prev = new Set(data[i - 1].per_player.map((p) => `${p.display_name}|${p.team}`));
-          const curr = new Set(data[i].per_player.map((p) => `${p.display_name}|${p.team}`));
+          const prev = new Set((data[i - 1].lineup.per_player ?? []).map((p) => `${p.display_name}|${p.team}`));
+          const curr = new Set((data[i].lineup.per_player ?? []).map((p) => `${p.display_name}|${p.team}`));
           const changedPlayers = [];
 
           for (const key of curr) {
             if (!prev.has(key)) {
-              const player = data[i].per_player.find((p) => `${p.display_name}|${p.team}` === key);
+              const player = (data[i].lineup.per_player ?? []).find((p) => `${p.display_name}|${p.team}` === key);
               if (player) changedPlayers.push({ name: player.display_name, team: player.team, status: "added" as const });
             }
           }
           for (const key of prev) {
             if (!curr.has(key)) {
-              const player = data[i - 1].per_player.find((p) => `${p.display_name}|${p.team}` === key);
+              const player = (data[i - 1].lineup.per_player ?? []).find((p) => `${p.display_name}|${p.team}` === key);
               if (player) changedPlayers.push({ name: player.display_name, team: player.team, status: "removed" as const });
             }
           }
@@ -87,8 +73,8 @@ export function FreezesPage() {
           <h1>Freeze History</h1>
         </div>
 
-        {loading && <p className="freezes-page__message">Loading...</p>}
-        {error && <p className="freezes-page__message freezes-page__message--error">{error}</p>}
+        {loading && <p className="freezes-page__message">Loading freeze history...</p>}
+        {error && <p className="freezes-page__message freezes-page__message--error">Unable to load freeze history. {error}</p>}
 
         {freezes.length > 0 && (
           <div className="freezes-page__list">

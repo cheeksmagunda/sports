@@ -1,29 +1,16 @@
 import { useEffect, useState } from "react";
 import { Shell } from "../components/Shell";
-import { API_URL } from "../lib/api";
-
-interface SystemStatus {
-  buildSha?: string;
-  buildTime?: string;
-  modelSha?: string;
-  modelDate?: string;
-  databaseHealthy?: boolean;
-  redisHealthy?: boolean;
-  lastJobRun?: string;
-  nextJobRun?: string;
-}
+import { fetchWatchdogToday, type WatchdogToday } from "../lib/api";
 
 export function SystemPage() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [status, setStatus] = useState<WatchdogToday | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const r = await fetch(`${API_URL}/system`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        setStatus((await r.json()) as SystemStatus);
+        setStatus(await fetchWatchdogToday());
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unknown error");
       } finally {
@@ -37,74 +24,43 @@ export function SystemPage() {
     <Shell slateDateDisplay="SYSTEM">
       <div className="system-page">
         <div className="system-page__header">
+          <span className="page-kicker">Operational monitor</span>
           <h1>System Status</h1>
+          <p className="page-intro">The production watchdog checks the data and freeze pipeline before tonight&rsquo;s lineup is served.</p>
         </div>
 
-        {loading && <p className="system-page__message">Loading...</p>}
-        {error && <p className="system-page__message system-page__message--error">{error}</p>}
+        {loading && <p className="system-page__message">Checking the watchdog...</p>}
+        {error && <p className="system-page__message system-page__message--error">Unable to reach the watchdog. {error}</p>}
 
         {status && (
-          <div className="system-page__grid">
-            {status.buildSha && (
-              <div className="system-page__item">
-                <div className="system-page__label">Frontend Build</div>
-                <code className="system-page__code">{status.buildSha.slice(0, 8)}</code>
-              </div>
-            )}
-            {status.buildTime && (
-              <div className="system-page__item">
-                <div className="system-page__label">Built At</div>
-                <time>{new Date(status.buildTime).toLocaleString()}</time>
-              </div>
-            )}
-            {status.modelSha && (
-              <div className="system-page__item">
-                <div className="system-page__label">Model</div>
-                <code className="system-page__code">{status.modelSha.slice(0, 12)}</code>
-              </div>
-            )}
-            {status.modelDate && (
-              <div className="system-page__item">
-                <div className="system-page__label">Model Trained</div>
-                <time>{new Date(status.modelDate).toLocaleString()}</time>
-              </div>
-            )}
-            {typeof status.databaseHealthy === "boolean" && (
-              <div className="system-page__item">
-                <div className="system-page__label">Database</div>
-                <span
-                  className={`system-page__status system-page__status--${
-                    status.databaseHealthy ? "ok" : "error"
-                  }`}
-                >
-                  {status.databaseHealthy ? "OK" : "Error"}
+          <div className="system-page__content">
+            <div className="system-page__summary">
+              <div>
+                <div className="system-page__label">Watchdog status</div>
+                <span className={`system-page__status system-page__status--${status.status}`}>
+                  {status.status === "ok" ? "All clear" : status.status}
                 </span>
               </div>
-            )}
-            {typeof status.redisHealthy === "boolean" && (
-              <div className="system-page__item">
-                <div className="system-page__label">Redis Cache</div>
-                <span
-                  className={`system-page__status system-page__status--${
-                    status.redisHealthy ? "ok" : "error"
-                  }`}
-                >
-                  {status.redisHealthy ? "OK" : "Error"}
-                </span>
+              <div>
+                <div className="system-page__label">Last checked</div>
+                <time>{new Date(status.checked_at_utc).toLocaleString()}</time>
               </div>
-            )}
-            {status.lastJobRun && (
-              <div className="system-page__item">
-                <div className="system-page__label">Last Job Run</div>
-                <time>{new Date(status.lastJobRun).toLocaleString()}</time>
+              <div>
+                <div className="system-page__label">Alerts</div>
+                <strong>{status.events.length}</strong>
               </div>
-            )}
-            {status.nextJobRun && (
-              <div className="system-page__item">
-                <div className="system-page__label">Next Job Run</div>
-                <time>{new Date(status.nextJobRun).toLocaleString()}</time>
+            </div>
+            {status.events.length > 0 ? (
+              <div className="system-page__events">
+                {status.events.map((event, index) => (
+                  <div key={`${event.created_at ?? "event"}-${index}`} className={`system-page__event system-page__event--${event.severity}`}>
+                    <span className="system-page__event-severity">{event.severity}</span>
+                    <span className="system-page__event-trigger">{event.trigger.replaceAll("_", " ")}</span>
+                    <time>{event.created_at ? new Date(event.created_at).toLocaleString() : "—"}</time>
+                  </div>
+                ))}
               </div>
-            )}
+            ) : <p className="system-page__message">No active watchdog events.</p>}
           </div>
         )}
       </div>

@@ -45,6 +45,9 @@ export function Header({
           <Link to="/history" className="header__nav-link">
             History
           </Link>
+          <Link to="/system" className="header__nav-link">
+            System
+          </Link>
         </nav>
         <WatchdogDot />
         <ThemeToggle theme={theme} onToggle={onThemeToggle} />

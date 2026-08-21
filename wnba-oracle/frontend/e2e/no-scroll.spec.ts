@@ -25,6 +25,15 @@ test.describe("No-scroll gate", () => {
       });
     });
 
+    test("/picker with a frozen lineup renders visible player rows", async ({ page }) => {
+      await page.goto(`${BASE_URL}/?demo=frozen`);
+      await page.waitForLoadState("networkidle");
+
+      const row = page.locator(".slip-row").first();
+      await expect(row).toBeVisible();
+      expect((await row.boundingBox())?.height ?? 0).toBeGreaterThan(40);
+    });
+
     test("/history does not scroll", async ({ page }) => {
       await page.goto(`${BASE_URL}/history`);
       await page.waitForLoadState("networkidle");
@@ -61,6 +70,15 @@ test.describe("No-scroll gate", () => {
 
         expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
       });
+    });
+
+    test("/picker with a frozen lineup renders visible player rows", async ({ page }) => {
+      await page.goto(`${BASE_URL}/?demo=frozen`);
+      await page.waitForLoadState("networkidle");
+
+      const row = page.locator(".slip-row").first();
+      await expect(row).toBeVisible();
+      expect((await row.boundingBox())?.height ?? 0).toBeGreaterThan(40);
     });
 
     test("/history does not scroll", async ({ page }) => {

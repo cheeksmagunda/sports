@@ -104,6 +104,7 @@
   --dur-4: 520ms;
 
   --radius-sm: 6px;
+  --radius-xs: 4px;
   --radius-md: 12px;
   --radius-lg: 20px;
   --radius-full: 999px;
@@ -137,6 +138,23 @@
   --line-h-body:    1.55;
   --line-h-display: 1.05;
   --line-h-snug:    1.25;
+
+  /* Compatibility aliases for the depth-page styles. These pages were
+     written against the earlier token names; keep them semantic so every
+     route renders in both themes instead of silently falling back. */
+  --border-neutral: var(--border-default);
+  --surface-2: var(--bg-elevated);
+  --surface-hover: var(--bg-inset);
+  --fs-xs: var(--fs-meta);
+  --fs-sm: var(--fs-body);
+  --fs-h4: var(--fs-stat);
+  --fs-h5: var(--fs-body-lg);
+  --success-primary: var(--good);
+  --success-light: color-mix(in oklab, var(--good) 12%, transparent);
+  --success-dark: var(--good);
+  --error-primary: var(--bad);
+  --error-light: color-mix(in oklab, var(--bad) 12%, transparent);
+  --error-dark: var(--bad);
 
   --icon-xs: 16px;
   --icon-sm: 20px;
@@ -205,7 +223,10 @@ a { color: var(--primary-text); }
      nowrap), which blows every row out past the viewport instead of
      wrapping or clipping locally. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto 1fr auto;
+  /* Header, one content wrapper, footer. Phase 7 introduced the wrapper
+     around page content; keeping the old four-row template creates an empty
+     implicit row and leaves the picker with only its min-content height. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 /* Content row: min-height:0 lets it shrink to the remaining 1fr space
@@ -214,6 +235,22 @@ a { color: var(--primary-text); }
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* The picker has a fixed-height hero followed by a nested lineup main. The
+   nested main must own the remaining grid space or its flex children resolve
+   against zero and the five rows collapse to their borders. The same rule
+   lets depth pages use the available content area without changing the
+   header/footer contract. */
+.app > main > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app > main > main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .skip-link {
@@ -332,6 +369,7 @@ a { color: var(--primary-text); }
 .header__nav {
   display: flex;
   align-items: center;
+  gap: var(--space-4);
 }
 
 .header__nav-link {
@@ -1460,6 +1498,8 @@ a { color: var(--primary-text); }
 .slate-page,
 .freezes-page,
 .player-page {
+  width: min(1180px, 100%);
+  margin: 0 auto;
   padding: var(--space-5);
   overflow-y: auto;
   overflow-x: hidden;
@@ -1489,20 +1529,93 @@ a { color: var(--primary-text); }
   margin: 0;
 }
 
-.system-page__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-3);
+.page-kicker {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--accent-text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 700;
+  letter-spacing: var(--tracking-loose);
+  text-transform: uppercase;
 }
 
-.system-page__item {
+.page-intro {
+  max-width: 660px;
+  margin: var(--space-3) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-body-lg);
+  line-height: var(--line-h-body);
+}
+
+.system-page__content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3);
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  gap: var(--space-4);
 }
+
+.system-page__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(140px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+.system-page__summary > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 94px;
+  padding: var(--space-4);
+  background: var(--bg-surface);
+}
+
+.system-page__summary strong {
+  font-family: var(--font-display);
+  font-size: var(--fs-stat);
+  color: var(--text-primary);
+}
+
+.system-page__events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.system-page__event {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.system-page__event--error,
+.system-page__event--critical { border-left-color: var(--bad); }
+
+.system-page__event-severity,
+.system-page__event-trigger {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.system-page__event-severity { color: var(--warn); }
+.system-page__event--error .system-page__event-severity,
+.system-page__event--critical .system-page__event-severity { color: var(--bad); }
+.system-page__event-trigger { color: var(--text-primary); }
+.system-page__event time { color: var(--text-muted); font-size: var(--fs-meta); }
 
 .system-page__label {
   font-size: var(--fs-sm);
@@ -1510,12 +1623,6 @@ a { color: var(--primary-text); }
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-.system-page__code {
-  font-family: monospace;
-  font-size: var(--fs-sm);
-  color: var(--text-primary);
 }
 
 .system-page__status {
@@ -1531,7 +1638,13 @@ a { color: var(--primary-text); }
   color: var(--success-dark);
 }
 
-.system-page__status--error {
+.system-page__status--warn {
+  background: color-mix(in oklab, var(--warn) 14%, transparent);
+  color: var(--warn);
+}
+
+.system-page__status--error,
+.system-page__status--critical {
   background: var(--error-light);
   color: var(--error-dark);
 }
@@ -1569,8 +1682,9 @@ a { color: var(--primary-text); }
   color: var(--success-primary);
 }
 
-.history-page__stat-value--loss {
-  color: var(--error-primary);
+.history-page__stat-value--date {
+  font-size: var(--fs-body-lg);
+  line-height: var(--line-h-snug);
 }
 
 .history-page__table-wrap {
@@ -1623,15 +1737,25 @@ a { color: var(--primary-text); }
   text-decoration: underline;
 }
 
-.history-page__cell--win {
+.history-page__cell--enter,
+.history-page__cell--enter_with_caveat {
   color: var(--success-primary);
-  font-weight: 600;
+  font-weight: 700;
+  text-transform: capitalize;
 }
 
-.history-page__cell--loss {
+.history-page__cell--skip {
   color: var(--error-primary);
-  font-weight: 600;
+  font-weight: 700;
+  text-transform: capitalize;
 }
+
+.history-page__cell--numeric {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-page__cell--muted { color: var(--text-muted); }
 
 .freezes-page__list {
   display: flex;
@@ -1783,6 +1907,22 @@ a { color: var(--primary-text); }
   gap: var(--space-3);
 }
 
+.player-page__message {
+  margin: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.player-page__message--error {
+  border-color: color-mix(in oklab, var(--bad) 45%, var(--border-default));
+  background: var(--error-light);
+  color: var(--error-dark);
+}
+
 .player-page__stat-item {
   display: flex;
   flex-direction: column;
@@ -1819,4 +1959,27 @@ a { color: var(--primary-text); }
 .freezes-page__message--error {
   background: var(--error-light);
   color: var(--error-dark);
+}
+
+@media (max-width: 720px) {
+  .system-page,
+  .history-page,
+  .slate-page,
+  .freezes-page,
+  .player-page {
+    padding: var(--space-4);
+  }
+
+  .system-page__summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .system-page__summary > div:first-child { grid-column: 1 / -1; }
+
+  .system-page__event {
+    grid-template-columns: 1fr auto;
+  }
+
+  .system-page__event-trigger { grid-column: 1 / -1; grid-row: 2; }
+  .system-page__event time { grid-column: 2; grid-row: 1; }
 }
