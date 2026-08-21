@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-20
+Last verified: 2026-08-21
 
 This file is a mutable operational snapshot. Verify service state, schedules,
 repository commits, environment configuration, and artifact identity against
@@ -8,14 +8,13 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
 
 ## Monorepo cutover
 
-- Sports monorepo extraction: in progress; not yet the production source.
-- Operational WNBA source commit observed 2026-08-20:
-  `e82cd20806a117d407649b35f9b239f0faf1ae38`.
-- The frontend contributor reported all eight frontend phases passing at that
-  commit. The monorepo import still requires a mechanical commit import and
-  frontend tree-hash verification before its source is repointed.
-- Railway still requires sequential source repointing and a full acceptance
-  cycle before the original private WNBA repository can become read-only.
+- Completed 2026-08-21. Railway uses `cheeksmagunda/sports`, branch `main`, as
+  the source for the API, six backend roles, and frontend.
+- Backend services build from the workspace root with
+  `wnba-oracle/Dockerfile`, so they can import `oracle-core`.
+- The frontend builds from `wnba-oracle/frontend`; PostgreSQL and Redis remain
+  the same managed Railway services.
+- The previous WNBA repository is an archive only. Do not deploy from it.
 
 ## Production
 
@@ -30,21 +29,13 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
 
 ## Monitoring and ops record
 
-At the last verified snapshot, two scheduled cloud routines watched production
-daily:
-
-- WNBA pre-freeze guard, 13:30 UTC: tonight's picks. Escalates to the
-  GitHub issue labeled `ops-guard`; silent when healthy.
-- WNBA dayclose verify, 07:00 UTC: corpus ingest + early Real Sports
-  session-death warning + results digest to the issue labeled `ops-results`.
-
-Operational history lives in those issues and in the routines' session
-logs (https://claude.ai/code/routines), not in this file. The pre-2026-07
-audit-log lines that used to accumulate here are preserved in git history.
-
-The monorepo migration adds equivalent WNBA-owned GitHub Actions. Do not disable
-the old routines or enable new schedules until manual runs and the required
-production acceptance cycle succeed.
+- Production watchdog state is available at `/watchdog/today` and
+  `/watchdog/jobs/today` on the API.
+- Root GitHub Actions own backend CI, provider contracts, corpus backup,
+  watchdog monitoring, pre-freeze checks, and day-close verification. Check
+  their current schedule state in GitHub before relying on a run window.
+- Operational history belongs in the corresponding GitHub issues and workflow
+  logs. Keep this file to current state, known gaps, and recovery facts.
 
 ## Canonical Data
 
@@ -276,7 +267,6 @@ issue labeled `ops-results` (#15). No model change was made.
 
 ## Quality gates
 
-- 435 unit tests pass (`uv run --extra dev python -m pytest -q`; the bare
-  `uv run pytest` lacks project deps).
-- ruff + mypy clean on `src/`.
+- Last local verification, 2026-08-21: 596 WNBA tests and 48 oracle-core tests
+  passed; Ruff, mypy, import-boundary checks, and package builds passed.
 - `make determinism-check` compares model content, not pickle SHA (D93).

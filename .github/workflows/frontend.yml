@@ -1,19 +1,14 @@
 name: frontend
 
-# Lint, typecheck, and test the frontend on every change that touches it.
-# The frontend had no CI at all before the D110 overhaul; this closes that
-# gap so a broken build can't reach main and trigger Railway's auto-deploy
-# for the frontend service silently.
-
 on:
   push:
     branches: [main]
     paths:
-      - "frontend/**"
+      - "wnba-oracle/frontend/**"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
-      - "frontend/**"
+      - "wnba-oracle/frontend/**"
       - ".github/workflows/frontend.yml"
 
 permissions:
@@ -21,7 +16,7 @@ permissions:
 
 defaults:
   run:
-    working-directory: frontend
+    working-directory: wnba-oracle/frontend
 
 jobs:
   check:
@@ -33,7 +28,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: wnba-oracle/frontend/package-lock.json
 
       - run: npm ci
       - run: npm run lint

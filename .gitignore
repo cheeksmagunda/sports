@@ -5,8 +5,6 @@
 **/.env.*
 !**/.env.example
 **/.envrc
-**/.claude/credentials.env
-**/.claude/settings.local.json
 **/age-identity.txt
 **/age-keys.txt
 **/*.key
@@ -14,9 +12,6 @@
 
 # Agent and editor state
 .codex/
-**/.claude/worktrees/
-**/.claude/sessions/
-**/.claude/snapshots/
 .DS_Store
 .idea/
 .vscode/
@@ -32,4 +27,6 @@
 **/node_modules/
 **/dist/
 **/build/
+**/playwright-report/
+**/test-results/
 **/*.log
