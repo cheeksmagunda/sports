@@ -1,0 +1,166 @@
+/* §1-2 Design tokens: primitive ramp + semantic tokens.
+ *
+ * No Tailwind. Hex literals are confined to this file; everything else
+ * resolves through semantic tokens via light-dark().
+ */
+
+/* Primitive ramp: only place hex literals are allowed. */
+
+:root {
+  color-scheme: light dark;
+
+  --teal-950: #053838;
+  --teal-900: #0a4a4a;
+  --teal-700: #0e8e8e;
+  --teal-500: #1ab3b3;
+  --teal-300: #5ed4d4;
+  --teal-200: #93e6e6;
+  --teal-100: #ccf3f3;
+
+  --magenta-900: #4a0827;
+  --magenta-700: #8a1148;
+  --magenta-500: #d81b60;
+  --magenta-300: #ef5b8c;
+  --magenta-200: #f78cb0;
+  --magenta-100: #fdcfe0;
+
+  --neutral-0:   #ffffff;
+  --neutral-50:  #f3f4f6;
+  --neutral-100: #e5e7eb;
+  --neutral-200: #d1d5db;
+  --neutral-300: #9ca3af;
+  --neutral-500: #6b7280;
+  --neutral-600: #4b5563;
+  --neutral-700: #374151;
+  --neutral-800: #1f2937;
+  --neutral-850: #161e2c;
+  --neutral-900: #111827;
+  --neutral-950: #050810;
+
+  /* §2 Semantic tokens */
+
+  --bg-canvas:   light-dark(var(--neutral-50),  var(--neutral-950));
+  --bg-surface:  light-dark(var(--neutral-0),   var(--neutral-900));
+  --bg-elevated: light-dark(var(--neutral-0),   var(--neutral-850));
+  --bg-inset:    light-dark(var(--neutral-100), var(--neutral-800));
+
+  --border-subtle:  light-dark(var(--neutral-100), var(--neutral-800));
+  --border-default: light-dark(var(--neutral-200), var(--neutral-700));
+  --border-strong:  light-dark(var(--neutral-300), var(--neutral-500));
+
+  --text-primary:   light-dark(var(--neutral-950), var(--neutral-50));
+  --text-secondary: light-dark(var(--neutral-700), var(--neutral-200));
+  --text-muted:     light-dark(var(--neutral-500), var(--neutral-300));
+  --text-inverse:   light-dark(var(--neutral-50),  var(--neutral-950));
+
+  --primary:       light-dark(var(--teal-700), var(--teal-300));
+  --primary-hover: light-dark(var(--teal-900), var(--teal-200));
+  --primary-text:  light-dark(var(--teal-700), var(--teal-300));
+  --on-primary:    #ffffff;
+
+  --accent:      light-dark(var(--magenta-500), var(--magenta-300));
+  --accent-text: light-dark(var(--magenta-700), var(--magenta-200));
+  --deep:        light-dark(var(--magenta-700), var(--magenta-200));
+
+  --good: light-dark(oklch(0.46 0.12 152), oklch(0.78 0.14 152));
+  --warn: light-dark(oklch(0.55 0.16 70),  oklch(0.78 0.16 70));
+  --bad:  light-dark(oklch(0.5  0.18 25),  oklch(0.7  0.2  25));
+
+  /* Slate lifecycle states (Phase 3 wires live/final; declared now so
+     the Slip's tokens land in one place). */
+  --state-live:  light-dark(oklch(0.55 0.19 25), oklch(0.72 0.20 25));
+  --state-pre:   var(--text-muted);
+  --state-final: var(--text-secondary);
+  --beat: var(--good);       /* cleared projected p50 */
+  --miss: var(--text-muted); /* did not clear */
+
+  /* Slip row sizing. --team-primary/--team-ink are set inline per row
+     from lib/teams.ts, not declared here. */
+  --row-h:    clamp(88px, 12dvh, 104px);
+  --gutter-w: clamp(44px, 5vw, 56px);
+
+  --focus-ring: light-dark(var(--teal-700), var(--teal-300));
+
+  --shadow-sm: light-dark(
+    0 1px 2px rgba(5,8,16,0.06),
+    0 1px 0 rgba(255,255,255,0.02) inset
+  );
+  --shadow-md: light-dark(
+    0 1px 2px rgba(5,8,16,0.04), 0 4px 12px rgba(5,8,16,0.06),
+    0 0 0 1px rgba(255,255,255,0.03) inset
+  );
+  --shadow-lg: light-dark(
+    0 1px 2px rgba(5,8,16,0.04), 0 8px 32px rgba(5,8,16,0.08),
+    0 0 0 1px rgba(255,255,255,0.04) inset
+  );
+
+  --ease-out:  cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-emph: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 340ms;
+  --dur-4: 520ms;
+
+  --radius-sm: 6px;
+  --radius-xs: 4px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: clamp(28px, 3vw, 36px);
+  --space-7: clamp(36px, 5vw, 56px);
+  --space-8: clamp(48px, 7vw, 80px);
+
+  --font-body:    'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Hanken Grotesk', ui-sans-serif, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  --fs-meta:    clamp(10px, 0.7vw + 8px, 12px);
+  --fs-mono:    clamp(11px, 0.7vw + 9px, 13px);
+  --fs-body:    clamp(14px, 0.4vw + 13px, 16px);
+  --fs-body-lg: clamp(16px, 0.5vw + 15px, 18px);
+  --fs-stat:    clamp(20px, 1.4vw + 16px, 28px);
+  --fs-h3:      clamp(20px, 1vw + 16px, 26px);
+  --fs-h2:      clamp(24px, 1.6vw + 18px, 36px);
+  --fs-h1:      clamp(36px, 4vw + 16px, 72px);
+
+  --tracking-loose: 0.18em;
+  --tracking-wide:  0.08em;
+  --tracking-tight: -0.01em;
+
+  --line-h-body:    1.55;
+  --line-h-display: 1.05;
+  --line-h-snug:    1.25;
+
+  /* Compatibility aliases for the depth-page styles. These pages were
+     written against the earlier token names; keep them semantic so every
+     route renders in both themes instead of silently falling back. */
+  --border-neutral: var(--border-default);
+  --surface-2: var(--bg-elevated);
+  --surface-hover: var(--bg-inset);
+  --fs-xs: var(--fs-meta);
+  --fs-sm: var(--fs-body);
+  --fs-h4: var(--fs-stat);
+  --fs-h5: var(--fs-body-lg);
+  --success-primary: var(--good);
+  --success-light: color-mix(in oklab, var(--good) 12%, transparent);
+  --success-dark: var(--good);
+  --error-primary: var(--bad);
+  --error-light: color-mix(in oklab, var(--bad) 12%, transparent);
+  --error-dark: var(--bad);
+
+  --icon-xs: 16px;
+  --icon-sm: 20px;
+  --icon-md: 24px;
+  --icon-lg: 32px;
+  --icon-xl: 48px;
+}
+
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark']  { color-scheme: dark;  }
+

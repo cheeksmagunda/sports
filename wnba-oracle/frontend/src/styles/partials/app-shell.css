@@ -1,0 +1,70 @@
+/* ───────────────────────────────────────────────────────────── */
+/* §4 App shell                                                   */
+/* ───────────────────────────────────────────────────────────── */
+
+.app {
+  position: relative;
+  z-index: 1;
+  height: 100dvh;
+  overflow: hidden;
+  display: grid;
+  /* minmax(0, 1fr), not the bare 1fr an implicit column defaults to --
+     without the 0 floor, a grid track won't shrink below the min-content
+     width of its widest child (e.g. .header__wordmark's white-space:
+     nowrap), which blows every row out past the viewport instead of
+     wrapping or clipping locally. */
+  grid-template-columns: minmax(0, 1fr);
+  /* Header, one content wrapper, footer. Phase 7 introduced the wrapper
+     around page content; keeping the old four-row template creates an empty
+     implicit row and leaves the picker with only its min-content height. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+/* Content row: min-height:0 lets it shrink to the remaining 1fr space
+   instead of forcing the grid to grow past 100dvh and clip the footer. */
+.app > main {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The picker has a fixed-height hero followed by a nested lineup main. The
+   nested main must own the remaining grid space or its flex children resolve
+   against zero and the five rows collapse to their borders. The same rule
+   lets depth pages use the available content area without changing the
+   header/footer contract. */
+.app > main > :last-child {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app > main > main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform var(--dur-2) var(--ease-out);
+  z-index: 200;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+

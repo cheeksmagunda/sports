@@ -1,0 +1,202 @@
+/* ───────────────────────────────────────────────────────────── */
+/* §6 Slate band                                                  */
+/* ───────────────────────────────────────────────────────────── */
+
+.slate-band {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-7) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-loose);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Magenta + teal wash, scoped to this element only (was a full-viewport
+   body::after; nothing else needs the decorative load on a dense page). */
+.slate-band::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 90% 140% at 85% 0%,
+      color-mix(in oklab, var(--accent) 18%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70% 120% at 25% 100%,
+      color-mix(in oklab, var(--primary) 15%, transparent),
+      transparent 65%
+    );
+  filter: blur(40px);
+}
+
+.slate-band > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-data: reduce) {
+  .slate-band::before { filter: none; opacity: 0.5; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .slate-band::before { display: none; }
+}
+
+.slate-band__title-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.slate-band__caption {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  letter-spacing: var(--tracking-loose);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.slate-band__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--line-h-display);
+  text-transform: uppercase;
+  text-wrap: balance;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.slate-band__title em {
+  font-style: normal;
+  color: var(--accent-text);
+}
+
+.slate-band__right {
+  display: grid;
+  grid-template-columns: auto 1px auto 1px auto;
+  align-items: center;
+  gap: var(--space-5);
+  text-align: right;
+}
+
+.slate-band__divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-default);
+}
+
+.slate-band__stat-label {
+  display: block;
+  color: var(--text-muted);
+}
+
+.slate-band__stat-val {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-stat);
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.slate-band__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-2);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  width: max-content;
+}
+
+.slate-band__chip--enter {
+  color: var(--good);
+  background: color-mix(in oklab, var(--good) 12%, transparent);
+}
+.slate-band__chip--enter_with_caveat {
+  color: var(--accent-text);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+.slate-band__chip--skip {
+  color: var(--bad);
+  background: color-mix(in oklab, var(--bad) 14%, transparent);
+}
+.slate-band__chip--historical {
+  color: var(--accent-text);
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  border-color: color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.slate-band__chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.slate-band__chip--freeze {
+  color: var(--text-secondary);
+  background: var(--bg-inset);
+  border-color: var(--border-default);
+  text-decoration: none;
+}
+
+.slate-band__stat-val--flanked {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.slate-band__stat-flank {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .slate-band {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+  }
+  .slate-band__title-row {
+    gap: 4px;
+  }
+  .slate-band__title {
+    font-size: clamp(26px, 8vw, 34px);
+  }
+  .slate-band__right {
+    grid-template-columns: auto 1px auto;
+    justify-content: flex-start;
+    gap: var(--space-4);
+    text-align: left;
+    width: 100%;
+  }
+  .slate-band__stat-val {
+    font-size: 18px;
+  }
+}
+

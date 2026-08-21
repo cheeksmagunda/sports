@@ -1,0 +1,299 @@
+/* ───────────────────────────────────────────────────────────── */
+/* §7 The Slip                                                    */
+/* ───────────────────────────────────────────────────────────── */
+
+.slip {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Only matters when rows hit --row-h's max and don't consume all
+     available space; harmless otherwise since flex-grow already fills
+     the common case. */
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-7) var(--space-5);
+  list-style: none;
+  margin: 0;
+}
+
+/* Rows fill whatever space the grid's 1fr content row actually has,
+   rather than trusting --row-h's dvh-based guess to match the real
+   header/slate-band/footer heights -- clamped between --row-h's min and
+   max so a row never becomes illegibly short or unreasonably tall.
+   container-type lives here, not on .slip-row: a container query cannot
+   restyle the element that establishes it, so the row it collapses on
+   phone has to be a descendant of the container, not the container
+   itself. */
+.slip__item {
+  container-type: inline-size;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: var(--row-h);
+}
+
+.slip-row {
+  display: grid;
+  grid-template-columns: var(--gutter-w) 1fr 72px 96px 120px 140px;
+  grid-template-areas: "rank identity slot proj minutes live";
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    transform var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out);
+  animation: rowEnter var(--dur-4) var(--ease-emph) both;
+}
+
+.slip-row:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-default);
+}
+
+.slip-row:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.slip__item:nth-child(1) .slip-row { animation-delay: 0ms; }
+.slip__item:nth-child(2) .slip-row { animation-delay: 40ms; }
+.slip__item:nth-child(3) .slip-row { animation-delay: 80ms; }
+.slip__item:nth-child(4) .slip-row { animation-delay: 120ms; }
+.slip__item:nth-child(5) .slip-row { animation-delay: 160ms; }
+
+@keyframes rowEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Region 1: rank gutter -- the layout spine. */
+
+.slip-row__rank {
+  grid-area: rank;
+  display: grid;
+  place-items: center;
+  background: var(--team-primary, var(--primary));
+  color: var(--team-ink, var(--on-primary));
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(24px, 4cqw, 34px);
+  line-height: 1;
+}
+
+/* Region 2: identity. */
+
+.slip-row__identity {
+  grid-area: identity;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 0 var(--space-3);
+  overflow: hidden;
+}
+
+.slip-row__identity .headshot { margin: 0; flex: 0 0 auto; }
+
+.slip-row__identity-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.slip-row__name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(15px, 2.3cqw, 19px);
+  letter-spacing: -0.005em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slip-row__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Team/opponent/position is the one part allowed to shrink and ellipsize
+   -- the slot token and boost badge next to it are short and fixed. */
+.slip-row__meta-text {
+  min-width: 20px;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slip-row__slot-mobile,
+.slip-row__meta .boost-badge {
+  flex: 0 0 auto;
+}
+
+.slip-row__slot-mobile { display: none; }
+
+/* Region 3: slot multiplier. */
+
+.slip-row__slot {
+  grid-area: slot;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-left: 1px solid var(--border-subtle);
+}
+
+/* Regions 4+5 share a wrapper: display:contents on desktop lets proj and
+   minutes act as independent grid items; the phone container query below
+   turns the wrapper into a real flex column so they merge into one cell. */
+
+.slip-row__proj-minutes {
+  display: contents;
+}
+
+.slip-row__proj {
+  grid-area: proj;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.slip-row__proj-num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.slip-row__proj-band-track {
+  position: relative;
+  width: 56px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border-subtle);
+}
+
+.slip-row__proj-band {
+  position: absolute;
+  top: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--team-primary, var(--primary));
+}
+
+/* Region 5: minutes. */
+
+.slip-row__minutes {
+  grid-area: minutes;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.slip-row__minutes .interval-bar { width: 100%; }
+
+/* Region 6: live. Pre-tip shows a neutral dash; live/final show the
+   reported box line or a "no live data" marker for an unmatched player. */
+
+.slip-row__live {
+  grid-area: live;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  border-left: 1px solid var(--border-subtle);
+  padding: var(--space-2);
+}
+
+.slip-row__live-stats {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 2px var(--space-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.slip-row__live-nodata {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Phone collapse: container query on the row's own inline size, not a
+   viewport media query, so this ports unchanged to /slate/:date. */
+
+@container (max-width: 600px) {
+  .slip-row {
+    /* Identity gets the lion's share -- it's the one region holding
+       primary readable content (the name); projmin/live are compact
+       summaries, not the point of this row on phone. */
+    grid-template-columns: var(--gutter-w) 1fr 62px 62px;
+    grid-template-areas: "rank identity projmin live";
+  }
+  .slip-row__slot { display: none; }
+  .slip-row__slot-mobile { display: inline; }
+  .slip-row__identity { gap: var(--space-2); padding: 0 var(--space-2); }
+  .slip-row__proj-minutes {
+    grid-area: projmin;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 4px;
+    border-left: 1px solid var(--border-subtle);
+  }
+  .slip-row__proj { border-left: 0; padding: 0; }
+  .slip-row__proj-num { font-size: 16px; }
+  .slip-row__proj-band-track { width: 40px; }
+  .slip-row__minutes { border-left: 0; padding: 0; }
+  .slip-row__minutes .interval-bar { width: 48px; }
+  .slip-row__rank { font-size: clamp(20px, 9cqw, 28px); }
+  .slip-row__live { padding: 0 4px; }
+  .slip-row__live-stats {
+    grid-template-columns: repeat(2, auto);
+    gap: 1px 4px;
+    font-size: 9px;
+  }
+}
+

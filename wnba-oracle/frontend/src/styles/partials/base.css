@@ -1,0 +1,41 @@
+/* ───────────────────────────────────────────────────────────── */
+/* §3 Reset + base                                                */
+/* ───────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html {
+  background: var(--bg-canvas);
+  /* Reserve gutter so showing/hiding the scrollbar doesn't reflow the
+     sticky header. Baseline in all majors since 2024. */
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--line-h-body);
+  color: var(--text-primary);
+  background: var(--bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11' 1, 'ss01' 1;
+  font-synthesis: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Smooth color flip on theme toggle. The View Transitions API in
+     useTheme handles the cross-fade for users with motion; this
+     transition handles the no-VT fallback path. */
+  transition: background-color var(--dur-3) ease, color var(--dur-3) ease;
+  /* Respect notched / dynamic-island devices. The header sits at the
+     top so safe-area only matters for the bottom in our layout. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+button { font: inherit; color: inherit; }
+
+::selection { background: var(--primary); color: var(--on-primary); }
+
+a { color: var(--primary-text); }
+

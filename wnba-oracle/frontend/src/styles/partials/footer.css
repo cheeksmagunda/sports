@@ -1,0 +1,49 @@
+/* ───────────────────────────────────────────────────────────── */
+/* §8 Footer                                                      */
+/* ───────────────────────────────────────────────────────────── */
+
+.footer {
+  margin-top: auto;
+  padding: var(--space-5) var(--space-7);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-5);
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.footer__left, .footer__right {
+  display: flex;
+  gap: var(--space-5);
+  align-items: center;
+}
+
+.footer__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+}
+
+.footer__sha { color: var(--text-secondary); }
+
+.footer__sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  display: inline-block;
+}
+
+@media (max-width: 720px) {
+  .footer { flex-direction: column; align-items: flex-start; padding: var(--space-4); }
+  .footer__right { flex-wrap: wrap; gap: var(--space-3); }
+}
+

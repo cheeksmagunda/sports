@@ -1,0 +1,167 @@
+/* ───────────────────────────────────────────────────────────── */
+/* §9 Shared pick UI (boost badge, headshot, interval bar)        */
+/* ───────────────────────────────────────────────────────────── */
+
+/* ── Boost badge ────────────────────────────────────────────── */
+
+.boost-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--accent) 28%, transparent);
+  color: var(--accent-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in oklab, var(--accent) 50%, transparent);
+}
+
+.boost-badge svg { width: 12px; height: 12px; }
+
+/* ── Headshot (initials avatar) ─────────────────────────────── */
+
+.headshot {
+  --headshot-size: 100px;
+  position: relative;
+  width: var(--headshot-size);
+  height: var(--headshot-size);
+  margin: var(--space-4) auto var(--space-2);
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 0 0 2px var(--team-primary, var(--primary)),
+    0 8px 32px -8px color-mix(in oklab, var(--team-primary, var(--primary)) 60%, transparent);
+}
+
+.headshot::after {
+  content: '';
+  position: absolute;
+  /* Proportional to size -- fixed 10px/12px blur reads as a heavy halo
+     at the Slip row's 40px scale. */
+  inset: calc(var(--headshot-size, 100px) * -0.1);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--team-primary, var(--primary)) 35%, transparent),
+    transparent 70%
+  );
+  z-index: -1;
+  filter: blur(calc(var(--headshot-size, 100px) * 0.12));
+}
+
+.headshot__fallback {
+  font-family: var(--font-display);
+  /* Proportional to --headshot-size so the 40px Slip-row avatar and the
+     100px card-scale default both render legible two-letter initials. */
+  font-size: calc(var(--headshot-size, 100px) * 0.32);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--on-primary);
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--team-primary, var(--primary));
+}
+
+.headshot__img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  /* Matches .headshot__fallback's background so a slow-loading photo
+     doesn't flash transparent against the page behind it. */
+  background: var(--team-primary, var(--primary));
+}
+
+/* ── Interval bar ──────────────────────────────────────────── */
+
+.interval-bar {
+  position: relative;
+  height: 28px;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.interval-bar--compact {
+  height: 18px;
+}
+
+/* Live/final: minutes actually played, filled from the left edge behind
+   the predicted band -- the "is this working" signal at a glance. */
+.interval-bar__actual {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in oklab, var(--text-muted) 25%, transparent);
+  transition: width var(--dur-3) var(--ease-out);
+}
+
+.interval-bar__band {
+  position: absolute;
+  top: 6px;
+  height: 16px;
+  background: color-mix(in oklab, var(--team-primary, var(--primary)) 60%, transparent);
+  border-radius: 4px;
+  transition: left var(--dur-3) var(--ease-out), width var(--dur-3) var(--ease-out);
+}
+
+.interval-bar--compact .interval-bar__band {
+  top: 4px;
+  height: 10px;
+}
+
+.interval-bar__median {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text-primary);
+  border-radius: 1px;
+  transition: left var(--dur-3) var(--ease-out);
+}
+
+.interval-bar__labels {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  pointer-events: none;
+  align-items: end;
+  padding: 0 4px 2px;
+}
+
+.interval-bar__labels span:nth-child(2) { text-align: center; }
+.interval-bar__labels span:nth-child(3) { text-align: right; }
+
+/* ── Forced colors ─────────────────────────────────────────── */
+
+@media (forced-colors: active) {
+  .slip-row,
+  .theme-toggle,
+  .knob,
+  .boost-badge,
+  .interval-bar { border: 1px solid CanvasText; }
+  .headshot { box-shadow: 0 0 0 2px CanvasText; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slip-row,
+  .interval-bar__band,
+  .interval-bar__median { transition: none; }
+}
+

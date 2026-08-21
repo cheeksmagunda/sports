@@ -1,0 +1,163 @@
+/* ───────────────────────────────────────────────────────────── */
+/* §11 Oracle loader                                              */
+/* ───────────────────────────────────────────────────────────── */
+
+@keyframes oracleSpin    { to { transform: rotateY(360deg); } }
+@keyframes oracleFadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes oraclePulse   { 0%,100% { opacity: 0.4; } 50% { opacity: 0.85; } }
+
+.oracle-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: light-dark(rgba(243,244,246,0.96), rgba(5,8,16,0.96));
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  opacity: 1;
+  /* Mount-in fade is the entry animation (one-shot). Fade-out is driven
+     by data-fading="true" toggling the opacity custom property — this
+     way leaving the fading state doesn't pin opacity at 0 the way an
+     `animation: forwards` would. */
+  animation: oracleFadeIn 200ms ease;
+  transition: opacity var(--dur-3) ease;
+}
+
+.oracle-loader[data-fading='true'] {
+  opacity: 0;
+}
+
+.pyramid-loader {
+  position: relative;
+  width: clamp(180px, 22vw, 240px);
+  height: clamp(90px, 11vw, 120px);
+  transform-style: preserve-3d;
+  transform: rotateX(-20deg);
+}
+
+.pyramid-loader .wrap {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  animation: oracleSpin 4s linear infinite;
+}
+
+.pyramid-loader .side {
+  width: 64px; height: 64px;
+  position: absolute; inset: 0; margin: auto;
+  transform-origin: center top;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  background: linear-gradient(to bottom right, var(--teal-500), var(--teal-700));
+}
+.pyramid-loader .side-1 { transform: rotateZ(-30deg) rotateY(90deg); background: linear-gradient(to bottom right, var(--magenta-500), var(--teal-700)); }
+.pyramid-loader .side-2 { transform: rotateZ( 30deg) rotateY(90deg); }
+.pyramid-loader .side-3 { transform: rotateX( 30deg); }
+.pyramid-loader .side-4 { transform: rotateX(-30deg); background: linear-gradient(to bottom right, var(--magenta-500), var(--teal-700)); }
+
+.pyramid-loader .shadow {
+  width: 56px; height: 56px;
+  position: absolute; inset: 0; margin: auto;
+  background: var(--teal-300);
+  transform: rotateX(90deg) translateZ(-36px);
+  filter: blur(12px);
+}
+
+.oracle-loader__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  width: min(560px, 88vw);
+  text-align: center;
+}
+
+.oracle-message {
+  font-family: var(--font-mono);
+  font-size: clamp(13px, 1vw + 10px, 17px);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: light-dark(var(--neutral-950), var(--neutral-50));
+  text-align: center;
+  line-height: 1.2;
+  margin: 0;
+  animation: oracleFadeIn 400ms ease forwards;
+  margin-top: var(--space-2);
+  min-height: 1.2em;
+}
+
+.oracle-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono);
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--primary);
+  animation: oraclePulse 2s ease-in-out infinite;
+}
+
+/* §11.5 Countdown — used inside OracleLoader. */
+.countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--bg-elevated) 70%, transparent);
+  border: 1px solid var(--border-subtle);
+  min-width: clamp(220px, 28vw, 280px);
+}
+
+.countdown__caption {
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  font-weight: 700;
+  letter-spacing: var(--tracking-loose);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.countdown__value {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(36px, 4vw + 8px, 56px);
+  letter-spacing: var(--tracking-tight);
+  color: var(--primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  min-width: 6ch;
+  text-align: center;
+}
+
+.countdown__sub {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pyramid-loader .wrap { animation: none; }
+  .oracle-label { animation: none; opacity: 0.85; }
+  .oracle-loader, .oracle-message { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .oracle-loader {
+    background: var(--bg-canvas);
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .pyramid-loader .side,
+  .pyramid-loader .shadow { background: CanvasText; filter: none; }
+}
+
