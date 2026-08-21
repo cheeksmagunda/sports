@@ -321,6 +321,7 @@ def _build_specs(
     is_starter_by_pid: dict[int, bool] = {}
     is_anchor_by_pid: dict[int, bool] = {}
     p_active_by_pid: dict[int, float] = {}
+    n_min_games_by_pid: dict[int, int] = {}
     gsm_rows: list[GameScriptInput] = []
     rate_by_pid: dict[int, float] = {}
     n_minutes_predicted = 0
@@ -344,6 +345,7 @@ def _build_specs(
         # the slate's later games is honored from the 13:00 expected lineup.
         eff_confirmed = _effective_confirmed(f, use_expected=settings.starter_signal_use_expected)
         mf = _minutes_features(r.get("features_json")) if settings.minutes_model_enabled else None
+        n_min_games_by_pid[pid] = int(mf["n_min_games"]) if mf is not None else 0
         # Anchor flag (D57, Tier 1) -- computed regardless of the floor setting
         # so it always rides on the spec; the optimizer only enforces it when
         # min_anchors > 0.
@@ -628,7 +630,7 @@ def _build_specs(
         # uncertainty (role volatility) and/or the player has limited
         # recent history (sample-size shrinkage). Both default to 0.0 so
         # the path is byte-identical until armed via env var.
-        n_min_games = int(mf["n_min_games"]) if mf is not None else 0
+        n_min_games = n_min_games_by_pid.get(pid, 0)
         sigma_log = ceiling_adjusted_sigma_log(
             sigma_log,
             blowout_prob=blowout_prob_by_pid.get(pid, 0.0),
