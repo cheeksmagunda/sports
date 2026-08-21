@@ -270,3 +270,16 @@ issue labeled `ops-results` (#15). No model change was made.
 - Last local verification, 2026-08-21: 596 WNBA tests and 48 oracle-core tests
   passed; Ruff, mypy, import-boundary checks, and package builds passed.
 - `make determinism-check` compares model content, not pickle SHA (D93).
+- `src/wnba_oracle/scheduler/` was split 2026-08-21: `job1.py`, `job2.py`,
+  `watchdog.py`, `placements.py`, and `shadow.py` (each 500-1700+ lines) were
+  each broken into a handful of `<name>_<concern>.py` sibling modules (io/
+  model/timing/freeze/specs for job2, rotowire/persist for job1, checks/
+  drift for watchdog, calibration for placements, knobs for shadow). Every
+  original module still exists and re-imports its moved names at the bottom
+  of the file, so `from wnba_oracle.scheduler.job2 import _build_specs`
+  (and every other pre-split import path) is unchanged. Behavior-preserving
+  throughout; see the commit history from `0e3e613` to `bc4bbfc` for the
+  per-slice verification each split ran. `frontend/src/styles/main.css`
+  (1985 lines) was similarly split into `frontend/src/styles/partials/`,
+  one file per numbered section (§1 through §15); verified byte-identical
+  via the built CSS bundle's content hash before and after.
