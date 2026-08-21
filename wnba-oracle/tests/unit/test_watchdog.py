@@ -8,7 +8,7 @@ import json
 import pickle
 from unittest.mock import MagicMock, patch
 
-from wnba_oracle.scheduler import watchdog
+from wnba_oracle.scheduler import watchdog, watchdog_checks, watchdog_drift
 
 
 def _engine_with_pool_count(
@@ -58,7 +58,7 @@ def _engine_for_enrichment_check(
 
 
 def test_no_job1_pool_triggers_critical() -> None:
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_pool_count(0)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_pool_count(0)):
         events = watchdog._check_pool("2026-05-27")
     assert len(events) == 1
     assert events[0].trigger == "no_job1_pool"
@@ -67,7 +67,7 @@ def test_no_job1_pool_triggers_critical() -> None:
 
 def test_small_pool_triggers_error() -> None:
     """D84: escalated from warn — a sub-10 pool is an ingest failure."""
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_pool_count(7)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_pool_count(7)):
         events = watchdog._check_pool("2026-05-27")
     assert len(events) == 1
     assert events[0].trigger == "pool_too_small"
@@ -78,7 +78,7 @@ def test_small_pool_triggers_error() -> None:
 def test_single_team_pool_triggers_critical() -> None:
     """D84: the 2026-06-08 morning shape — rows exist, one team."""
     eng = _engine_with_pool_count(12, n_teams=1)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_pool("2026-05-27")
     triggers = {e.trigger: e.severity for e in events}
     assert triggers.get("pool_degenerate_teams") == "critical"
@@ -87,7 +87,7 @@ def test_single_team_pool_triggers_critical() -> None:
 def test_enrichment_stale_after_20utc() -> None:
     stale = dt.datetime(2026, 5, 27, 9, 0, tzinfo=dt.UTC)
     eng = _engine_for_enrichment_check(60, last_captured=stale, frozen_row=None)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_enrichment_freshness(
             "2026-05-27", now_utc=dt.datetime(2026, 5, 27, 20, 30, tzinfo=dt.UTC)
         )
@@ -99,7 +99,7 @@ def test_enrichment_stale_after_20utc() -> None:
 def test_enrichment_fresh_no_event() -> None:
     fresh = dt.datetime(2026, 5, 27, 13, 40, tzinfo=dt.UTC)
     eng = _engine_for_enrichment_check(60, last_captured=fresh, frozen_row=None)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_enrichment_freshness(
             "2026-05-27", now_utc=dt.datetime(2026, 5, 27, 20, 30, tzinfo=dt.UTC)
         )
@@ -113,7 +113,7 @@ def test_enrichment_stale_quiet_when_already_frozen() -> None:
     stale = dt.datetime(2026, 8, 1, 13, 7, tzinfo=dt.UTC)
     frozen_row = ({"player_ids": [1, 2, 3]}, 1.32, dt.datetime(2026, 8, 1, 16, 22, tzinfo=dt.UTC))
     eng = _engine_for_enrichment_check(60, last_captured=stale, frozen_row=frozen_row)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_enrichment_freshness(
             "2026-08-01", now_utc=dt.datetime(2026, 8, 1, 20, 2, tzinfo=dt.UTC)
         )
@@ -124,7 +124,7 @@ def test_enrichment_freshness_quiet_before_20utc() -> None:
     """The 13:00 UTC job1-path watchdog run must not flag the capture it
     just made (or its absence minutes before)."""
     eng = _engine_with_pool_count(60, last_captured=None)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_enrichment_freshness(
             "2026-05-27", now_utc=dt.datetime(2026, 5, 27, 13, 10, tzinfo=dt.UTC)
         )
@@ -146,7 +146,7 @@ def _engine_with_coverage(
 
 def test_label_coverage_gap_warn_on_small_gap() -> None:
     eng = _engine_with_coverage(80, 2, [(726, "J. Loyd"), (627, "A. Boston")])
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_label_coverage("2026-06-08")
     assert len(events) == 1
     assert events[0].trigger == "label_coverage_gap"
@@ -157,21 +157,21 @@ def test_label_coverage_gap_warn_on_small_gap() -> None:
 
 def test_label_coverage_gap_error_above_20pct() -> None:
     eng = _engine_with_coverage(80, 40, [(1, "P1")])
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_label_coverage("2026-06-08")
     assert events[0].severity == "error"
 
 
 def test_label_coverage_clean_no_event() -> None:
     eng = _engine_with_coverage(80, 0)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         assert watchdog._check_label_coverage("2026-06-08") == []
 
 
 def test_label_coverage_quiet_on_empty_pool() -> None:
     """dayclose ingest checks own the no-leaderboard signal; coverage stays silent."""
     eng = _engine_with_coverage(0, 0)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         assert watchdog._check_label_coverage("2026-06-08") == []
 
 
@@ -219,12 +219,12 @@ def test_ping_noop_without_url() -> None:
 
 
 def test_healthy_pool_no_events() -> None:
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_pool_count(60)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_pool_count(60)):
         assert watchdog._check_pool("2026-05-27") == []
 
 
 def test_no_frozen_lineup_after_22utc_triggers_critical() -> None:
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(None)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(None)):
         events = watchdog._check_freeze(
             "2026-05-27",
             now_utc=dt.datetime(2026, 5, 27, 22, 30, tzinfo=dt.UTC),
@@ -236,7 +236,7 @@ def test_no_frozen_lineup_after_22utc_triggers_critical() -> None:
 
 def test_no_frozen_lineup_before_22utc_no_event() -> None:
     """Quiet before the cron-job2 window has had enough attempts."""
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(None)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(None)):
         events = watchdog._check_freeze(
             "2026-05-27",
             now_utc=dt.datetime(2026, 5, 27, 21, 5, tzinfo=dt.UTC),
@@ -247,7 +247,7 @@ def test_no_frozen_lineup_before_22utc_no_event() -> None:
 def test_no_frozen_lineup_quiet_for_past_slate() -> None:
     """Backfill / historical query — don't false-positive when the slate
     is yesterday and the check happens to fire today."""
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(None)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(None)):
         events = watchdog._check_freeze(
             "2026-05-26",
             now_utc=dt.datetime(2026, 5, 27, 23, 0, tzinfo=dt.UTC),
@@ -260,8 +260,8 @@ def test_no_frozen_lineup_tip_relative_overdue_fires_before_22utc() -> None:
     hours before the legacy 22:00 UTC rule would ever look."""
     deadline = dt.datetime(2026, 6, 14, 15, 30, tzinfo=dt.UTC)
     with (
-        patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(None)),
-        patch.object(watchdog, "_slate_freeze_deadline", return_value=deadline),
+        patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(None)),
+        patch.object(watchdog_checks, "_slate_freeze_deadline", return_value=deadline),
     ):
         events = watchdog._check_freeze(
             "2026-06-14",
@@ -277,8 +277,8 @@ def test_no_frozen_lineup_tip_relative_quiet_before_deadline() -> None:
     """Before the tip-relative deadline, a missing freeze is not yet overdue."""
     deadline = dt.datetime(2026, 6, 14, 15, 30, tzinfo=dt.UTC)
     with (
-        patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(None)),
-        patch.object(watchdog, "_slate_freeze_deadline", return_value=deadline),
+        patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(None)),
+        patch.object(watchdog_checks, "_slate_freeze_deadline", return_value=deadline),
     ):
         events = watchdog._check_freeze(
             "2026-06-14",
@@ -290,7 +290,7 @@ def test_no_frozen_lineup_tip_relative_quiet_before_deadline() -> None:
 def test_missing_per_player_block_triggers_error() -> None:
     lineup = {"player_ids": [1, 2, 3, 4, 5], "slot_multipliers": [1.5]}  # no per_player
     row = (json.dumps(lineup), 1.2, dt.datetime.now(dt.UTC))
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(row)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(row)):
         events = watchdog._check_freeze(
             "2026-05-27",
             now_utc=dt.datetime(2026, 5, 27, 22, 30, tzinfo=dt.UTC),
@@ -302,7 +302,7 @@ def test_missing_per_player_block_triggers_error() -> None:
 def test_zero_expected_payout_triggers_warn() -> None:
     lineup = {"per_player": [{"player_id": i} for i in (1, 2, 3, 4, 5)]}
     row = (json.dumps(lineup), 0.0, dt.datetime.now(dt.UTC))
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(row)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(row)):
         events = watchdog._check_freeze("2026-05-27")
     triggers = {e.trigger for e in events}
     assert "zero_expected_payout" in triggers
@@ -311,7 +311,7 @@ def test_zero_expected_payout_triggers_warn() -> None:
 def test_healthy_freeze_no_events() -> None:
     lineup = {"per_player": [{"player_id": i} for i in (1, 2, 3, 4, 5)]}
     row = (json.dumps(lineup), 1.4, dt.datetime.now(dt.UTC))
-    with patch.object(watchdog, "get_engine", return_value=_engine_with_freeze_row(row)):
+    with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(row)):
         events = watchdog._check_freeze("2026-05-27")
     assert events == []
 
@@ -406,7 +406,7 @@ def _engine_with_feature_counts(n: int, n_odds: int, n_starter: int) -> MagicMoc
 
 def test_feature_content_warns_on_empty_odds_and_rotowire() -> None:
     eng = _engine_with_feature_counts(20, 0, 0)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_feature_content("2026-06-21")
     triggers = {e.trigger for e in events}
     assert triggers == {"odds_empty", "rotowire_empty"}
@@ -415,14 +415,14 @@ def test_feature_content_warns_on_empty_odds_and_rotowire() -> None:
 
 def test_feature_content_clean_when_feeds_present() -> None:
     eng = _engine_with_feature_counts(20, 18, 9)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         assert watchdog._check_feature_content("2026-06-21") == []
 
 
 def test_feature_content_quiet_on_tiny_pool() -> None:
     """Below 10 rows is the _check_pool checks' job; don't double-warn."""
     eng = _engine_with_feature_counts(4, 0, 0)
-    with patch.object(watchdog, "get_engine", return_value=eng):
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
         assert watchdog._check_feature_content("2026-06-21") == []
 
 
@@ -494,7 +494,7 @@ def test_check_prediction_drift_fires_on_bad_corr(monkeypatch) -> None:
             "best_score_gap": -5.0,
         }
 
-    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    monkeypatch.setattr(watchdog_drift, "compute_drift_metrics", _stub)
     events = watchdog._check_prediction_drift("2026-07-03")
     triggers = [e.trigger for e in events]
     assert "prediction_calibration_drift" in triggers
@@ -521,7 +521,7 @@ def test_check_prediction_drift_silent_when_underpowered(monkeypatch) -> None:
             "best_score_gap": -5.0,
         }
 
-    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    monkeypatch.setattr(watchdog_drift, "compute_drift_metrics", _stub)
     assert watchdog._check_prediction_drift("2026-07-03") == []
 
 
@@ -537,7 +537,7 @@ def test_check_prediction_drift_fires_on_bad_gap(monkeypatch) -> None:
             "best_score_gap": -12.0,
         }
 
-    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    monkeypatch.setattr(watchdog_drift, "compute_drift_metrics", _stub)
     events = watchdog._check_prediction_drift("2026-07-03")
     triggers = [e.trigger for e in events]
     assert "lineup_gap_regression" in triggers
@@ -559,12 +559,12 @@ def test_check_prediction_drift_silent_at_baseline(monkeypatch) -> None:
             "best_score_gap": -7.0,
         }
 
-    monkeypatch.setattr(watchdog, "compute_drift_metrics", _stub)
+    monkeypatch.setattr(watchdog_drift, "compute_drift_metrics", _stub)
     assert watchdog._check_prediction_drift("2026-07-03") == []
 
 
 def test_check_prediction_drift_silent_when_no_data(monkeypatch) -> None:
-    monkeypatch.setattr(watchdog, "compute_drift_metrics", lambda **_: None)
+    monkeypatch.setattr(watchdog_drift, "compute_drift_metrics", lambda **_: None)
     assert watchdog._check_prediction_drift("2026-07-03") == []
 
 
