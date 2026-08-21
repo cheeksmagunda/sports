@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from wnba_oracle.picker.optimize import LineupRecommendation
-from wnba_oracle.scheduler import job2
+from wnba_oracle.scheduler import job2, job2_freeze
 
 
 def _rec() -> LineupRecommendation:
@@ -56,7 +56,7 @@ def test_frozen_append_casts_model_sha() -> None:
 
 def test_release_freeze_lock_first_fire_key() -> None:
     rd = MagicMock()
-    with patch.object(job2, "get_redis", return_value=rd):
+    with patch.object(job2_freeze, "get_redis", return_value=rd):
         job2._release_freeze_lock("2026-06-18", force=False, owner_token="owner-a")
     assert rd.eval.call_count == 1
     assert rd.eval.call_args.args[1:] == (1, "wnba.frozen.2026-06-18", "owner-a")
@@ -64,7 +64,7 @@ def test_release_freeze_lock_first_fire_key() -> None:
 
 def test_release_freeze_lock_late_refreeze_key() -> None:
     rd = MagicMock()
-    with patch.object(job2, "get_redis", return_value=rd):
+    with patch.object(job2_freeze, "get_redis", return_value=rd):
         job2._release_freeze_lock("2026-06-18", force=True, owner_token="owner-b")
     assert rd.eval.call_count == 1
     assert rd.eval.call_args.args[1:] == (1, "wnba.late_frozen.2026-06-18", "owner-b")
@@ -73,7 +73,7 @@ def test_release_freeze_lock_late_refreeze_key() -> None:
 def test_release_freeze_lock_swallows_redis_error() -> None:
     rd = MagicMock()
     rd.eval.side_effect = RuntimeError("redis down")
-    with patch.object(job2, "get_redis", return_value=rd):
+    with patch.object(job2_freeze, "get_redis", return_value=rd):
         job2._release_freeze_lock(
             "2026-06-18", force=False, owner_token="owner-a"
         )  # must not raise
@@ -81,7 +81,7 @@ def test_release_freeze_lock_swallows_redis_error() -> None:
 
 def test_release_freeze_lock_without_owner_never_deletes() -> None:
     rd = MagicMock()
-    with patch.object(job2, "get_redis", return_value=rd):
+    with patch.object(job2_freeze, "get_redis", return_value=rd):
         job2._release_freeze_lock("2026-06-18", force=False, owner_token=None)
     rd.eval.assert_not_called()
 
@@ -100,8 +100,8 @@ def test_freeze_releases_lock_and_raises_when_append_fails() -> None:
     rd = MagicMock()
     rd.set.return_value = True  # lock acquired
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
         pytest.raises(RuntimeError, match="failed to append"),
     ):
         job2._freeze("2026-06-18", "sha", _rec(), "top_20", _proj(), force=False)

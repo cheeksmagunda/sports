@@ -18,26 +18,21 @@ Pipeline:
 from __future__ import annotations
 
 import datetime as dt
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import numpy as np
-from oracle_core.storage import Lease, RedisLeaseStore
-from sqlalchemy import text
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import Settings, get_settings
-from wnba_oracle.db.engine import get_engine, get_redis
+from wnba_oracle.db.engine import get_engine
 from wnba_oracle.features.game_script_minutes import (
     GameScriptInput,
     GameScriptMinutesConfig,
     blowout_probability,
     redistribute_game_script_minutes,
 )
-from wnba_oracle.features.spec import cohort_for_position
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.game_script import GameScriptConfig, game_script_multiplier
 from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig, optimize_lineup
@@ -59,7 +54,6 @@ from wnba_oracle.predict.minutes import (
     minutes_interval_from_role,
     project_minutes_from_base,
 )
-from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
 
@@ -93,9 +87,36 @@ class Job2Result:
         return 1 if self.reason in failures else 0
 
 
-# Pure scoring/feature-extraction helpers live in job2_scoring so this
-# module can focus on freeze orchestration + DB/Redis glue. Re-exported
-# here because tests reference them via ``job2._name``.
+# The scoring helpers, DB loaders, model/prediction tier, timing gates,
+# and freeze persistence live in sibling job2_* modules so this module
+# can focus on spec building + freeze orchestration. Re-imported here
+# because tests and scripts reference them via ``job2._name``, and
+# because the orchestration below resolves them through this module's
+# globals, which keeps monkeypatching on job2 effective.
+from wnba_oracle.scheduler.job2_freeze import (  # noqa: E402
+    FREEZE_LEASE_TTL_SECONDS,
+    FROZEN_APPEND,
+    FROZEN_EXISTS,
+    FROZEN_OPERATION_EXISTS,
+    _build_per_player,
+    _freeze,
+    _release_freeze_lock,
+)
+from wnba_oracle.scheduler.job2_io import (  # noqa: E402
+    SLATE_LOCK_Q,
+    _load_enrichment,
+    _load_measured_drafts,
+    _load_player_history,
+    _load_prior_real_scores,
+    _load_slate_label_names,
+    _load_slate_lock_time,
+)
+from wnba_oracle.scheduler.job2_model import (  # noqa: E402
+    REPO_ROOT,
+    _eb_predict_one,
+    _load_model_artifact,
+    _predict_heads_for_pool,
+)
 from wnba_oracle.scheduler.job2_scoring import (  # noqa: E402
     _cascade_bonuses,
     _effective_confirmed,
@@ -109,300 +130,50 @@ from wnba_oracle.scheduler.job2_scoring import (  # noqa: E402
     _starter_multiplier,
     _vegas_from_features,
 )
+from wnba_oracle.scheduler.job2_timing import (  # noqa: E402
+    _freeze_deadline_utc,
+    _game_start_utc,
+    _in_pre_freeze_window,
+    _late_refreeze_allowed,
+    scope_to_upcoming_games,
+)
 
 __all__ = [
+    "FREEZE_LEASE_TTL_SECONDS",
+    "FROZEN_APPEND",
+    "FROZEN_EXISTS",
+    "FROZEN_OPERATION_EXISTS",
+    "REPO_ROOT",
+    "SLATE_LOCK_Q",
+    "_build_per_player",
     "_cascade_bonuses",
+    "_eb_predict_one",
     "_effective_confirmed",
     "_features_dict",
     "_floor_tilt_multiplier",
+    "_freeze",
+    "_freeze_deadline_utc",
+    "_game_start_utc",
     "_heuristic_real_score",
+    "_in_pre_freeze_window",
     "_is_out_from_features",
+    "_late_refreeze_allowed",
+    "_load_enrichment",
+    "_load_measured_drafts",
+    "_load_model_artifact",
+    "_load_player_history",
+    "_load_prior_real_scores",
+    "_load_slate_label_names",
+    "_load_slate_lock_time",
     "_minutes_features",
+    "_predict_heads_for_pool",
     "_prop_signal_multiplier",
+    "_release_freeze_lock",
     "_starter_minutes_lift",
     "_starter_multiplier",
     "_vegas_from_features",
+    "scope_to_upcoming_games",
 ]
-
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
-
-
-def _load_player_history() -> dict[int, float]:
-    """Per-player mean real_score from slate_labels in Postgres.
-
-    Used as a fallback prediction tier between the EB model and the generic
-    heuristic. Players not yet in the EB model (trained before their 2026 data
-    was backfilled) but with any corpus history get their actual observed mean
-    rather than the boost-level heuristic. This matters most for boost-3
-    players: the heuristic gives them 1.81, but a player like Milic whose only
-    observed slate scored 0.51 should not be treated as average-for-boost-3.
-
-    Returns an empty dict on any read/parse error so the caller degrades
-    gracefully to the heuristic.
-    """
-    try:
-        from wnba_oracle.db.reads import read_player_history
-
-        return read_player_history()
-    except Exception:
-        return {}
-
-
-def _load_model_artifact(sha: str) -> PickerArtifact | None:
-    """Load the trained PickerArtifact whose SHA256 matches `sha`.
-
-    Looks under `models/` for any `picker_*.pkl` whose sidecar
-    `.sha256` file matches. Returns None on any failure (missing,
-    SHA mismatch, unpickle error) — the caller falls back to the
-    transparent heuristic.
-
-    Empty `sha` short-circuits to None so deployments without the
-    env var set behave exactly like the pre-D45 heuristic-only path.
-    """
-    if not sha:
-        return None
-    sha = sha.strip().lower()
-    models_dir = REPO_ROOT / "models"
-    if not models_dir.exists():
-        log.warning("model_artifact_dir_missing", dir=str(models_dir))
-        return None
-    # `write_artifact` writes the sidecar at `picker_<commit>_<ts>.sha256`
-    # (path.with_suffix(".sha256") REPLACES `.pkl`, it doesn't append).
-    for sidecar in models_dir.glob("picker_*.sha256"):
-        try:
-            disk_sha = sidecar.read_text().strip().lower()
-        except OSError:
-            continue
-        if disk_sha != sha:
-            continue
-        pkl_path = sidecar.with_suffix(".pkl")
-        if not pkl_path.exists():
-            log.warning("model_artifact_pkl_missing", path=str(pkl_path))
-            return None
-        try:
-            art = load_artifact(pkl_path)
-        except Exception as exc:
-            log.exception("model_artifact_load_failed", path=str(pkl_path), error=str(exc))
-            return None
-        if not isinstance(art, PickerArtifact):
-            log.error(
-                "model_artifact_type_invalid",
-                path=str(pkl_path),
-                actual_type=type(art).__name__,
-            )
-            return None
-        log.info(
-            "model_artifact_loaded",
-            path=str(pkl_path),
-            sha=sha[:12],
-            training_rows=art.training_rows,
-            low_data_mode=art.low_data_mode,
-            n_heads=len(art.heads),
-            has_eb_baseline=art.eb_baseline is not None,
-            n_eb_players=len(art.eb_baseline.player_alpha) if art.eb_baseline else 0,
-        )
-        return art
-    log.warning("model_artifact_sha_not_found", sha=sha[:12])
-    return None
-
-
-def _eb_predict_one(art: PickerArtifact | None, player_id: int, position: str) -> float | None:
-    """Single-player EB prediction with cohort + player-alpha lookup.
-
-    Returns None if (a) no artifact, (b) no EB baseline in artifact, or
-    (c) player_id wasn't seen in training. Caller falls back to the
-    heuristic on None — this preserves graceful degradation for new
-    players the model never saw. The `team_pace` term is dropped
-    because job1_enrichment doesn't yet carry team pace.
-    """
-    if art is None or art.eb_baseline is None:
-        return None
-    eb = art.eb_baseline
-    if int(player_id) not in eb.player_alpha:
-        return None
-    cohort = cohort_for_position(position)
-    mu = eb.cohort_means.get(cohort, 0.0)
-    alpha = eb.player_alpha[int(player_id)]
-    pred = mu + alpha
-    return max(0.5, float(pred))
-
-
-def _load_enrichment(slate_date: str) -> list[dict]:
-    eng = get_engine()
-    q = text(
-        "SELECT real_sports_player_id, name, team, opponent, position, "
-        "card_boost, features_json "
-        "FROM job1_enrichment WHERE slate_date = :sd"
-    )
-    with eng.connect() as conn:
-        result = conn.execute(q, {"sd": slate_date})
-        return [dict(row._mapping) for row in result]
-
-
-def _load_prior_real_scores(slate_date: str) -> dict[int, list[float]]:
-    """As-of per-player realized real_scores from slate_labels for all slates
-    STRICTLY BEFORE `slate_date`, most-recent-first. Drives per-player
-    sampling sigma (volatility). Empty on any DB error -> caller uses the
-    calibrated default sigma. Walk-forward-safe: never reads the target slate.
-    """
-    try:
-        eng = get_engine()
-    except RuntimeError:
-        return {}
-    q = text(
-        "SELECT platform_player_id, slate_date, MAX(real_score) AS real_score "
-        "FROM slate_labels WHERE slate_date < :sd AND real_score IS NOT NULL "
-        "GROUP BY platform_player_id, slate_date ORDER BY slate_date DESC"
-    )
-    out: dict[int, list[float]] = {}
-    with eng.connect() as conn:
-        for row in conn.execute(q, {"sd": slate_date}):
-            m = row._mapping
-            pid = m.get("platform_player_id")
-            rs = m.get("real_score")
-            if pid is None or rs is None:
-                continue
-            out.setdefault(int(pid), []).append(float(rs))
-    return out
-
-
-def _load_measured_drafts(slate_date: str) -> dict[int, int]:
-    """Pull the most recent draftStats.drafts counts from slate_labels for
-    the slate. Empty if Job 2 is firing before any contest finalized
-    (typical case pregame). Job 2 then falls back to the popularity
-    estimator."""
-    try:
-        eng = get_engine()
-    except RuntimeError:
-        return {}
-    q = text(
-        "SELECT platform_player_id, MAX(drafts) AS drafts "
-        "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
-        "GROUP BY platform_player_id"
-    )
-    with eng.connect() as conn:
-        rows = conn.execute(q, {"sd": slate_date}).fetchall()
-    out: dict[int, int] = {}
-    for r in rows:
-        m = r._mapping
-        pid = m.get("platform_player_id")
-        d = m.get("drafts")
-        if pid is None or d is None:
-            continue
-        out[int(pid)] = int(d)
-    return out
-
-
-def _load_slate_label_names(slate_date: str) -> dict[int, str]:
-    """Pull display names from slate_labels for the slate, keyed by
-    platform_player_id.
-
-    Defense-in-depth name source for the frozen lineup (D50). The primary
-    name path is `job1_enrichment.name` (Real Sports pool, D49). When that
-    is empty for a player, this fallback fills it from the independently
-    populated `slate_labels.display_name` so the freeze never ships a
-    `Player <id>` placeholder when a real name exists anywhere in the DB.
-    Empty / blank names are skipped so they never shadow the final
-    `Player {pid}` fallback. Empty when Job 2 fires before any contest
-    finalized (typical pregame), in which case the enrichment name stands.
-    """
-    try:
-        eng = get_engine()
-    except RuntimeError:
-        return {}
-    q = text(
-        "SELECT DISTINCT ON (platform_player_id) platform_player_id, display_name "
-        "FROM slate_labels WHERE slate_date = :sd "
-        "ORDER BY platform_player_id, id DESC"
-    )
-    with eng.connect() as conn:
-        rows = conn.execute(q, {"sd": slate_date}).fetchall()
-    out: dict[int, str] = {}
-    for r in rows:
-        m = r._mapping
-        pid = m.get("platform_player_id")
-        name = str(m.get("display_name", "") or "").strip()
-        if pid is None or not name:
-            continue
-        out[int(pid)] = name
-    return out
-
-
-def _predict_heads_for_pool(
-    art: PickerArtifact | None,
-    enrichment: list[dict],
-) -> dict[int, dict[str, float]]:
-    """D69 / Phase 2b Tier-0: run the D63 trained heads over every pool player
-    whose `head_features` row Job 1 persisted into ``features_json``.
-
-    Returns {pid: {"p10", "p50", "p90"}} for matched players. Empty dict on:
-      - artifact None / no minutes head trained (no behavioural change)
-      - no pool player has head_features (cold-start day, fall through to ladder)
-      - any predict failure (logged + skipped, per-player ladder still fires)
-    """
-    if art is None:
-        return {}
-    # Require both heads the recompose uses; otherwise predict_real_score returns
-    # None and we save the import + frame build.
-    minutes_head = art.heads.get(("minutes", "F"))
-    rate_head = art.heads.get(("real_score_per_min", "F"))
-    if minutes_head is None or rate_head is None:
-        return {}
-    feature_cols = minutes_head.feature_columns
-    rate_cols = rate_head.feature_columns
-    # The two heads were trained on identical _BASE_FEATURES (features/spec.py).
-    # Take the union so neither booster sees a missing column at predict time.
-    needed = tuple(dict.fromkeys((*feature_cols, *rate_cols)))
-
-    pids: list[int] = []
-    rows: list[dict] = []
-    for r in enrichment:
-        pid_raw = r.get("real_sports_player_id")
-        if pid_raw is None:
-            continue
-        try:
-            pid = int(pid_raw)
-        except (TypeError, ValueError):
-            continue
-        f = _features_dict(r.get("features_json"))
-        hf = f.get("head_features") if isinstance(f, dict) else None
-        if not isinstance(hf, dict) or not hf:
-            continue
-        # Cohort routing inside predict_real_score reads `position`; pool into "F"
-        # for now (matches features/corpus build_gamelog_corpus, D63 memory).
-        row: dict[str, object] = {"position": "F"}
-        for c in needed:
-            v = hf.get(c, 0.0)
-            try:
-                row[c] = float(v) if v is not None else 0.0
-            except (TypeError, ValueError):
-                row[c] = 0.0
-        pids.append(pid)
-        rows.append(row)
-    if not rows:
-        return {}
-    try:
-        import polars as pl
-
-        frame = pl.DataFrame(rows)
-        pred = art.predict_real_score(frame)
-    except Exception as exc:
-        log.warning("head_predict_failed", reason=str(exc)[:160])
-        return {}
-    if pred is None:
-        return {}
-    out: dict[int, dict[str, float]] = {}
-    for pid, p10, p50, p90 in zip(pids, pred["p10"], pred["p50"], pred["p90"]):
-        if p50 is None or not np.isfinite(p50):
-            continue
-        out[int(pid)] = {
-            "p10": float(p10) if np.isfinite(p10) else 0.0,
-            "p50": float(p50),
-            "p90": float(p90) if np.isfinite(p90) else float(p50),
-        }
-    log.info("head_predict", n_in=len(rows), n_out=len(out))
-    return out
 
 
 def build_optimize_config(settings: Settings) -> OptimizeConfig:
@@ -972,426 +743,6 @@ def _build_specs(
                 projection_by_pid[pid]["stat_leverage"] = label.stat_leverage
 
     return samps, fields, projection_by_pid
-
-
-# D82: frozen_lineups is append-only. Every freeze fire (the first tip-relative T-40 fire
-# freeze and D75 late re-freeze alike) inserts a NEW row with the next
-# freeze_seq for (slate_date, model_sha); nothing ever updates a frozen row
-# in place, so the lineup the operator saw at any point stays reconstructable.
-# The seq is computed in the INSERT's source SELECT; if two writers race to
-# the same seq the unique constraint on (slate_date, model_sha, freeze_seq)
-# turns the loser into a clean no-op (empty RETURNING) that _freeze retries.
-#
-# :model_sha is CAST to varchar explicitly. It is referenced twice (the SELECT
-# value and the WHERE filter); after migration 0008 widened the column to
-# varchar(64), Postgres deduced inconsistent types for the reused bind param
-# ("text versus character varying") and raised AmbiguousParameter on every
-# append, which silently blocked all freezes from 2026-06-13 onward. The cast
-# pins a single type so the parameter unifies.
-FROZEN_APPEND = text(
-    """
-    INSERT INTO frozen_lineups (
-        slate_date, model_sha, payout_regime, frozen_at, lineup,
-        entry_recommendation, expected_payout, metadata_json,
-        freeze_seq, frozen_via, operation_key
-    )
-    SELECT
-        :slate_date, CAST(:model_sha AS varchar), :payout_regime, now(),
-        CAST(:lineup AS JSONB),
-        :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB),
-        COALESCE(MAX(freeze_seq), 0) + 1, :frozen_via, :operation_key
-    FROM frozen_lineups
-    WHERE slate_date = :slate_date AND model_sha = CAST(:model_sha AS varchar)
-    ON CONFLICT DO NOTHING
-    RETURNING id, freeze_seq;
-    """
-)
-
-FROZEN_EXISTS = text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd AND model_sha = :ms")
-FROZEN_OPERATION_EXISTS = text(
-    "SELECT 1 FROM frozen_lineups "
-    "WHERE slate_date = :sd AND model_sha = :ms AND operation_key = :operation_key"
-)
-
-SLATE_LOCK_Q = text("SELECT contest_lock_utc, first_tip_utc FROM slate_meta WHERE slate_date = :sd")
-
-
-def _load_slate_lock_time(slate_date: str) -> dt.datetime | None:
-    """The slate's contest lock time from slate_meta (D83).
-
-    Prefers an explicit contest_lock_utc; falls back to first_tip_utc
-    (DFS contests lock at first game start, and the platform exposes no
-    lock timestamp). None when job1 never captured timing for the slate,
-    in which case the gate uses its hard deadline instead.
-    """
-    try:
-        eng = get_engine()
-        with eng.connect() as conn:
-            row = conn.execute(SLATE_LOCK_Q, {"sd": slate_date}).first()
-    except Exception as exc:
-        log.warning("job2_slate_lock_read_failed", reason=str(exc)[:120])
-        return None
-    if row is None:
-        return None
-    lock = row[0] or row[1]
-    if lock is None:
-        return None
-    if lock.tzinfo is None:
-        lock = lock.replace(tzinfo=dt.UTC)
-    return lock.astimezone(dt.UTC)
-
-
-def _game_start_utc(row: dict) -> dt.datetime | None:
-    """The tip time of this pool row's game, from features_json (D109).
-
-    None when job1 persisted the row without one (pre-D109 enrichment, or a
-    platform payload with no dateTime). Callers that scope the pool treat
-    None as "cannot verify", not as "not started".
-    """
-    feats = row.get("features_json") or {}
-    if isinstance(feats, str):
-        try:
-            feats = json.loads(feats)
-        except (TypeError, ValueError):
-            return None
-    raw = str((feats or {}).get("game_start_utc") or "").strip()
-    if not raw:
-        return None
-    try:
-        parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.UTC)
-    return parsed.astimezone(dt.UTC)
-
-
-def scope_to_upcoming_games(
-    rows: list[dict], now_utc: dt.datetime
-) -> tuple[list[dict], dt.datetime | None, int, int]:
-    """Keep only players whose game has not tipped yet (D109).
-
-    A WNBA slate spans several tip times. Once the early game starts its
-    players are no longer enterable, so an operator drafting late needs a
-    pool drawn from the games still ahead. Fails closed: a row with no
-    known game start is dropped, because "has not started" cannot be
-    verified for it.
-
-    Returns (kept rows, earliest remaining tip, n_started, n_unknown).
-    """
-    kept: list[dict] = []
-    n_started = n_unknown = 0
-    earliest: dt.datetime | None = None
-    for r in rows:
-        start = _game_start_utc(r)
-        if start is None:
-            n_unknown += 1
-            continue
-        if start <= now_utc:
-            n_started += 1
-            continue
-        kept.append(r)
-        if earliest is None or start < earliest:
-            earliest = start
-    return kept, earliest, n_started, n_unknown
-
-
-def _freeze_deadline_utc(
-    lock_time_utc: dt.datetime | None,
-    settings,
-) -> dt.datetime | None:
-    """The tip-relative freeze deadline = lock/first-tip minus freeze_lead_minutes.
-
-    WNBA slates tip at different clock times each day, so a static UTC cutoff
-    (late_refreeze_after_utc) misses an afternoon slate that locks before the
-    evening cron window. The deadline anchors freeze timing to the slate's own
-    first tip. None when slate_meta has no timing (callers fall back to their
-    static behaviour). See deep-dive E.
-    """
-    if lock_time_utc is None:
-        return None
-    lead = int(getattr(settings, "freeze_lead_minutes", 40))
-    return lock_time_utc - dt.timedelta(minutes=lead)
-
-
-def _in_pre_freeze_window(now_utc: dt.datetime, deadline_utc: dt.datetime | None) -> bool:
-    """True when this fire should be skipped because the slate has not reached
-    its T-minus freeze deadline yet. A None deadline (tip unknown) never skips:
-    the static late-refreeze fallback handles timing in that case. See E."""
-    return deadline_utc is not None and now_utc < deadline_utc
-
-
-def _late_refreeze_allowed(
-    now_utc: dt.datetime,
-    lock_time_utc: dt.datetime | None,
-    settings,
-) -> tuple[bool, str]:
-    """D83 lock gate for the late re-freeze.
-
-    Lock time known: allow only strictly before lock minus the buffer.
-    Lock time unknown: allow only strictly before the configured hard
-    deadline (HH:MM UTC). A malformed deadline blocks the re-freeze;
-    failing closed is the point of the gate.
-    """
-    if lock_time_utc is not None:
-        buffer = dt.timedelta(minutes=int(settings.refreeze_lock_buffer_min))
-        if now_utc < lock_time_utc - buffer:
-            return True, "pre_lock"
-        return False, "lock_gated"
-    try:
-        h, m = (int(x) for x in settings.late_refreeze_deadline_utc.split(":"))
-        deadline = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
-    except (ValueError, AttributeError):
-        return False, "bad_deadline_config"
-    if now_utc < deadline:
-        return True, "pre_deadline_no_locktime"
-    return False, "deadline_no_locktime"
-
-
-def _build_per_player(
-    rec: LineupRecommendation,
-    projection_by_pid: dict[int, dict],
-) -> list[dict]:
-    """Materialize the per-player projection list embedded in the frozen
-    lineup JSONB. The frontend's FrozenLineup contract reads this to
-    render player names, teams, opponents, positions, boosts, and the
-    minutes-quantile interval bar.
-
-    Minutes P10/P50/P90 pass through from the predictor (the same
-    project_minutes_from_base + minutes_vol the D55/D63 tiers use to score
-    the player). Rows without a projection map (missing pid, upstream
-    bug) fall back to a rank-aware default so the row still emits with
-    a plausible interval instead of crashing the freeze.
-    """
-    pid_order = list(rec.player_ids)
-    out: list[dict] = []
-    for slot_idx, pid in enumerate(pid_order):
-        proj = projection_by_pid.get(int(pid), {})
-        # Rank-aware minutes fallback used only when the predictor did not
-        # attach an interval (safe-default path — missing pid or a tier that
-        # skipped minutes projection). Slot 1 leans starter, slot 5 trails.
-        p50_default = max(22.0, 32.0 - 1.5 * slot_idx)
-        p10m = float(proj.get("pred_minutes_p10", p50_default - 4.0))
-        p50m = float(proj.get("pred_minutes_p50", p50_default))
-        p90m = float(proj.get("pred_minutes_p90", p50_default + 4.0))
-        entry = {
-            "player_id": int(pid),
-            "display_name": proj.get("display_name", f"Player {pid}"),
-            "team": proj.get("team", ""),
-            "opponent": proj.get("opponent", ""),
-            "position": proj.get("position", "F"),
-            "card_boost": float(proj.get("card_boost", 0.0)),
-            "pred_real_score_p50": float(proj.get("pred_real_score_p50", 0.0)),
-            "pred_minutes_p10": p10m,
-            "pred_minutes_p50": p50m,
-            "pred_minutes_p90": p90m,
-        }
-        # D69 / Phase 2b: pass through the real_score interval when the
-        # trained heads served this player. Absent fields are backward-compatible.
-        if "pred_real_score_p10" in proj:
-            entry["pred_real_score_p10"] = float(proj["pred_real_score_p10"])
-            entry["pred_real_score_p90"] = float(proj["pred_real_score_p90"])
-        # D105: archetype label (metadata-only; does not affect predictions).
-        if "archetype" in proj:
-            entry["archetype"] = proj["archetype"]
-        if "streak_driver" in proj:
-            entry["streak_driver"] = proj["streak_driver"]
-            entry["streak_quality"] = float(proj.get("streak_quality", 0.0))
-        if "stat_leverage" in proj:
-            entry["stat_leverage"] = float(proj["stat_leverage"])
-        out.append(entry)
-    return out
-
-
-FREEZE_LEASE_TTL_SECONDS = 24 * 3600
-
-
-def _release_freeze_lock(slate_date: str, force: bool, owner_token: str | None) -> None:
-    """Drop the Redis freeze lock for a slate so the next fire can retry.
-
-    The lock (wnba.frozen.{sd} / wnba.late_frozen.{sd}) is taken with a 24h
-    TTL before the Postgres append. If the append then fails, leaving the lock
-    set would defer every later fire for the full TTL and wedge the slate (the
-    2026-06-13 outage). Releasing it on failure makes the lock self-healing:
-    a transient append error costs one fire, not a day. Best-effort; a Redis
-    error here is irrelevant because the lock auto-expires anyway.
-    """
-    if not owner_token:
-        return
-    key = f"wnba.late_frozen.{slate_date}" if force else f"wnba.frozen.{slate_date}"
-    try:
-        RedisLeaseStore(get_redis(), prefix="").release(Lease(key=key, token=owner_token))
-    except Exception as exc:
-        log.warning("job2_freeze_lock_release_failed", slate_date=slate_date, error=str(exc)[:120])
-
-
-def _freeze(
-    slate_date: str,
-    model_sha: str,
-    rec: LineupRecommendation,
-    payout_regime: str,
-    projection_by_pid: dict[int, dict],
-    *,
-    force: bool = False,
-    payout_curve: dict | None = None,
-    serving_knobs: dict | None = None,
-    via: str | None = None,
-) -> bool:
-    """Idempotent freeze: first job2 fire writes, subsequent fires no-op.
-
-    True-freeze semantics (the operator submits one lineup per slate and
-    must not see it change underneath them):
-
-    1. Check Postgres for an existing row keyed on (slate_date, model_sha).
-       Existence is the canonical "already frozen" signal — Redis is just
-       a fast-path hint.
-    2. If absent, take the Redis SETNX lock as a fast soft-lock to
-       discourage concurrent inserts within the cron window (cron-job2
-       fires every 15 min; without the lock two cron tasks could race
-       between the existence-check and the INSERT). On lock-miss treat
-       it as "another fire is in flight" and bail without writing.
-    3. Issue FROZEN_APPEND (D82): an INSERT that computes the next
-       freeze_seq for the key and no-ops on a seq collision. ``RETURNING``
-       distinguishes "I wrote this row" from "lost the seq race".
-
-    When force=True (late re-freeze, D75): skip the Postgres existence
-    check, use the wnba.late_frozen.{slate_date} Redis key (first-fire-wins
-    per day, 24h TTL) to prevent duplicate late re-freezes, and APPEND a
-    new row (D82) so the earlier freeze stays intact for audit. This path
-    is only reached when LATE_REFREEZE_ENABLED=true, the current UTC time
-    is past LATE_REFREEZE_AFTER_UTC, and the D83 lock gate allows it.
-
-    Returns True iff this invocation appended a freeze record.
-    """
-    eng = get_engine()
-    frozen_via = via or ("job2_late_refreeze" if force else "job2_first_fire")
-    operation_key = frozen_via if force else "first"
-    lock_owner: str | None = None
-
-    if force:
-        # D75 late re-freeze: use a separate Redis key so only the first
-        # late-fire appends. Subsequent fires (every 15 min) see the key
-        # already set and bail without touching frozen_lineups.
-        try:
-            rd = get_redis()
-            late_key = f"wnba.late_frozen.{slate_date}"
-            lease = RedisLeaseStore(rd, prefix="").acquire(
-                late_key,
-                ttl_seconds=FREEZE_LEASE_TTL_SECONDS,
-            )
-            lock_owner = lease.token if lease else None
-            lock_acquired = lease is not None
-        except Exception as redis_exc:
-            log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
-            lock_owner = None
-            lock_acquired = True  # proceed; Postgres UPSERT is the canonical guard
-        if not lock_acquired:
-            log.info("job2_late_refreeze_already_done", slate_date=slate_date)
-            return False
-    else:
-        with eng.connect() as conn:
-            existing = conn.execute(FROZEN_EXISTS, {"sd": slate_date, "ms": model_sha}).first()
-        if existing:
-            log.info("job2_already_frozen", slate_date=slate_date, model_sha=model_sha)
-            return False
-
-        try:
-            rd = get_redis()
-            key = f"wnba.frozen.{slate_date}"
-            # The 24h TTL covers a full slate window; if the writer crashes the
-            # lock auto-releases for the next fire to retry.
-            lease = RedisLeaseStore(rd, prefix="").acquire(
-                key,
-                ttl_seconds=FREEZE_LEASE_TTL_SECONDS,
-            )
-            lock_owner = lease.token if lease else None
-            lock_acquired = lease is not None
-        except Exception as redis_exc:
-            log.warning("job2_redis_unavailable", error=str(redis_exc)[:120])
-            lock_owner = None
-            lock_acquired = True  # proceed; Postgres ON CONFLICT guards correctness
-        if not lock_acquired:
-            log.info(
-                "job2_freeze_lock_held",
-                slate_date=slate_date,
-                note="another job2 fire is mid-freeze; deferring",
-            )
-            return False
-
-    # D90 calibration fields: payout_curve + serving_knobs persist in the
-    # lineup JSONB so the placement reader can join the freeze-time forecast
-    # to the realized contest outcome. None payloads are dropped to keep the
-    # JSONB compact when callers (older test fixtures) do not supply them.
-    lineup_payload: dict = {
-        "player_ids": list(rec.player_ids),
-        "slot_multipliers": list(rec.slot_multipliers),
-        "lineup_score_p10": rec.lineup_score_p10,
-        "lineup_score_p50": rec.lineup_score_p50,
-        "lineup_score_p90": rec.lineup_score_p90,
-        "per_player": _build_per_player(rec, projection_by_pid),
-    }
-    if payout_curve is not None:
-        lineup_payload["payout_curve"] = payout_curve
-    if serving_knobs is not None:
-        lineup_payload["serving_knobs"] = serving_knobs
-
-    payload = {
-        "slate_date": slate_date,
-        "model_sha": model_sha,
-        "payout_regime": payout_regime,
-        "lineup": json.dumps(lineup_payload),
-        "entry_recommendation": rec.entry_flag,
-        "expected_payout": rec.expected_payout,
-        # frozen_via stays duplicated in metadata_json for one release so
-        # existing readers of metadata keep working (drop after frontend
-        # confirms it reads the column).
-        "metadata_json": json.dumps({"frozen_via": frozen_via}),
-        "frozen_via": frozen_via,
-        "operation_key": operation_key,
-    }
-    # One retry on an empty RETURNING: a concurrent appender took our seq.
-    # The Redis locks make this near-impossible, but the constraint is the
-    # actual correctness boundary, so honor it.
-    result = None
-    try:
-        for attempt in (1, 2):
-            with eng.begin() as conn:
-                result = conn.execute(FROZEN_APPEND, payload).first()
-            if result is not None:
-                break
-            with eng.connect() as conn:
-                duplicate = conn.execute(
-                    FROZEN_OPERATION_EXISTS,
-                    {"sd": slate_date, "ms": model_sha, "operation_key": operation_key},
-                ).first()
-            if duplicate:
-                log.info(
-                    "job2_freeze_operation_already_committed",
-                    slate_date=slate_date,
-                    operation_key=operation_key,
-                )
-                return False
-            log.info("job2_lost_seq_race", slate_date=slate_date, attempt=attempt)
-    except Exception as append_exc:
-        # The append raised (e.g. a SQL/parameter error). Release the freeze
-        # lock so the next fire retries immediately instead of deferring for
-        # the 24h TTL, then surface the error to the caller.
-        _release_freeze_lock(slate_date, force, lock_owner)
-        log.exception(
-            "job2_freeze_append_error", slate_date=slate_date, error=str(append_exc)[:200]
-        )
-        raise RuntimeError("failed to append frozen lineup") from append_exc
-    if result is None:
-        _release_freeze_lock(slate_date, force, lock_owner)
-        log.warning("job2_freeze_append_failed", slate_date=slate_date, via=frozen_via)
-        raise RuntimeError("freeze append lost its sequence race twice")
-    log.info(
-        "job2_late_refrozen" if force else "job2_frozen",
-        slate_date=slate_date,
-        row_id=int(result[0]),
-        freeze_seq=int(result[1]),
-    )
-    return True
 
 
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:

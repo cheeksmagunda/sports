@@ -12,7 +12,7 @@ import datetime as dt
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from wnba_oracle.scheduler import job2
+from wnba_oracle.scheduler import job2, job2_io
 
 
 def _settings(buffer_min: int = 10, deadline: str = "23:30") -> SimpleNamespace:
@@ -160,7 +160,7 @@ def test_load_slate_lock_time_prefers_explicit_lock() -> None:
     tip = dt.datetime(2026, 6, 8, 23, 30, tzinfo=dt.UTC)
     conn.execute.return_value.first.return_value = (explicit, tip)
     eng.connect.return_value.__enter__.return_value = conn
-    with patch.object(job2, "get_engine", return_value=eng):
+    with patch.object(job2_io, "get_engine", return_value=eng):
         out = job2._load_slate_lock_time("2026-06-08")
     assert out == explicit
 
@@ -171,7 +171,7 @@ def test_load_slate_lock_time_falls_back_to_first_tip() -> None:
     tip = dt.datetime(2026, 6, 8, 23, 30, tzinfo=dt.UTC)
     conn.execute.return_value.first.return_value = (None, tip)
     eng.connect.return_value.__enter__.return_value = conn
-    with patch.object(job2, "get_engine", return_value=eng):
+    with patch.object(job2_io, "get_engine", return_value=eng):
         out = job2._load_slate_lock_time("2026-06-08")
     assert out == tip
 
@@ -181,7 +181,7 @@ def test_load_slate_lock_time_none_when_no_row() -> None:
     conn = MagicMock()
     conn.execute.return_value.first.return_value = None
     eng.connect.return_value.__enter__.return_value = conn
-    with patch.object(job2, "get_engine", return_value=eng):
+    with patch.object(job2_io, "get_engine", return_value=eng):
         assert job2._load_slate_lock_time("2026-06-08") is None
 
 
@@ -191,6 +191,6 @@ def test_load_slate_lock_time_naive_timestamp_treated_as_utc() -> None:
     naive = dt.datetime(2026, 6, 8, 23, 30)
     conn.execute.return_value.first.return_value = (naive, None)
     eng.connect.return_value.__enter__.return_value = conn
-    with patch.object(job2, "get_engine", return_value=eng):
+    with patch.object(job2_io, "get_engine", return_value=eng):
         out = job2._load_slate_lock_time("2026-06-08")
     assert out == dt.datetime(2026, 6, 8, 23, 30, tzinfo=dt.UTC)

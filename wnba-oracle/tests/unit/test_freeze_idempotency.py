@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from wnba_oracle.picker.optimize import LineupRecommendation
-from wnba_oracle.scheduler import job2
+from wnba_oracle.scheduler import job2, job2_freeze
 
 
 def _rec() -> LineupRecommendation:
@@ -75,8 +75,8 @@ def test_first_fire_writes_and_returns_true() -> None:
     eng = _fake_engine(existing_row=False, insert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is True
@@ -90,8 +90,8 @@ def test_second_fire_short_circuits_at_existence_check() -> None:
     eng = _fake_engine(existing_row=True)
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is False
@@ -104,8 +104,8 @@ def test_redis_lock_loss_bails_without_writing() -> None:
     eng = _fake_engine(existing_row=False)
     rd = _fake_redis(lock_wins=False)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is False
@@ -117,8 +117,8 @@ def test_unresolved_insert_race_raises_for_retry() -> None:
     eng = _fake_engine(existing_row=False, insert_returns_row=False)
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
         pytest.raises(RuntimeError, match="sequence race"),
     ):
         job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
@@ -134,8 +134,8 @@ def test_same_operation_race_returns_expected_noop() -> None:
     select_conn.execute.side_effect = [initial, duplicate]
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     assert out is False
@@ -147,8 +147,8 @@ def test_freeze_payload_includes_per_player() -> None:
     eng = _fake_engine(existing_row=False, insert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
     insert_call = eng.begin.return_value.__enter__.return_value.execute.call_args

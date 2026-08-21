@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from wnba_oracle.picker.optimize import LineupRecommendation
-from wnba_oracle.scheduler import job2
+from wnba_oracle.scheduler import job2, job2_freeze
 
 
 def _rec() -> LineupRecommendation:
@@ -67,8 +67,8 @@ def test_force_skips_postgres_existence_check() -> None:
     eng = _fake_engine_for_force(upsert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     assert out is True
@@ -82,8 +82,8 @@ def test_force_acquires_late_frozen_redis_key() -> None:
     rd = _fake_redis(lock_wins=True)
     with (
         patch("oracle_core.storage.secrets.token_urlsafe", return_value="late-owner-token"),
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     rd.set.assert_called_once_with(
@@ -98,8 +98,8 @@ def test_force_append_failure_releases_matching_owner_token() -> None:
     rd = _fake_redis(lock_wins=True)
     with (
         patch("oracle_core.storage.secrets.token_urlsafe", return_value="late-owner-token"),
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
         pytest.raises(RuntimeError, match="failed to append"),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
@@ -121,8 +121,8 @@ def test_force_second_fire_bails_on_late_frozen_key() -> None:
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=False)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     assert out is False
@@ -135,8 +135,8 @@ def test_force_append_payload_frozen_via_late_refreeze() -> None:
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     call_args = eng.begin.return_value.__enter__.return_value.execute.call_args
@@ -152,8 +152,8 @@ def test_force_uses_append_statement_not_update() -> None:
     eng = _fake_engine_for_force()
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=True)
     call_args = eng.begin.return_value.__enter__.return_value.execute.call_args
@@ -173,8 +173,8 @@ def test_force_false_preserves_normal_flow() -> None:
     eng.connect.return_value.__enter__.return_value = select_conn
     rd = _fake_redis(lock_wins=True)
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-07", "heuristic-v1", _rec(), "top_20", _proj(), force=False)
     assert out is False

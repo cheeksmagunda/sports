@@ -112,10 +112,11 @@ def test_load_model_artifact_roundtrip(tmp_path, monkeypatch) -> None:
     (fake_models / "picker_test_123.pkl").write_bytes(payload)
     (fake_models / "picker_test_123.sha256").write_text(sha)
 
-    # Point REPO_ROOT at our temp dir
-    import wnba_oracle.scheduler.job2 as job2
+    # Point REPO_ROOT at our temp dir (_load_model_artifact reads it from
+    # its home module, job2_model)
+    import wnba_oracle.scheduler.job2_model as job2_model
 
-    monkeypatch.setattr(job2, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(job2_model, "REPO_ROOT", tmp_path)
 
     loaded = _load_model_artifact(sha)
     assert loaded is not None

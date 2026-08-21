@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from wnba_oracle.picker.optimize import LineupRecommendation
-from wnba_oracle.scheduler import job2
+from wnba_oracle.scheduler import job2, job2_freeze
 
 
 def _rec() -> LineupRecommendation:
@@ -71,8 +71,8 @@ def test_first_fire_sets_frozen_via_column() -> None:
     eng = _engine_with_results([(42, 1)])
     rd = _fake_redis()
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
     assert out is True
@@ -85,8 +85,8 @@ def test_seq_race_retries_once_then_succeeds() -> None:
     eng = _engine_with_results([None, (43, 2)])
     rd = _fake_redis()
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
         out = job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
     assert out is True
@@ -98,8 +98,8 @@ def test_seq_race_gives_up_after_two_attempts() -> None:
     eng = _engine_with_results([None, None])
     rd = _fake_redis()
     with (
-        patch.object(job2, "get_engine", return_value=eng),
-        patch.object(job2, "get_redis", return_value=rd),
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
         pytest.raises(RuntimeError, match="sequence race"),
     ):
         job2._freeze("2026-06-10", "sha-a", _rec(), "top_20", _proj())
