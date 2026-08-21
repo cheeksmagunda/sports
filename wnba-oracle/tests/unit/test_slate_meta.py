@@ -16,7 +16,7 @@ import pytest
 
 from wnba_oracle.ingest import realsports
 from wnba_oracle.ingest.realsports import RequestHeaders
-from wnba_oracle.scheduler import job1
+from wnba_oracle.scheduler import job1, job1_persist
 
 
 def _fake_headers() -> RequestHeaders:
@@ -47,7 +47,7 @@ def test_persist_slate_meta_takes_earliest_tip() -> None:
     eng = MagicMock()
     conn = MagicMock()
     eng.begin.return_value.__enter__.return_value = conn
-    with patch.object(job1, "get_engine", return_value=eng):
+    with patch.object(job1_persist, "get_engine", return_value=eng):
         job1._persist_slate_meta(
             "2026-05-27",
             ["2026-05-28T00:00:00.000Z", "2026-05-27T23:00:00.000Z"],
@@ -68,7 +68,7 @@ def test_persist_slate_meta_writes_null_row_when_no_games() -> None:
     eng = MagicMock()
     conn = MagicMock()
     eng.begin.return_value.__enter__.return_value = conn
-    with patch.object(job1, "get_engine", return_value=eng):
+    with patch.object(job1_persist, "get_engine", return_value=eng):
         job1._persist_slate_meta("2026-05-27", [])
     payload = conn.execute.call_args.args[1]
     assert payload["first_tip_utc"] is None

@@ -14,14 +14,11 @@ Pipeline:
 from __future__ import annotations
 
 import asyncio
-import datetime as dt
 import json
 import os
-import unicodedata
 from dataclasses import dataclass
 
 import httpx
-from sqlalchemy import text
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.logging import configure_logging, get_logger
@@ -51,9 +48,52 @@ from wnba_oracle.ingest.realsports import (
     fetch_slate_game_times,
     headers_or_capture,
 )
-from wnba_oracle.ingest.rotowire import LineupEntry, fetch_lineups
+from wnba_oracle.ingest.rotowire import fetch_lineups
 
 log = get_logger("oracle.job1")
+
+# RotoWire name-matching/identity and enrichment persistence live in sibling
+# job1_* modules so this module can focus on the scrape + build orchestration.
+# Re-imported here because tests and scripts reference them via
+# ``job1._name``, and because the pipeline below resolves them through this
+# module's globals, which keeps monkeypatching on job1 effective.
+from wnba_oracle.scheduler.job1_persist import (  # noqa: E402
+    GAME_START_READ,
+    JOB1_DELETE_SLATE,
+    JOB1_UPSERT,
+    LITE_PATCH,
+    LITE_READ,
+    SLATE_META_UPSERT,
+    _persist_slate_meta,
+    _replace_enrichment,
+    parse_game_time,
+)
+from wnba_oracle.scheduler.job1_rotowire import (  # noqa: E402
+    RotowireIndex,
+    _index_rotowire,
+    _name_keys,
+    _normalize_name,
+    is_out_status,
+    rotowire_patch,
+)
+
+__all__ = [
+    "GAME_START_READ",
+    "JOB1_DELETE_SLATE",
+    "JOB1_UPSERT",
+    "LITE_PATCH",
+    "LITE_READ",
+    "SLATE_META_UPSERT",
+    "RotowireIndex",
+    "_index_rotowire",
+    "_name_keys",
+    "_normalize_name",
+    "_persist_slate_meta",
+    "_replace_enrichment",
+    "is_out_status",
+    "parse_game_time",
+    "rotowire_patch",
+]
 
 
 @dataclass(frozen=True)
@@ -68,203 +108,12 @@ class Job1Result:
     degraded_reasons: tuple[str, ...] = ()
 
 
-JOB1_UPSERT = text(
-    """
-    INSERT INTO job1_enrichment (
-        slate_date, player_id, real_sports_player_id, name, team, opponent,
-        position, card_boost, features_json, captured_at
-    ) VALUES (
-        :slate_date, :player_id, :real_sports_player_id, :name, :team, :opponent,
-        :position, :card_boost, :features_json, now()
-    )
-    ON CONFLICT (slate_date, player_id) DO UPDATE SET
-        real_sports_player_id = EXCLUDED.real_sports_player_id,
-        name = EXCLUDED.name,
-        team = EXCLUDED.team,
-        opponent = EXCLUDED.opponent,
-        position = EXCLUDED.position,
-        card_boost = EXCLUDED.card_boost,
-        features_json = EXCLUDED.features_json,
-        captured_at = now();
-    """
-)
-
-JOB1_DELETE_SLATE = text("DELETE FROM job1_enrichment WHERE slate_date = :slate_date")
-
-
-def _replace_enrichment(conn, slate_date: str, rows: list[dict]) -> int:
-    """Atomically promote one complete, validated slate capture.
-
-    The transaction first removes the prior slate snapshot and then writes the
-    new rows. Callers must run ``pool_sanity`` before invoking this helper, so a
-    partial upstream response never mixes fresh timestamps with stale players.
-    """
-    conn.execute(JOB1_DELETE_SLATE, {"slate_date": slate_date})
-    for row in rows:
-        conn.execute(JOB1_UPSERT, row)
-    return len(rows)
-
-
-SLATE_META_UPSERT = text(
-    """
-    INSERT INTO slate_meta (
-        slate_date, first_tip_utc, contest_lock_utc, source, payload_json, updated_at
-    ) VALUES (
-        :slate_date, :first_tip_utc, :contest_lock_utc, :source,
-        CAST(:payload_json AS JSONB), now()
-    )
-    ON CONFLICT (slate_date) DO UPDATE SET
-        first_tip_utc = EXCLUDED.first_tip_utc,
-        contest_lock_utc = EXCLUDED.contest_lock_utc,
-        source = EXCLUDED.source,
-        payload_json = EXCLUDED.payload_json,
-        updated_at = now();
-    """
-)
-
-
-def parse_game_time(raw: str) -> dt.datetime | None:
-    """Parse a Real Sports game `dateTime` ("2026-05-27T23:00:00.000Z")
-    into an aware UTC datetime. None on anything unparseable."""
-    if not raw:
-        return None
-    try:
-        parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.UTC)
-    return parsed.astimezone(dt.UTC)
-
-
-def _persist_slate_meta(slate_date: str, game_times: list[str]) -> None:
-    """UPSERT the slate's timing facts (D83).
-
-    first_tip_utc is the earliest game time, the contest-lock proxy.
-    contest_lock_utc stays NULL until the platform exposes a real lock
-    timestamp (probe 2026-06-10: the contest payload only carries a live
-    `isLocked` boolean). A row with NULL first_tip_utc still gets written
-    so the gate can tell "job1 looked and found nothing" from "job1 never
-    ran" when debugging.
-    """
-    parsed = sorted(t for t in (parse_game_time(g) for g in game_times) if t is not None)
-    first_tip = parsed[0] if parsed else None
-    eng = get_engine()
-    with eng.begin() as conn:
-        conn.execute(
-            SLATE_META_UPSERT,
-            {
-                "slate_date": slate_date,
-                "first_tip_utc": first_tip,
-                "contest_lock_utc": None,
-                "source": "realsports_home_next",
-                "payload_json": json.dumps({"game_times": game_times}),
-            },
-        )
-    log.info(
-        "job1_slate_meta",
-        slate_date=slate_date,
-        first_tip_utc=first_tip.isoformat() if first_tip else None,
-        n_games=len(game_times),
-    )
-
-
 def _device_uuid() -> str:
     return os.environ.get("WNBA_DEVICE_UUID", "wnba-oracle-prod-01-device")
 
 
 def _device_name() -> str:
     return os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-prod-01")
-
-
-# RotoWire status strings that mean "do not draft" — matches the same
-# token set used by features/injury_cascade.py so the two paths agree on
-# what "OUT" means.
-_OUT_STATUS_TOKENS = {"OUT", "IL", "INJ", "INACTIVE", "NA"}
-
-
-def _normalize_name(name: str) -> str:
-    """Case-fold + strip suffixes for RotoWire <-> Real Sports name matching.
-
-    Beyond case + Jr./Sr./III suffixes, folds the three cross-source spelling
-    hazards that silently mislabel starters as bench (the 2026-07-07 PHO
-    slot-1 hole: RotoWire "M. Akoa-Makani" vs Real Sports "Monique Akoa
-    Makani" missed BOTH join keys, so an expected starter took the
-    unknown-role fade):
-      - diacritics:  "Noémie" == "Noemie" (NFKD ASCII fold)
-      - hyphens:     "Akoa-Makani" == "Akoa Makani" (split BEFORE stripping
-        punctuation so double surnames keep a last-token join key)
-      - apostrophes/periods: "A'ja" == "Aja", "M." == "M"
-    """
-    if not name:
-        return ""
-    nfkd = unicodedata.normalize("NFKD", name)
-    folded = "".join(c for c in nfkd if not unicodedata.combining(c))
-    folded = folded.replace("-", " ").replace("/", " ")
-    cleaned = "".join(c for c in folded if c.isalnum() or c.isspace())
-    parts = [p for p in cleaned.strip().split() if p]
-    suffixes = {"jr", "sr", "ii", "iii", "iv"}
-    parts = [p for p in parts if p.lower() not in suffixes]
-    return " ".join(parts).lower()
-
-
-def _name_keys(name: str) -> tuple[str, str]:
-    """Return (full_norm, initial_norm) join keys for a player name.
-
-    full_norm    = the case/suffix-normalized full name ('cecilia zandalasini').
-    initial_norm = first-initial + last name ('c zandalasini').
-
-    Both 'C. Zandalasini' (RotoWire often abbreviates the visiting team's first
-    names) and 'Cecilia Zandalasini' (Real Sports' full names) collapse to the
-    same initial_norm, so the initial key bridges the two sources when the full
-    names differ. The exact key is still tried first to avoid first-initial +
-    last-name collisions between two different players on the same team.
-    """
-    norm = _normalize_name(name)
-    parts = norm.split()
-    if len(parts) >= 2:
-        initial = parts[0].rstrip(".")[:1]
-        return norm, f"{initial} {parts[-1]}"
-    return norm, norm
-
-
-@dataclass(frozen=True)
-class RotowireIndex:
-    """(team, name) -> LineupEntry lookup with an abbreviated-name fallback."""
-
-    exact: dict[tuple[str, str], LineupEntry]
-    by_initial: dict[tuple[str, str], LineupEntry]
-
-    def get(self, team: str, name: str) -> LineupEntry | None:
-        team_u = team.upper()
-        full_norm, initial_norm = _name_keys(name)
-        hit = self.exact.get((team_u, full_norm))
-        if hit is not None:
-            return hit
-        return self.by_initial.get((team_u, initial_norm))
-
-    def __contains__(self, key: tuple[str, str]) -> bool:
-        # Back-compat for `(team, normalized_name) in idx` callers/tests.
-        return key in self.exact
-
-
-def _index_rotowire(entries: list[LineupEntry]) -> RotowireIndex:
-    """Build a RotowireIndex so Real Sports pool rows enrich in O(1).
-
-    Keys each entry under both the exact normalized full name and the
-    first-initial + last-name fallback so abbreviated RotoWire names still
-    match Real Sports' full names (D100 fix)."""
-    exact: dict[tuple[str, str], LineupEntry] = {}
-    by_initial: dict[tuple[str, str], LineupEntry] = {}
-    for e in entries:
-        team = e.team.upper()
-        full_norm, initial_norm = _name_keys(e.player_name)
-        exact[(team, full_norm)] = e
-        # First write wins on the initial key so a later collision (two players,
-        # same team + initial + last name) can't clobber the first; the exact
-        # key still disambiguates when the full name is present.
-        by_initial.setdefault((team, initial_norm), e)
-    return RotowireIndex(exact=exact, by_initial=by_initial)
 
 
 def pool_sanity(rows: list[dict], *, min_pool: int, min_teams: int) -> list[str]:
@@ -285,16 +134,6 @@ def pool_sanity(rows: list[dict], *, min_pool: int, min_teams: int) -> list[str]
     if n_teams < min_teams:
         reasons.append(f"n_teams={n_teams} below floor {min_teams}")
     return reasons
-
-
-def is_out_status(status: str | None) -> bool:
-    """True iff RotoWire's status token marks the player as a confirmed
-    non-draft. Used by both job1 (when persisting features_json) and job2
-    (when filtering the optimizer pool)."""
-    if not status:
-        return False
-    upper = status.strip().upper()
-    return any(tok in upper for tok in _OUT_STATUS_TOKENS)
 
 
 async def _do_pool_fetch(slate_date: str) -> tuple[list, list[str]]:
@@ -671,29 +510,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     return Job1Result(sd, len(pool), len(odds), len(lineups), persisted, tuple(degraded))
 
 
-LITE_READ = text("SELECT id, name, team FROM job1_enrichment WHERE slate_date = :sd")
-LITE_PATCH = text(
-    "UPDATE job1_enrichment "
-    "SET features_json = features_json || CAST(:patch AS jsonb) "
-    "WHERE id = :id"
-)
-
-
-def rotowire_patch(rw: LineupEntry) -> dict:
-    """The RotoWire-authoritative subset of features_json: starter slot +
-    confirmation, and the injury status ONLY when RotoWire has a fresh one
-    (so a Real-Sports-sourced OUT is never wiped by a blank RotoWire row)."""
-    patch: dict[str, object] = {
-        "is_starter": int(1 <= rw.starter_slot <= 5),
-        "starter_slot": int(rw.starter_slot),
-        "rotowire_confirmed": int(bool(rw.confirmed)),
-    }
-    if rw.injury_status:
-        patch["injury_status"] = rw.injury_status
-        patch["is_out"] = int(is_out_status(rw.injury_status))
-    return patch
-
-
 def run_lite(slate_date: str | None = None) -> Job1Result:
     """Credit-free confirmed-lineup refresh.
 
@@ -741,11 +557,6 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
         n_lineups=len(lineups),
     )
     return Job1Result(sd, n_existing, 0, len(lineups), n_updated)
-
-
-GAME_START_READ = text(
-    "SELECT id, real_sports_player_id FROM job1_enrichment WHERE slate_date = :sd"
-)
 
 
 def run_game_starts(slate_date: str | None = None) -> int:
