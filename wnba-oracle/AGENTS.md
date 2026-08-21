@@ -107,8 +107,7 @@ scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
 ## Configuration and secrets
 
 - Runtime configuration comes only from the process environment. Do not load or
-  parse `.env`, `.envrc`, `.claude/settings.local.json`, or
-  `.claude/credentials.env`.
+  parse `.env`, `.envrc`, agent settings, or vendor-specific credential files.
 - Variable names and purposes are declared without values in `.env.example`.
   SOPS files are optional local at-rest storage, not a runtime requirement.
   Native `gh` and Railway CLI sessions stay in their native credential stores.

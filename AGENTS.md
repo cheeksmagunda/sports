@@ -105,5 +105,5 @@ commands, but cannot weaken this contract.
   belong in the child `STATUS.md`.
 - Decision rationale belongs in tests, code comments, or commits. Do not create
   competing markdown ledgers.
-- Tool-specific instruction shims import canonical instructions and contain no
-  independent rules. Root `CLAUDE.md` must contain only `@AGENTS.md`.
+- `AGENTS.md` is the only agent-instruction format in this repository. Do not
+  add model-specific instruction files or compatibility shims.

@@ -265,7 +265,7 @@ issue labeled `ops-results` (#15). No model change was made.
 - 2026-06-27..07-03: five-day outage, issue #10. Root causes compounding:
   the Real Sports session died server-side (~3-week TTL) killing job1's
   pool, AND the cloud audit routine's bootstrap file
-  (.claude/credentials.env) had been deleted in a cleanup commit, leaving
+  (a legacy agent credential file) had been deleted in a cleanup commit, leaving
   the watcher blind with a stale Railway token. Recovered 2026-07-03:
   session re-seeded via the Playwright MCP login path, missed slates
   backfilled (labels + leaderboards for 06-27, 06-28, 06-30), routines
