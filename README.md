@@ -33,6 +33,26 @@ scripts/                Portfolio operations, secret injection, boundary checks
 The dependency direction is application to core. Core cannot import an
 application, and applications cannot import one another.
 
+## Repository and deployment model
+
+`sports` can hold shared things, including:
+
+- Root `AGENTS.md` for every coding agent
+- GitHub Actions, security checks, and portfolio-wide automation
+- `oracle-core`, the shared technical foundation
+- Future common infrastructure, once proven useful
+
+Meanwhile, Railway treats `sports` as the GitHub source for WNBA, then builds
+only the appropriate part:
+
+- Backend services use the monorepo root so they can import `oracle-core`, with
+  `wnba-oracle/Dockerfile`
+- Frontend uses `wnba-oracle/frontend`
+- Postgres and Redis stay as the same connected Railway services
+
+So `sports` is both the shared repository and the deployment source. WNBA
+remains a self-contained application inside it.
+
 ## Local backend authentication
 
 Normal commands run directly. They use exported environment values, deployment
