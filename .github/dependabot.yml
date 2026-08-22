@@ -13,6 +13,16 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # These ceilings mirror the workspace's tested compatibility ranges.
+    # Without explicit ignores Dependabot probes incompatible major releases,
+    # reports a failed check suite, and blocks Railway's CI-gated deploys.
+    ignore:
+      - dependency-name: "starlette"
+        versions:
+          - ">=1.0"
+      - dependency-name: "redis"
+        versions:
+          - ">=6.0"
 
   - package-ecosystem: "github-actions"
     directory: "/"
