@@ -38,6 +38,7 @@ from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.ingest.contest_stats import (
     ContestLabel,
+    ContestRetryExhausted,
     ContestUnavailable,
     LeaderboardEntry,
     dedupe_by_player,
@@ -263,6 +264,7 @@ def run_historical_backfill(
     n_success = 0
     n_unavailable = 0
     n_auth_failed = 0
+    n_retry_exhausted = 0
     n_lb_entries = 0
     with httpx.Client(timeout=20.0) as client:
         for cid in _iter_contest_ids(start_id, stop_id):
@@ -278,6 +280,10 @@ def run_historical_backfill(
                 n_auth_failed += 1
                 time.sleep(pause_seconds)
                 continue
+            except ContestRetryExhausted:
+                log.error("contest_stats_retry_exhausted", contest_id=cid)
+                n_retry_exhausted += 1
+                break
             if not labels:
                 n_unavailable += 1
                 time.sleep(pause_seconds)
@@ -293,6 +299,10 @@ def run_historical_backfill(
                 except PlatformAuthRequired:
                     log.warning("auth_required_entries", contest_id=cid)
                     n_auth_failed += 1
+                except ContestRetryExhausted:
+                    log.error("contest_entries_retry_exhausted", contest_id=cid)
+                    n_retry_exhausted += 1
+                    break
 
             n_supplemental = 0
             if persist_to_pg:
@@ -322,9 +332,14 @@ def run_historical_backfill(
         n_success=n_success,
         n_unavailable=n_unavailable,
         n_auth_failed=n_auth_failed,
+        n_retry_exhausted=n_retry_exhausted,
         n_lb_entries=n_lb_entries,
     )
-    return 0
+    # A 404, 403, non-WNBA contest, or empty finalized payload is an expected
+    # miss while walking the shared contest-id space. Authentication or retry
+    # exhaustion is different: required stats or leaderboard work did not
+    # execute, so callers such as day-close must receive a nonzero result.
+    return 1 if n_auth_failed or n_retry_exhausted else 0
 
 
 def main() -> int:

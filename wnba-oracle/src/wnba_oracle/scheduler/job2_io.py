@@ -53,6 +53,36 @@ def _load_enrichment(slate_date: str) -> list[dict]:
         return [dict(row._mapping) for row in result]
 
 
+def _load_assurance_capture_times(
+    slate_date: str,
+) -> tuple[dict[int, dt.datetime | None], str | None]:
+    """Read observation timestamps without changing model-ingress rows.
+
+    This query is deliberately separate from ``_load_enrichment``. Production
+    scoring retains the incumbent projection, row order, and row values while
+    the assurance manifest receives timestamps through copied rows only.
+    Failures are reduced to their exception type so credentials and connection
+    details cannot enter logs or a durable recommendation.
+    """
+
+    try:
+        eng = get_engine()
+        q = text(
+            "SELECT real_sports_player_id, captured_at FROM job1_enrichment WHERE slate_date = :sd"
+        )
+        with eng.connect() as conn:
+            rows = conn.execute(q, {"sd": slate_date})
+            captured = {
+                int(row._mapping["real_sports_player_id"]): row._mapping.get("captured_at")
+                for row in rows
+            }
+        return captured, None
+    except Exception as exc:
+        error_type = type(exc).__name__
+        log.warning("source_assurance_capture_read_failed", error_type=error_type)
+        return {}, error_type
+
+
 def _load_prior_real_scores(slate_date: str) -> dict[int, list[float]]:
     """As-of per-player realized real_scores from slate_labels for all slates
     STRICTLY BEFORE `slate_date`, most-recent-first. Drives per-player

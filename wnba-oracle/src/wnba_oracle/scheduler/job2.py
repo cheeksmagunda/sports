@@ -18,6 +18,7 @@ Pipeline:
 from __future__ import annotations
 
 import datetime as dt
+import json
 from dataclasses import dataclass
 
 import numpy as np
@@ -156,6 +157,7 @@ from wnba_oracle.scheduler.job2_freeze import (  # noqa: E402
 )
 from wnba_oracle.scheduler.job2_io import (  # noqa: E402
     SLATE_LOCK_Q,
+    _load_assurance_capture_times,
     _load_enrichment,
     _load_measured_drafts,
     _load_player_history,
@@ -201,6 +203,7 @@ __all__ = [
     "_in_pre_freeze_window",
     "_is_out_from_features",
     "_late_refreeze_allowed",
+    "_load_assurance_capture_times",
     "_load_enrichment",
     "_load_measured_drafts",
     "_load_model_artifact",
@@ -412,18 +415,34 @@ def _build_specs(
     return samps, fields, projection_by_pid
 
 
-def _record_serving_schema_findings(slate_date: str, enrichment: list[dict]) -> None:
-    """Persist warn-only serving-boundary findings without blocking a freeze."""
+def _record_serving_schema_findings(
+    slate_date: str,
+    enrichment: list[dict],
+) -> tuple[list[str], str | None]:
+    """Persist warn-only findings and return their safe assurance summary."""
     try:
         from wnba_oracle.features.serving_schema import validate_enrichment
-        from wnba_oracle.scheduler.watchdog import (
-            SEVERITY_WARN,
-            WatchdogEvent,
-            persist_events,
-        )
 
-        findings = validate_enrichment(enrichment, strict=False)
-        if findings:
+        findings = list(validate_enrichment(enrichment, strict=False))
+        finding_triggers: list[str] = []
+        for finding in findings:
+            trigger = finding.trigger
+            if not isinstance(trigger, str):
+                raise TypeError("serving schema finding trigger must be a string")
+            finding_triggers.append(trigger)
+    except Exception as exc:
+        error_type = type(exc).__name__
+        log.warning("serving_schema_check_failed", error_type=error_type)
+        return [], error_type
+
+    if findings:
+        try:
+            from wnba_oracle.scheduler.watchdog import (
+                SEVERITY_WARN,
+                WatchdogEvent,
+                persist_events,
+            )
+
             persist_events(
                 [
                     WatchdogEvent(
@@ -435,8 +454,75 @@ def _record_serving_schema_findings(slate_date: str, enrichment: list[dict]) -> 
                     for finding in findings
                 ]
             )
+        except Exception as exc:
+            log.warning("serving_schema_persist_failed", error_type=type(exc).__name__)
+    return finding_triggers, None
+
+
+def _safe_source_assurance(
+    enrichment: list[dict],
+    *,
+    assessed_at: dt.datetime,
+    decision_input_sha256: str,
+    decision_input_canonical_sha256: str,
+    finding_triggers: list[str],
+    assessment_error_type: str | None,
+) -> dict:
+    """Build metadata after scoring; assurance failure cannot block a freeze."""
+    try:
+        from wnba_oracle.assurance.source_quality import build_source_assurance
+
+        payload = build_source_assurance(
+            enrichment,
+            assessed_at=assessed_at,
+            decision_input_sha256=decision_input_sha256,
+            decision_input_canonical_sha256=decision_input_canonical_sha256,
+            finding_triggers=finding_triggers,
+            assessment_error_type=assessment_error_type,
+        )
+        if not isinstance(payload, dict):
+            raise TypeError("source assurance payload must be a mapping")
+        if payload.get("decision_input_sha256") != decision_input_sha256:
+            raise ValueError("source assurance decision input digest mismatch")
+        if payload.get("decision_input_canonical_sha256") != decision_input_canonical_sha256:
+            raise ValueError("source assurance canonical input digest mismatch")
+        json.dumps(payload, sort_keys=True, allow_nan=False)
+        return payload
     except Exception as exc:
-        log.warning("serving_schema_check_failed", reason=str(exc)[:160])
+        error_type = type(exc).__name__
+        log.warning("source_assurance_failed", error_type=error_type)
+        return {
+            "schema_version": 2,
+            "decision_input_connector_catalog_sha256": None,
+            "decision_input_connector_ids": [],
+            "assessment_status": "unknown",
+            "assessed_at_utc": assessed_at.astimezone(dt.UTC).isoformat(),
+            "decision_input_sha256": decision_input_sha256,
+            "decision_input_canonical_sha256": decision_input_canonical_sha256,
+            "error": {"type": error_type},
+        }
+
+
+def _assurance_rows_with_capture_times(
+    enrichment: list[dict],
+    capture_times: dict[int, dt.datetime | None],
+) -> list[dict]:
+    """Attach assurance-only timestamps to copies of model-ingress rows."""
+
+    rows: list[dict] = []
+    for source in enrichment:
+        row = dict(source)
+        raw_player_id = source.get("real_sports_player_id")
+        if raw_player_id is None:
+            player_id = None
+        else:
+            try:
+                player_id = int(raw_player_id)
+            except (TypeError, ValueError, OverflowError):
+                player_id = None
+        row["captured_at"] = capture_times.get(player_id) if player_id is not None else None
+        rows.append(row)
+    return rows
 
 
 def _resolve_refreeze(
@@ -531,6 +617,7 @@ def _freeze_recommendation(
     force_refreeze: bool,
     frozen_via_override: str | None,
     scoring_provenance: ScoringProvenance,
+    source_assurance: dict,
 ) -> tuple[bool, str]:
     payout_curve_payload = {
         "regime": curve.regime,
@@ -568,6 +655,7 @@ def _freeze_recommendation(
         payout_curve=payout_curve_payload,
         serving_knobs=serving_knobs_payload,
         model_provenance=scoring_provenance.to_payload(),
+        source_assurance=source_assurance,
         via=frozen_via_override,
     )
     if frozen:
@@ -688,7 +776,10 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
             now_utc=now_utc.isoformat(),
         )
         return Job2Result(sd, model_sha, None, False, "pre_freeze_window")
-    _record_serving_schema_findings(sd, enrichment_raw)
+    schema_finding_triggers, schema_assessment_error_type = _record_serving_schema_findings(
+        sd,
+        enrichment_raw,
+    )
     # Injury cascade (D55): redistribute OUT players' recent minutes to active
     # teammates BEFORE dropping the OUT players from the pool (they are the
     # donors). job1 now ships recent_minutes per player, so the full D33/D29
@@ -802,6 +893,21 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     )
     if terminal_reason is not None:
         return Job2Result(sd, model_sha, rec, False, terminal_reason)
+    capture_times, capture_assessment_error_type = _load_assurance_capture_times(sd)
+    assurance_rows = _assurance_rows_with_capture_times(enrichment_raw, capture_times)
+    assurance_finding_triggers = list(schema_finding_triggers)
+    if capture_assessment_error_type is None and any(
+        row.get("captured_at") is None for row in assurance_rows
+    ):
+        assurance_finding_triggers.append("capture_timestamp_missing")
+    source_assurance = _safe_source_assurance(
+        assurance_rows,
+        assessed_at=now_utc,
+        decision_input_sha256=scoring_provenance.enrichment_sequence_sha256,
+        decision_input_canonical_sha256=scoring_provenance.enrichment_sha256,
+        finding_triggers=assurance_finding_triggers,
+        assessment_error_type=(schema_assessment_error_type or capture_assessment_error_type),
+    )
     frozen, status = _freeze_recommendation(
         slate_date=sd,
         model_sha=model_sha,
@@ -812,6 +918,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         force_refreeze=force_refreeze,
         frozen_via_override=frozen_via_override,
         scoring_provenance=scoring_provenance,
+        source_assurance=source_assurance,
     )
     _run_shadow_evaluation(settings, sd, model_sha, enrichment)
     return Job2Result(sd, model_sha, rec, frozen, status)

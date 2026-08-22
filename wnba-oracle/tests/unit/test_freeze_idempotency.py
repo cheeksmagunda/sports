@@ -145,7 +145,7 @@ def test_same_operation_race_returns_expected_noop() -> None:
 
 
 def test_freeze_payload_includes_per_player() -> None:
-    """The JSONB lineup blob carries the per_player contract — verified by
+    """The JSONB lineup blob carries the per_player contract, verified by
     inspecting the INSERT bind params."""
     eng = _fake_engine(existing_row=False, insert_returns_row=True)
     rd = _fake_redis(lock_wins=True)
@@ -160,6 +160,10 @@ def test_freeze_payload_includes_per_player() -> None:
             "top_20",
             _proj(),
             model_provenance={"model_policy_sha256": "policy-sha"},
+            source_assurance={
+                "assessment_status": "observed",
+                "decision_input_sha256": "input-sha",
+            },
         )
     insert_call = eng.begin.return_value.__enter__.return_value.execute.call_args
     payload = insert_call.args[1]
@@ -170,6 +174,10 @@ def test_freeze_payload_includes_per_player() -> None:
     assert len(lineup["per_player"]) == 5
     assert {row["player_id"] for row in lineup["per_player"]} == {1, 2, 3, 4, 5}
     assert lineup["model_provenance"] == {"model_policy_sha256": "policy-sha"}
+    assert lineup["source_assurance"] == {
+        "assessment_status": "observed",
+        "decision_input_sha256": "input-sha",
+    }
 
 
 def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
@@ -194,6 +202,7 @@ def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
             force_refreeze=False,
             frozen_via_override=None,
             scoring_provenance=provenance,
+            source_assurance={"decision_input_sha256": provenance.enrichment_sha256},
         )
 
     assert frozen is True
@@ -206,3 +215,6 @@ def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
     assert call.kwargs["model_provenance"]["model_policy_sha256"] == policy.sha256
     assert call.kwargs["model_provenance"]["enrichment_rows"] == 0
     assert len(call.kwargs["model_provenance"]["optimizer_inputs_sha256"]) == 64
+    assert call.kwargs["source_assurance"] == {
+        "decision_input_sha256": provenance.enrichment_sha256
+    }

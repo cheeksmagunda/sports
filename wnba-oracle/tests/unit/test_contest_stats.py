@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-import httpx
+from unittest.mock import MagicMock, patch
 
+import httpx
+import pytest
+
+from wnba_oracle.ingest import contest_stats
 from wnba_oracle.ingest.contest_stats import (
     ContestLabel,
+    ContestRetryExhausted,
     ContestUnavailable,
     _parse_drafts,
     _parse_real_score,
@@ -96,6 +101,21 @@ def test_fetch_contest_stats_empty_display_name_falls_back() -> None:
     assert len(out) == 1
     assert out[0].platform_player_id == 4322873
     assert out[0].display_name == "Frieda Buhner"
+
+
+def test_fetch_contest_stats_429_exhaustion_is_not_unavailable() -> None:
+    response = httpx.Response(
+        429,
+        request=httpx.Request("GET", "https://example.test/contest/stats"),
+    )
+    with (
+        patch.object(contest_stats, "request_with_retry", return_value=response) as request,
+        patch("time.sleep"),
+        pytest.raises(ContestRetryExhausted),
+    ):
+        fetch_contest_stats(1840, _stub_headers(), MagicMock())
+
+    assert request.call_count == 4
 
 
 def test_fetch_contest_entries_parses_lineup() -> None:

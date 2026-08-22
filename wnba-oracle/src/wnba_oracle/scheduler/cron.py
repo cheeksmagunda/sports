@@ -6,11 +6,12 @@ import argparse
 import os
 import sys
 
+from oracle_core.config import MissingRequiredEnvironmentError
 from oracle_core.jobs import JobRunner, RoleMismatchError
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.logging import configure_logging, get_logger
-from wnba_oracle.common.settings import get_settings
+from wnba_oracle.common.settings import get_settings, validate_production_role
 from wnba_oracle.scheduler.job_runtime import (
     JOB_NAMES,
     PostgresJobRunHook,
@@ -39,6 +40,34 @@ def main() -> int:
         has_redis_url=bool(settings.redis_url),
         has_realsports_creds=settings.has_legacy_realsports_credentials,
     )
+
+    if settings.env == "prod" and not intended_role:
+        log.critical(
+            "cron_role_unset_abort",
+            job=args.job,
+            msg="WNBA_CRON_ROLE is required in production",
+        )
+        return 1
+    if intended_role and intended_role != args.job:
+        log.critical(
+            "cron_role_mismatch_abort",
+            expected_role=intended_role,
+            actual_job=args.job,
+            msg="WNBA_CRON_ROLE does not match the selected job",
+        )
+        return 1
+
+    try:
+        validate_production_role(settings, args.job)
+    except MissingRequiredEnvironmentError as exc:
+        log.critical(
+            "cron_required_environment_missing",
+            job=args.job,
+            role=role,
+            missing=list(exc.names),
+            msg="Required production configuration is absent",
+        )
+        return 1
 
     runner = JobRunner(
         build_job_registry(settings),

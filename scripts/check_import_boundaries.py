@@ -16,7 +16,9 @@ MODEL_KERNEL_DIRS = (
     WNBA_SOURCE / "picker",
     WNBA_SOURCE / "predict",
 )
+ASSURANCE_DIR = WNBA_SOURCE / "assurance"
 MODEL_FORBIDDEN_PREFIXES = (
+    "wnba_oracle.assurance",
     "wnba_oracle.api",
     "wnba_oracle.common.clock",
     "wnba_oracle.common.settings",
@@ -35,6 +37,21 @@ MODEL_FORBIDDEN_MODULES = {
     "sqlalchemy",
     "subprocess",
 }
+ASSURANCE_FORBIDDEN_PREFIXES = (
+    "wnba_oracle.api",
+    "wnba_oracle.common.settings",
+    "wnba_oracle.db",
+    "wnba_oracle.eval",
+    "wnba_oracle.features",
+    "wnba_oracle.ingest",
+    "wnba_oracle.modeling",
+    "wnba_oracle.picker",
+    "wnba_oracle.predict",
+    "wnba_oracle.scheduler",
+    "wnba_oracle.train",
+    "oracle_core",
+)
+ASSURANCE_FORBIDDEN_MODULES = MODEL_FORBIDDEN_MODULES
 
 
 @dataclass(frozen=True)
@@ -70,8 +87,25 @@ def _imports(path: Path) -> list[tuple[int, str]]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             imports.extend((node.lineno, alias.name) for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            imports.append((node.lineno, node.module))
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0 and node.module:
+                imports.append((node.lineno, node.module))
+                continue
+            package_parts: list[str] = []
+            parent = path.parent
+            while (parent / "__init__.py").is_file():
+                package_parts.insert(0, parent.name)
+                parent = parent.parent
+            ascents = max(node.level - 1, 0)
+            if ascents > len(package_parts):
+                continue
+            base = package_parts[: len(package_parts) - ascents]
+            if node.module:
+                imports.append((node.lineno, ".".join([*base, node.module])))
+            else:
+                imports.extend(
+                    (node.lineno, ".".join([*base, alias.name])) for alias in node.names
+                )
     return imports
 
 
@@ -118,9 +152,30 @@ def _violations() -> list[str]:
                     continue
                 relative = path.relative_to(WORKSPACE_ROOT)
                 violations.append(
-                    f"{relative}:{line}: model kernel cannot import operational module "
-                    f"{module!r}"
+                    f"{relative}:{line}: model kernel cannot import operational module {module!r}"
                 )
+
+    for path in sorted(ASSURANCE_DIR.rglob("*.py")):
+        for line, module in _imports(path):
+            top_level = module.split(".", 1)[0]
+            forbidden_prefix = next(
+                (
+                    prefix
+                    for prefix in ASSURANCE_FORBIDDEN_PREFIXES
+                    if module == prefix or module.startswith(f"{prefix}.")
+                ),
+                None,
+            )
+            if (
+                forbidden_prefix is None
+                and top_level not in ASSURANCE_FORBIDDEN_MODULES
+            ):
+                continue
+            relative = path.relative_to(WORKSPACE_ROOT)
+            violations.append(
+                f"{relative}:{line}: assurance boundary cannot import runtime or model module "
+                f"{module!r}"
+            )
     return violations
 
 

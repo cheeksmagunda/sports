@@ -67,6 +67,10 @@ class ContestUnavailable(RuntimeError):
     skip the slate, not halt the whole backfill."""
 
 
+class ContestRetryExhausted(RuntimeError):
+    """A required contest request exhausted its bounded retry budget."""
+
+
 @dataclass(frozen=True)
 class ContestLabel:
     """One per-slate per-player training label."""
@@ -179,7 +183,7 @@ def fetch_contest_stats(
         if r.status_code == 429:
             backoff_429 += 1
             if backoff_429 > 3:
-                raise ContestUnavailable(f"429 on {url} after {backoff_429} retries")
+                raise ContestRetryExhausted("contest stats rate-limit retries exhausted")
             sleep_s = min(30, 2**backoff_429)
             log.warning("contest_stats_429_backoff", contest_id=contest_id, sleep_s=sleep_s)
             _time.sleep(sleep_s)
@@ -243,7 +247,7 @@ def fetch_contest_stats(
 class LeaderboardEntry:
     """One top-N finisher's lineup for a single contest.
 
-    `lineup` is the raw 5-player payload from `additionalInfo.lineup` — each
+    `lineup` is the raw 5-player payload from `additionalInfo.lineup`; each
     player dict carries `playerId`, `multiplier` (the user's chosen
     multiplier, NOT card_boost), `value` (the realized per-slate real_score
     as a string), `score` (multiplier * value), plus display metadata. We
@@ -272,7 +276,7 @@ def fetch_contest_entries(
     """Synchronous fetch of top-20 leaderboard entries for a single contest.
 
     Returns the parsed entries (one per finisher). The platform truncates
-    to top 20 — `num_brawlers` on each entry carries the full contest
+    to top 20; `num_brawlers` on each entry carries the full contest
     entry count so consumers can reason about depth. 401 retries once via
     `refresh_headers`. 404 raises `ContestUnavailable` (skip the slate).
     Sport mismatch (cid resolved to a non-WNBA contest) raises
@@ -310,7 +314,7 @@ def fetch_contest_entries(
         if r.status_code == 429:
             backoff_429 += 1
             if backoff_429 > 3:
-                raise ContestUnavailable(f"429 on {url} after {backoff_429} retries")
+                raise ContestRetryExhausted("contest entries rate-limit retries exhausted")
             sleep_s = min(30, 2**backoff_429)
             log.warning("contest_entries_429_backoff", contest_id=contest_id, sleep_s=sleep_s)
             _time.sleep(sleep_s)

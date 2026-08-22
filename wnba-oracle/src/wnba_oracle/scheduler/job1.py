@@ -389,7 +389,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
 
     # Build the RotoWire injury index once so the per-player loop stays
     # O(n) and joins by (team, normalized_name). RotoWire is the
-    # authoritative injury signal — when present its status overrides
+    # authoritative injury signal. When present, its status overrides
     # whatever Real Sports has (Real Sports sometimes lags by hours).
     rotowire_idx = _index_rotowire(lineups)
 
@@ -564,8 +564,15 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
     try:
         lineups = fetch_lineups()
     except Exception as exc:
-        log.warning("job1_lite_lineups_failed", reason=str(exc))
-        lineups = []
+        log.warning("job1_lite_lineups_failed", error_type=type(exc).__name__)
+        return Job1Result(
+            sd,
+            0,
+            0,
+            0,
+            0,
+            degraded_reasons=("rotowire_fetch_failed",),
+        )
     if not lineups or not settings.database_url:
         log.warning("job1_lite_noop", slate_date=sd, n_lineups=len(lineups))
         return Job1Result(sd, 0, 0, len(lineups), 0)
@@ -667,8 +674,10 @@ def main() -> int:
 def main_lite() -> int:
     configure_logging("INFO")
     try:
-        run_lite(current_slate_date().isoformat())
+        result = run_lite(current_slate_date().isoformat())
     except Exception as exc:
-        log.exception("job1_lite_failed", error=str(exc))
+        log.exception("job1_lite_failed", error_type=type(exc).__name__)
+        return 1
+    if result.degraded_reasons:
         return 1
     return 0

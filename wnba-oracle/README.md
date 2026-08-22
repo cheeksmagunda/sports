@@ -57,6 +57,30 @@ capture, and enabled game-log refresh as required work. A required failure makes
 the durable job record fail. Optional shadow and cleanup failures remain visible
 as degraded substeps without falsely marking required data work complete.
 
+## Model and infrastructure isolation
+
+The model kernel owns policy, feature interpretation, prediction, sampling,
+field simulation, payout, and optimization. Static import checks keep it free of
+API, database, scheduler, provider, settings, HTTP, Redis, and assurance
+dependencies. Infrastructure may call the model through typed inputs, but the
+model cannot reach back into runtime state.
+
+Job 2 captures its incumbent enrichment rows without changing their projection
+or order, computes the recommendation, and only then creates observational
+assurance metadata from copied rows. The durable freeze records the exact
+sequence-sensitive enrichment hash, an order-independent canonical enrichment
+hash, the finalized optimizer-input hash, model policy, artifact identity, and
+serving-feature identity. Assurance failure is value-free and cannot change or
+block the model decision.
+
+`src/wnba_oracle/assurance/connectors.py` is the credential-free connector
+catalog. Its smaller decision-input subset is fingerprinted separately from
+delivery and control-plane connectors, so an API, frontend, GitHub, Railway, or
+alerting change cannot masquerade as a model-input change. Source-quality V1
+reports persisted aggregate evidence, not provider health; missing evidence is
+degraded or unknown and must not be interpreted as proof that an upstream
+service was available.
+
 ## Canonical data
 
 PostgreSQL is the durable source. Redis is a cache and coordination service.
@@ -73,6 +97,7 @@ identity resolution belongs in this application.
 
 ```text
 src/wnba_oracle/api/        WNBA routers and response contracts
+src/wnba_oracle/assurance/  Value-free connector and source-evidence manifests
 src/wnba_oracle/ingest/     WNBA provider implementations and parsers
 src/wnba_oracle/features/   Feature builders and rolling windows
 src/wnba_oracle/train/      WNBA model training and artifact CLI

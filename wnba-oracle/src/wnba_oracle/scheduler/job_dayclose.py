@@ -241,10 +241,47 @@ def _backfill_shadow_results() -> dict[str, Any]:
 def _refresh_current_game_logs() -> dict[str, Any]:
     from wnba_oracle.ingest.minutes_backfill import refresh_game_logs
 
-    season = str(current_slate_date().year)
-    n = refresh_game_logs([season])
-    log.info("dayclose_game_logs_refreshed", season=season, rows=n)
-    return {"status": "success", "season": season, "rows": n}
+    today = current_slate_date()
+    season = str(today.year)
+    # Current-year league logs should be nonempty during the broad WNBA play
+    # window. Outside that window, a new season with no games is a valid no-op.
+    active_season_expected = 5 <= today.month <= 10
+    n = refresh_game_logs([season], require_nonempty=active_season_expected)
+    log.info(
+        "dayclose_game_logs_refreshed",
+        season=season,
+        rows=n,
+        active_season_expected=active_season_expected,
+    )
+    return {
+        "status": "success",
+        "season": season,
+        "rows": n,
+        "active_season_expected": active_season_expected,
+    }
+
+
+def _ingest_historical_window(start_id: int, stop_id: int) -> dict[str, Any]:
+    rc = run_historical_backfill(
+        start_id=start_id,
+        stop_id=stop_id,
+        pause_seconds=0.5,
+        dry_run=False,
+        with_leaderboards=True,
+    )
+    if rc != 0:
+        return {
+            "status": "failed",
+            "start_id": start_id,
+            "stop_id": stop_id,
+            "source_exit_code": rc,
+        }
+    return {
+        "status": "success",
+        "start_id": start_id,
+        "stop_id": stop_id,
+        "source_exit_code": 0,
+    }
 
 
 def _run_substep(
@@ -271,7 +308,9 @@ def _run_substep(
         return
 
     outcomes[name] = outcome
-    if outcome.get("status") == "degraded":
+    if outcome.get("status") == "failed":
+        (required_failures if required else degradations).append(name)
+    elif outcome.get("status") == "degraded":
         degradations.append(name)
 
 
@@ -319,22 +358,14 @@ def run() -> JobResult:
         start_id=start_id,
         stop_id=stop_id,
     )
-    rc = run_historical_backfill(
-        start_id=start_id,
-        stop_id=stop_id,
-        pause_seconds=0.5,
-        dry_run=False,
-        with_leaderboards=True,
+    _run_substep(
+        "historical_backfill",
+        lambda: _ingest_historical_window(start_id, stop_id),
+        required=True,
+        outcomes=outcomes,
+        required_failures=required_failures,
+        degradations=degradations,
     )
-    if rc == 0:
-        outcomes["historical_backfill"] = {
-            "status": "success",
-            "start_id": start_id,
-            "stop_id": stop_id,
-        }
-    else:
-        outcomes["historical_backfill"] = {"status": "failed", "source_exit_code": rc}
-        required_failures.append("historical_backfill")
 
     # D85: audit yesterday's label coverage against the contest universe so a
     # player silently absent from slate_labels (the 2026-06-08 Loyd/Boston

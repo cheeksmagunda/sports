@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -200,6 +202,111 @@ def test_canonical_enrichment_fingerprint_ignores_adapter_order_and_json_format(
 
     assert canonical_enrichment_payload(rows) == canonical_enrichment_payload(reordered)
     assert enrichment_sequence_payload(rows) != enrichment_sequence_payload(reordered)
+
+
+def test_capture_timestamp_is_not_part_of_the_model_input_fingerprint() -> None:
+    rows = _rows()
+    timestamped = [dict(row) for row in rows]
+    timestamped[0]["captured_at"] = dt.datetime(2026, 8, 22, 20, 0, tzinfo=dt.UTC)
+    timestamped[1]["captured_at"] = "2026-08-22T20:05:00+00:00"
+
+    assert canonical_enrichment_payload(rows) == canonical_enrichment_payload(timestamped)
+    assert enrichment_sequence_payload(rows) == enrichment_sequence_payload(timestamped)
+
+
+def test_job2_assurance_failure_is_value_free_and_does_not_raise() -> None:
+    secret_message = "postgresql://user:password@example/token-value"
+    with patch(
+        "wnba_oracle.assurance.source_quality.build_source_assurance",
+        side_effect=RuntimeError(secret_message),
+    ):
+        payload = job2._safe_source_assurance(
+            _rows(),
+            assessed_at=dt.datetime(2026, 8, 22, 22, 20, tzinfo=dt.UTC),
+            decision_input_sha256="a" * 64,
+            decision_input_canonical_sha256="c" * 64,
+            finding_triggers=[],
+            assessment_error_type=None,
+        )
+
+    serialized = json.dumps(payload, sort_keys=True)
+    assert payload["assessment_status"] == "unknown"
+    assert payload["error"] == {"type": "RuntimeError"}
+    assert "password" not in serialized
+    assert "token-value" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("malformed_findings", "error_type"),
+    [
+        (None, "TypeError"),
+        ([object()], "AttributeError"),
+        ([SimpleNamespace(trigger=17)], "TypeError"),
+    ],
+)
+def test_serving_schema_contract_drift_cannot_block_job2(
+    malformed_findings: object, error_type: str
+) -> None:
+    with patch(
+        "wnba_oracle.features.serving_schema.validate_enrichment",
+        return_value=malformed_findings,
+    ):
+        triggers, assessment_error_type = job2._record_serving_schema_findings(
+            "2026-08-22",
+            _rows(),
+        )
+
+    assert triggers == []
+    assert assessment_error_type == error_type
+
+
+@pytest.mark.parametrize(
+    ("malformed_payload", "error_type"),
+    [
+        (
+            {
+                "decision_input_sha256": "a" * 64,
+                "decision_input_canonical_sha256": "c" * 64,
+                "bad": object(),
+            },
+            "TypeError",
+        ),
+        (
+            {
+                "decision_input_sha256": "b" * 64,
+                "decision_input_canonical_sha256": "c" * 64,
+            },
+            "ValueError",
+        ),
+        (
+            {
+                "decision_input_sha256": "a" * 64,
+                "decision_input_canonical_sha256": "d" * 64,
+            },
+            "ValueError",
+        ),
+    ],
+)
+def test_job2_rejects_malformed_assurance_without_blocking_freeze(
+    malformed_payload: dict[str, object], error_type: str
+) -> None:
+    with patch(
+        "wnba_oracle.assurance.source_quality.build_source_assurance",
+        return_value=malformed_payload,
+    ):
+        payload = job2._safe_source_assurance(
+            _rows(),
+            assessed_at=dt.datetime(2026, 8, 22, 22, 20, tzinfo=dt.UTC),
+            decision_input_sha256="a" * 64,
+            decision_input_canonical_sha256="c" * 64,
+            finding_triggers=[],
+            assessment_error_type=None,
+        )
+
+    assert payload["assessment_status"] == "unknown"
+    assert payload["decision_input_sha256"] == "a" * 64
+    assert payload["decision_input_canonical_sha256"] == "c" * 64
+    assert payload["error"] == {"type": error_type}
 
 
 def test_scoring_provenance_records_policy_and_input_hashes_without_activating_sort() -> None:

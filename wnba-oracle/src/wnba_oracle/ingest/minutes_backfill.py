@@ -50,6 +50,10 @@ COLS = [
 TEAM_ALIASES = {"PHO": "PHX"}
 
 
+class GameLogRefreshError(RuntimeError):
+    """At least one requested WNBA Stats season failed to fetch."""
+
+
 def _normalize_team(t: str | None) -> str:
     if not t or str(t).lower() == "nan":
         return ""
@@ -176,28 +180,60 @@ def _persist(df: pl.DataFrame) -> int:
     return n
 
 
-def refresh_game_logs(seasons: list[str], *, pause_seconds: float = 0.6) -> int:
+def refresh_game_logs(
+    seasons: list[str],
+    *,
+    pause_seconds: float = 0.6,
+    require_nonempty: bool = False,
+) -> int:
     """Fetch + upsert wnba_game_logs for the given seasons. Returns rows written.
 
-    Per-season failures are logged and skipped (partial refresh beats none).
-    The UPSERT is idempotent on (game_date, player_id), so re-running is safe.
+    A successful empty response is a valid zero-row no-op unless the caller has
+    an active-season expectation and sets ``require_nonempty``. A failed
+    upstream request is represented by ``None`` from ``_fetch_season_logs`` and
+    raises ``GameLogRefreshError`` after any successful seasons have been
+    persisted. The UPSERT is idempotent on (game_date, player_id), so retrying
+    is safe.
     """
     import pandas as pd
 
     frames = []
+    failed_seasons: list[str] = []
     for season in seasons:
         df = _fetch_season_logs(season)
-        if df is None or df.empty:
+        if df is None:
+            failed_seasons.append(season)
+            continue
+        if df.empty:
+            log.info("game_logs_season_empty", season=season)
             continue
         df = df[[c for c in COLS if c in df.columns]].copy()
         df["season"] = season
         frames.append(df)
         log.info("game_logs_season_fetched", season=season, rows=len(df))
         time.sleep(pause_seconds)
-    if not frames:
-        log.warning("game_logs_refresh_empty", seasons=seasons)
-        return 0
-    raw = pd.concat(frames, ignore_index=True)
-    n = _persist(_to_rows(raw))
-    log.info("game_logs_refreshed", rows=n, seasons=seasons)
+
+    n = 0
+    if frames:
+        raw = pd.concat(frames, ignore_index=True)
+        n = _persist(_to_rows(raw))
+
+    if failed_seasons:
+        log.error(
+            "game_logs_refresh_failed",
+            failed_seasons=failed_seasons,
+            rows_persisted=n,
+        )
+        raise GameLogRefreshError(
+            f"WNBA Stats failed for {len(failed_seasons)} requested season(s)"
+        )
+
+    if not frames and require_nonempty:
+        log.error("game_logs_refresh_unexpected_empty", seasons=seasons)
+        raise GameLogRefreshError("WNBA Stats returned no rows during the active season")
+
+    if frames:
+        log.info("game_logs_refreshed", rows=n, seasons=seasons)
+    else:
+        log.info("game_logs_refresh_empty", seasons=seasons)
     return n

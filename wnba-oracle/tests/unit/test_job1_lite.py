@@ -6,6 +6,7 @@ fields onto existing enrichment, with no Odds/props re-fetch.
 
 from __future__ import annotations
 
+import datetime as dt
 from unittest.mock import MagicMock, patch
 
 from wnba_oracle.ingest.rotowire import LineupEntry
@@ -43,6 +44,27 @@ def test_run_lite_noop_without_lineups() -> None:
     with patch.object(job1, "fetch_lineups", return_value=[]):
         res = job1.run_lite("2026-06-21")
     assert res.persisted_rows == 0
+
+
+def test_run_lite_marks_rotowire_fetch_exception_as_degraded() -> None:
+    with (
+        patch.object(job1, "get_settings", return_value=MagicMock(database_url="x")),
+        patch.object(job1, "fetch_lineups", side_effect=RuntimeError("unavailable")),
+    ):
+        res = job1.run_lite("2026-06-21")
+
+    assert res.persisted_rows == 0
+    assert res.degraded_reasons == ("rotowire_fetch_failed",)
+
+
+def test_main_lite_returns_nonzero_for_rotowire_fetch_exception() -> None:
+    with (
+        patch.object(job1, "configure_logging"),
+        patch.object(job1, "current_slate_date", return_value=dt.date(2026, 6, 21)),
+        patch.object(job1, "get_settings", return_value=MagicMock(database_url="x")),
+        patch.object(job1, "fetch_lineups", side_effect=RuntimeError("unavailable")),
+    ):
+        assert job1.main_lite() == 1
 
 
 def test_run_lite_patches_matched_existing_rows() -> None:
