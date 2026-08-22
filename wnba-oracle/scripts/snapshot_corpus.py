@@ -115,7 +115,9 @@ def main() -> int:
     with eng.connect() as conn:
         ro = conn.execute(sa.text("show transaction_read_only")).scalar()
         if str(ro).lower() != "on":
-            print(f"[fatal] read-only guard not armed (transaction_read_only={ro})", file=sys.stderr)
+            print(
+                f"[fatal] read-only guard not armed (transaction_read_only={ro})", file=sys.stderr
+            )
             return 2
 
     manifest: dict[str, object] = {

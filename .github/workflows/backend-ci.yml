@@ -10,6 +10,7 @@ on:
       - "wnba-oracle/scripts/**"
       - "wnba-oracle/migrations/**"
       - "wnba-oracle/pyproject.toml"
+      - "wnba-oracle/Makefile"
       - "wnba-oracle/README.md"
       - "wnba-oracle/alembic.ini"
       - "wnba-oracle/Dockerfile"
@@ -20,8 +21,10 @@ on:
       - ".gitleaksignore"
       - ".gitleaks.toml"
       - "scripts/check_import_boundaries.py"
+      - "Makefile"
       - "pyproject.toml"
       - "uv.lock"
+      - ".github/dependabot.yml"
       - ".github/workflows/**"
   pull_request:
     paths:
@@ -31,6 +34,7 @@ on:
       - "wnba-oracle/scripts/**"
       - "wnba-oracle/migrations/**"
       - "wnba-oracle/pyproject.toml"
+      - "wnba-oracle/Makefile"
       - "wnba-oracle/README.md"
       - "wnba-oracle/alembic.ini"
       - "wnba-oracle/Dockerfile"
@@ -41,8 +45,10 @@ on:
       - ".gitleaksignore"
       - ".gitleaks.toml"
       - "scripts/check_import_boundaries.py"
+      - "Makefile"
       - "pyproject.toml"
       - "uv.lock"
+      - ".github/dependabot.yml"
       - ".github/workflows/**"
 
 permissions:
@@ -98,59 +104,29 @@ jobs:
       - name: Install workspace
         run: uv sync --frozen --all-packages --all-extras
 
-      - name: Audit runtime dependencies
-        run: |
-          uv export --quiet --frozen --all-packages --no-dev --no-hashes \
-            --output-file "$RUNNER_TEMP/runtime-requirements.txt"
-          # Narrow reachability exceptions for the current Linux API:
-          # Arrow's affected pre-buffer API is not exposed in Python bindings.
-          # The API has no request-URL authorization, form parsing, StaticFiles,
-          # or HTTPEndpoint subclasses covered by the listed Starlette advisories.
-          uv run --package wnba-oracle pip-audit \
-            --requirement "$RUNNER_TEMP/runtime-requirements.txt" \
-            --ignore-vuln GHSA-rgxp-2hwp-jwgg \
-            --ignore-vuln GHSA-86qp-5c8j-p5mr \
-            --ignore-vuln GHSA-jp82-jpqv-5vv3 \
-            --ignore-vuln GHSA-82w8-qh3p-5jfq \
-            --ignore-vuln GHSA-wqp7-x3pw-xc5r \
-            --ignore-vuln GHSA-x746-7m8f-x49c
-
-      - name: Scan backend security issues
-        run: >-
-          uv run --package wnba-oracle bandit -q -r wnba-oracle/src
-          --severity-level medium --confidence-level medium
+      # The Makefile owns the audit command and narrow reachability exceptions.
+      # Revisit every ignore if the API begins exposing the affected Arrow or
+      # Starlette request, form, static-file, or HTTPEndpoint surfaces.
+      - name: Audit runtime dependencies and backend security
+        run: make security
 
       - name: Test oracle-core
-        run: uv run --package oracle-core python -m pytest packages/oracle-core/tests -q
+        run: make test-core
 
       - name: Test WNBA backend
-        run: uv run --package wnba-oracle python -m pytest wnba-oracle/tests -q
+        run: make test-wnba
 
-      - name: Lint oracle-core
-        working-directory: packages/oracle-core
-        run: uv run --package oracle-core ruff check src tests
+      - name: Lint backend workspace
+        run: make lint
 
-      - name: Lint WNBA backend
-        working-directory: wnba-oracle
-        run: uv run --package wnba-oracle ruff check src tests scripts
-
-      - name: Typecheck oracle-core
-        run: >-
-          uv run --package oracle-core mypy
-          --config-file packages/oracle-core/pyproject.toml
-          packages/oracle-core/src
-
-      - name: Typecheck WNBA backend
-        run: >-
-          uv run --package wnba-oracle mypy
-          --config-file wnba-oracle/pyproject.toml
-          wnba-oracle/src
+      - name: Typecheck backend workspace
+        run: make typecheck
 
       - name: Enforce package import boundaries
-        run: python scripts/check_import_boundaries.py
+        run: make check-boundaries
 
       - name: Build Python packages
-        run: uv build --all-packages
+        run: make build
 
   integration-and-container:
     needs: test-and-quality
@@ -198,17 +174,8 @@ jobs:
       - name: Install backend workspace
         run: uv sync --frozen --all-packages --all-extras
 
-      - name: Test empty and existing-schema migrations
-        run: uv run --package wnba-oracle python wnba-oracle/scripts/check_migrations.py
-
-      - name: Upgrade acceptance database
-        working-directory: wnba-oracle
-        run: uv run --package wnba-oracle alembic upgrade head
-
-      - name: Test PostgreSQL and Redis boundaries
-        run: >-
-          uv run --package wnba-oracle python -m pytest
-          wnba-oracle/tests/integration -m integration -q
+      - name: Test migrations, PostgreSQL, and Redis
+        run: make test-integration
 
       - name: Build WNBA backend image
         run: docker build -t wnba-oracle:ci -f wnba-oracle/Dockerfile .

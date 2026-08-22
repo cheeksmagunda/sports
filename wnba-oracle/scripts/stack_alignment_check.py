@@ -116,8 +116,7 @@ def main() -> int:
 
     slates = sorted(set(frozen) & set(winners))
 
-    print(f"Game-stack alignment audit -- {len(slates)} model-era slates "
-          f"(>= {MODEL_ERA_START})\n")
+    print(f"Game-stack alignment audit -- {len(slates)} model-era slates (>= {MODEL_ERA_START})\n")
     header = (
         f"{'slate':<12} {'winner stack(2+)':<22} {'our teams':<22} "
         f"{'inStack':>7} {'align':>6} {'same':>5}"
@@ -166,15 +165,15 @@ def main() -> int:
         print(
             f"\nSlates audited:                 {n_total}"
             f"\nOur lineups that held any 2+ stack: {n_we_stacked} "
-            f"({100*n_we_stacked/n_total:.0f}%)"
+            f"({100 * n_we_stacked / n_total:.0f}%)"
             f"\nALIGNED (2+ from winner stack): {n_aligned}/{n_total} "
-            f"= {100*n_aligned/n_total:.1f}%"
+            f"= {100 * n_aligned / n_total:.1f}%"
             f"\n  strict (2+ on one winner-stacked team): {n_same_team}/{n_total} "
-            f"= {100*n_same_team/n_total:.1f}%"
+            f"= {100 * n_same_team / n_total:.1f}%"
         )
         print(
             f"\nThreshold: 60%. Primary alignment is "
-            f"{'BELOW' if 100*n_aligned/n_total < 60 else 'AT/ABOVE'} threshold."
+            f"{'BELOW' if 100 * n_aligned / n_total < 60 else 'AT/ABOVE'} threshold."
         )
     else:
         print("\nNo slates with both a frozen lineup and a winning leaderboard.")

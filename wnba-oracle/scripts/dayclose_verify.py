@@ -41,7 +41,9 @@ def _public_api_checks(api_base: str, slate_date: str) -> list[Check]:
         if status == 200 and isinstance(health, dict) and health.get("status") == "ok":
             checks.append(Check("API health", "ok", "The public API returned OK."))
         else:
-            checks.append(Check("API health", "alert", f"The health endpoint returned HTTP {status}."))
+            checks.append(
+                Check("API health", "alert", f"The health endpoint returned HTTP {status}.")
+            )
     except SafeRequestError as exc:
         checks.append(Check("API health", "alert", str(exc)))
 
@@ -59,7 +61,9 @@ def _public_api_checks(api_base: str, slate_date: str) -> list[Check]:
                 )
             )
         elif status == 404:
-            checks.append(Check("Served lineup", "ok", "No frozen lineup was served for this date."))
+            checks.append(
+                Check("Served lineup", "ok", "No frozen lineup was served for this date.")
+            )
         else:
             checks.append(Check("Served lineup", "warn", f"The endpoint returned HTTP {status}."))
     except SafeRequestError as exc:
@@ -68,7 +72,9 @@ def _public_api_checks(api_base: str, slate_date: str) -> list[Check]:
     try:
         status, payload = get_json(f"{api_base}/watchdog/{slate_date}?severity_min=warn")
         if status != 200 or not isinstance(payload, dict):
-            checks.append(Check("Day-close watchdog", "alert", f"The endpoint returned HTTP {status}."))
+            checks.append(
+                Check("Day-close watchdog", "alert", f"The endpoint returned HTTP {status}.")
+            )
         else:
             events = payload.get("events")
             event_list = events if isinstance(events, list) else []
@@ -84,11 +90,17 @@ def _public_api_checks(api_base: str, slate_date: str) -> list[Check]:
                 for event in event_list
             )
             if critical:
-                checks.append(Check("Day-close watchdog", "alert", f"Triggers: {', '.join(triggers)}."))
+                checks.append(
+                    Check("Day-close watchdog", "alert", f"Triggers: {', '.join(triggers)}.")
+                )
             elif triggers:
-                checks.append(Check("Day-close watchdog", "warn", f"Advisories: {', '.join(triggers)}."))
+                checks.append(
+                    Check("Day-close watchdog", "warn", f"Advisories: {', '.join(triggers)}.")
+                )
             else:
-                checks.append(Check("Day-close watchdog", "ok", "No watchdog events were recorded."))
+                checks.append(
+                    Check("Day-close watchdog", "ok", "No watchdog events were recorded.")
+                )
     except SafeRequestError as exc:
         checks.append(Check("Day-close watchdog", "alert", str(exc)))
     return checks
@@ -125,7 +137,9 @@ def _railway_checks(
             )
         )
     else:
-        checks.append(Check("Real Sports session", "ok", "No authentication failure signature was found."))
+        checks.append(
+            Check("Real Sports session", "ok", "No authentication failure signature was found.")
+        )
 
     completed = structured_events(logs, "historical_backfill_done", window=window)
     if completed:
@@ -153,9 +167,13 @@ def _railway_checks(
     if contains_any(messages, ("dayclose_game_logs_refreshed",)):
         checks.append(Check("Game-log refresh", "ok", "The refresh completion event was present."))
     elif contains_any(messages, ("dayclose_game_logs_refresh_failed",)):
-        checks.append(Check("Game-log refresh", "warn", "The best-effort refresh reported a failure."))
+        checks.append(
+            Check("Game-log refresh", "warn", "The best-effort refresh reported a failure.")
+        )
     else:
-        checks.append(Check("Game-log refresh", "warn", "No refresh event was visible in recent logs."))
+        checks.append(
+            Check("Game-log refresh", "warn", "No refresh event was visible in recent logs.")
+        )
     return checks
 
 
@@ -204,7 +222,9 @@ def main() -> int:
             "Real Sports session recovery is operator-only and is never attempted by this workflow.",
         ],
     )
-    append_github_output(args.github_output, status=summarize_status(checks), slate_date=args.slate_date)
+    append_github_output(
+        args.github_output, status=summarize_status(checks), slate_date=args.slate_date
+    )
     return 0
 
 

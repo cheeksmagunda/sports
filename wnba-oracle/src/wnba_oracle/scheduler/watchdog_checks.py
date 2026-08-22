@@ -15,6 +15,7 @@ from pathlib import Path
 from sqlalchemy import text
 
 from wnba_oracle.common.logging import get_logger
+from wnba_oracle.common.paths import resolve_project_root
 from wnba_oracle.db.engine import get_engine
 from wnba_oracle.scheduler.watchdog import (
     SEVERITY_CRITICAL,
@@ -23,7 +24,7 @@ from wnba_oracle.scheduler.watchdog import (
     WatchdogEvent,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = resolve_project_root(__file__)
 
 log = get_logger("oracle.watchdog")
 

@@ -12,7 +12,9 @@ SCRIPTS_DIR = pathlib.Path(__file__).resolve().parents[2] / "scripts"
 
 
 def _load_monitor() -> ModuleType:
-    common_spec = importlib.util.spec_from_file_location("ops_common", SCRIPTS_DIR / "ops_common.py")
+    common_spec = importlib.util.spec_from_file_location(
+        "ops_common", SCRIPTS_DIR / "ops_common.py"
+    )
     assert common_spec is not None
     assert common_spec.loader is not None
     common = importlib.util.module_from_spec(common_spec)
@@ -108,12 +110,8 @@ def test_early_same_slate_run_does_not_mask_a_missed_scheduled_fire() -> None:
     monitor = _load_monitor()
     now = dt.datetime(2026, 8, 20, 14, tzinfo=dt.UTC)
     jobs = {
-        "dayclose": _successful_run(
-            "dayclose", dt.datetime(2026, 8, 20, 6, 5, tzinfo=dt.UTC)
-        ),
-        "job1": _successful_run(
-            "job1", dt.datetime(2026, 8, 20, 10, 5, tzinfo=dt.UTC)
-        ),
+        "dayclose": _successful_run("dayclose", dt.datetime(2026, 8, 20, 6, 5, tzinfo=dt.UTC)),
+        "job1": _successful_run("job1", dt.datetime(2026, 8, 20, 10, 5, tzinfo=dt.UTC)),
     }
 
     checks = monitor.job_deadline_checks(_payload(now, jobs), now=now)
@@ -197,9 +195,7 @@ def test_monitor_withholds_heartbeat_and_recovery_while_a_job_is_running(
             return 200, _payload(
                 now,
                 {
-                    "dayclose": _successful_run(
-                        "dayclose", now.replace(hour=6, minute=5)
-                    ),
+                    "dayclose": _successful_run("dayclose", now.replace(hour=6, minute=5)),
                     "job1": running,
                 },
             )

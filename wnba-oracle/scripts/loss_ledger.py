@@ -45,6 +45,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from sqlalchemy import text  # noqa: E402
+from sqlalchemy.engine import Engine  # noqa: E402
 
 from wnba_oracle.db.engine import get_engine  # noqa: E402
 from wnba_oracle.eval.contest_score import DEFAULT_SLOT_BASES, committed_order_score  # noqa: E402
@@ -281,6 +282,160 @@ def _apply_overlay(
 
 
 _OFF_OVERLAY = "off"
+Candidate = tuple[int, float, float, str, bool]
+
+
+def _counterfactual_inputs(
+    eng: Engine, slate_date: str
+) -> tuple[dict[int, tuple[float, float]], list[dict]]:
+    with eng.connect() as conn:
+        labels = {
+            int(r._mapping["platform_player_id"]): (
+                float(r._mapping["card_boost"] or 0.0),
+                float(r._mapping["real_score"] or 0.0),
+            )
+            for r in conn.execute(
+                text(
+                    "SELECT platform_player_id, card_boost, real_score "
+                    "FROM slate_labels WHERE slate_date = :sd AND real_score IS NOT NULL"
+                ),
+                {"sd": slate_date},
+            ).fetchall()
+        }
+        pool_rows = [
+            dict(r._mapping)
+            for r in conn.execute(
+                text(
+                    "SELECT player_id, name, team, position, card_boost, features_json "
+                    "FROM job1_enrichment WHERE slate_date = :sd"
+                ),
+                {"sd": slate_date},
+            ).fetchall()
+        ]
+    return labels, pool_rows
+
+
+def _counterfactual_candidates(
+    pool_rows: list[dict],
+    heads: dict,
+    overlay: str,
+    max_single_boost: float,
+) -> list[Candidate]:
+    candidates: list[Candidate] = []
+    for row in pool_rows:
+        pid = int(row["player_id"])
+        hp = heads.get(pid)
+        if hp is None:
+            continue
+        raw_features = row.get("features_json") or {}
+        features = (
+            raw_features
+            if isinstance(raw_features, dict)
+            else json.loads(raw_features)
+            if raw_features
+            else {}
+        )
+        if bool(int(features.get("is_out", 0) or 0)):
+            continue
+        boost = float(row.get("card_boost") or 0.0)
+        if max_single_boost > 0.0 and boost > max_single_boost:
+            continue
+        is_starter = int(features.get("is_starter", 0) or 0)
+        rotowire_confirmed = int(features.get("rotowire_confirmed", 0) or 0)
+        has_rotation = (
+            int(features.get("n_min_games", 0) or 0) >= LIVE_ANCHOR_MIN_GAMES
+            and float(features.get("recent_minutes", 0.0) or 0.0) >= LIVE_ANCHOR_MIN_MINUTES
+        )
+        is_anchor = has_rotation or (
+            (rotowire_confirmed == 1 or is_starter == 1) and is_starter == 1
+        )
+        adjusted, _ = _apply_overlay(
+            pred_p50=hp["p50"],
+            pred_p90=hp["p90"],
+            boost=boost,
+            is_starter=is_starter,
+            rotowire_confirmed=rotowire_confirmed,
+            overlay=overlay,
+            pred_p10=float(hp.get("p10", 0.0)),
+            features=features,
+        )
+        candidates.append(
+            (pid, adjusted * (MAX_SLOT_MULT + boost), boost, row.get("team") or "", is_anchor)
+        )
+    return sorted(candidates, key=lambda item: item[1], reverse=True)
+
+
+def _pick_five(candidates: list[Candidate], boost_sum_cap: float) -> list[int]:
+    chosen: list[Candidate] = []
+    team_counts: dict[str, int] = {}
+    boost_sum = 0.0
+    for candidate in candidates:
+        _, _, boost, team, _ = candidate
+        if len(chosen) == 5:
+            break
+        if team and team_counts.get(team, 0) >= LIVE_MAX_PER_TEAM:
+            continue
+        if boost_sum_cap > 0.0 and boost_sum + boost > boost_sum_cap:
+            continue
+        chosen.append(candidate)
+        boost_sum += boost
+        if team:
+            team_counts[team] = team_counts.get(team, 0) + 1
+
+    anchor_count = sum(1 for *_, is_anchor in chosen if is_anchor)
+    chosen_ids = {pid for pid, *_ in chosen}
+    for anchor in (item for item in candidates if item[0] not in chosen_ids and item[4]):
+        if anchor_count >= LIVE_ANCHOR_FLOOR:
+            break
+        for index in range(len(chosen) - 1, -1, -1):
+            _, _, dropped_boost, dropped_team, dropped_anchor = chosen[index]
+            if dropped_anchor:
+                continue
+            new_boost = boost_sum - dropped_boost + anchor[2]
+            if boost_sum_cap > 0.0 and new_boost > boost_sum_cap:
+                continue
+            next_counts = dict(team_counts)
+            if dropped_team:
+                next_counts[dropped_team] -= 1
+            if anchor[3] and next_counts.get(anchor[3], 0) >= LIVE_MAX_PER_TEAM:
+                continue
+            if anchor[3]:
+                next_counts[anchor[3]] = next_counts.get(anchor[3], 0) + 1
+            chosen[index] = anchor
+            boost_sum = new_boost
+            team_counts = next_counts
+            anchor_count += 1
+            break
+    return [pid for pid, *_ in chosen]
+
+
+def _score_counterfactual(
+    entry: SlateEntry,
+    chosen: list[int],
+    labels: dict[int, tuple[float, float]],
+) -> dict:
+    lineup = [
+        PlayerLine(
+            pid=pid,
+            name=f"pid={pid}",
+            team="",
+            position="",
+            card_boost=labels.get(pid, (0.0, 0.0))[0],
+            real_score=labels.get(pid, (0.0, 0.0))[1],
+        )
+        for pid in chosen
+    ]
+    new_score = score_lineup(lineup)
+    return {
+        "slate": entry.slate_date,
+        "old": entry.our_score,
+        "new": new_score,
+        "delta": new_score - entry.our_score,
+        "gap_before": entry.delta_vs_median if entry.delta_vs_median is not None else 0.0,
+        "gap_after": (entry.top20_median - new_score if entry.top20_median is not None else None),
+        "top20_median": entry.top20_median,
+        "chosen": chosen,
+    }
 
 
 def _run_counterfactual(
@@ -312,33 +467,7 @@ def _run_counterfactual(
     eng = get_engine()
     results: list[dict] = []
     for e in ledger:
-        # Reload the pool + labels for this slate (ledger already dropped a few
-        # fields we need here).
-        with eng.connect() as conn:
-            labels = {
-                int(r._mapping["platform_player_id"]): (
-                    float(r._mapping["card_boost"] or 0.0),
-                    float(r._mapping["real_score"] or 0.0),
-                )
-                for r in conn.execute(
-                    text(
-                        "SELECT platform_player_id, card_boost, real_score "
-                        "FROM slate_labels WHERE slate_date = :sd "
-                        "AND real_score IS NOT NULL"
-                    ),
-                    {"sd": e.slate_date},
-                ).fetchall()
-            }
-            pool_rows = [
-                dict(r._mapping)
-                for r in conn.execute(
-                    text(
-                        "SELECT player_id, name, team, position, card_boost, features_json "
-                        "FROM job1_enrichment WHERE slate_date = :sd"
-                    ),
-                    {"sd": e.slate_date},
-                ).fetchall()
-            ]
+        labels, pool_rows = _counterfactual_inputs(eng, e.slate_date)
         if not pool_rows:
             continue
         enrichment = [
@@ -358,144 +487,14 @@ def _run_counterfactual(
                 print(f"[skip] {e.slate_date}: head empty")
             continue
 
-        # Build candidate table: (pid, rank_score, boost, team, is_anchor)
-        candidates: list[tuple[int, float, float, str, bool]] = []
-        for r in pool_rows:
-            pid = int(r["player_id"])
-            hp = heads.get(pid)
-            if hp is None:
-                continue
-            fj = r.get("features_json") or {}
-            f = fj if isinstance(fj, dict) else json.loads(fj) if fj else {}
-            is_starter = int(f.get("is_starter", 0) or 0)
-            rotowire_conf = int(f.get("rotowire_confirmed", 0) or 0)
-            is_out = bool(int(f.get("is_out", 0) or 0))
-            if is_out:
-                continue
-            boost = float(r.get("card_boost") or 0.0)
-            # Max-single-boost cap: exclude players above the live picker's
-            # per-pick ceiling. Matches OptimizeConfig._exceeds_boost_cap
-            # (with the picker's "relax if infeasible" branch omitted; the
-            # counterfactual is a lower bound so we accept the tighter cap).
-            if max_single_boost > 0.0 and boost > max_single_boost:
-                continue
-            # Anchor definition mirrors job2._build_specs: an established
-            # rotation player (>= LIVE_ANCHOR_MIN_GAMES logging
-            # LIVE_ANCHOR_MIN_MINUTES) or an expected-confirmed starter.
-            recent_minutes = float(f.get("recent_minutes", 0.0) or 0.0)
-            n_min_games = int(f.get("n_min_games", 0) or 0)
-            has_rotation = (
-                n_min_games >= LIVE_ANCHOR_MIN_GAMES and recent_minutes >= LIVE_ANCHOR_MIN_MINUTES
-            )
-            is_anchor = has_rotation or (
-                (rotowire_conf == 1 or is_starter == 1) and is_starter == 1
-            )
-            adj_pred, _ = _apply_overlay(
-                pred_p50=hp["p50"],
-                pred_p90=hp["p90"],
-                boost=boost,
-                is_starter=is_starter,
-                rotowire_confirmed=rotowire_conf,
-                overlay=overlay,
-                pred_p10=float(hp.get("p10", 0.0)),
-                features=f,
-            )
-            rank_score = adj_pred * (MAX_SLOT_MULT + boost)
-            candidates.append((pid, rank_score, boost, r.get("team") or "", is_anchor))
-        candidates.sort(key=lambda t: t[1], reverse=True)
-
-        # Greedy top-5 with the live picker's guardrails (D57, D70/R2).
-        # Order of constraints:
-        #  - <= LIVE_MAX_PER_TEAM per team
-        #  - sum(card_boost) <= LIVE_BOOST_SUM_CAP
-        #  - >= LIVE_ANCHOR_FLOOR anchors in the final five
-        # The anchor floor is enforced with a second-chance pass: after
-        # greedy fills five, if the anchor count is short, swap the
-        # lowest-ranked non-anchor for the highest-ranked anchor that
-        # doesn't already violate the team/boost caps.
-        def _pick_five(cands: list[tuple[int, float, float, str, bool]]) -> list[int]:
-            chosen_local: list[tuple[int, float, float, str, bool]] = []
-            team_local: dict[str, int] = {}
-            boost_sum = 0.0
-            for pid_c, rank_c, boost_c, team_c, anchor_c in cands:
-                if len(chosen_local) == 5:
-                    break
-                if team_c and team_local.get(team_c, 0) >= LIVE_MAX_PER_TEAM:
-                    continue
-                if boost_sum_cap > 0.0 and boost_sum + boost_c > boost_sum_cap:
-                    continue
-                chosen_local.append((pid_c, rank_c, boost_c, team_c, anchor_c))
-                boost_sum += boost_c
-                if team_c:
-                    team_local[team_c] = team_local.get(team_c, 0) + 1
-            # Anchor floor: promote anchors until we hit LIVE_ANCHOR_FLOOR.
-            n_anchors = sum(1 for _, _, _, _, a in chosen_local if a)
-            if n_anchors < LIVE_ANCHOR_FLOOR:
-                remaining = [c for c in cands if c[0] not in {p for p, *_ in chosen_local}]
-                anchors_pool = [c for c in remaining if c[4]]
-                for anchor in anchors_pool:
-                    if n_anchors >= LIVE_ANCHOR_FLOOR:
-                        break
-                    # Drop the lowest-ranked non-anchor pick that would let
-                    # the anchor swap in without violating caps.
-                    for i in range(len(chosen_local) - 1, -1, -1):
-                        _, _, boost_drop, team_drop, anchor_drop = chosen_local[i]
-                        if anchor_drop:
-                            continue
-                        new_boost = boost_sum - boost_drop + anchor[2]
-                        if boost_sum_cap > 0.0 and new_boost > boost_sum_cap:
-                            continue
-                        # Team cap check after swap.
-                        team_after = dict(team_local)
-                        if team_drop:
-                            team_after[team_drop] -= 1
-                        if anchor[3]:
-                            if team_after.get(anchor[3], 0) >= LIVE_MAX_PER_TEAM:
-                                continue
-                            team_after[anchor[3]] = team_after.get(anchor[3], 0) + 1
-                        chosen_local[i] = anchor
-                        boost_sum = new_boost
-                        team_local = team_after
-                        n_anchors += 1
-                        break
-            return [pid_c for pid_c, *_ in chosen_local]
-
-        chosen = _pick_five(candidates)
+        candidates = _counterfactual_candidates(pool_rows, heads, overlay, max_single_boost)
+        chosen = _pick_five(candidates, boost_sum_cap)
         if len(chosen) < 5:
             if verbose:
                 print(f"[skip] {e.slate_date}: only {len(chosen)} eligible under caps")
             continue
 
-        # Score the new lineup.
-        new_lines: list[PlayerLine] = []
-        for pid in chosen:
-            boost_l, rs_l = labels.get(pid, (0.0, 0.0))
-            new_lines.append(
-                PlayerLine(
-                    pid=pid,
-                    name=f"pid={pid}",
-                    team="",
-                    position="",
-                    card_boost=boost_l,
-                    real_score=rs_l,
-                )
-            )
-        new_score = score_lineup(new_lines)
-        delta = new_score - e.our_score
-        gap_before = e.delta_vs_median if e.delta_vs_median is not None else 0.0
-        gap_after = (e.top20_median - new_score) if e.top20_median is not None else None
-        results.append(
-            {
-                "slate": e.slate_date,
-                "old": e.our_score,
-                "new": new_score,
-                "delta": delta,
-                "gap_before": gap_before,
-                "gap_after": gap_after,
-                "top20_median": e.top20_median,
-                "chosen": chosen,
-            }
-        )
+        results.append(_score_counterfactual(e, chosen, labels))
     return results
 
 
@@ -540,6 +539,132 @@ def _print_counterfactual(overlay: str, rows: list[dict]) -> None:
     )
 
 
+def _ledger_inputs(
+    eng: Engine, slate_date: str
+) -> tuple[dict[int, tuple[float, float]], list[dict], list]:
+    with eng.connect() as conn:
+        labels = {
+            int(row._mapping["platform_player_id"]): (
+                float(row._mapping["card_boost"] or 0.0),
+                float(row._mapping["real_score"] or 0.0),
+            )
+            for row in conn.execute(
+                text(
+                    "SELECT platform_player_id, card_boost, real_score "
+                    "FROM slate_labels WHERE slate_date = :sd AND real_score IS NOT NULL"
+                ),
+                {"sd": slate_date},
+            ).fetchall()
+        }
+        pool_rows = [
+            dict(row._mapping)
+            for row in conn.execute(
+                text(
+                    "SELECT player_id, name, team, position, card_boost, features_json "
+                    "FROM job1_enrichment WHERE slate_date = :sd"
+                ),
+                {"sd": slate_date},
+            ).fetchall()
+        ]
+        leaderboard = conn.execute(
+            text(
+                "SELECT contest_id, score FROM contest_leaderboards "
+                "WHERE slate_date = :sd ORDER BY rank ASC LIMIT 20"
+            ),
+            {"sd": slate_date},
+        ).fetchall()
+    return labels, pool_rows, leaderboard
+
+
+def _hydrate_picks(
+    pids: list[int],
+    labels: dict[int, tuple[float, float]],
+    pool_rows: list[dict],
+) -> tuple[list[PlayerLine], dict[int, PlayerLine]]:
+    pool_index = build_pool_index(pool_rows)
+    for pid, line in pool_index.items():
+        if pid in labels:
+            line.card_boost, line.real_score = labels[pid]
+
+    picks: list[PlayerLine] = []
+    for pid in pids:
+        source = pool_index.get(pid)
+        if source is None:
+            boost, real_score = labels.get(pid, (0.0, 0.0))
+            source = PlayerLine(pid, f"pid={pid}", "", "", boost, real_score)
+        elif pid in labels:
+            source.card_boost, source.real_score = labels[pid]
+        picks.append(source)
+    return picks, pool_index
+
+
+def _swap_candidates(
+    picks: list[PlayerLine], pool_index: dict[int, PlayerLine], our_score: float
+) -> list[SwapCandidate]:
+    candidates: list[SwapCandidate] = []
+    pick_ids = {pick.pid for pick in picks}
+    for slot, pick in enumerate(picks):
+        for candidate_id, candidate in pool_index.items():
+            if candidate_id in pick_ids or candidate.real_score <= 0:
+                continue
+            trial = picks.copy()
+            trial[slot] = candidate
+            gain = score_lineup(trial) - our_score
+            if gain > 0:
+                candidates.append(
+                    SwapCandidate(
+                        slot=slot,
+                        pick=pick,
+                        alt=candidate,
+                        gain=gain,
+                        category=categorize_swap(pick, candidate),
+                    )
+                )
+    return sorted(candidates, key=lambda candidate: candidate.gain, reverse=True)
+
+
+def _ledger_entry(row: object, eng: Engine, verbose: bool) -> SlateEntry | None:
+    slate_date = row.slate_date  # type: ignore[attr-defined]
+    raw_lineup = row.lineup  # type: ignore[attr-defined]
+    lineup = raw_lineup if isinstance(raw_lineup, dict) else json.loads(raw_lineup)
+    pids = [int(value) for value in (lineup.get("player_ids") or [])]
+    if len(pids) != 5:
+        if verbose:
+            print(f"[skip] {slate_date}: frozen lineup has {len(pids)} players")
+        return None
+
+    labels, pool_rows, leaderboard = _ledger_inputs(eng, slate_date)
+    if not leaderboard:
+        if verbose:
+            print(f"[skip] {slate_date}: no leaderboard rows")
+        return None
+
+    picks, pool_index = _hydrate_picks(pids, labels, pool_rows)
+    our_score = score_lineup(picks)
+    scores = [float(item._mapping["score"]) for item in leaderboard]
+    median_score = statistics.median(scores)
+    candidates = _swap_candidates(picks, pool_index, our_score)
+    missing_labels = [pid for pid in pids if pid not in labels]
+    if missing_labels and verbose:
+        print(f"[note] {slate_date}: missing labels for {missing_labels}")
+    return SlateEntry(
+        slate_date=slate_date,
+        contest_id=int(leaderboard[0]._mapping["contest_id"]),
+        model_sha=str(row.model_sha),  # type: ignore[attr-defined]
+        freeze_seq=int(row.freeze_seq),  # type: ignore[attr-defined]
+        our_picks=picks,
+        our_score=our_score,
+        top20_median=median_score,
+        top20_min=min(scores),
+        winner_score=max(scores),
+        delta_vs_median=median_score - our_score,
+        n_captured=len(scores),
+        n_pool_scored=sum(1 for player in pool_index.values() if player.real_score > 0),
+        top_swap=candidates[0] if candidates else None,
+        all_swaps_top5=candidates[:5],
+    )
+
+
 def build_ledger(limit: int, verbose: bool = False) -> list[SlateEntry]:
     eng = get_engine()
     ledger: list[SlateEntry] = []
@@ -564,159 +689,9 @@ def build_ledger(limit: int, verbose: bool = False) -> list[SlateEntry]:
         rows = conn.execute(slates_q, {"n": limit}).fetchall()
 
     for row in rows:
-        sd = row.slate_date
-        raw_lineup = row.lineup
-        lineup_dict = raw_lineup if isinstance(raw_lineup, dict) else json.loads(raw_lineup)
-        pids: list[int] = [int(x) for x in (lineup_dict.get("player_ids") or [])]
-        if len(pids) != 5:
-            if verbose:
-                print(f"[skip] {sd}: frozen lineup has {len(pids)} players")
-            continue
-
-        with eng.connect() as conn:
-            # Slate labels (realized real_score) for every player who
-            # showed up in the pool - covers our picks + swap candidates.
-            labels_q = text(
-                """
-                SELECT platform_player_id, card_boost, real_score
-                FROM slate_labels
-                WHERE slate_date = :sd AND real_score IS NOT NULL
-                """
-            )
-            labels = {
-                int(r._mapping["platform_player_id"]): (
-                    float(r._mapping["card_boost"] or 0.0),
-                    float(r._mapping["real_score"] or 0.0),
-                )
-                for r in conn.execute(labels_q, {"sd": sd}).fetchall()
-            }
-
-            # Pool at freeze from job1_enrichment.
-            pool_q = text(
-                """
-                SELECT player_id, name, team, position, card_boost, features_json
-                FROM job1_enrichment
-                WHERE slate_date = :sd
-                """
-            )
-            pool_rows = [dict(r._mapping) for r in conn.execute(pool_q, {"sd": sd}).fetchall()]
-
-            # Captured top-20 scores + contest_id.
-            lb_q = text(
-                """
-                SELECT contest_id, score
-                FROM contest_leaderboards
-                WHERE slate_date = :sd
-                ORDER BY rank ASC
-                LIMIT 20
-                """
-            )
-            lb_rows = conn.execute(lb_q, {"sd": sd}).fetchall()
-
-        if not lb_rows:
-            if verbose:
-                print(f"[skip] {sd}: no leaderboard rows")
-            continue
-
-        # Skip slates where any of our picks lacks a realized score - a
-        # gap means the pick did not play; scoring it as zero is fine as
-        # a lineup-total measurement, but our_score would understate what
-        # the lineup meant to project. Include those slates but mark them.
-        missing_labels = [pid for pid in pids if pid not in labels]
-
-        pool_index = build_pool_index(pool_rows)
-        # Fill realized real_score onto the pool index (drops pool players
-        # who don't have a slate_labels row, e.g. they didn't play or were
-        # never scored).
-        for pid, line in list(pool_index.items()):
-            if pid in labels:
-                line.card_boost = labels[pid][0]  # authoritative post-lock boost
-                line.real_score = labels[pid][1]
-
-        # Build our five PlayerLines. Fall back to synthesized lines when
-        # a pick is missing from the pool_index or from labels.
-        our_picks: list[PlayerLine] = []
-        for pid in pids:
-            src = pool_index.get(pid)
-            if src is None:
-                # Not in enrichment: fabricate a stub so the loop keeps
-                # going. Boost/real_score come from labels if present.
-                boost, rs = labels.get(pid, (0.0, 0.0))
-                src = PlayerLine(
-                    pid=pid,
-                    name=f"pid={pid}",
-                    team="",
-                    position="",
-                    card_boost=boost,
-                    real_score=rs,
-                )
-            # Enforce realized score even if we found the pool line via
-            # enrichment (the previous fill loop skipped missing labels).
-            if pid in labels:
-                src.card_boost = labels[pid][0]
-                src.real_score = labels[pid][1]
-            our_picks.append(src)
-
-        our_score = score_lineup(our_picks)
-
-        lb_scores = [float(r._mapping["score"]) for r in lb_rows]
-        contest_id = int(lb_rows[0]._mapping["contest_id"]) if lb_rows else None
-        top20_median = statistics.median(lb_scores) if lb_scores else None
-        top20_min = min(lb_scores) if lb_scores else None
-        winner_score = max(lb_scores) if lb_scores else None
-        delta = (top20_median - our_score) if top20_median is not None else None
-
-        # Swap-one exercise. For each slot, sweep every pool player with a
-        # realized score, replace that slot, recompute lineup score. Track
-        # the single best swap plus a top-5 leaderboard for the CSV.
-        n_pool_scored = sum(1 for pl in pool_index.values() if pl.real_score > 0)
-        candidates: list[SwapCandidate] = []
-        our_pids_set = {p.pid for p in our_picks}
-        for slot_idx, pick in enumerate(our_picks):
-            for cand_pid, cand in pool_index.items():
-                if cand_pid in our_pids_set:
-                    continue
-                if cand.real_score <= 0:  # didn't play or no label
-                    continue
-                trial = our_picks.copy()
-                trial[slot_idx] = cand
-                trial_score = score_lineup(trial)
-                gain = trial_score - our_score
-                if gain <= 0:
-                    continue
-                candidates.append(
-                    SwapCandidate(
-                        slot=slot_idx,
-                        pick=pick,
-                        alt=cand,
-                        gain=gain,
-                        category=categorize_swap(pick, cand),
-                    )
-                )
-
-        candidates.sort(key=lambda c: c.gain, reverse=True)
-        top_swap = candidates[0] if candidates else None
-        top5 = candidates[:5]
-
-        entry = SlateEntry(
-            slate_date=sd,
-            contest_id=contest_id,
-            model_sha=str(row.model_sha),
-            freeze_seq=int(row.freeze_seq),
-            our_picks=our_picks,
-            our_score=our_score,
-            top20_median=top20_median,
-            top20_min=top20_min,
-            winner_score=winner_score,
-            delta_vs_median=delta,
-            n_captured=len(lb_scores),
-            n_pool_scored=n_pool_scored,
-            top_swap=top_swap,
-            all_swaps_top5=top5,
-        )
-        if missing_labels and verbose:
-            print(f"[note] {sd}: missing labels for {missing_labels}")
-        ledger.append(entry)
+        entry = _ledger_entry(row, eng, verbose)
+        if entry is not None:
+            ledger.append(entry)
 
     return ledger
 

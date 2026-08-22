@@ -11,6 +11,7 @@ the nightly dayclose cron shares it (D102); this script reloads all seasons.
 
 Run: uv run python scripts/backfill_minutes.py
 """
+
 from __future__ import annotations
 
 import sys

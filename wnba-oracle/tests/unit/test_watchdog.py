@@ -386,9 +386,7 @@ def test_model_artifact_matching_sidecar_but_corrupt_pickle_is_critical(tmp_path
     (tmp_path / "picker_x_1.sha256").write_text(sha)
     (tmp_path / "picker_x_1.pkl").write_bytes(payload)
 
-    events = watchdog._check_model_artifact(
-        "2026-06-21", model_sha=sha, models_dir=tmp_path
-    )
+    events = watchdog._check_model_artifact("2026-06-21", model_sha=sha, models_dir=tmp_path)
 
     assert [event.trigger for event in events] == ["model_artifact_unresolved"]
     assert events[0].severity == watchdog.SEVERITY_CRITICAL

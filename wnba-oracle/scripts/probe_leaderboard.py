@@ -154,16 +154,14 @@ async def amain():
                     row["isFinalized"] = contest.get("isFinalized")
                     sections = data.get("draftStats") or []
                     row["n_sections"] = len(sections)
-                    row["n_players"] = sum(
-                        len(s.get("players") or []) for s in sections
-                    )
+                    row["n_players"] = sum(len(s.get("players") or []) for s in sections)
                 except Exception as exc:
                     row["parse_err"] = str(exc)
             print(
                 f"  cid={cid}  status={row['status']}  "
-                f"sport={row.get('sport','?')}  day={row.get('day','?')}  "
-                f"final={row.get('isFinalized','?')}  "
-                f"players={row.get('n_players','?')}",
+                f"sport={row.get('sport', '?')}  day={row.get('day', '?')}  "
+                f"final={row.get('isFinalized', '?')}  "
+                f"players={row.get('n_players', '?')}",
                 flush=True,
             )
             walk_results.append(row)
@@ -191,7 +189,7 @@ async def amain():
                     pass
             print(
                 f"  cid={cid}  status={row['status']}  "
-                f"sport={row.get('sport','?')}  day={row.get('day','?')}",
+                f"sport={row.get('sport', '?')}  day={row.get('day', '?')}",
                 flush=True,
             )
             coarse.append(row)

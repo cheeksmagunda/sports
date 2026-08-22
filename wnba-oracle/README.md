@@ -16,6 +16,7 @@ From the monorepo root:
 uv sync --all-packages --all-extras
 scripts/auth-check wnba-oracle --offline
 make test-wnba
+make security
 make lint
 make typecheck
 ```
@@ -51,6 +52,11 @@ backend environment variables.
 
 Exact production schedules are mutable and belong in `STATUS.md`.
 
+Day-close treats discovery, historical backfill, label coverage, placement
+capture, and enabled game-log refresh as required work. A required failure makes
+the durable job record fail. Optional shadow and cleanup failures remain visible
+as degraded substeps without falsely marking required data work complete.
+
 ## Canonical data
 
 PostgreSQL is the durable source. Redis is a cache and coordination service.
@@ -81,3 +87,11 @@ frontend/                   Separately owned Vite React application
 
 Read `AGENTS.md` for exact commands, invariants, verification, provider rules,
 and production recovery requirements.
+
+## Acceptance commands
+
+From the monorepo root, `make test-wnba` covers the default offline suite,
+`make test-integration` exercises migrations plus PostgreSQL and Redis, and
+`make test-contract` performs live provider checks. `make security` runs the
+runtime dependency audit and the medium-severity Bandit gate. CI uses the same
+targets before building the Docker image and probing all runtime roles.

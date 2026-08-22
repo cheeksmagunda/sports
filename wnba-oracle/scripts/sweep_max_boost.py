@@ -28,18 +28,16 @@ def main() -> int:
     ledger = build_ledger(limit=30)
     print(f"loaded {len(ledger)} slates from the ledger\n")
 
-    baseline = _run_counterfactual(
-        ledger, overlay=_OFF_OVERLAY, max_single_boost=CAPS[0]
-    )
+    baseline = _run_counterfactual(ledger, overlay=_OFF_OVERLAY, max_single_boost=CAPS[0])
     baseline_by_slate = {r["slate"]: r for r in baseline}
 
-    print(f"{'cap':>6}{'overlay':>14}{'n':>6}{'up_vs_base':>12}"
-          f"{'down_vs_base':>14}{'total_delta':>13}{'beat_median':>13}")
+    print(
+        f"{'cap':>6}{'overlay':>14}{'n':>6}{'up_vs_base':>12}"
+        f"{'down_vs_base':>14}{'total_delta':>13}{'beat_median':>13}"
+    )
     for cap in CAPS:
         for overlay in (_OFF_OVERLAY, "starter-fade"):
-            rows = _run_counterfactual(
-                ledger, overlay=overlay, max_single_boost=cap
-            )
+            rows = _run_counterfactual(ledger, overlay=overlay, max_single_boost=cap)
             n_up = n_down = n_beat = 0
             total = 0.0
             for r in rows:

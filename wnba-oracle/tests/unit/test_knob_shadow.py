@@ -30,9 +30,14 @@ def test_overlay_sha_carries_prefix() -> None:
 def test_starter_unknown_fade_reduces_rank_for_unknowns() -> None:
     # Unknown: is_starter=0 & rotowire_confirmed=0.
     features = {"is_starter": 0, "rotowire_confirmed": 0}
-    baseline = _apply_knob_overlay({"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=1.0, features=features, overlay={})
+    baseline = _apply_knob_overlay(
+        {"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=1.0, features=features, overlay={}
+    )
     faded = _apply_knob_overlay(
-        {"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=1.0, features=features, overlay={"starter_unknown_fade": 0.75}
+        {"p10": 1.0, "p50": 2.0, "p90": 4.0},
+        boost=1.0,
+        features=features,
+        overlay={"starter_unknown_fade": 0.75},
     )
     assert baseline == 2.0
     assert faded == 2.0 * 0.75
@@ -40,9 +45,14 @@ def test_starter_unknown_fade_reduces_rank_for_unknowns() -> None:
 
 def test_starter_unknown_fade_does_not_touch_starters() -> None:
     starter = {"is_starter": 1, "rotowire_confirmed": 1}
-    baseline = _apply_knob_overlay({"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=0.5, features=starter, overlay={})
+    baseline = _apply_knob_overlay(
+        {"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=0.5, features=starter, overlay={}
+    )
     faded = _apply_knob_overlay(
-        {"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=0.5, features=starter, overlay={"starter_unknown_fade": 0.5}
+        {"p10": 1.0, "p50": 2.0, "p90": 4.0},
+        boost=0.5,
+        features=starter,
+        overlay={"starter_unknown_fade": 0.5},
     )
     # Confirmed starter always keeps 1.10, regardless of the fade.
     assert baseline == 2.0 * 1.10
@@ -56,9 +66,15 @@ def test_boost_tail_lift_applies_only_above_threshold() -> None:
         "boost_tail_lift_threshold": 2.0,
         "boost_tail_lift_factor": 1.5,
     }
-    below = _apply_knob_overlay({"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=1.5, features=features, overlay=overlay)
-    at = _apply_knob_overlay({"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=2.0, features=features, overlay=overlay)
-    above = _apply_knob_overlay({"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=2.5, features=features, overlay=overlay)
+    below = _apply_knob_overlay(
+        {"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=1.5, features=features, overlay=overlay
+    )
+    at = _apply_knob_overlay(
+        {"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=2.0, features=features, overlay=overlay
+    )
+    above = _apply_knob_overlay(
+        {"p10": 1.0, "p50": 2.0, "p90": 4.0}, boost=2.5, features=features, overlay=overlay
+    )
     assert below == 2.0  # unchanged (baseline unknown mult 1.0)
     assert at == 2.0 * 1.5
     assert above == 2.0 * 1.5

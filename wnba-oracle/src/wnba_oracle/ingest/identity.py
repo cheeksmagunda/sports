@@ -19,10 +19,11 @@ from pathlib import Path
 import polars as pl
 
 from wnba_oracle.common.logging import get_logger
+from wnba_oracle.common.paths import resolve_project_root
 
 log = get_logger("oracle.ingest.identity")
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = resolve_project_root(__file__)
 OVERRIDES_PATH = REPO_ROOT / "data" / "identity_overrides.csv"
 
 

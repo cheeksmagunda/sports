@@ -17,6 +17,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -108,6 +109,28 @@ class Job1Result:
     degraded_reasons: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class _EnrichmentContext:
+    team_to_opp: dict[str, str]
+    team_to_vegas: dict[str, dict[str, float]]
+    rotowire: RotowireIndex
+    minutes: dict
+    head_features: dict
+    resolver: Any
+    team_stats: dict
+    opponent_dvp: dict[str, float]
+    props: dict
+
+
+@dataclass
+class _MergeStats:
+    rotowire_matched: int = 0
+    rotowire_out: int = 0
+    minutes_matched: int = 0
+    head_features_matched: int = 0
+    props_matched: int = 0
+
+
 def _device_uuid() -> str:
     return os.environ.get("WNBA_DEVICE_UUID", "wnba-oracle-prod-01-device")
 
@@ -134,6 +157,151 @@ def pool_sanity(rows: list[dict], *, min_pool: int, min_teams: int) -> list[str]
     if n_teams < min_teams:
         reasons.append(f"n_teams={n_teams} below floor {min_teams}")
     return reasons
+
+
+def _build_enrichment_rows(
+    slate_date: str,
+    pool: list,
+    context: _EnrichmentContext,
+) -> tuple[list[dict], _MergeStats, list[str]]:
+    """Merge provider signals into the durable Job 1 row shape."""
+    rows: list[dict] = []
+    stats = _MergeStats()
+    head_feature_misses: list[str] = []
+
+    for player in pool:
+        vegas = context.team_to_vegas.get(player.team, {})
+        rotowire_entry = context.rotowire.get(player.team, player.display_name)
+        if rotowire_entry is not None:
+            stats.rotowire_matched += 1
+            rotowire_status = rotowire_entry.injury_status or ""
+            injury_status = rotowire_status or player.injury_status
+            is_starter = 1 <= rotowire_entry.starter_slot <= 5
+            starter_slot = rotowire_entry.starter_slot
+            confirmed = bool(rotowire_entry.confirmed)
+        else:
+            injury_status = player.injury_status
+            is_starter = False
+            starter_slot = 0
+            confirmed = False
+
+        is_out = is_out_status(injury_status)
+        if is_out:
+            stats.rotowire_out += 1
+        features = {
+            "primary_ranking": player.primary_ranking,
+            "injury_status": injury_status,
+            "is_out": int(is_out),
+            "is_starter": int(is_starter),
+            "starter_slot": int(starter_slot),
+            "rotowire_confirmed": int(confirmed),
+            "vegas_total": vegas.get("vegas_total", 0.0),
+            "vegas_spread": vegas.get("vegas_spread", 0.0),
+            "is_home": int(vegas.get("is_home", 0.0)),
+        }
+        minutes = lookup(
+            context.minutes,
+            display_name=player.display_name,
+            team=player.team,
+        )
+        if minutes is not None:
+            stats.minutes_matched += 1
+            features["recent_minutes"] = round(minutes.recent_minutes, 2)
+            features["per_min_rate"] = round(minutes.per_min_rate, 5)
+            features["minutes_vol"] = round(minutes.minutes_vol, 2)
+            features["n_min_games"] = minutes.n_games
+
+        head_feature = None
+        resolved_player_id: int | None = None
+        if context.resolver:
+            try:
+                resolved_player_id = context.resolver.resolve(
+                    player.platform_id,
+                    display_name=player.display_name,
+                    first_name=player.first_name,
+                    last_name=player.last_name,
+                    team=player.team,
+                )
+                if resolved_player_id is not None and isinstance(context.head_features, dict):
+                    head_feature = context.head_features.get(resolved_player_id)
+            except Exception as exc:
+                log.debug(
+                    "job1_resolver_lookup_failed",
+                    player=player.display_name,
+                    reason=str(exc)[:60],
+                )
+        if head_feature is None:
+            head_feature = head_feature_lookup(
+                context.head_features,
+                display_name=player.display_name,
+                team=player.team,
+            )
+        if head_feature is not None:
+            head_feature = dict(head_feature)
+            team_abbreviation = player.team.upper()
+            opponent_abbreviation = context.team_to_opp.get(team_abbreviation, "").upper()
+            team_metrics = context.team_stats.get(team_abbreviation, {})
+            opponent_metrics = context.team_stats.get(opponent_abbreviation, {})
+            head_feature["team_pace"] = team_metrics.get("pace", head_feature.get("team_pace", 0.0))
+            head_feature["opp_pace"] = opponent_metrics.get(
+                "pace", head_feature.get("opp_pace", 0.0)
+            )
+            head_feature["team_off_rtg"] = team_metrics.get(
+                "off_rtg", head_feature.get("team_off_rtg", 0.0)
+            )
+            head_feature["team_def_rtg"] = team_metrics.get(
+                "def_rtg", head_feature.get("team_def_rtg", 0.0)
+            )
+            head_feature["opp_off_rtg"] = opponent_metrics.get(
+                "off_rtg", head_feature.get("opp_off_rtg", 0.0)
+            )
+            head_feature["opp_def_rtg"] = opponent_metrics.get(
+                "def_rtg", head_feature.get("opp_def_rtg", 0.0)
+            )
+            if head_feature["team_pace"] and head_feature["opp_pace"]:
+                head_feature["game_pace_implied"] = (
+                    head_feature["team_pace"] + head_feature["opp_pace"]
+                ) / 2.0
+            defensive_value = context.opponent_dvp.get(opponent_abbreviation, 0.0)
+            head_feature["opp_dvp_guard"] = defensive_value
+            head_feature["opp_dvp_forward"] = defensive_value
+            head_feature["opp_dvp_center"] = defensive_value
+            features["head_features"] = head_feature
+            stats.head_features_matched += 1
+        elif resolved_player_id is not None:
+            head_feature_misses.append(
+                f"{player.display_name} ({player.team}) [no_features, pid={resolved_player_id}]"
+            )
+        else:
+            head_feature_misses.append(f"{player.display_name} ({player.team}) [unresolved]")
+
+        normalized_name = player.display_name.lower().strip()
+        for market in ("player_points", "player_rebounds", "player_assists"):
+            prop_data = context.props.get((normalized_name, market))
+            if prop_data:
+                short_name = market.replace("player_", "prop_")
+                features[f"{short_name}_line"] = prop_data["line"]
+                features[f"{short_name}_over_prob"] = prop_data["implied_over_prob"]
+                features[f"{short_name}_under_prob"] = prop_data["implied_under_prob"]
+                stats.props_matched += 1
+                break
+        if player.game_start_utc:
+            features["game_start_utc"] = player.game_start_utc
+        rows.append(
+            {
+                "slate_date": slate_date,
+                "player_id": int(player.platform_id) if player.platform_id.isdigit() else 0,
+                "real_sports_player_id": player.platform_id,
+                "name": player.display_name,
+                "team": player.team,
+                "opponent": context.team_to_opp.get(player.team, ""),
+                "position": player.position,
+                "card_boost": float(player.multiplier_bonus),
+                "features_json": json.dumps(features),
+            }
+        )
+
+    return rows, stats, head_feature_misses
 
 
 async def _do_pool_fetch(slate_date: str) -> tuple[list, list[str]]:
@@ -199,8 +367,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     except Exception as exc:
         log.warning("job1_props_failed", reason=str(exc)[:120])
         props_lookup = {}
-    n_props_matched = 0
-
     # Build opponent / team map from odds + per-game roster join. For now
     # the platform pool gives team but not opponent; use the odds map.
     # Game-script-relevant Vegas signals (total, abs(spread)) are written
@@ -226,8 +392,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     # authoritative injury signal — when present its status overrides
     # whatever Real Sports has (Real Sports sometimes lags by hours).
     rotowire_idx = _index_rotowire(lineups)
-    n_rotowire_matched = 0
-    n_rotowire_out = 0
 
     # Minutes/role features (D55): the minutes edge orthogonal to card_boost.
     # One league-wide stats.wnba.com pull, reconstruct real_score per game via
@@ -240,8 +404,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     except Exception as exc:
         log.warning("job1_minutes_failed", reason=str(exc)[:120])
         minutes_feats = {}
-    n_minutes_matched = 0
-
     # D69 / Phase 2b: build the full causal head feature row per player from
     # the canonical wnba_game_logs corpus (same source the heads trained on).
     # Persisted into features_json["head_features"] so job2 can run the D63
@@ -258,9 +420,6 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     except Exception as exc:
         log.warning("job1_head_features_failed", reason=str(exc)[:120])
         head_feats = {}
-    n_head_features_matched = 0
-    head_feature_misses: list[str] = []
-
     # D107 (#29): initialize Resolver to route identity lookups through nbaId
     # trust + override CSV instead of fragile name-string matching. Used per-player
     # to get the nba_api player_id, which is then looked up in head_feats.
@@ -292,153 +451,32 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         log.warning("job1_opp_dvp_failed", reason=str(exc)[:120])
         opp_dvp_map = {}
 
-    rows = []
-    for p in pool:
-        vegas = team_to_vegas.get(p.team, {})
-        rw_entry = rotowire_idx.get(p.team, p.display_name)
-        # Prefer RotoWire's injury status when we have a confirmed match;
-        # otherwise carry through the Real Sports value.
-        if rw_entry is not None:
-            n_rotowire_matched += 1
-            rw_status = rw_entry.injury_status or ""
-            injury_status = rw_status or p.injury_status
-            is_starter = 1 <= rw_entry.starter_slot <= 5
-            starter_slot = rw_entry.starter_slot
-            confirmed = bool(rw_entry.confirmed)
-        else:
-            injury_status = p.injury_status
-            is_starter = False
-            starter_slot = 0
-            confirmed = False
-        is_out = is_out_status(injury_status)
-        if is_out:
-            n_rotowire_out += 1
-        features = {
-            "primary_ranking": p.primary_ranking,
-            "injury_status": injury_status,
-            "is_out": int(is_out),
-            "is_starter": int(is_starter),
-            "starter_slot": int(starter_slot),
-            "rotowire_confirmed": int(confirmed),
-            "vegas_total": vegas.get("vegas_total", 0.0),
-            "vegas_spread": vegas.get("vegas_spread", 0.0),
-            "is_home": int(vegas.get("is_home", 0.0)),
-        }
-        mf = lookup(minutes_feats, display_name=p.display_name, team=p.team)
-        if mf is not None:
-            n_minutes_matched += 1
-            features["recent_minutes"] = round(mf.recent_minutes, 2)
-            features["per_min_rate"] = round(mf.per_min_rate, 5)
-            features["minutes_vol"] = round(mf.minutes_vol, 2)
-            features["n_min_games"] = mf.n_games
-        # D69 / Phase 2b: full head feature row (one nested dict under
-        # `head_features`). job2 reads this and runs the D63 quantile heads.
-        # D107 (#29): route through Resolver (nbaId trust + override CSV) first,
-        # fall back to name-based lookup.
-        hf = None
-        resolved_pid: int | None = None
-        if resolver:
-            try:
-                resolved_pid = resolver.resolve(
-                    p.platform_id,
-                    display_name=p.display_name,
-                    first_name=p.first_name,
-                    last_name=p.last_name,
-                    team=p.team,
-                )
-                if resolved_pid is not None and isinstance(head_feats, dict):
-                    hf = head_feats.get(resolved_pid)
-            except Exception as exc:
-                log.debug(
-                    "job1_resolver_lookup_failed", player=p.display_name, reason=str(exc)[:60]
-                )
-        # Fallback to name-based lookup if Resolver lookup failed
-        if hf is None:
-            hf = head_feature_lookup(head_feats, display_name=p.display_name, team=p.team)
-        if hf is not None:
-            # Copy before mutating so the shared lookup dict is not modified.
-            hf = dict(hf)
-            # D74 (R8 first-pass): inject tonight's matchup context that the
-            # rolling-feature builder cannot know (team_pace, opp_pace,
-            # opponent defensive rating, DvP). The trained heads were calibrated
-            # on real values for team_pace (nba_api via the gamelog corpus);
-            # serving with zero is a calibration leak — override with live values.
-            team_abbr = p.team.upper()
-            opp_abbr = team_to_opp.get(team_abbr, "").upper()
-            ts = team_stats.get(team_abbr, {})
-            os_ = team_stats.get(opp_abbr, {})
-            hf["team_pace"] = ts.get("pace", hf.get("team_pace", 0.0))
-            hf["opp_pace"] = os_.get("pace", hf.get("opp_pace", 0.0))
-            hf["team_off_rtg"] = ts.get("off_rtg", hf.get("team_off_rtg", 0.0))
-            hf["team_def_rtg"] = ts.get("def_rtg", hf.get("team_def_rtg", 0.0))
-            hf["opp_off_rtg"] = os_.get("off_rtg", hf.get("opp_off_rtg", 0.0))
-            hf["opp_def_rtg"] = os_.get("def_rtg", hf.get("opp_def_rtg", 0.0))
-            if hf["team_pace"] and hf["opp_pace"]:
-                hf["game_pace_implied"] = (hf["team_pace"] + hf["opp_pace"]) / 2.0
-            dvp = opp_dvp_map.get(opp_abbr, 0.0)
-            hf["opp_dvp_guard"] = dvp
-            hf["opp_dvp_forward"] = dvp
-            hf["opp_dvp_center"] = dvp
-            features["head_features"] = hf
-            n_head_features_matched += 1
-        else:
-            # D102 / D107 (#29): a head-feature miss means this player falls through
-            # to the heuristic with NO recency signal -- the silent failure that hit
-            # ramping rookies (C. Leite, D99). D107 now routes through Resolver
-            # (nbaId trust + override CSV) to reduce false misses; genuine misses are
-            # logged as "unresolved" (Resolver could not place them) or "no_features"
-            # (resolved but no corpus row yet).
-            if resolved_pid is not None:
-                head_feature_misses.append(
-                    f"{p.display_name} ({p.team}) [no_features, pid={resolved_pid}]"
-                )
-            else:
-                head_feature_misses.append(f"{p.display_name} ({p.team}) [unresolved]")
-        # D74: player prop lines as projection cross-check signals.
-        # Stored under features_json keys for future training; job2 can read
-        # these as a calibration signal (if prop_pts_line > p50 projection,
-        # the market thinks we are under-projecting). Not yet used in the
-        # optimizer objective — stored for corpus enrichment only.
-        norm_name = p.display_name.lower().strip()
-        for market in ("player_points", "player_rebounds", "player_assists"):
-            prop_data = props_lookup.get((norm_name, market))
-            if prop_data:
-                short = market.replace("player_", "prop_")
-                features[f"{short}_line"] = prop_data["line"]
-                features[f"{short}_over_prob"] = prop_data["implied_over_prob"]
-                features[f"{short}_under_prob"] = prop_data["implied_under_prob"]
-                n_props_matched += 1
-                break  # count once per player
-        # Tip time of this player's game (D109). job2 reads it to scope the
-        # pool to games that have not started when POOL_EXCLUDE_STARTED_GAMES
-        # is on. Absent when the platform payload carried no dateTime.
-        if p.game_start_utc:
-            features["game_start_utc"] = p.game_start_utc
-        rows.append(
-            {
-                "slate_date": sd,
-                "player_id": int(p.platform_id) if p.platform_id.isdigit() else 0,
-                "real_sports_player_id": p.platform_id,
-                "name": p.display_name,
-                "team": p.team,
-                "opponent": team_to_opp.get(p.team, ""),
-                "position": p.position,
-                "card_boost": float(p.multiplier_bonus),
-                "features_json": json.dumps(features),
-            }
-        )
-
+    rows, merge_stats, head_feature_misses = _build_enrichment_rows(
+        sd,
+        pool,
+        _EnrichmentContext(
+            team_to_opp=team_to_opp,
+            team_to_vegas=team_to_vegas,
+            rotowire=rotowire_idx,
+            minutes=minutes_feats,
+            head_features=head_feats,
+            resolver=resolver,
+            team_stats=team_stats,
+            opponent_dvp=opp_dvp_map,
+            props=props_lookup,
+        ),
+    )
     log.info(
         "job1_rotowire_merged",
         n_pool=len(pool),
         n_rotowire=len(lineups),
-        n_matched=n_rotowire_matched,
-        n_out=n_rotowire_out,
-        n_minutes_matched=n_minutes_matched,
-        n_head_features_matched=n_head_features_matched,
+        n_matched=merge_stats.rotowire_matched,
+        n_out=merge_stats.rotowire_out,
+        n_minutes_matched=merge_stats.minutes_matched,
+        n_head_features_matched=merge_stats.head_features_matched,
         n_team_stats=len(team_stats),
         n_opp_dvp=len(opp_dvp_map),
-        n_props_matched=n_props_matched,
+        n_props_matched=merge_stats.props_matched,
     )
     # D102 (#29): surface head-feature resolution misses. A high miss rate on a
     # full pool means the (initial, last, team) identity join is failing for a

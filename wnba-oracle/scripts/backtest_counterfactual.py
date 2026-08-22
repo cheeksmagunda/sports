@@ -23,6 +23,7 @@ the leakage constant and are the trustworthy signal.
 
 Run: uv run python scripts/backtest_counterfactual.py
 """
+
 from __future__ import annotations
 
 import itertools
@@ -78,9 +79,7 @@ def realized_oracle(pool_rows, cap: int) -> float:
     # brute force: a player outside the top-26 by real_score*(2.0+boost)
     # cannot plausibly enter the top-5-by-ceiling lineup, and this keeps the
     # enumeration at C(26,5)=65k instead of C(37,5)=435k.
-    pool_rows = sorted(
-        pool_rows, key=lambda r: -(r["real_score"] * (2.0 + r["card_boost"]))
-    )[:26]
+    pool_rows = sorted(pool_rows, key=lambda r: -(r["real_score"] * (2.0 + r["card_boost"])))[:26]
     vals = np.array([r["real_score"] for r in pool_rows], float)
     boosts = np.array([r["card_boost"] for r in pool_rows], float)
     teams = np.array([r["team_key"] for r in pool_rows])
@@ -110,8 +109,12 @@ def run_config(slates_data, *, contrarian_strength: float, cap_mode: str):
         if len(samps) < 5:
             continue
         cfg = OptimizeConfig(
-            top_n_filter=min(18, len(samps)), n_samples=150, n_field_lineups=40,
-            seed=2026, max_per_team=2, dynamic_team_cap=(cap_mode == "dynamic"),
+            top_n_filter=min(18, len(samps)),
+            n_samples=150,
+            n_field_lineups=40,
+            seed=2026,
+            max_per_team=2,
+            dynamic_team_cap=(cap_mode == "dynamic"),
         )
         try:
             rec = optimize_lineup(samps, fields, default_curve_for_regime("top_20"), cfg=cfg)
@@ -121,11 +124,20 @@ def run_config(slates_data, *, contrarian_strength: float, cap_mode: str):
             our, our_pids = 0.0, set()
         scores = sorted(slate_lb["score"].to_list(), reverse=True)
         placement = sum(1 for s in scores if s >= our) + 1
-        win_pids = {int(p["playerId"]) for p in json.loads(slate_lb.row(0, named=True)["lineup_json"])}
-        out.append({
-            "slate": sd, "our": our, "top1": scores[0], "top20": scores[-1],
-            "placement": placement, "overlap": len(our_pids & win_pids), "n_games": n_games,
-        })
+        win_pids = {
+            int(p["playerId"]) for p in json.loads(slate_lb.row(0, named=True)["lineup_json"])
+        }
+        out.append(
+            {
+                "slate": sd,
+                "our": our,
+                "top1": scores[0],
+                "top20": scores[-1],
+                "placement": placement,
+                "overlap": len(our_pids & win_pids),
+                "n_games": n_games,
+            }
+        )
     return out
 
 
@@ -137,8 +149,10 @@ def agg(rows, label):
     gap = np.mean([r["top1"] - r["our"] for r in rows])
     ov = np.mean([r["overlap"] for r in rows])
     beat20 = np.mean([r["our"] >= r["top20"] for r in rows])
-    print(f"  {label:28s} top20={t20:2d}/{n}  top5={t5:2d}  top1={t1}  "
-          f"mean_gap={gap:5.2f}  overlap={ov:.2f}/5  beat_cashline={beat20:4.0%}")
+    print(
+        f"  {label:28s} top20={t20:2d}/{n}  top5={t5:2d}  top1={t1}  "
+        f"mean_gap={gap:5.2f}  overlap={ov:.2f}/5  beat_cashline={beat20:4.0%}"
+    )
 
 
 _HISTORY = _load_player_history()
@@ -165,18 +179,27 @@ def main() -> int:
             pid = int(r["platform_player_id"])
             boost_by[pid] = float(r["card_boost"])
             rs_by[pid] = float(r["real_score"]) if r["real_score"] is not None else 0.0
-            enrichment.append({
-                "real_sports_player_id": str(pid), "name": r["display_name"],
-                "team": r["team_key"], "opponent": team_to_opp.get(r["team_key"], "UNK"),
-                "position": "F", "card_boost": float(r["card_boost"]), "features_json": "{}",
-            })
+            enrichment.append(
+                {
+                    "real_sports_player_id": str(pid),
+                    "name": r["display_name"],
+                    "team": r["team_key"],
+                    "opponent": team_to_opp.get(r["team_key"], "UNK"),
+                    "position": "F",
+                    "card_boost": float(r["card_boost"]),
+                    "features_json": "{}",
+                }
+            )
         slates_data.append((sd, slate, slate_lb, enrichment, boost_by, rs_by, n_games))
 
     print(f"Counterfactual backtest on {len(slates_data)} 2026 slates")
     print("(absolute numbers optimistic due to EB leakage; trust the config DELTAS)\n")
 
     print("=== CONFIG SWEEP ===")
-    agg(run_config(slates_data, contrarian_strength=0.2, cap_mode="static2"), "A prod (contr=0.2, cap2)")
+    agg(
+        run_config(slates_data, contrarian_strength=0.2, cap_mode="static2"),
+        "A prod (contr=0.2, cap2)",
+    )
     agg(run_config(slates_data, contrarian_strength=0.0, cap_mode="static2"), "B contrarian OFF")
     agg(run_config(slates_data, contrarian_strength=0.2, cap_mode="dynamic"), "C dynamic cap")
     agg(run_config(slates_data, contrarian_strength=0.0, cap_mode="dynamic"), "D both fixes")
@@ -187,12 +210,16 @@ def main() -> int:
     oracle_cap2, oracle_dyn, win_scores = [], [], []
     for sd, slate, slate_lb, enrichment, boost_by, rs_by, n_games in slates_data:
         cc = ContrarianConfig(enabled=False, strength=0.0)
-        samps, fields, _ = _build_specs(enrichment, slate_date=sd, contrarian_cfg=cc, player_history=_HISTORY)
+        samps, fields, _ = _build_specs(
+            enrichment, slate_date=sd, contrarian_cfg=cc, player_history=_HISTORY
+        )
         if len(samps) < 6:
             continue
         pid = [s.player_id for s in fields]
         pred = np.array([f.pred_real_score * (2.0 + f.card_boost) for f in fields])
-        realized = np.array([rs_by.get(int(p), 0.0) * (2.0 + boost_by.get(int(p), 0.0)) for p in pid])
+        realized = np.array(
+            [rs_by.get(int(p), 0.0) * (2.0 + boost_by.get(int(p), 0.0)) for p in pid]
+        )
         boost_only = np.array([2.0 + boost_by.get(int(p), 0.0) for p in pid])
         rho = spearmanr(pred, realized).correlation
         if not np.isnan(rho):
@@ -207,18 +234,24 @@ def main() -> int:
         oracle_cap2.append(realized_oracle(pool_rows, 2) if n_games > 1 else float("nan"))
         oracle_dyn.append(realized_oracle(pool_rows, dynamic_cap(n_games)))
         win_scores.append(float(slate_lb.row(0, named=True)["score"]))
-    print(f"  mean Spearman(pred, realized)       = {np.nanmean(sps):+.3f}  "
-          f"(0 = our ranking is noise; 1 = perfect)")
+    print(
+        f"  mean Spearman(pred, realized)       = {np.nanmean(sps):+.3f}  "
+        f"(0 = our ranking is noise; 1 = perfect)"
+    )
     print(f"  our pred top-5 recovers {np.mean(recov_pred):.2f}/5 of the realized top-8 plays")
     print(f"  boost-ONLY top-5 recovers {np.mean(recov_boost):.2f}/5 of the realized top-8 plays")
     print("    (if boost-only ~= our pred, the model adds little over the boost tier)\n")
 
     print("=== CEILING: realized oracle vs actual human winner ===")
     print(f"  mean realized-oracle (dynamic cap)  = {np.nanmean(oracle_dyn):.2f}")
-    print(f"  mean realized-oracle (static cap 2) = {np.nanmean([o for o in oracle_cap2 if not np.isnan(o)]):.2f} "
-          f"(2+ game slates only)")
-    print(f"  mean actual human winner            = {np.mean(win_scores):.2f}  "
-          f"({np.mean(win_scores)/np.nanmean(oracle_dyn):.0%} of oracle)")
+    print(
+        f"  mean realized-oracle (static cap 2) = {np.nanmean([o for o in oracle_cap2 if not np.isnan(o)]):.2f} "
+        f"(2+ game slates only)"
+    )
+    print(
+        f"  mean actual human winner            = {np.mean(win_scores):.2f}  "
+        f"({np.mean(win_scores) / np.nanmean(oracle_dyn):.0%} of oracle)"
+    )
     return 0
 
 

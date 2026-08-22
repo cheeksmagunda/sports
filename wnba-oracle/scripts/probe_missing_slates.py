@@ -18,6 +18,7 @@ Strategy:
 
 Output: prints a CSV-ish summary; persists nothing.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,17 +37,31 @@ CACHE = REPO / "scraper" / "request_token_cache.json"
 
 # Game-days that have wnba_game_logs rows but no slate_labels row.
 MISSING_SLATE_DATES = {
-    "2025-09-18", "2025-09-19", "2025-09-21", "2025-09-23",
-    "2025-09-26", "2025-09-28", "2025-09-30",
-    "2025-10-03", "2025-10-05", "2025-10-08", "2025-10-10",
-    "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-29",
-    "2026-04-30", "2026-05-01", "2026-05-02", "2026-05-03",
+    "2025-09-18",
+    "2025-09-19",
+    "2025-09-21",
+    "2025-09-23",
+    "2025-09-26",
+    "2025-09-28",
+    "2025-09-30",
+    "2025-10-03",
+    "2025-10-05",
+    "2025-10-08",
+    "2025-10-10",
+    "2026-04-25",
+    "2026-04-26",
+    "2026-04-27",
+    "2026-04-29",
+    "2026-04-30",
+    "2026-05-01",
+    "2026-05-02",
+    "2026-05-03",
 }
 
 WINDOWS = [
-    (878, 1000),    # after the last confirmed 2025 reg-season slate (cid 877)
-    (1400, 1500),   # probable 2026 preseason window
-    (1500, 1755),   # gap between preseason and first confirmed 2026 slate
+    (878, 1000),  # after the last confirmed 2025 reg-season slate (cid 877)
+    (1400, 1500),  # probable 2026 preseason window
+    (1500, 1755),  # gap between preseason and first confirmed 2026 slate
 ]
 
 OUT_CSV = Path("/tmp/wnba_missing_slates_probe.csv")
@@ -75,9 +90,7 @@ async def _refresh_via_playwright() -> dict[str, str]:
     from wnba_oracle.ingest.realsports import _http_headers, capture_live_headers
 
     uuid = json.loads(CACHE.read_text())["real-device-uuid"]
-    name = json.loads(CACHE.read_text()).get(
-        "real-device-name", "wnba-oracle-prod-01"
-    )
+    name = json.loads(CACHE.read_text()).get("real-device-name", "wnba-oracle-prod-01")
     h = await capture_live_headers(uuid, name)
     return _http_headers(h)
 
@@ -113,12 +126,16 @@ async def amain() -> int:
     # Quick auth check with a known-good neighbor cid.
     with httpx.Client(timeout=15.0) as client:
         warmup = _probe_one(client, headers, 877)
-        print(f"warmup cid=877 -> status={warmup['status']} sport={warmup['sport']} day={warmup['day']}")
+        print(
+            f"warmup cid=877 -> status={warmup['status']} sport={warmup['sport']} day={warmup['day']}"
+        )
         if warmup["status"] in {"401", "EXC"}:
             print("cached headers stale; refreshing via Playwright (storage_state.json)...")
             headers = await _refresh_via_playwright()
             warmup = _probe_one(client, headers, 877)
-            print(f"post-refresh warmup cid=877 -> status={warmup['status']} sport={warmup['sport']} day={warmup['day']}")
+            print(
+                f"post-refresh warmup cid=877 -> status={warmup['status']} sport={warmup['sport']} day={warmup['day']}"
+            )
             if warmup["status"] != "200":
                 print(f"FATAL: still not authed (status={warmup['status']})", file=sys.stderr)
                 return 3
@@ -146,9 +163,11 @@ async def amain() -> int:
         w = csv.DictWriter(f, fieldnames=["cid", "status", "sport", "day", "err"])
         w.writeheader()
         w.writerows(results)
-    print(f"\nWrote {OUT_CSV}: {len(results)} probes, "
-          f"{len(hits_wnba)} wnba contests found, "
-          f"{len(hits_missing)} match a missing-slate date.")
+    print(
+        f"\nWrote {OUT_CSV}: {len(results)} probes, "
+        f"{len(hits_wnba)} wnba contests found, "
+        f"{len(hits_missing)} match a missing-slate date."
+    )
     if hits_missing:
         print("\nRecoverable missing slates:")
         for h in hits_missing:

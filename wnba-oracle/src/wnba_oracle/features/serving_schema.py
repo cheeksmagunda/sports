@@ -96,26 +96,9 @@ def _flatten_enrichment(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def validate_enrichment(
-    enrichment_rows: list[dict[str, Any]],
-    *,
-    strict: bool = False,
-) -> list[SchemaFinding]:
-    """Check the flattened enrichment for the failure modes documented
-    above. Returns a list of findings (empty when the pool is healthy).
-
-    ``strict=False`` returns findings; the caller decides what to do.
-    ``strict=True`` raises ``ValueError`` on any finding, useful for
-    tests that want a hard boundary. Rollout ships with strict=False.
-    """
-    findings: list[SchemaFinding] = []
-    if not enrichment_rows:
-        return findings
-    flat = _flatten_enrichment(enrichment_rows)
+def _structural_findings(flat: list[dict[str, Any]]) -> list[SchemaFinding]:
     n = len(flat)
-
-    # Per-row hard rejections (only structural: card_boost outside [0, 5]
-    # or unknown position are ingest bugs, not feature-degradation).
+    findings: list[SchemaFinding] = []
     bad_boost = [r for r in flat if r["card_boost"] < 0.0 or r["card_boost"] > 5.0]
     if bad_boost:
         findings.append(
@@ -128,6 +111,7 @@ def validate_enrichment(
                 },
             )
         )
+
     unknown_pos = [r for r in flat if r["position"] not in _ALLOWED_POSITIONS]
     if unknown_pos:
         findings.append(
@@ -142,98 +126,130 @@ def validate_enrichment(
                 },
             )
         )
+    return findings
 
-    # Pool-wide degeneracies. These are the 2026-07-02 signature.
+
+def _position_finding(flat: list[dict[str, Any]]) -> SchemaFinding | None:
+    n = len(flat)
     distinct_positions = {r["position"] for r in flat if r["position"]}
-    if n >= 10 and len(distinct_positions) < 2:
-        # All players collapsed to one position (or blank) -- the
-        # ingest lost the position mapping. The picker still runs but
-        # every player is effectively interchangeable at scoring time.
-        findings.append(
-            SchemaFinding(
-                trigger="schema_position_collapsed",
-                payload={
-                    "n_rows": n,
-                    "distinct_positions": sorted(distinct_positions) or ["<empty>"],
-                    "note": (
-                        "position field degenerate across the pool; ingest join "
-                        "into RotoWire / Real Sports likely lost the mapping."
-                    ),
-                },
-            )
-        )
+    if n < 10 or len(distinct_positions) >= 2:
+        return None
+    return SchemaFinding(
+        trigger="schema_position_collapsed",
+        payload={
+            "n_rows": n,
+            "distinct_positions": sorted(distinct_positions) or ["<empty>"],
+            "note": (
+                "position field degenerate across the pool; ingest join "
+                "into RotoWire / Real Sports likely lost the mapping."
+            ),
+        },
+    )
 
-    # Minutes feed presence. If <20% of the pool has recent_minutes, the
-    # minutes head goes dark and the fallback dominates.
-    with_minutes = sum(1 for r in flat if r["recent_minutes"] is not None)
-    if n >= 10 and with_minutes / n < 0.20:
-        findings.append(
-            SchemaFinding(
-                trigger="schema_minutes_feed_sparse",
-                payload={
-                    "n_rows": n,
-                    "with_minutes": with_minutes,
-                    "coverage": round(with_minutes / n, 3),
-                    "threshold": 0.20,
-                },
-            )
-        )
 
-    with_head = sum(1 for r in flat if r["head_features_present"])
-    if n >= 10 and with_head / n < 0.20:
-        findings.append(
-            SchemaFinding(
-                trigger="schema_head_features_sparse",
-                payload={
-                    "n_rows": n,
-                    "with_head": with_head,
-                    "coverage": round(with_head / n, 3),
-                    "threshold": 0.20,
-                    "note": (
-                        "Fewer than 20% of the pool has head_features; "
-                        "the Tier-0 head predict path will fall through to heuristic."
-                    ),
-                },
-            )
-        )
+def _coverage_finding(
+    flat: list[dict[str, Any]],
+    *,
+    present_key: str,
+    trigger: str,
+    count_key: str,
+    note: str | None = None,
+    truthy: bool = False,
+) -> SchemaFinding | None:
+    n = len(flat)
+    present = sum(
+        1 for row in flat if (bool(row[present_key]) if truthy else row[present_key] is not None)
+    )
+    if n < 10 or present / n >= 0.20:
+        return None
+    payload: dict[str, Any] = {
+        "n_rows": n,
+        count_key: present,
+        "coverage": round(present / n, 3),
+        "threshold": 0.20,
+    }
+    if note is not None:
+        payload["note"] = note
+    return SchemaFinding(trigger=trigger, payload=payload)
 
-    # Vegas coverage: a fully-empty odds feed is already handled by
-    # watchdog._check_feature_content. Add the middle-ground signal: rows
-    # exist AND >10% of the pool has zero vegas_total (partial odds).
-    zero_vegas = sum(1 for r in flat if r["vegas_total"] == 0.0)
-    if n >= 10 and 0.10 <= zero_vegas / n < 1.0:
-        findings.append(
-            SchemaFinding(
-                trigger="schema_vegas_partial_gap",
-                payload={
-                    "n_rows": n,
-                    "n_zero_vegas": zero_vegas,
-                    "coverage_missing": round(zero_vegas / n, 3),
-                    "threshold": 0.10,
-                    "note": "partial odds coverage; game-script tilt degraded for some players.",
-                },
-            )
-        )
 
-    # Prop probability sanity: values outside [0, 1] indicate a scrape
-    # coercion bug (prob left as a %-string). Not the [0, 1] side-quest;
-    # a hard structural check.
+def _vegas_finding(flat: list[dict[str, Any]]) -> SchemaFinding | None:
+    n = len(flat)
+    zero_vegas = sum(1 for row in flat if row["vegas_total"] == 0.0)
+    missing_ratio = zero_vegas / n
+    if n < 10 or not 0.10 <= missing_ratio < 1.0:
+        return None
+    return SchemaFinding(
+        trigger="schema_vegas_partial_gap",
+        payload={
+            "n_rows": n,
+            "n_zero_vegas": zero_vegas,
+            "coverage_missing": round(missing_ratio, 3),
+            "threshold": 0.10,
+            "note": "partial odds coverage; game-script tilt degraded for some players.",
+        },
+    )
+
+
+def _prop_probability_finding(flat: list[dict[str, Any]]) -> SchemaFinding | None:
     bad_prob = [
-        r for r in flat if r["prop_over_prob"] is not None and not 0.0 <= r["prop_over_prob"] <= 1.0
+        row
+        for row in flat
+        if row["prop_over_prob"] is not None and not 0.0 <= row["prop_over_prob"] <= 1.0
     ]
-    if bad_prob:
-        findings.append(
-            SchemaFinding(
-                trigger="schema_prop_prob_out_of_range",
-                payload={
-                    "n_rows": n,
-                    "n_bad": len(bad_prob),
-                    "sample": [
-                        {"pid": r["player_id"], "prob": r["prop_over_prob"]} for r in bad_prob[:5]
-                    ],
-                },
-            )
-        )
+    if not bad_prob:
+        return None
+    return SchemaFinding(
+        trigger="schema_prop_prob_out_of_range",
+        payload={
+            "n_rows": len(flat),
+            "n_bad": len(bad_prob),
+            "sample": [
+                {"pid": row["player_id"], "prob": row["prop_over_prob"]} for row in bad_prob[:5]
+            ],
+        },
+    )
+
+
+def validate_enrichment(
+    enrichment_rows: list[dict[str, Any]],
+    *,
+    strict: bool = False,
+) -> list[SchemaFinding]:
+    """Check the flattened enrichment for the failure modes documented
+    above. Returns a list of findings (empty when the pool is healthy).
+
+    ``strict=False`` returns findings; the caller decides what to do.
+    ``strict=True`` raises ``ValueError`` on any finding, useful for
+    tests that want a hard boundary. Rollout ships with strict=False.
+    """
+    if not enrichment_rows:
+        return []
+    flat = _flatten_enrichment(enrichment_rows)
+    findings = _structural_findings(flat)
+    optional_findings = (
+        _position_finding(flat),
+        _coverage_finding(
+            flat,
+            present_key="recent_minutes",
+            trigger="schema_minutes_feed_sparse",
+            count_key="with_minutes",
+        ),
+        _coverage_finding(
+            flat,
+            present_key="head_features_present",
+            trigger="schema_head_features_sparse",
+            count_key="with_head",
+            truthy=True,
+            note=(
+                "Fewer than 20% of the pool has head_features; "
+                "the Tier-0 head predict path will fall through to heuristic."
+            ),
+        ),
+        _vegas_finding(flat),
+        _prop_probability_finding(flat),
+    )
+    findings.extend(finding for finding in optional_findings if finding is not None)
 
     if strict and findings:
         raise ValueError(f"serving-enrichment schema failed: {[f.trigger for f in findings]}")

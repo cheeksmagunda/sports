@@ -31,16 +31,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 SLOTS = np.array([2.0, 1.8, 1.6, 1.4, 1.2])
 
 
-
 def load_corpus(year_prefix: str = "2026") -> tuple[pd.DataFrame, pd.DataFrame]:
     from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
 
-    sl = read_slate_labels().filter(
-        pl.col("slate_date").str.starts_with(year_prefix)
-    ).to_pandas()
-    lb = read_leaderboards().filter(
-        pl.col("slate_date").str.starts_with(year_prefix)
-    ).to_pandas()
+    sl = read_slate_labels().filter(pl.col("slate_date").str.starts_with(year_prefix)).to_pandas()
+    lb = read_leaderboards().filter(pl.col("slate_date").str.starts_with(year_prefix)).to_pandas()
     return sl, lb
 
 
@@ -98,30 +93,49 @@ def main() -> None:
         if lb_s.empty:
             continue
         for _, r in lb_s.iterrows():
-            lj = json.loads(r["lineup_json"]) if isinstance(r["lineup_json"], str) else r["lineup_json"]
+            lj = (
+                json.loads(r["lineup_json"])
+                if isinstance(r["lineup_json"], str)
+                else r["lineup_json"]
+            )
             tids = [p.get("teamId") for p in lj]
             _, c = np.unique([t for t in tids if t is not None], return_counts=True)
-            rows.append({"slate": sd, "games": ng, "rank": int(r["rank"]),
-                         "score": float(r["score"]), "max_stack": int(c.max())})
+            rows.append(
+                {
+                    "slate": sd,
+                    "games": ng,
+                    "rank": int(r["rank"]),
+                    "score": float(r["score"]),
+                    "max_stack": int(c.max()),
+                }
+            )
     d = pd.DataFrame(rows)
-    d["game_bucket"] = pd.cut(d["games"], [0, 1.5, 2.5, 100], labels=["1 game", "2 games", "3+ games"])
+    d["game_bucket"] = pd.cut(
+        d["games"], [0, 1.5, 2.5, 100], labels=["1 game", "2 games", "3+ games"]
+    )
 
     print("\n-- Top-20 finishers: max same-team count by slate size --")
     for gb, grp in d.groupby("game_bucket", observed=True):
         share3 = (grp["max_stack"] >= 3).mean()
-        print(f"  {gb:9s} (n={len(grp):4d} entries): mean max-stack={grp['max_stack'].mean():.2f}, "
-              f"%lineups w/ 3+ from one team={share3:5.1%}, max seen={grp['max_stack'].max()}")
+        print(
+            f"  {gb:9s} (n={len(grp):4d} entries): mean max-stack={grp['max_stack'].mean():.2f}, "
+            f"%lineups w/ 3+ from one team={share3:5.1%}, max seen={grp['max_stack'].max()}"
+        )
 
     print("\n-- WINNERS ONLY (rank==1): max same-team count by slate size --")
     w = d[d["rank"] == 1]
     for gb, grp in w.groupby("game_bucket", observed=True):
         share3 = (grp["max_stack"] >= 3).mean()
-        print(f"  {gb:9s} (n={len(grp):3d} winners): mean max-stack={grp['max_stack'].mean():.2f}, "
-              f"%winners w/ 3+ from one team={share3:5.1%}")
+        print(
+            f"  {gb:9s} (n={len(grp):3d} winners): mean max-stack={grp['max_stack'].mean():.2f}, "
+            f"%winners w/ 3+ from one team={share3:5.1%}"
+        )
 
     print("\n-- Oracle (perfect-hindsight) lineup: cost of the max_per_team=2 cap --")
-    print(f"  {'slate':12s} {'games':5s} {'oracle_cap2':>11s} {'oracle_nocap':>12s} "
-          f"{'cap_cost':>9s} {'nocap_stack':>11s} {'winner':>7s}")
+    print(
+        f"  {'slate':12s} {'games':5s} {'oracle_cap2':>11s} {'oracle_nocap':>12s} "
+        f"{'cap_cost':>9s} {'nocap_stack':>11s} {'winner':>7s}"
+    )
     cap_cost_small, cap_cost_big = [], []
     for sd in slates:
         pool = pool_by_slate[sd]
@@ -136,11 +150,17 @@ def main() -> None:
         cost = (s5 - s2) if not infeasible else s5  # full lineup forfeited
         (cap_cost_small if ng <= 2 else cap_cost_big).append(cost)
         cap2_disp = "INFEAS" if infeasible else f"{s2:.2f}"
-        print(f"  {sd:12s} {ng:5.1f} {cap2_disp:>11s} {s5:12.2f} {cost:9.2f} {stack5:11d} {win_s:7.2f}")
-    print(f"\n  Mean oracle cap-cost on <=2 game slates: {np.mean(cap_cost_small):.2f} pts "
-          f"(n={len(cap_cost_small)})")
-    print(f"  Mean oracle cap-cost on  3+ game slates: {np.mean(cap_cost_big):.2f} pts "
-          f"(n={len(cap_cost_big)})")
+        print(
+            f"  {sd:12s} {ng:5.1f} {cap2_disp:>11s} {s5:12.2f} {cost:9.2f} {stack5:11d} {win_s:7.2f}"
+        )
+    print(
+        f"\n  Mean oracle cap-cost on <=2 game slates: {np.mean(cap_cost_small):.2f} pts "
+        f"(n={len(cap_cost_small)})"
+    )
+    print(
+        f"  Mean oracle cap-cost on  3+ game slates: {np.mean(cap_cost_big):.2f} pts "
+        f"(n={len(cap_cost_big)})"
+    )
 
     # ================= Q2: CONTRARIAN =================
     print("\n" + "=" * 78)
@@ -169,7 +189,7 @@ def main() -> None:
     lo = P[P["draft_pct"] < 0.5]["real_score"]
     print(f"\n  Most-drafted 50%: mean real_score={hi.mean():.3f}  (NBA claim: LOW)")
     print(f"  Least-drafted 50%: mean real_score={lo.mean():.3f}  (NBA claim: ~24-26% HIGHER)")
-    print(f"  least/most ratio = {lo.mean()/hi.mean():.3f}x  (NBA claim ~1.25x)")
+    print(f"  least/most ratio = {lo.mean() / hi.mean():.3f}x  (NBA claim ~1.25x)")
 
     print("\n-- Are the HIGHEST realized scorers chalk or contrarian? --")
     print("  For each slate, take the 5 players with the best realized ceil_contrib")
@@ -178,8 +198,10 @@ def main() -> None:
     for _sd, grp in P.groupby("slate_date"):
         top5 = grp.nlargest(5, "ceil_contrib")
         dp.append(top5["draft_pct"].median())
-    print(f"  median draft-pct of the 5 best plays: {np.median(dp):.2f} "
-          f"(0.50=neutral, >0.5 means the best plays were MORE drafted than average)")
+    print(
+        f"  median draft-pct of the 5 best plays: {np.median(dp):.2f} "
+        f"(0.50=neutral, >0.5 means the best plays were MORE drafted than average)"
+    )
 
     # winner roster popularity
     print("\n-- What draft percentile do actual WINNERS roster? --")
@@ -200,8 +222,10 @@ def main() -> None:
         pcs = [x for x in pcs if x is not None]
         if pcs:
             wdp.append(np.mean(pcs))
-    print(f"  Mean draft-pct of winners' rostered players: {np.mean(wdp):.2f} "
-          f"(across {len(wdp)} winners; >0.5 means winners lean CHALK)")
+    print(
+        f"  Mean draft-pct of winners' rostered players: {np.mean(wdp):.2f} "
+        f"(across {len(wdp)} winners; >0.5 means winners lean CHALK)"
+    )
 
     print("\n-- The single best play each slate: how often is it a popular stud? --")
     n_chalk_best, n_total = 0, 0

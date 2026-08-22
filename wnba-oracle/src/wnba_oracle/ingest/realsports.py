@@ -133,6 +133,17 @@ class StorageStateStale(RuntimeError):
     """Storage state present but session has expired."""
 
 
+_POOL_PREFIXES = "abcdefghijklmnopqrstuvwxyz"
+_MAX_FALLBACK_QUERIES = 50
+
+
+@dataclass
+class _PoolOverlayState:
+    headers: dict[str, str]
+    rated_by_id: dict[str, float]
+    refreshed: bool = False
+
+
 def load_cached_headers() -> RequestHeaders | None:
     if not TOKEN_CACHE_PATH.exists():
         return None
@@ -453,6 +464,128 @@ async def fetch_game_start_by_player(
     return {pid: str(p.get("gameStartUtc") or "") for pid, p in union.items()}
 
 
+async def _search_pool_ratings(
+    slate_date: str,
+    query: str,
+    state: _PoolOverlayState,
+    client: httpx.AsyncClient,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None,
+) -> list[dict[str, Any]]:
+    try:
+        _status, players = await _search_with_query(slate_date, query, state.headers, client)
+        return players
+    except PlatformAuthRequired:
+        if refresh_headers is None or state.refreshed:
+            raise
+        state.headers = _http_headers(await refresh_headers())
+        state.refreshed = True
+        _status, players = await _search_with_query(slate_date, query, state.headers, client)
+        return players
+
+
+def _merge_pool_ratings(
+    players: list[dict[str, Any]],
+    rated_by_id: dict[str, float],
+    *,
+    replace: bool,
+) -> int:
+    added = 0
+    for player in players:
+        player_id = str(player.get("id", ""))
+        multiplier = player.get("multiplierBonus")
+        if not player_id or multiplier is None or (not replace and player_id in rated_by_id):
+            continue
+        try:
+            rated_by_id[player_id] = float(multiplier)
+            added += 1
+        except (TypeError, ValueError):
+            continue
+    return added
+
+
+async def _collect_prefix_ratings(
+    slate_date: str,
+    state: _PoolOverlayState,
+    client: httpx.AsyncClient,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None,
+) -> None:
+    for index, letter in enumerate(_POOL_PREFIXES):
+        if index > 0:
+            await asleep_truncated_gaussian()
+        players = await _search_pool_ratings(slate_date, letter, state, client, refresh_headers)
+        _merge_pool_ratings(players, state.rated_by_id, replace=True)
+
+
+def _fallback_query(player: dict[str, Any]) -> str:
+    last_name = str(player.get("lastName") or "").strip()
+    first_name = str(player.get("firstName") or "").strip()
+    seed = last_name or first_name
+    if not seed:
+        return ""
+    folded = _ud.normalize("NFKD", seed).encode("ascii", "ignore").decode().lower()
+    return folded[:3].strip()
+
+
+async def _collect_fallback_ratings(
+    slate_date: str,
+    union: dict[str, dict[str, Any]],
+    state: _PoolOverlayState,
+    client: httpx.AsyncClient,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None,
+) -> None:
+    unmatched = [
+        (player_id, player)
+        for player_id, player in union.items()
+        if player_id not in state.rated_by_id
+    ]
+    queried_prefixes = set(_POOL_PREFIXES)
+    queried = 0
+    added = 0
+    still_missing: list[str] = []
+
+    for player_id, player in unmatched:
+        if queried >= _MAX_FALLBACK_QUERIES:
+            still_missing.append(player_id)
+            continue
+        query = _fallback_query(player)
+        if not query or query in queried_prefixes:
+            if player_id not in state.rated_by_id:
+                still_missing.append(player_id)
+            continue
+        queried_prefixes.add(query)
+        await asleep_truncated_gaussian()
+        players = await _search_pool_ratings(slate_date, query, state, client, refresh_headers)
+        queried += 1
+        _merge_pool_ratings(players, state.rated_by_id, replace=False)
+        if player_id in state.rated_by_id:
+            added += 1
+        else:
+            still_missing.append(player_id)
+
+    log.info(
+        "fetch_pool_fallback",
+        n_unmatched_after_az=len(unmatched),
+        n_queries=queried,
+        n_added=added,
+        n_still_missing=len(still_missing),
+        cap=_MAX_FALLBACK_QUERIES,
+    )
+
+
+def _overlay_pool(
+    union: dict[str, dict[str, Any]],
+    rated_by_id: dict[str, float],
+) -> list[PlatformPlayer]:
+    overlaid: list[dict[str, Any]] = []
+    for player_id, player in union.items():
+        if player_id not in rated_by_id:
+            continue
+        row = dict(player)
+        row["multiplierBonus"] = rated_by_id[player_id]
+        overlaid.append(row)
+    return _parse_pool({"players": overlaid})
+
+
 async def fetch_pool_for_date(
     slate_date: str,
     headers: RequestHeaders,
@@ -471,115 +604,17 @@ async def fetch_pool_for_date(
     Pool membership is the intersection. A player Real Sports does not
     surface across any a..z prefix is not draftable today.
     """
-    h = _http_headers(headers)
-
-    union = await _fetch_game_rosters(slate_date, h, client, refresh_headers=refresh_headers)
-
-    # Prefix-iterated card_boost overlay
-    rated_by_id: dict[str, float] = {}
-    letters = "abcdefghijklmnopqrstuvwxyz"
-    refreshed_during_overlay = False
-    for i, letter in enumerate(letters):
-        if i > 0:
-            await asleep_truncated_gaussian()
-        try:
-            _status, players = await _search_with_query(slate_date, letter, h, client)
-        except PlatformAuthRequired:
-            if refresh_headers is not None and not refreshed_during_overlay:
-                h = _http_headers(await refresh_headers())
-                refreshed_during_overlay = True
-                _status, players = await _search_with_query(slate_date, letter, h, client)
-            else:
-                raise
-        for rp in players:
-            rid = str(rp.get("id", ""))
-            mb = rp.get("multiplierBonus")
-            if not rid or mb is None:
-                continue
-            try:
-                rated_by_id[rid] = float(mb)
-            except (TypeError, ValueError):
-                continue
-
-    # Targeted-search fallback. The single-letter prefix sweep caps results
-    # per query and misses players deep in the alphabetical ordering. Live
-    # audits showed winning-lineup picks missing from the optimizer pool, all
-    # draftable players the prefix
-    # sweep silently dropped (A. Stevens, S. Sabally, J. Jocyte, M. Akoa
-    # Makani, C. McMahon, K. Bell, ...). For each player in the per-game
-    # union not yet in rated_by_id, we query their last name (first 3
-    # chars, lowercased + ASCII-folded) as the search query and merge any
-    # multiplierBonus that comes back. Capped at MAX_FALLBACK_QUERIES per
-    # slate to bound latency.
-    MAX_FALLBACK_QUERIES = 50
-    fallback_queried = 0
-    fallback_added = 0
-    fallback_still_missing: list[str] = []
-    unmatched = [(pid, p) for pid, p in union.items() if pid not in rated_by_id]
-    queried_prefixes: set[str] = set(letters)  # don't re-query single letters
-    for pid, p in unmatched:
-        if fallback_queried >= MAX_FALLBACK_QUERIES:
-            fallback_still_missing.append(pid)
-            continue
-        last = str(p.get("lastName") or "").strip()
-        first = str(p.get("firstName") or "").strip()
-        seed = last or first
-        if not seed:
-            fallback_still_missing.append(pid)
-            continue
-        # ASCII-fold to mirror the prefix sweep's behaviour on accented
-        # names (Jocyte vs Jocyteė). 3 chars covers the common case
-        # without over-narrowing.
-        folded = _ud.normalize("NFKD", seed).encode("ascii", "ignore").decode().lower()
-        query = folded[:3].strip()
-        if not query or query in queried_prefixes:
-            if pid not in rated_by_id:
-                fallback_still_missing.append(pid)
-            continue
-        queried_prefixes.add(query)
-        await asleep_truncated_gaussian()
-        try:
-            _status, players = await _search_with_query(slate_date, query, h, client)
-        except PlatformAuthRequired:
-            if refresh_headers is not None and not refreshed_during_overlay:
-                h = _http_headers(await refresh_headers())
-                refreshed_during_overlay = True
-                _status, players = await _search_with_query(slate_date, query, h, client)
-            else:
-                raise
-        fallback_queried += 1
-        added_this_query = 0
-        for rp in players:
-            rid = str(rp.get("id", ""))
-            mb = rp.get("multiplierBonus")
-            if not rid or mb is None or rid in rated_by_id:
-                continue
-            try:
-                rated_by_id[rid] = float(mb)
-                added_this_query += 1
-            except (TypeError, ValueError):
-                continue
-        if pid in rated_by_id:
-            fallback_added += 1
-        else:
-            fallback_still_missing.append(pid)
-    log.info(
-        "fetch_pool_fallback",
-        n_unmatched_after_az=len(unmatched),
-        n_queries=fallback_queried,
-        n_added=fallback_added,
-        n_still_missing=len(fallback_still_missing),
-        cap=MAX_FALLBACK_QUERIES,
+    request_headers = _http_headers(headers)
+    union = await _fetch_game_rosters(
+        slate_date,
+        request_headers,
+        client,
+        refresh_headers=refresh_headers,
     )
-
-    overlaid: list[dict[str, Any]] = []
-    for pid, p in union.items():
-        if pid not in rated_by_id:
-            continue
-        p = dict(p)
-        p["multiplierBonus"] = rated_by_id[pid]
-        overlaid.append(p)
-    return _parse_pool({"players": overlaid})
+    state = _PoolOverlayState(headers=request_headers, rated_by_id={})
+    await _collect_prefix_ratings(slate_date, state, client, refresh_headers)
+    await _collect_fallback_ratings(slate_date, union, state, client, refresh_headers)
+    return _overlay_pool(union, state.rated_by_id)
 
 
 def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:

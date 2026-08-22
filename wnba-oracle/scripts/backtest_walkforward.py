@@ -22,6 +22,7 @@ Run:
   uv run python scripts/backtest_walkforward.py            # part 1 only
   uv run python scripts/backtest_walkforward.py --placement  # + part 2
 """
+
 from __future__ import annotations
 
 import sys
@@ -60,7 +61,9 @@ def eb_walkforward_pred(history: pd.DataFrame, pool: pd.DataFrame) -> dict[int, 
     out = {}
     for r in pool.itertuples():
         alpha = eb.player_alpha.get(int(r.player_id))
-        out[int(r.player_id)] = max(0.5, mu + alpha) if alpha is not None else boost_prior(r.card_boost)
+        out[int(r.player_id)] = (
+            max(0.5, mu + alpha) if alpha is not None else boost_prior(r.card_boost)
+        )
     return out
 
 
@@ -93,10 +96,14 @@ def predictor_quality(corpus: pd.DataFrame, slates: list[str]) -> None:
             rows[name]["recov"].append(len(pred_top5 & top8))
     print(f"  {'predictor':12s} {'mean Spearman':>14s} {'top-5 recovers of top-8':>26s}")
     for name in ("boost_only", "eb_wf"):
-        print(f"  {name:12s} {np.mean(rows[name]['rho']):>+14.3f} "
-              f"{np.mean(rows[name]['recov']):>22.2f}/5")
-    print("\n  (boost_only is the no-player-signal floor; eb_wf is the honest"
-          " version of\n   today's model.)")
+        print(
+            f"  {name:12s} {np.mean(rows[name]['rho']):>+14.3f} "
+            f"{np.mean(rows[name]['recov']):>22.2f}/5"
+        )
+    print(
+        "\n  (boost_only is the no-player-signal floor; eb_wf is the honest"
+        " version of\n   today's model.)"
+    )
 
 
 def _load_drafts_by_slate() -> dict[str, dict[int, int]]:
@@ -145,13 +152,23 @@ def run_placement(corpus: pd.DataFrame, lb: pl.DataFrame, slates: list[str]) -> 
             mu = float(np.log(max(pred + K, 1.0)))
             sigma = (
                 min(0.6, max(0.12, vol.get(pid, 1.17) / max(pred + K, 1e-6)))
-                if per_player_sigma else 0.25
+                if per_player_sigma
+                else 0.25
             )
-            samps.append(PlayerSamplingSpec(pid, str(r.team), str(opp.get(r.team, "")), mu, sigma, float(r.card_boost)))
+            samps.append(
+                PlayerSamplingSpec(
+                    pid, str(r.team), str(opp.get(r.team, "")), mu, sigma, float(r.card_boost)
+                )
+            )
             fields.append(FieldPlayerSpec(pid, pred, float(r.card_boost)))
         cfg = OptimizeConfig(
-            top_n_filter=min(18, len(samps)), n_samples=200, n_field_lineups=40,
-            seed=2026, max_per_team=2, dynamic_team_cap=True, score_offset=K,
+            top_n_filter=min(18, len(samps)),
+            n_samples=200,
+            n_field_lineups=40,
+            seed=2026,
+            max_per_team=2,
+            dynamic_team_cap=True,
+            score_offset=K,
         )
         rec = optimize_lineup(samps, fields, curve, cfg=cfg)
         rs_by = {int(r.player_id): float(r.real_score) for r in pool.itertuples()}
@@ -183,9 +200,13 @@ def run_placement(corpus: pd.DataFrame, lb: pl.DataFrame, slates: list[str]) -> 
             "eb": eb_walkforward_pred(history, pool),
         }
         for name, (pname, K, pps) in configs.items():
-            placement, our, top1, ov = build_and_score(sd, pool, prior, preds[pname], K=K, per_player_sigma=pps)
+            placement, our, top1, ov = build_and_score(
+                sd, pool, prior, preds[pname], K=K, per_player_sigma=pps
+            )
             results[name].append({"placement": placement, "our": our, "top1": top1, "overlap": ov})
-    print(f"  {'config':28s} {'top20':>6s} {'top5':>5s} {'top1':>5s} {'mean_gap':>9s} {'overlap':>8s}")
+    print(
+        f"  {'config':28s} {'top20':>6s} {'top5':>5s} {'top1':>5s} {'mean_gap':>9s} {'overlap':>8s}"
+    )
     for name, rows in results.items():
         n = len(rows)
         t20 = sum(1 for r in rows if r["placement"] <= 20)
@@ -200,8 +221,10 @@ def main() -> int:
     corpus = read_label_corpus().to_pandas()
     lb = read_leaderboards()
     slates = sorted(d for d in corpus["slate_date"].unique() if str(d).startswith("2026-"))
-    print(f"Walk-forward over {len(slates)} 2026 slates "
-          f"(history grows from {corpus['slate_date'].min()})\n")
+    print(
+        f"Walk-forward over {len(slates)} 2026 slates "
+        f"(history grows from {corpus['slate_date'].min()})\n"
+    )
     predictor_quality(corpus, slates)
 
     if "--placement" in sys.argv:

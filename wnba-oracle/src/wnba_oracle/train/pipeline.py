@@ -35,6 +35,7 @@ from oracle_core.artifacts import (
 )
 
 from wnba_oracle.common.logging import get_logger
+from wnba_oracle.common.paths import resolve_project_root
 from wnba_oracle.features.provenance import feature_module_sha
 from wnba_oracle.features.spec import (
     HEAD_SPECS,
@@ -53,7 +54,7 @@ from wnba_oracle.train.lgbm_heads import (
 
 log = get_logger("oracle.train.pipeline")
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = resolve_project_root(__file__)
 MODELS_DIR = REPO_ROOT / "models"
 CONFIG_PATH = Path(__file__).with_name("models.yaml")
 

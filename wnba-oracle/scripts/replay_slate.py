@@ -7,6 +7,7 @@ Default predictor is boost_prior (the D52 walk-forward winner); pass
 
 Usage: uv run python scripts/replay_slate.py [SLATE_DATE]   # default 2026-05-25
 """
+
 from __future__ import annotations
 
 import itertools
@@ -72,12 +73,25 @@ def build_and_pick(pool, prior, drafts, *, K, per_player_sigma, dynamic_cap):
         pid = int(r.player_id)
         pred = max(0.5, adj[pid])
         mu = float(np.log(max(pred + K, 1.0)))
-        sigma = min(0.6, max(0.12, vol.get(pid, 1.17) / max(pred + K, 1e-6))) if per_player_sigma else 0.25
-        samps.append(PlayerSamplingSpec(pid, str(r.team), str(opp.get(r.team, "")), mu, sigma, float(r.card_boost)))
+        sigma = (
+            min(0.6, max(0.12, vol.get(pid, 1.17) / max(pred + K, 1e-6)))
+            if per_player_sigma
+            else 0.25
+        )
+        samps.append(
+            PlayerSamplingSpec(
+                pid, str(r.team), str(opp.get(r.team, "")), mu, sigma, float(r.card_boost)
+            )
+        )
         fields.append(FieldPlayerSpec(pid, pred, float(r.card_boost)))
     cfg = OptimizeConfig(
-        top_n_filter=min(20, len(samps)), n_samples=4000, n_field_lineups=200,
-        seed=2026, max_per_team=2, dynamic_team_cap=dynamic_cap, score_offset=K,
+        top_n_filter=min(20, len(samps)),
+        n_samples=4000,
+        n_field_lineups=200,
+        seed=2026,
+        max_per_team=2,
+        dynamic_team_cap=dynamic_cap,
+        score_offset=K,
     )
     return optimize_lineup(samps, fields, default_curve_for_regime("top_20"), cfg=cfg)
 
@@ -92,7 +106,11 @@ def main() -> int:
 
     pool = corpus[corpus["slate_date"] == sd].drop_duplicates("player_id").reset_index(drop=True)
     prior = prior_by_player(corpus[corpus["slate_date"] < sd])
-    drafts = {int(r["platform_player_id"]): int(r["drafts"]) for r in sl.iter_rows(named=True) if r["drafts"] is not None}
+    drafts = {
+        int(r["platform_player_id"]): int(r["drafts"])
+        for r in sl.iter_rows(named=True)
+        if r["drafts"] is not None
+    }
     name_by = {int(r.player_id): r.display_name for r in pool.itertuples()}
     boost_by = {int(r.player_id): float(r.card_boost) for r in pool.itertuples()}
     rs_by = {int(r.player_id): float(r.real_score) for r in pool.itertuples()}
@@ -102,9 +120,11 @@ def main() -> int:
     win_row = lb.row(0, named=True)
     win_pids = {int(p["playerId"]) for p in json.loads(win_row["lineup_json"])}
 
-    print(f"=== {sd}  ({n_teams} teams / {n_teams//2} games, pool={len(pool)}) ===")
-    print(f"winner {win_row['user_id']}: {win_row['score']:.2f} | top-5 line {scores[4]:.2f} | "
-          f"top-20 (cash) line {scores[-1]:.2f} | oracle(dyn cap)={oracle(pool, 5 if n_teams<=2 else 3 if n_teams<=4 else 2):.2f}")
+    print(f"=== {sd}  ({n_teams} teams / {n_teams // 2} games, pool={len(pool)}) ===")
+    print(
+        f"winner {win_row['user_id']}: {win_row['score']:.2f} | top-5 line {scores[4]:.2f} | "
+        f"top-20 (cash) line {scores[-1]:.2f} | oracle(dyn cap)={oracle(pool, 5 if n_teams <= 2 else 3 if n_teams <= 4 else 2):.2f}"
+    )
     print()
 
     def show(label, rec):
@@ -113,10 +133,15 @@ def main() -> int:
         ov = len({int(p) for p in rec.player_ids} & win_pids)
         verdict = "WIN" if our > scores[0] else ("CASH(top20)" if our >= scores[-1] else "miss")
         print(f"{label}: {our:.2f}  place ~{place}  overlap {ov}/5 winner  [{verdict}]")
-        members = sorted(((p, rs_by.get(int(p), 0.0), boost_by.get(int(p), 0.0)) for p in rec.player_ids), key=lambda x: -x[1])
+        members = sorted(
+            ((p, rs_by.get(int(p), 0.0), boost_by.get(int(p), 0.0)) for p in rec.player_ids),
+            key=lambda x: -x[1],
+        )
         for i, (p, rs, b) in enumerate(members):
             star = "*" if int(p) in win_pids else " "
-            print(f"   {star}{name_by.get(int(p),p):16s} boost {b:.1f}  real {rs:.2f}  x{SLOTS[i]+b:.1f} = {(SLOTS[i]+b)*rs:5.2f}")
+            print(
+                f"   {star}{name_by.get(int(p), p):16s} boost {b:.1f}  real {rs:.2f}  x{SLOTS[i] + b:.1f} = {(SLOTS[i] + b) * rs:5.2f}"
+            )
 
     old = build_and_pick(pool, prior, drafts, K=10.0, per_player_sigma=False, dynamic_cap=False)
     new = build_and_pick(pool, prior, drafts, K=2.0, per_player_sigma=True, dynamic_cap=True)

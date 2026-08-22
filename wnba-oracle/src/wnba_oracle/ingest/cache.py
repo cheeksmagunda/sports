@@ -16,7 +16,9 @@ from typing import Any
 from oracle_core.artifacts import atomic_write_json, sha256_bytes
 from oracle_core.cache import JsonTtlCache
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+from wnba_oracle.common.paths import resolve_project_root
+
+REPO_ROOT = resolve_project_root(__file__)
 CACHE_DIR = REPO_ROOT / "data" / "raw"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _STORE_TTL_SECONDS = 30 * 24 * 3600

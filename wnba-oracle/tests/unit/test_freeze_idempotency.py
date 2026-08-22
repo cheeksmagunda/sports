@@ -15,7 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from wnba_oracle.picker.optimize import LineupRecommendation
+from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig
+from wnba_oracle.picker.payout import default_curve_for_regime
 from wnba_oracle.scheduler import job2, job2_freeze
 
 
@@ -159,3 +160,27 @@ def test_freeze_payload_includes_per_player() -> None:
     assert "per_player" in lineup
     assert len(lineup["per_player"]) == 5
     assert {row["player_id"] for row in lineup["per_player"]} == {1, 2, 3, 4, 5}
+
+
+def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
+    curve = default_curve_for_regime("top_20")
+    cfg = OptimizeConfig(n_samples=250, n_field_lineups=125, min_anchors=2)
+    with patch.object(job2, "_freeze", return_value=True) as freeze:
+        frozen, status = job2._freeze_recommendation(
+            slate_date="2026-05-27",
+            model_sha="sha",
+            recommendation=_rec(),
+            curve=curve,
+            cfg=cfg,
+            projection_by_pid=_proj(),
+            force_refreeze=False,
+            frozen_via_override=None,
+        )
+
+    assert frozen is True
+    assert status == "ok"
+    call = freeze.call_args
+    assert call.kwargs["payout_curve"]["regime"] == "top_20"
+    assert call.kwargs["serving_knobs"]["n_samples"] == 250
+    assert call.kwargs["serving_knobs"]["n_field_lineups"] == 125
+    assert call.kwargs["serving_knobs"]["min_anchors"] == 2

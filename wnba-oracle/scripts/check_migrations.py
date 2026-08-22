@@ -41,13 +41,12 @@ def _verify_head(database_url: str) -> None:
     engine = sa.create_engine(database_url)
     try:
         with engine.connect() as connection:
-            revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+            revision = connection.execute(
+                sa.text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
             tables = set(
                 connection.execute(
-                    sa.text(
-                        "SELECT tablename FROM pg_tables "
-                        "WHERE schemaname = 'public'"
-                    )
+                    sa.text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
                 ).scalars()
             )
         if revision != HEAD_REVISION:

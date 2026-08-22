@@ -8,18 +8,17 @@ falls through to its next tier instead of crashing the freeze.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 
 from wnba_oracle.common.logging import get_logger
+from wnba_oracle.common.paths import resolve_project_root
 from wnba_oracle.features.spec import cohort_for_position
 from wnba_oracle.scheduler.job2_scoring import _features_dict
 from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = resolve_project_root(__file__)
 
 
 def _load_model_artifact(sha: str) -> PickerArtifact | None:

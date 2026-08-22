@@ -150,47 +150,44 @@ def fit_multiplier_mse(pairs: list[tuple[float, float]]) -> tuple[float, float]:
     return m, float(np.mean(resid * resid))
 
 
-def main() -> int:
-    print("Loading slate_labels + job1_enrichment...")
-    rows = load_pool_rows()
-    print(f"  {len(rows)} player-slate rows across {len({r['slate_date'] for r in rows})} slates\n")
-
+def _group_rows_by_slate(rows: list[dict]) -> dict[str, list[dict]]:
     rows_by_slate: dict[str, list[dict]] = defaultdict(list)
-    for r in rows:
-        rows_by_slate[r["slate_date"]].append(r)
+    for row in rows:
+        rows_by_slate[row["slate_date"]].append(row)
+    return rows_by_slate
 
-    print("Running current head against every historical pool (this takes ~2 min)...")
-    p50_by_key = predict_pool_p50_by_slate(rows_by_slate)
-    print(f"  {len(p50_by_key)} (slate, pid) head predictions produced\n")
 
-    # ---- 1. Starter-unknown fade -----------------------------------------
-    # Buckets: expected_starter (is_starter=1 OR rotowire_confirmed=1),
-    # confirmed_bench (rotowire_confirmed=1 AND is_starter=0),
-    # unknown (both flags 0), out (drop).
-    buckets: dict[str, list[tuple[float, float, float]]] = defaultdict(
-        list
-    )  # (boost, pred_p50, real)
-    for r in rows:
-        key = (r["slate_date"], int(r["pid"]))
-        pred = p50_by_key.get(key)
+def _starter_bucket(features: dict) -> str:
+    is_starter = int(features.get("is_starter", 0) or 0)
+    rotowire_confirmed = int(features.get("rotowire_confirmed", 0) or 0)
+    if is_starter == 0 and rotowire_confirmed == 0:
+        return "unknown"
+    if rotowire_confirmed == 1 and is_starter == 0:
+        return "confirmed_bench"
+    return "expected_starter"
+
+
+def _build_starter_buckets(
+    rows: list[dict],
+    predictions: dict[tuple[str, int], dict[str, float]],
+) -> dict[str, list[tuple[float, float, float]]]:
+    buckets: dict[str, list[tuple[float, float, float]]] = defaultdict(list)
+    for row in rows:
+        key = (row["slate_date"], int(row["pid"]))
+        pred = predictions.get(key)
         if pred is None:
             continue
-        f = features_for(r["features_json"])
-        if int(f.get("is_out", 0) or 0):
+        features = features_for(row["features_json"])
+        if int(features.get("is_out", 0) or 0):
             continue
-        is_starter = int(f.get("is_starter", 0) or 0)
-        rotowire_conf = int(f.get("rotowire_confirmed", 0) or 0)
-        boost = float(r.get("label_boost") or r.get("enrich_boost") or 0.0)
-        real = float(r["real_score"])
+        boost = float(row.get("label_boost") or row.get("enrich_boost") or 0.0)
+        real = float(row["real_score"])
         p50 = float(pred["p50"])
-        if is_starter == 0 and rotowire_conf == 0:
-            bucket = "unknown"
-        elif rotowire_conf == 1 and is_starter == 0:
-            bucket = "confirmed_bench"
-        else:
-            bucket = "expected_starter"
-        buckets[bucket].append((boost, p50, real))
+        buckets[_starter_bucket(features)].append((boost, p50, real))
+    return buckets
 
+
+def _print_starter_summary(buckets: dict[str, list[tuple[float, float, float]]]) -> None:
     print(f"{'=' * 78}")
     print("STARTER FADE CALIBRATION")
     print(f"{'=' * 78}")
@@ -198,7 +195,6 @@ def main() -> int:
         f"{'bucket':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'ratio':>8}"
         f"{'p_dnp':>8}{'p_bomb':>8}{'mse_m=1':>10}"
     )
-    dnp_rate: dict[str, float] = {}
     for name in ("expected_starter", "confirmed_bench", "unknown"):
         rows_b = buckets.get(name, [])
         if not rows_b:
@@ -212,80 +208,83 @@ def main() -> int:
         p_dnp = float(np.mean(reals <= 0.01))
         p_bomb = float(np.mean(reals <= 1.0))
         mse1 = float(np.mean((reals - preds) ** 2))
-        dnp_rate[name] = p_dnp
         print(
             f"{name:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}{ratio:>8.3f}"
             f"{p_dnp:>8.2%}{p_bomb:>8.2%}{mse1:>10.3f}"
         )
 
-    print()
-    # Fade calibration only trusts slates where either flag is nonzero at all
-    # (older enrichment predates the RotoWire wire-up; those rows land in the
-    # "unknown" bucket by default and swamp the signal).
-    slates_with_flags: set[str] = set()
-    for r in rows:
-        f = features_for(r["features_json"])
-        if int(f.get("is_starter", 0) or 0) or int(f.get("rotowire_confirmed", 0) or 0):
-            slates_with_flags.add(r["slate_date"])
-    print(
-        f"Restricting fade fit to {len(slates_with_flags)} slates that have "
-        f"at least one player with a nonzero starter flag."
-    )
+
+def _slates_with_starter_flags(rows: list[dict]) -> set[str]:
+    flagged: set[str] = set()
+    for row in rows:
+        features = features_for(row["features_json"])
+        if int(features.get("is_starter", 0) or 0) or int(
+            features.get("rotowire_confirmed", 0) or 0
+        ):
+            flagged.add(row["slate_date"])
+    return flagged
+
+
+def _fit_pairs(
+    rows: list[dict],
+    predictions: dict[tuple[str, int], dict[str, float]],
+    flagged_slates: set[str],
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
     starter_pairs: list[tuple[float, float]] = []
     unknown_pairs: list[tuple[float, float]] = []
-    for r in rows:
-        key = (r["slate_date"], int(r["pid"]))
-        pred = p50_by_key.get(key)
-        if pred is None or r["slate_date"] not in slates_with_flags:
+    for row in rows:
+        key = (row["slate_date"], int(row["pid"]))
+        pred = predictions.get(key)
+        if pred is None or row["slate_date"] not in flagged_slates:
             continue
-        f = features_for(r["features_json"])
-        if int(f.get("is_out", 0) or 0):
+        features = features_for(row["features_json"])
+        if int(features.get("is_out", 0) or 0):
             continue
-        is_starter = int(f.get("is_starter", 0) or 0)
-        rotowire_conf = int(f.get("rotowire_confirmed", 0) or 0)
-        real = float(r["real_score"])
-        p50 = float(pred["p50"])
-        if is_starter == 0 and rotowire_conf == 0:
-            unknown_pairs.append((p50, real))
-        elif (is_starter == 1 or rotowire_conf == 1) and not (
-            rotowire_conf == 1 and is_starter == 0
-        ):
-            starter_pairs.append((p50, real))
+        pair = (float(pred["p50"]), float(row["real_score"]))
+        bucket = _starter_bucket(features)
+        if bucket == "unknown":
+            unknown_pairs.append(pair)
+        elif bucket == "expected_starter":
+            starter_pairs.append(pair)
+    return starter_pairs, unknown_pairs
+
+
+def _print_pair_summary(name: str, pairs: list[tuple[float, float]]) -> None:
+    if not pairs:
+        return
+    preds = np.array([pred for pred, _ in pairs])
+    reals = np.array([real for _, real in pairs])
+    print(
+        f"  {name}: mean_real={np.mean(reals):.3f}  mean_pred={np.mean(preds):.3f}"
+        f"  p_dnp={np.mean(reals <= 0.01):.2%}"
+    )
+
+
+def _print_fade_fit(
+    starter_pairs: list[tuple[float, float]],
+    unknown_pairs: list[tuple[float, float]],
+) -> None:
     print(f"  starters n={len(starter_pairs)}  unknowns n={len(unknown_pairs)}")
-    if starter_pairs:
-        preds = np.array([p for p, _ in starter_pairs])
-        reals = np.array([r for _, r in starter_pairs])
-        print(
-            f"  starters: mean_real={np.mean(reals):.3f}  mean_pred={np.mean(preds):.3f}"
-            f"  p_dnp={np.mean(reals <= 0.01):.2%}"
-        )
-    if unknown_pairs:
-        preds = np.array([p for p, _ in unknown_pairs])
-        reals = np.array([r for _, r in unknown_pairs])
-        print(
-            f"  unknowns: mean_real={np.mean(reals):.3f}  mean_pred={np.mean(preds):.3f}"
-            f"  p_dnp={np.mean(reals <= 0.01):.2%}"
-        )
+    _print_pair_summary("starters", starter_pairs)
+    _print_pair_summary("unknowns", unknown_pairs)
+
     if unknown_pairs:
         m_unknown, mse_unknown = fit_multiplier_mse(unknown_pairs)
-        # sweep m for reference
         best_m, best_mse = 1.0, float("inf")
-        for cand in np.arange(0.3, 1.05, 0.05):
-            preds = np.array([p for p, _ in unknown_pairs])
-            reals = np.array([r for _, r in unknown_pairs])
-            mse = float(np.mean((reals - preds * cand) ** 2))
+        preds = np.array([pred for pred, _ in unknown_pairs])
+        reals = np.array([real for _, real in unknown_pairs])
+        for candidate in np.arange(0.3, 1.05, 0.05):
+            mse = float(np.mean((reals - preds * candidate) ** 2))
             if mse < best_mse:
-                best_m, best_mse = float(cand), mse
+                best_m, best_mse = float(candidate), mse
         print(f"unknowns: OLS m = {m_unknown:.3f} (MSE {mse_unknown:.3f})")
         print(
             f"unknowns: sweep min m in [0.30,1.00,step 0.05] -> {best_m:.2f} (MSE {best_mse:.3f})"
         )
     if unknown_pairs and starter_pairs:
-        mean_ratio = float(np.mean([r for _, r in unknown_pairs])) / float(
-            np.mean([r for _, r in starter_pairs])
+        mean_ratio = float(np.mean([real for _, real in unknown_pairs])) / float(
+            np.mean([real for _, real in starter_pairs])
         )
-        # Existing starter mult is 1.10; so the "unknown mult vs starter mult" ratio implies
-        # a starter mult-equivalent for unknowns of 1.10 * mean_ratio.
         print(f"ratio(mean_real unknown / mean_real starter) = {mean_ratio:.3f}")
         print(
             f"  implied fade vs current starter mult 1.10 -> unknown mult = {1.10 * mean_ratio:.3f}"
@@ -297,73 +296,95 @@ def main() -> int:
             "Both should agree to within a few percent."
         )
 
-    # ---- 2. Boost-tier residual ------------------------------------------
+
+def _build_tier_buckets(
+    starter_buckets: dict[str, list[tuple[float, float, float]]],
+) -> tuple[
+    dict[str, list[tuple[float, float]]],
+    dict[str, list[tuple[float, float]]],
+]:
+    all_players: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    starters: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for name in ("expected_starter", "unknown", "confirmed_bench"):
+        for boost, p50, real in starter_buckets.get(name, []):
+            tier = _tier_for(boost)
+            all_players[tier].append((p50, real))
+            if name == "expected_starter":
+                starters[tier].append((p50, real))
+    return all_players, starters
+
+
+def _print_tier_table(tier_buckets: dict[str, list[tuple[float, float]]]) -> None:
+    print(f"{'tier':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'resid':>10}{'ratio':>8}")
+    for tier in (name for _, _, name in BOOST_TIERS):
+        entries = tier_buckets.get(tier, [])
+        if not entries:
+            continue
+        preds = np.array([pred for pred, _ in entries])
+        reals = np.array([real for _, real in entries])
+        mean_real = float(np.mean(reals))
+        mean_pred = float(np.mean(preds))
+        residual = mean_real - mean_pred
+        ratio = mean_real / mean_pred if mean_pred > 1e-9 else 0.0
+        print(
+            f"{tier:<20}{len(entries):>8}{mean_real:>12.3f}{mean_pred:>12.3f}"
+            f"{residual:>+10.3f}{ratio:>8.3f}"
+        )
+
+
+def _print_boost_tail_recommendation(
+    tier_buckets: dict[str, list[tuple[float, float]]],
+) -> None:
+    high_boost_entries = [
+        entry for tier in ("boost_2.0-2.5", "boost_2.5+") for entry in tier_buckets.get(tier, [])
+    ]
+    if not high_boost_entries:
+        return
+    preds = np.array([pred for pred, _ in high_boost_entries])
+    reals = np.array([real for _, real in high_boost_entries])
+    residual = float(np.mean(reals - preds))
+    ratio = float(np.mean(reals) / max(np.mean(preds), 1e-9))
+    print(
+        f"HIGH-BOOST (>=2.0): n={len(high_boost_entries)} mean_real={np.mean(reals):.3f} "
+        f"mean_pred={np.mean(preds):.3f} resid={residual:+.3f} ratio={ratio:.3f}"
+    )
+    if ratio >= 1.15:
+        print("  -> ship PICKER_BOOST_TAIL_LIFT=true (stage-1 filter uses p90 for boost>=2)")
+    else:
+        print("  -> not materially under-predicted; keep PICKER_BOOST_TAIL_LIFT off")
+
+
+def main() -> int:
+    print("Loading slate_labels + job1_enrichment...")
+    rows = load_pool_rows()
+    print(f"  {len(rows)} player-slate rows across {len({r['slate_date'] for r in rows})} slates\n")
+
+    print("Running current head against every historical pool (this takes ~2 min)...")
+    predictions = predict_pool_p50_by_slate(_group_rows_by_slate(rows))
+    print(f"  {len(predictions)} (slate, pid) head predictions produced\n")
+
+    starter_buckets = _build_starter_buckets(rows, predictions)
+    _print_starter_summary(starter_buckets)
+    print()
+    flagged_slates = _slates_with_starter_flags(rows)
+    print(
+        f"Restricting fade fit to {len(flagged_slates)} slates that have "
+        f"at least one player with a nonzero starter flag."
+    )
+    starter_pairs, unknown_pairs = _fit_pairs(rows, predictions, flagged_slates)
+    _print_fade_fit(starter_pairs, unknown_pairs)
+
     print()
     print(f"{'=' * 78}")
     print("BOOST-TAIL RESIDUAL")
     print(f"{'=' * 78}")
-    # residual = real - pred_p50, binned by boost tier, split by starter class
-    tier_bucket: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    tier_bucket_starters: dict[str, list[tuple[float, float]]] = defaultdict(list)
-    for name in ("expected_starter", "unknown", "confirmed_bench"):
-        for boost, p50, real in buckets.get(name, []):
-            tier = _tier_for(boost)
-            tier_bucket[tier].append((p50, real))
-            if name == "expected_starter":
-                tier_bucket_starters[tier].append((p50, real))
-
-    print(f"{'tier':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'resid':>10}{'ratio':>8}")
-    tier_order = [name for _, _, name in BOOST_TIERS]
-    for tier in tier_order:
-        entries = tier_bucket.get(tier, [])
-        if not entries:
-            continue
-        n = len(entries)
-        preds = np.array([p for p, _ in entries])
-        reals = np.array([r for _, r in entries])
-        mean_r = float(np.mean(reals))
-        mean_p = float(np.mean(preds))
-        resid = mean_r - mean_p
-        ratio = mean_r / mean_p if mean_p > 1e-9 else 0.0
-        print(f"{tier:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}{resid:>+10.3f}{ratio:>8.3f}")
-
+    tier_buckets, starter_tier_buckets = _build_tier_buckets(starter_buckets)
+    _print_tier_table(tier_buckets)
     print()
     print("Starters-only (isolate the multiplier effect from the confirmed-bench fade):")
-    print(f"{'tier':<20}{'n':>8}{'mean_real':>12}{'mean_pred':>12}{'resid':>10}{'ratio':>8}")
-    for tier in tier_order:
-        entries = tier_bucket_starters.get(tier, [])
-        if not entries:
-            continue
-        n = len(entries)
-        preds = np.array([p for p, _ in entries])
-        reals = np.array([r for _, r in entries])
-        mean_r = float(np.mean(reals))
-        mean_p = float(np.mean(preds))
-        resid = mean_r - mean_p
-        ratio = mean_r / mean_p if mean_p > 1e-9 else 0.0
-        print(f"{tier:<20}{n:>8}{mean_r:>12.3f}{mean_p:>12.3f}{resid:>+10.3f}{ratio:>8.3f}")
-
+    _print_tier_table(starter_tier_buckets)
     print()
-    # Decide the boost-tail knob from the starters-only residual: if the
-    # residual is materially positive at boost>=2, the head systematically
-    # under-predicts and we lift stage-1 filter for those pids to pred_p90.
-    high_boost_entries: list[tuple[float, float]] = []
-    for tier in ("boost_2.0-2.5", "boost_2.5+"):
-        high_boost_entries.extend(tier_bucket.get(tier, []))
-    if high_boost_entries:
-        n = len(high_boost_entries)
-        preds = np.array([p for p, _ in high_boost_entries])
-        reals = np.array([r for _, r in high_boost_entries])
-        resid = float(np.mean(reals - preds))
-        ratio = float(np.mean(reals) / max(np.mean(preds), 1e-9))
-        print(
-            f"HIGH-BOOST (>=2.0): n={n} mean_real={np.mean(reals):.3f} "
-            f"mean_pred={np.mean(preds):.3f} resid={resid:+.3f} ratio={ratio:.3f}"
-        )
-        if ratio >= 1.15:
-            print("  -> ship PICKER_BOOST_TAIL_LIFT=true (stage-1 filter uses p90 for boost>=2)")
-        else:
-            print("  -> not materially under-predicted; keep PICKER_BOOST_TAIL_LIFT off")
+    _print_boost_tail_recommendation(tier_buckets)
 
     return 0
 

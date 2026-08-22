@@ -278,7 +278,6 @@ def _run_substep(
 def run() -> JobResult:
     """Run day-close and return durable, substep-level completion semantics."""
 
-
     settings = get_settings()
     walk_window = int(os.environ.get("WNBA_DAYCLOSE_WALK_WINDOW", DEFAULT_WALK_WINDOW))
     outcomes: dict[str, dict[str, Any]] = {}

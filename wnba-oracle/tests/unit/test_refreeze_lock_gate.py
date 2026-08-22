@@ -102,6 +102,37 @@ def test_job2_result_maps_missing_durable_output_to_failure() -> None:
     assert result.exit_code == 1
 
 
+def test_upcoming_refreeze_decision_fails_closed_inside_lock_buffer() -> None:
+    settings = SimpleNamespace(
+        pool_exclude_started_games=True,
+        late_refreeze_enabled=False,
+    )
+    now = dt.datetime(2026, 6, 14, 22, 55, tzinfo=dt.UTC)
+    upcoming_tip = dt.datetime(2026, 6, 14, 23, 0, tzinfo=dt.UTC)
+    engine = MagicMock()
+    engine.connect.return_value.__enter__.return_value.execute.return_value.first.return_value = (
+        1,
+    )
+    with (
+        patch.object(job2, "get_engine", return_value=engine),
+        patch.object(job2, "_late_refreeze_allowed", return_value=(False, "lock_gated")),
+    ):
+        force, via, terminal = job2._resolve_refreeze(
+            slate_date="2026-06-14",
+            model_sha="sha",
+            settings=settings,
+            now_utc=now,
+            deadline=now,
+            upcoming_tip=upcoming_tip,
+            n_started=1,
+            lock_time=upcoming_tip,
+        )
+
+    assert force is False
+    assert via is None
+    assert terminal == "upcoming_refreeze_gated"
+
+
 LOCK = dt.datetime(2026, 6, 8, 23, 30, tzinfo=dt.UTC)
 
 

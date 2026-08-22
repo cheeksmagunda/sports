@@ -37,13 +37,12 @@ def test_postgres_is_at_head_with_runtime_tables() -> None:
     engine = sa.create_engine(_database_url())
     try:
         with engine.connect() as connection:
-            revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+            revision = connection.execute(
+                sa.text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
             tables = set(
                 connection.execute(
-                    sa.text(
-                        "SELECT tablename FROM pg_tables "
-                        "WHERE schemaname = 'public'"
-                    )
+                    sa.text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
                 ).scalars()
             )
     finally:
@@ -80,8 +79,7 @@ def test_degraded_job_details_are_durable() -> None:
         with engine.begin() as connection:
             row = connection.execute(
                 sa.text(
-                    "SELECT status, exit_code, details_json FROM job_runs "
-                    "WHERE run_id = :run_id"
+                    "SELECT status, exit_code, details_json FROM job_runs WHERE run_id = :run_id"
                 ),
                 {"run_id": run_id},
             ).one()

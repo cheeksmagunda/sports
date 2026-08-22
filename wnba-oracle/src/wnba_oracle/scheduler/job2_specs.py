@@ -128,6 +128,319 @@ class PlayerPredictions:
     head_quantiles_by_pid: dict[int, dict[str, float]] = field(default_factory=dict)
 
 
+@dataclass
+class _PredictorMix:
+    head: int = 0
+    minutes: int = 0
+    eb: int = 0
+    history: int = 0
+    heuristic: int = 0
+
+
+@dataclass(frozen=True)
+class _PredictionContext:
+    settings: Settings
+    artifact: PickerArtifact | None
+    head_predictions: dict[int, dict[str, float]]
+    player_history: dict[int, float] | None
+    bonus: dict[int, float]
+    game_script_minutes_enabled: bool
+    game_script_minutes_cfg: GameScriptMinutesConfig
+    game_script_cfg: GameScriptConfig
+    minutes_cfg: MinutesConfig
+    availability_enabled: bool
+    availability_cfg: AvailabilityConfig
+
+
+@dataclass
+class _PredictionWork:
+    predictions: PlayerPredictions = field(default_factory=PlayerPredictions)
+    game_script_rows: list[GameScriptInput] = field(default_factory=list)
+    rate_by_pid: dict[int, float] = field(default_factory=dict)
+    mix: _PredictorMix = field(default_factory=_PredictorMix)
+
+
+@dataclass(frozen=True)
+class _PlayerContext:
+    row: dict
+    pid: int
+    boost: float
+    position: str
+    total: float
+    spread: float
+    game_script_multiplier: float
+    features: dict
+    effective_confirmed: bool
+    minutes: dict | None
+
+
+def _register_player_state(
+    player: _PlayerContext,
+    context: _PredictionContext,
+    work: _PredictionWork,
+) -> None:
+    predictions = work.predictions
+    minutes = player.minutes
+    is_starter = bool(int(player.features.get("is_starter", 0) or 0))
+    predictions.n_min_games_by_pid[player.pid] = (
+        int(minutes["n_min_games"]) if minutes is not None else 0
+    )
+    predictions.is_anchor_by_pid[player.pid] = (
+        minutes is not None
+        and minutes["n_min_games"] >= ANCHOR_MIN_GAMES
+        and minutes["recent_minutes"] >= ANCHOR_MIN_MINUTES
+    ) or (player.effective_confirmed and is_starter)
+
+    if context.availability_enabled:
+        predictions.p_active_by_pid[player.pid] = availability_probability(
+            recent_minutes=float(minutes["recent_minutes"]) if minutes is not None else 0.0,
+            minutes_vol=float(minutes["minutes_vol"]) if minutes is not None else 0.0,
+            n_min_games=int(minutes["n_min_games"]) if minutes is not None else 0,
+            rotowire_confirmed=player.effective_confirmed,
+            is_starter=is_starter,
+            cfg=context.availability_cfg,
+        )
+
+    if context.game_script_minutes_enabled and player.total > 0:
+        predictions.blowout_prob_by_pid[player.pid] = blowout_probability(
+            abs(player.spread), context.game_script_minutes_cfg
+        )
+        recent_minutes = float(minutes["recent_minutes"]) if minutes is not None else 0.0
+        predictions.is_starter_by_pid[player.pid] = (
+            is_starter or recent_minutes >= context.game_script_minutes_cfg.starter_minutes_floor
+        )
+        if minutes is not None and recent_minutes > 0.0:
+            work.game_script_rows.append(
+                GameScriptInput(
+                    player.pid,
+                    str(player.row.get("team", "") or ""),
+                    recent_minutes,
+                    abs(player.spread),
+                )
+            )
+            work.rate_by_pid[player.pid] = float(minutes["per_min_rate"])
+
+
+def _apply_head_tier(
+    player: _PlayerContext,
+    context: _PredictionContext,
+    work: _PredictionWork,
+) -> bool:
+    head = context.head_predictions.get(player.pid)
+    if head is None:
+        return False
+
+    settings = context.settings
+    predictions = work.predictions
+    p10 = head["p10"]
+    p50 = head["p50"]
+    p90 = head["p90"]
+    starter_multiplier = _starter_multiplier(
+        player.row.get("features_json"),
+        enabled=settings.starter_signal_enabled,
+        use_expected=settings.starter_signal_use_expected,
+        unknown_fade=float(getattr(settings, "starter_unknown_fade", 1.0)),
+    )
+    starter_multiplier *= _starter_minutes_lift(
+        player.row.get("features_json"),
+        enabled=settings.starter_minutes_lift_enabled,
+        use_expected=settings.starter_signal_use_expected,
+        norm=settings.starter_minutes_norm,
+        weight=settings.starter_minutes_lift_weight,
+        cap=settings.starter_minutes_lift_cap,
+    )
+    prop_multiplier = _prop_signal_multiplier(
+        player.row.get("features_json"), scale=settings.prop_signal_scale
+    )
+    floor_multiplier = _floor_tilt_multiplier(
+        p10,
+        p50,
+        player.boost,
+        weight=settings.picker_floor_tilt_weight,
+        max_boost=settings.picker_floor_tilt_max_boost,
+    )
+    predictions.pred_real_scores[player.pid] = max(
+        0.5,
+        p50
+        * player.game_script_multiplier
+        * starter_multiplier
+        * prop_multiplier
+        * floor_multiplier,
+    )
+    if bool(getattr(settings, "picker_boost_tail_lift", False)) and player.boost >= float(
+        getattr(settings, "boost_tail_lift_threshold", 2.0)
+    ):
+        lift_factor = float(getattr(settings, "boost_tail_lift_factor", 1.5))
+        predictions.rank_pred_by_pid[player.pid] = max(
+            0.5,
+            p50
+            * lift_factor
+            * player.game_script_multiplier
+            * starter_multiplier
+            * prop_multiplier
+            * floor_multiplier,
+        )
+    head_spread = max(0.0, p90 - p10) * starter_multiplier / 2.56
+    predictions.minutes_vol_by_pid[player.pid] = max(0.5, head_spread)
+    predictions.head_quantiles_by_pid[player.pid] = {
+        "p10": p10 * starter_multiplier,
+        "p50": p50 * starter_multiplier,
+        "p90": p90 * starter_multiplier,
+    }
+
+    is_starter = bool(int(player.features.get("is_starter", 0) or 0))
+    minutes = player.minutes
+    if minutes is not None and minutes["n_min_games"] >= context.minutes_cfg.min_obs_for_history:
+        projected_minutes = project_minutes_from_base(
+            float(minutes["recent_minutes"]),
+            has_history=True,
+            rotowire_confirmed=player.effective_confirmed,
+            is_starter=is_starter,
+            injury_bonus_min=float(context.bonus.get(player.pid, 0.0)),
+            blowout=False,
+            cfg=context.minutes_cfg,
+        )
+        predictions.pred_minutes_by_pid[player.pid] = minutes_interval_from_projection(
+            projected_minutes,
+            float(minutes["minutes_vol"]),
+            cfg=context.minutes_cfg,
+        )
+    else:
+        predictions.pred_minutes_by_pid[player.pid] = minutes_interval_from_role(
+            rotowire_confirmed=player.effective_confirmed,
+            is_starter=is_starter,
+            cfg=context.minutes_cfg,
+        )
+    predictions.rows_by_pid[player.pid] = player.row
+    work.mix.head += 1
+    return True
+
+
+def _apply_minutes_tier(
+    player: _PlayerContext,
+    context: _PredictionContext,
+    work: _PredictionWork,
+) -> bool:
+    minutes = player.minutes
+    if minutes is None or minutes["n_min_games"] < context.minutes_cfg.min_obs_for_history:
+        return False
+    is_starter = bool(int(player.features.get("is_starter", 0) or 0))
+    base = blended_real_score(
+        recent_min=minutes["recent_minutes"],
+        rate=minutes["per_min_rate"],
+        n_games=minutes["n_min_games"],
+        boost_prior=_heuristic_real_score(player.boost),
+        rotowire_confirmed=player.effective_confirmed,
+        is_starter=is_starter,
+        injury_bonus_min=float(context.bonus.get(player.pid, 0.0)),
+        blowout=False,
+        cfg=context.minutes_cfg,
+    )
+    predictions = work.predictions
+    predictions.pred_real_scores[player.pid] = max(0.5, base * player.game_script_multiplier)
+    predictions.minutes_vol_by_pid[player.pid] = minutes["minutes_vol"] * minutes["per_min_rate"]
+    projected_minutes = project_minutes_from_base(
+        float(minutes["recent_minutes"]),
+        has_history=True,
+        rotowire_confirmed=player.effective_confirmed,
+        is_starter=is_starter,
+        injury_bonus_min=float(context.bonus.get(player.pid, 0.0)),
+        blowout=False,
+        cfg=context.minutes_cfg,
+    )
+    predictions.pred_minutes_by_pid[player.pid] = minutes_interval_from_projection(
+        projected_minutes,
+        float(minutes["minutes_vol"]),
+        cfg=context.minutes_cfg,
+    )
+    predictions.rows_by_pid[player.pid] = player.row
+    work.mix.minutes += 1
+    return True
+
+
+def _apply_fallback_tier(
+    player: _PlayerContext,
+    context: _PredictionContext,
+    work: _PredictionWork,
+) -> None:
+    settings = context.settings
+    starter_multiplier = _starter_multiplier(
+        player.row.get("features_json"),
+        enabled=settings.starter_signal_enabled,
+        use_expected=settings.starter_signal_use_expected,
+        unknown_fade=float(getattr(settings, "starter_unknown_fade", 1.0)),
+    )
+    eb_prediction = _eb_predict_one(context.artifact, player.pid, player.position)
+    if eb_prediction is not None:
+        base = eb_prediction
+        work.mix.eb += 1
+    elif context.player_history is not None and player.pid in context.player_history:
+        base = max(0.5, context.player_history[player.pid])
+        work.mix.history += 1
+    else:
+        base = _heuristic_real_score(player.boost)
+        work.mix.heuristic += 1
+    predictions = work.predictions
+    predictions.pred_real_scores[player.pid] = max(
+        0.5, base * player.game_script_multiplier * starter_multiplier
+    )
+    predictions.pred_minutes_by_pid[player.pid] = minutes_interval_from_role(
+        rotowire_confirmed=player.effective_confirmed,
+        is_starter=bool(int(player.features.get("is_starter", 0) or 0)),
+        cfg=context.minutes_cfg,
+    )
+    predictions.rows_by_pid[player.pid] = player.row
+
+
+def _apply_game_script_redistribution(
+    context: _PredictionContext,
+    work: _PredictionWork,
+) -> None:
+    if not (context.game_script_minutes_enabled and work.game_script_rows):
+        return
+    deltas = redistribute_game_script_minutes(
+        work.game_script_rows,
+        context.game_script_minutes_cfg,
+    )
+    n_bumped = sum(1 for delta in deltas.values() if delta > 0)
+    n_trimmed = sum(1 for delta in deltas.values() if delta < 0)
+    for pid, delta_minutes in deltas.items():
+        rate = work.rate_by_pid.get(pid, context.minutes_cfg.league_rate)
+        work.predictions.pred_real_scores[pid] = max(
+            0.5,
+            work.predictions.pred_real_scores[pid] + delta_minutes * rate,
+        )
+    log.info(
+        "game_script_minutes",
+        n_bumped=n_bumped,
+        n_trimmed=n_trimmed,
+        n_rows=len(work.game_script_rows),
+    )
+
+
+def _apply_availability_hurdle(
+    context: _PredictionContext,
+    work: _PredictionWork,
+) -> None:
+    probabilities = work.predictions.p_active_by_pid
+    if not (context.availability_enabled and probabilities):
+        return
+    n_low = 0
+    for pid, probability in probabilities.items():
+        if pid in work.predictions.pred_real_scores:
+            work.predictions.pred_real_scores[pid] = max(
+                0.5,
+                work.predictions.pred_real_scores[pid] * probability,
+            )
+            if probability < 0.5:
+                n_low += 1
+    log.info(
+        "availability_model",
+        n_players=len(probabilities),
+        n_low_availability=n_low,
+    )
+
+
 def predict_players(
     enrichment: list[dict],
     *,
@@ -137,315 +450,80 @@ def predict_players(
     player_history: dict[int, float] | None,
     bonus: dict[int, float],
 ) -> PlayerPredictions:
-    """The tiered per-player real_score + minutes predictor (D45/D55/D57/D63/D69).
+    """Build final pre-contrarian predictions through the ordered tier ladder."""
+    game_script_minutes_enabled = settings.game_script_minutes_enabled
+    context = _PredictionContext(
+        settings=settings,
+        artifact=art,
+        head_predictions=head_predictions,
+        player_history=player_history,
+        bonus=bonus,
+        game_script_minutes_enabled=game_script_minutes_enabled,
+        game_script_minutes_cfg=GameScriptMinutesConfig(),
+        game_script_cfg=(
+            GameScriptConfig(blowout_penalty=1.0)
+            if game_script_minutes_enabled
+            else GameScriptConfig()
+        ),
+        minutes_cfg=MinutesConfig(),
+        availability_enabled=settings.availability_model_enabled,
+        availability_cfg=AvailabilityConfig(),
+    )
+    work = _PredictionWork()
 
-    Ladder per player: D69/D63 trained quantile heads -> D55 minutes-edge
-    blend -> D45 EB baseline -> corpus history -> boost heuristic, each with
-    its own starter/game-script/floor-tilt multipliers. After the loop,
-    folds in the D57 game-script-minutes redistribution and the D57 Tier-2
-    availability hurdle so the returned ``pred_real_scores`` is the final
-    pre-contrarian prediction.
-    """
-    gsm_enabled = settings.game_script_minutes_enabled
-    gsm_cfg = GameScriptMinutesConfig()
-    # When the role-aware blowout redistribution is on it OWNS the blowout
-    # effect, so disable the blunt team-wide blowout penalty to avoid
-    # double-counting (D57).
-    gs_cfg = GameScriptConfig(blowout_penalty=1.0) if gsm_enabled else GameScriptConfig()
-    mcfg = MinutesConfig()
-    avail_enabled = settings.availability_model_enabled
-    avail_cfg = AvailabilityConfig()
-
-    preds = PlayerPredictions()
-    gsm_rows: list[GameScriptInput] = []
-    rate_by_pid: dict[int, float] = {}
-    n_head_predicted = 0
-    n_minutes_predicted = 0
-    n_eb_predicted = 0
-    n_history_fallback = 0
-    n_heuristic_fallback = 0
-
-    for r in enrichment:
-        pid_raw = r.get("real_sports_player_id")
-        if pid_raw is None:
+    for row in enrichment:
+        raw_player_id = row.get("real_sports_player_id")
+        if raw_player_id is None:
             continue
         try:
-            pid = int(pid_raw)
+            player_id = int(raw_player_id)
         except (TypeError, ValueError):
             continue
-        boost = float(r.get("card_boost", 0.0) or 0.0)
-        position = str(r.get("position", "") or "")
-        total, spread = _vegas_from_features(r.get("features_json"))
-        gs_mult = game_script_multiplier(total, spread, cfg=gs_cfg) if total > 0 else 1.0
-        f = _features_dict(r.get("features_json"))
-        # D104: treat RotoWire EXPECTED starters as a known role, not only
-        # CONFIRMED ones -- confirmed lineups for every game are not all out by
-        # the T-40 freeze. This `eff_confirmed` flag feeds every role consumer
-        # below (anchor, availability, blended minutes) so the starting five on
-        # the slate's later games is honored from the 13:00 expected lineup.
-        eff_confirmed = _effective_confirmed(f, use_expected=settings.starter_signal_use_expected)
-        mf = _minutes_features(r.get("features_json")) if settings.minutes_model_enabled else None
-        preds.n_min_games_by_pid[pid] = int(mf["n_min_games"]) if mf is not None else 0
-        # Anchor flag (D57, Tier 1) -- computed regardless of the floor setting
-        # so it always rides on the spec; the optimizer only enforces it when
-        # min_anchors > 0.
-        preds.is_anchor_by_pid[pid] = (
-            mf is not None
-            and mf["n_min_games"] >= ANCHOR_MIN_GAMES
-            and mf["recent_minutes"] >= ANCHOR_MIN_MINUTES
-        ) or (eff_confirmed and bool(int(f.get("is_starter", 0) or 0)))
-        if avail_enabled:
-            preds.p_active_by_pid[pid] = availability_probability(
-                recent_minutes=float(mf["recent_minutes"]) if mf is not None else 0.0,
-                minutes_vol=float(mf["minutes_vol"]) if mf is not None else 0.0,
-                n_min_games=int(mf["n_min_games"]) if mf is not None else 0,
-                rotowire_confirmed=eff_confirmed,
-                is_starter=bool(int(f.get("is_starter", 0) or 0)),
-                cfg=avail_cfg,
-            )
-        if gsm_enabled and total > 0:
-            # Blowout context for the regime-switching copula + the minutes
-            # redistribution (D57). Only players with known recent minutes can
-            # donate/receive; cold-start darts have no minutes and so are left
-            # untouched here (the availability engine, not this, gates them).
-            preds.blowout_prob_by_pid[pid] = blowout_probability(abs(spread), gsm_cfg)
-            recent_min_gs = float(mf["recent_minutes"]) if mf is not None else 0.0
-            preds.is_starter_by_pid[pid] = (
-                bool(int(f.get("is_starter", 0) or 0))
-                or recent_min_gs >= gsm_cfg.starter_minutes_floor
-            )
-            if mf is not None and recent_min_gs > 0.0:
-                gsm_rows.append(
-                    GameScriptInput(pid, str(r.get("team", "") or ""), recent_min_gs, abs(spread))
-                )
-                rate_by_pid[pid] = float(mf["per_min_rate"])
-        # D69 / Phase 2b Tier-0: trained quantile heads (D63). Walk-forward
-        # validated corr 0.554 vs the existing ladder's 0.246. Falls through to
-        # Tier 1 (blended_real_score) for any pid the head didn't score.
-        hp = head_predictions.get(pid)
-        if hp is not None:
-            p10 = hp["p10"]
-            p50 = hp["p50"]
-            p90 = hp["p90"]
-            # D71 / R5: apply the RotoWire confirmed-starter signal symmetrically
-            # to all three quantiles. The trained head learned from game logs
-            # only (`features/corpus.build_gamelog_corpus` does NOT compute
-            # `is_confirmed_starter`; `train/pipeline.py:240` drops it because
-            # it's missing from the corpus), so without this nudge the head is
-            # blind to today's confirmed lineup. Mirrors the Tier-3 fallback's
-            # use of `_starter_multiplier`; the Tier-1 blend deliberately omits
-            # the nudge because `blended_real_score` already weighs minutes.
-            # Magnitude is small (1.10 confirmed starter, 0.82 confirmed bench,
-            # 1.0 unknown) so we never overpower the head on the median, but
-            # the symmetric scaling of the 80% interval keeps the sampler's
-            # delta-method sigma in the same units.
-            starter_mult = _starter_multiplier(
-                r.get("features_json"),
-                enabled=settings.starter_signal_enabled,
-                use_expected=settings.starter_signal_use_expected,
-                unknown_fade=float(getattr(settings, "starter_unknown_fade", 1.0)),
-            )
-            # 2026-07-10: minutes-conditional starter lift. The head's
-            # features carry pre-promotion minutes, so an expected starter
-            # coming off a bench stretch is systematically under-projected
-            # (Kuier 07-05/07-07, Harris 07-09 -- each the slate's top missed
-            # swap). Folded into starter_mult so it rides every place the
-            # starter signal already touches (p50, interval, rank).
-            starter_mult *= _starter_minutes_lift(
-                r.get("features_json"),
-                enabled=settings.starter_minutes_lift_enabled,
-                use_expected=settings.starter_signal_use_expected,
-                norm=settings.starter_minutes_norm,
-                weight=settings.starter_minutes_lift_weight,
-                cap=settings.starter_minutes_lift_cap,
-            )
-            # Game-script multiplier still applies (Vegas tilt on top of the
-            # head). Floor matches every other Tier so the downstream sampler
-            # never sees a non-positive mean.
-            # D78: sportsbook prop signal (sharp-money pts over/under). Disabled
-            # by default (scale=0); enable via PROP_SIGNAL_SCALE=0.3 once
-            # calibrated against placement data.
-            prop_mult = _prop_signal_multiplier(
-                r.get("features_json"), scale=settings.prop_signal_scale
-            )
-            # 2026-07-10 floor tilt: blend the sampling/rank center of
-            # non-spike candidates toward their p10 so wide-interval ceiling
-            # plays fade out of the mid slots (winners' 1.8/1.6/1.4 slots are
-            # floor plays). Spike tier (boost >= max_boost) is untouched.
-            floor_mult = _floor_tilt_multiplier(
-                p10,
-                p50,
-                boost,
-                weight=settings.picker_floor_tilt_weight,
-                max_boost=settings.picker_floor_tilt_max_boost,
-            )
-            preds.pred_real_scores[pid] = max(
-                0.5, p50 * gs_mult * starter_mult * prop_mult * floor_mult
-            )
-            # 2026-07-04 boost-tail lift: multiplicative ceiling nudge applied
-            # only to the stage-1 ranker (visible_value), not to the sampler.
-            # calibrate_starter_and_boost.py: mean_real / mean_p50 ratio at
-            # boost>=2.0 is 1.57 across 1202 pool-slates, so a lift factor of
-            # ~1.5 matches empirical without inflating the noisy head p90
-            # (p90 for boost-3 role players is a fabricated 10x ceiling; its
-            # training rows are too sparse to bound the tail). Off by default.
-            lift_enabled = bool(getattr(settings, "picker_boost_tail_lift", False))
-            lift_thresh = float(getattr(settings, "boost_tail_lift_threshold", 2.0))
-            lift_factor = float(getattr(settings, "boost_tail_lift_factor", 1.5))
-            if lift_enabled and boost >= lift_thresh:
-                preds.rank_pred_by_pid[pid] = max(
-                    0.5, p50 * lift_factor * gs_mult * starter_mult * prop_mult * floor_mult
-                )
-            # 80% interval (~2.56 sigma) -> additive real_score volatility. Same
-            # semantic as `minutes_vol_by_pid` for the Tier-1 path so the
-            # sampler's delta-method conversion works unchanged. starter_mult
-            # is applied so the spread stays proportional to the shifted mean.
-            hp_spread = max(0.0, p90 - p10) * starter_mult / 2.56
-            preds.minutes_vol_by_pid[pid] = max(0.5, hp_spread)
-            preds.head_quantiles_by_pid[pid] = {
-                "p10": p10 * starter_mult,
-                "p50": p50 * starter_mult,
-                "p90": p90 * starter_mult,
-            }
-            # Real projected-minutes interval for the frozen per-player payload
-            # (frontend interval bar). The head predicts real_score, not
-            # minutes, so we anchor the interval on the same minutes machinery
-            # the D55 path uses when the player has recent minutes history;
-            # otherwise fall back to role anchors from the confirmed-starter
-            # signal so cold-start darts still get a plausible interval.
-            is_starter_flag = bool(int(f.get("is_starter", 0) or 0))
-            if mf is not None and mf["n_min_games"] >= mcfg.min_obs_for_history:
-                m50 = project_minutes_from_base(
-                    float(mf["recent_minutes"]),
-                    has_history=True,
-                    rotowire_confirmed=eff_confirmed,
-                    is_starter=is_starter_flag,
-                    injury_bonus_min=float(bonus.get(pid, 0.0)),
-                    blowout=False,
-                    cfg=mcfg,
-                )
-                preds.pred_minutes_by_pid[pid] = minutes_interval_from_projection(
-                    m50, float(mf["minutes_vol"]), cfg=mcfg
-                )
-            else:
-                preds.pred_minutes_by_pid[pid] = minutes_interval_from_role(
-                    rotowire_confirmed=eff_confirmed,
-                    is_starter=is_starter_flag,
-                    cfg=mcfg,
-                )
-            n_head_predicted += 1
-            preds.rows_by_pid[pid] = r
-            continue
-        if mf is not None and mf["n_min_games"] >= mcfg.min_obs_for_history:
-            # D55 minutes edge: blended_real_score handles the boost<->minutes
-            # weighting internally, with same-day role signals. Blowout is left
-            # to game_script (it already penalises via the spread tier) to avoid
-            # double-counting; the starter multiplier is superseded by the
-            # confirmed-role minutes anchor here, so it is NOT applied.
-            base = blended_real_score(
-                recent_min=mf["recent_minutes"],
-                rate=mf["per_min_rate"],
-                n_games=mf["n_min_games"],
-                boost_prior=_heuristic_real_score(boost),
-                rotowire_confirmed=eff_confirmed,
-                is_starter=bool(int(f.get("is_starter", 0) or 0)),
-                injury_bonus_min=float(bonus.get(pid, 0.0)),
-                blowout=False,
-                cfg=mcfg,
-            )
-            preds.pred_real_scores[pid] = max(0.5, base * gs_mult)
-            preds.minutes_vol_by_pid[pid] = mf["minutes_vol"] * mf["per_min_rate"]
-            # Tier-1 minutes interval: reuse the same projection blended_real_score
-            # applied internally, so the frontend interval matches what the model
-            # actually used to score the player.
-            m50_t1 = project_minutes_from_base(
-                float(mf["recent_minutes"]),
-                has_history=True,
-                rotowire_confirmed=eff_confirmed,
-                is_starter=bool(int(f.get("is_starter", 0) or 0)),
-                injury_bonus_min=float(bonus.get(pid, 0.0)),
-                blowout=False,
-                cfg=mcfg,
-            )
-            preds.pred_minutes_by_pid[pid] = minutes_interval_from_projection(
-                m50_t1, float(mf["minutes_vol"]), cfg=mcfg
-            )
-            n_minutes_predicted += 1
-            preds.rows_by_pid[pid] = r
-            continue
-        # Fallback (no minutes match): EB > corpus history > boost heuristic,
-        # with the legacy starter nudge.
-        starter_mult = _starter_multiplier(
-            r.get("features_json"),
-            enabled=settings.starter_signal_enabled,
+
+        total, spread = _vegas_from_features(row.get("features_json"))
+        features = _features_dict(row.get("features_json"))
+        effective_confirmed = _effective_confirmed(
+            features,
             use_expected=settings.starter_signal_use_expected,
-            unknown_fade=float(getattr(settings, "starter_unknown_fade", 1.0)),
         )
-        eb_pred = _eb_predict_one(art, pid, position)
-        if eb_pred is not None:
-            base = eb_pred
-            n_eb_predicted += 1
-        elif player_history is not None and pid in player_history:
-            # Use observed per-player mean from the label corpus. More
-            # accurate than the generic heuristic for players whose data
-            # postdates the last training run (common early-season pattern).
-            base = max(0.5, player_history[pid])
-            n_history_fallback += 1
-        else:
-            base = _heuristic_real_score(boost)
-            n_heuristic_fallback += 1
-        preds.pred_real_scores[pid] = max(0.5, base * gs_mult * starter_mult)
-        # Tier-3 minutes interval: no per-player minutes history, so we anchor
-        # on the confirmed-role signal (starter -> ~30 min, bench -> ~13 min,
-        # unknown -> wide 20-min band). Consistent with how _starter_multiplier
-        # tilts the real_score in this same branch.
-        preds.pred_minutes_by_pid[pid] = minutes_interval_from_role(
-            rotowire_confirmed=eff_confirmed,
-            is_starter=bool(int(f.get("is_starter", 0) or 0)),
-            cfg=mcfg,
+        minutes = (
+            _minutes_features(row.get("features_json")) if settings.minutes_model_enabled else None
         )
-        preds.rows_by_pid[pid] = r
+        player = _PlayerContext(
+            row=row,
+            pid=player_id,
+            boost=float(row.get("card_boost", 0.0) or 0.0),
+            position=str(row.get("position", "") or ""),
+            total=total,
+            spread=spread,
+            game_script_multiplier=(
+                game_script_multiplier(total, spread, cfg=context.game_script_cfg)
+                if total > 0
+                else 1.0
+            ),
+            features=features,
+            effective_confirmed=effective_confirmed,
+            minutes=minutes,
+        )
+        _register_player_state(player, context, work)
+        if _apply_head_tier(player, context, work):
+            continue
+        if _apply_minutes_tier(player, context, work):
+            continue
+        _apply_fallback_tier(player, context, work)
 
-    if gsm_enabled and gsm_rows:
-        # Convert the signed minute deltas to real_score via each player's
-        # per-minute rate, then fold into pred_real_score (D57). Bench up,
-        # starters down; floored at 0.5 like every other predictor branch.
-        deltas_min = redistribute_game_script_minutes(gsm_rows, gsm_cfg)
-        n_bumped = sum(1 for d in deltas_min.values() if d > 0)
-        n_trimmed = sum(1 for d in deltas_min.values() if d < 0)
-        for pid_d, dmin in deltas_min.items():
-            rate = rate_by_pid.get(pid_d, mcfg.league_rate)
-            preds.pred_real_scores[pid_d] = max(
-                0.5, preds.pred_real_scores[pid_d] + dmin * rate
-            )
-        log.info(
-            "game_script_minutes", n_bumped=n_bumped, n_trimmed=n_trimmed, n_rows=len(gsm_rows)
-        )
-
+    _apply_game_script_redistribution(context, work)
     log.info(
         "predictor_mix",
         artifact_sha=settings.model_artifact_sha[:12] if settings.model_artifact_sha else "",
-        n_head_predicted=n_head_predicted,
-        n_minutes_predicted=n_minutes_predicted,
-        n_eb_predicted=n_eb_predicted,
-        n_history_fallback=n_history_fallback,
-        n_heuristic_fallback=n_heuristic_fallback,
+        n_head_predicted=work.mix.head,
+        n_minutes_predicted=work.mix.minutes,
+        n_eb_predicted=work.mix.eb,
+        n_history_fallback=work.mix.history,
+        n_heuristic_fallback=work.mix.heuristic,
     )
-
-    if avail_enabled and preds.p_active_by_pid:
-        # Two-part hurdle (D57, Tier 2): scale each active-conditional pred by
-        # P(active). Cold-start darts collapse; established players ~unchanged.
-        n_low = 0
-        for pid_a, p_act in preds.p_active_by_pid.items():
-            if pid_a in preds.pred_real_scores:
-                preds.pred_real_scores[pid_a] = max(0.5, preds.pred_real_scores[pid_a] * p_act)
-                if p_act < 0.5:
-                    n_low += 1
-        log.info(
-            "availability_model", n_players=len(preds.p_active_by_pid), n_low_availability=n_low
-        )
-
-    return preds
+    _apply_availability_hurdle(context, work)
+    return work.predictions
 
 
 def materialize_specs(

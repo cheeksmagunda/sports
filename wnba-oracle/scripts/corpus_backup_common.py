@@ -109,9 +109,7 @@ def build_manifest(
     }
 
 
-def validate_snapshot(
-    snapshot_dir: pathlib.Path, *, expected_tables: set[str]
-) -> dict[str, Any]:
+def validate_snapshot(snapshot_dir: pathlib.Path, *, expected_tables: set[str]) -> dict[str, Any]:
     """Validate manifest shape, exact table set, byte counts, and SHA-256 hashes."""
 
     manifest_path = snapshot_dir / "manifest.json"

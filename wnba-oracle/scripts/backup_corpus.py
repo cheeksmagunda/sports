@@ -15,6 +15,7 @@ The manual GitHub Action (.github/workflows/corpus-backup.yml) runs this and
 commits the output to the orphan `backups` branch, off `main`, so backups never
 retrigger Railway deploys.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -150,8 +151,7 @@ def export_corpus(engine, output_dir: pathlib.Path) -> dict[str, object]:
     _assert_no_regression(
         manifest,
         pathlib.Path(previous_setting) if previous_setting else None,
-        allow_regression=os.environ.get("CORPUS_BACKUP_ALLOW_REGRESSION", "").lower()
-        == "true",
+        allow_regression=os.environ.get("CORPUS_BACKUP_ALLOW_REGRESSION", "").lower() == "true",
     )
     atomic_write_json(output_dir / "manifest.json", manifest)
     validate_snapshot(output_dir, expected_tables=set(CORPUS_QUERIES))

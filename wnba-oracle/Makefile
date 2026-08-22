@@ -1,15 +1,17 @@
 # WNBA Oracle developer targets. The parent workspace owns dependency locking.
 # Railway mutations go through documented HTTPS or CLI operations.
 
-.PHONY: help install test test-contract test-all lint typecheck dev migrate deploy determinism-check rotation-check-help fmt
+.PHONY: help install test test-integration test-contract test-all lint typecheck dev migrate deploy determinism-check rotation-check-help fmt
 
 UV_RUN = uv run --no-editable --package wnba-oracle
 
 help:
 	@echo "wnba-oracle developer targets:"
 	@echo "  make install              - uv sync + playwright install"
-	@echo "  make test                 - full pytest suite (excluding contract gate)"
+	@echo "  make test                 - default test suite (unit and offline acceptance)"
+	@echo "  make test-integration     - PostgreSQL, Redis, and migration acceptance"
 	@echo "  make test-contract        - external provider contract tests"
+	@echo "  make test-all             - default, integration, and contract suites"
 	@echo "  make lint                 - ruff check"
 	@echo "  make typecheck            - mypy"
 	@echo "  make fmt                  - ruff format"
@@ -26,15 +28,19 @@ install:
 test:
 	$(UV_RUN) --extra dev python -m pytest tests/ -q
 
+test-integration:
+	$(UV_RUN) --extra dev python scripts/check_migrations.py
+	$(UV_RUN) --extra dev alembic upgrade head
+	$(UV_RUN) --extra dev python -m pytest tests/integration -m integration -q
+
 test-contract:
 	$(UV_RUN) --extra dev python -m pytest tests/ -m contract -v
 
-test-all:
-	$(UV_RUN) --extra dev python -m pytest tests/ -q
-	$(UV_RUN) --extra dev python -m pytest tests/ -m contract -v
+test-all: test test-integration test-contract
 
 lint:
 	$(UV_RUN) --extra dev ruff check src/ tests/ scripts/
+	$(UV_RUN) --extra dev ruff format --check src/ tests/ scripts/
 
 typecheck:
 	$(UV_RUN) --extra dev python -m mypy src/

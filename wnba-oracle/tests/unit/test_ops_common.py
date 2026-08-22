@@ -77,7 +77,9 @@ def test_graphql_errors_do_not_expose_response_body(monkeypatch, tmp_path) -> No
 
     monkeypatch.setattr(ops.urllib.request, "urlopen", successful_request)
     with pytest.raises(ops.SafeRequestError) as raised:
-        ops.RailwayClient("not-rendered").execute("query { projects { edges { node { id } } } }", {})
+        ops.RailwayClient("not-rendered").execute(
+            "query { projects { edges { node { id } } } }", {}
+        )
 
     report = tmp_path / "report.md"
     ops.write_report(report, "Safe report", [ops.Check("Railway", "alert", str(raised.value))])

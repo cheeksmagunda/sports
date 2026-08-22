@@ -297,6 +297,370 @@ class OptimizeConfig:
     committed_order_objective: bool = False
 
 
+@dataclass
+class _ScanInputs:
+    """Precomputed optimizer state shared by constraint-relaxation scans."""
+
+    cfg: OptimizeConfig
+    filtered_count: int
+    effective_max_per_team: int
+    effective_boost_sum_cap: float
+    effective_max_single_boost: float
+    keep_teams: list[str]
+    keep_opponents: list[str]
+    keep_is_anchor: list[bool]
+    keep_boosts: np.ndarray
+    keep_log_own: np.ndarray
+    real_score_samples: np.ndarray
+    field_scores: np.ndarray
+    ownership: np.ndarray
+    slot_multipliers: np.ndarray
+    curve: PayoutCurve
+    field_size_total: int
+    field_lineup_counter: Counter[frozenset[int]] | None
+
+
+def _scan_lineups(
+    inputs: _ScanInputs,
+    min_anchors_req: int,
+) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
+    """Enumerate feasible five-player combinations and return the best."""
+    cfg = inputs.cfg
+    best_ev = -np.inf
+    best_indices: tuple[int, ...] = ()
+    best_samples = np.zeros(cfg.n_samples)
+    n_evaluated = n_skipped_team = n_skipped_anchor = n_skipped_boost = 0
+    boost_cap_on = inputs.effective_boost_sum_cap > 0.0 or inputs.effective_max_single_boost > 0.0
+    leverage_on = cfg.leverage_weight > 0.0
+    ceiling_on = cfg.ceiling_weight > 0.0
+    duplication_penalty_on = cfg.duplication_weight > 0.0
+
+    for combo in itertools.combinations(range(inputs.filtered_count), 5):
+        if inputs.effective_max_per_team < 5 and _exceeds_team_cap(
+            combo, inputs.keep_teams, inputs.effective_max_per_team
+        ):
+            n_skipped_team += 1
+            continue
+        if min_anchors_req > 0 and _anchor_count(combo, inputs.keep_is_anchor) < min_anchors_req:
+            n_skipped_anchor += 1
+            continue
+        if boost_cap_on and _exceeds_boost_cap(
+            combo,
+            inputs.keep_boosts,
+            inputs.effective_boost_sum_cap,
+            inputs.effective_max_single_boost,
+        ):
+            n_skipped_boost += 1
+            continue
+
+        own_samples = lineup_score_samples(
+            inputs.real_score_samples,
+            inputs.keep_boosts,
+            list(combo),
+            inputs.slot_multipliers,
+            committed_order=cfg.committed_order_objective,
+        )
+        ev = expected_payout(
+            own_samples,
+            inputs.field_scores,
+            inputs.curve,
+            field_size=inputs.field_size_total,
+        )
+        if inputs.field_lineup_counter is not None:
+            clones = inputs.field_lineup_counter.get(frozenset(combo), 0)
+            if clones > 0:
+                ev /= float(1 + clones)
+        if cfg.game_stack_bonus > 0.0:
+            pairs = _game_stack_pairs(combo, inputs.keep_teams, inputs.keep_opponents)
+            if pairs > 0:
+                ev += cfg.game_stack_bonus * pairs
+        if leverage_on:
+            leverage = float(-inputs.keep_log_own[list(combo)].mean())
+            ev += cfg.leverage_weight * leverage
+        if ceiling_on:
+            p50, p90 = np.quantile(own_samples, [0.5, 0.9])
+            denominator = max(abs(float(p50)), 1.0)
+            ev += cfg.ceiling_weight * float((p90 - p50) / denominator)
+        if duplication_penalty_on:
+            duplication_probability = float(np.prod(inputs.ownership[list(combo)]))
+            ev -= cfg.duplication_weight * duplication_probability * float(inputs.field_size_total)
+        n_evaluated += 1
+        if ev > best_ev:
+            best_ev, best_indices, best_samples = ev, combo, own_samples
+
+    return (
+        best_ev,
+        best_indices,
+        best_samples,
+        n_evaluated,
+        n_skipped_team,
+        n_skipped_anchor,
+        n_skipped_boost,
+    )
+
+
+@dataclass(frozen=True)
+class _FilteredPool:
+    sampling: list[PlayerSamplingSpec]
+    field: list[FieldPlayerSpec]
+    player_ids: list[int]
+    boosts: np.ndarray
+
+
+@dataclass
+class _ConstraintState:
+    n_games: int
+    max_per_team: int
+    min_anchors: int
+    boost_sum_cap: float
+    max_single_boost: float
+    teams: list[str]
+    opponents: list[str]
+    is_anchor: list[bool]
+
+
+def _slate_limits(sampling_specs: list[PlayerSamplingSpec], cfg: OptimizeConfig) -> tuple[int, int]:
+    """Return slate game count and the small-slate-aware team cap."""
+    n_teams = len({spec.team for spec in sampling_specs if spec.team})
+    n_games = max(n_teams // 2, 1)
+    max_per_team = cfg.max_per_team
+    if cfg.dynamic_team_cap and 0 < n_teams <= 2:
+        max_per_team = 5
+    elif cfg.dynamic_team_cap and 2 < n_teams <= 4:
+        max_per_team = max(cfg.max_per_team, 3)
+    return n_games, max_per_team
+
+
+def _filter_pool(
+    sampling_specs: list[PlayerSamplingSpec],
+    field_specs: list[FieldPlayerSpec],
+    top_n: int,
+) -> _FilteredPool:
+    """Keep the strongest visible-value players with stable tie ordering."""
+    visible_value = np.array(
+        [
+            (
+                spec.rank_pred_override
+                if spec.rank_pred_override is not None
+                else spec.pred_real_score
+            )
+            * (MAX_SLOT_MULT + spec.card_boost)
+            for spec in field_specs
+        ],
+        dtype=float,
+    )
+    order = np.argsort(visible_value, kind="stable")[::-1]
+    keep = order[: min(top_n, len(sampling_specs))]
+    sampling = [sampling_specs[index] for index in keep]
+    field = [field_specs[index] for index in keep]
+    return _FilteredPool(
+        sampling=sampling,
+        field=field,
+        player_ids=[spec.player_id for spec in sampling],
+        boosts=np.array([spec.boost for spec in sampling], dtype=float),
+    )
+
+
+def _sample_filtered_scores(
+    pool: _FilteredPool,
+    cfg: OptimizeConfig,
+    mixture_variance_enabled: bool,
+) -> np.ndarray:
+    availability_probs: np.ndarray | None = None
+    if mixture_variance_enabled:
+        probabilities = np.array([spec.p_active for spec in pool.sampling], dtype=float)
+        availability_probs = probabilities if np.any(probabilities < 1.0) else None
+    return sample_joint_real_scores(
+        pool.sampling,
+        cfg.n_samples,
+        CopulaConfig(seed=cfg.seed, score_offset=cfg.score_offset),
+        availability_probs=availability_probs,
+    )
+
+
+def _simulate_field_scores(
+    pool: _FilteredPool,
+    real_score_samples: np.ndarray,
+    slot_multipliers: np.ndarray,
+    cfg: OptimizeConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ownership = project_ownership(pool.field)
+    teams = [spec.team or "" for spec in pool.sampling]
+    opponents = [spec.opponent or "" for spec in pool.sampling]
+    game_keys = [
+        "|".join(sorted([team, opponent])) if team and opponent else ""
+        for team, opponent in zip(teams, opponents)
+    ]
+    field_lineups = simulate_field_lineups_correlated(
+        ownership,
+        game_keys=game_keys,
+        team_keys=teams,
+        same_game_boost=cfg.field_same_game_boost,
+        same_team_boost=cfg.field_same_team_boost,
+        n_lineups=cfg.n_field_lineups,
+        lineup_size=5,
+        seed=cfg.seed + 1,
+    )
+    field_scores = np.zeros((cfg.n_field_lineups, cfg.n_samples))
+    for row in range(cfg.n_field_lineups):
+        field_scores[row] = lineup_score_samples(
+            real_score_samples,
+            pool.boosts,
+            list(field_lineups[row]),
+            slot_multipliers,
+            committed_order=cfg.committed_order_objective,
+        )
+    return ownership, field_lineups, field_scores
+
+
+def _prepare_constraints(
+    pool: _FilteredPool,
+    cfg: OptimizeConfig,
+    n_games: int,
+    max_per_team: int,
+) -> _ConstraintState:
+    teams = [spec.team for spec in pool.sampling]
+    opponents = [spec.opponent for spec in pool.sampling]
+    is_anchor = [bool(spec.is_anchor) for spec in pool.sampling]
+    if max_per_team < 5 and not _cap_is_feasible(teams, max_per_team):
+        log.warning(
+            "optimizer_cap_infeasible",
+            effective_max_per_team=max_per_team,
+            n_games=n_games,
+            note="relaxing to uncapped",
+        )
+        max_per_team = 5
+
+    available_anchors = sum(is_anchor)
+    min_anchors = min(cfg.min_anchors, available_anchors)
+    if min_anchors < cfg.min_anchors:
+        log.warning(
+            "optimizer_anchor_floor_clamped",
+            requested=cfg.min_anchors,
+            available=available_anchors,
+        )
+
+    boost_sum_cap = cfg.boost_sum_cap
+    max_single_boost = cfg.max_single_boost
+    if (boost_sum_cap > 0.0 or max_single_boost > 0.0) and not _boost_cap_is_feasible(
+        pool.boosts, boost_sum_cap, max_single_boost
+    ):
+        log.warning(
+            "optimizer_boost_cap_infeasible_at_pool",
+            boost_sum_cap=cfg.boost_sum_cap,
+            max_single_boost=cfg.max_single_boost,
+            note="relaxing both caps to 0 (cannot starve the slate)",
+        )
+        boost_sum_cap = 0.0
+        max_single_boost = 0.0
+
+    return _ConstraintState(
+        n_games=n_games,
+        max_per_team=max_per_team,
+        min_anchors=min_anchors,
+        boost_sum_cap=boost_sum_cap,
+        max_single_boost=max_single_boost,
+        teams=teams,
+        opponents=opponents,
+        is_anchor=is_anchor,
+    )
+
+
+def _run_constraint_scans(
+    inputs: _ScanInputs,
+    constraints: _ConstraintState,
+) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
+    result = _scan_lineups(inputs, constraints.min_anchors)
+    if result[3] == 0 and constraints.min_anchors > 0:
+        log.warning("optimizer_anchor_floor_infeasible", note="relaxing anchor floor to 0")
+        result = _scan_lineups(inputs, 0)
+    if result[3] == 0 and (constraints.boost_sum_cap > 0.0 or constraints.max_single_boost > 0.0):
+        log.warning(
+            "optimizer_boost_cap_infeasible_post_scan",
+            boost_sum_cap=constraints.boost_sum_cap,
+            max_single_boost=constraints.max_single_boost,
+            note="relaxing both boost caps to 0",
+        )
+        constraints.boost_sum_cap = 0.0
+        constraints.max_single_boost = 0.0
+        inputs.effective_boost_sum_cap = 0.0
+        inputs.effective_max_single_boost = 0.0
+        result = _scan_lineups(inputs, constraints.min_anchors)
+
+    log.info(
+        "optimizer_stage2",
+        evaluated=result[3],
+        skipped_team_cap=result[4],
+        skipped_anchor_floor=result[5],
+        skipped_boost_cap=result[6],
+        max_per_team=inputs.cfg.max_per_team,
+        effective_max_per_team=constraints.max_per_team,
+        effective_min_anchors=constraints.min_anchors,
+        effective_boost_sum_cap=constraints.boost_sum_cap,
+        effective_max_single_boost=constraints.max_single_boost,
+        n_games=constraints.n_games,
+    )
+    return result
+
+
+def _assemble_recommendation(
+    result: tuple[float, tuple[int, ...], np.ndarray, int, int, int, int],
+    pool: _FilteredPool,
+    real_score_samples: np.ndarray,
+    slot_multipliers: np.ndarray,
+    cfg: OptimizeConfig,
+    n_games: int,
+) -> LineupRecommendation:
+    best_ev, best_indices, best_samples, n_evaluated, *_ = result
+    if n_evaluated == 0 or not np.isfinite(best_ev):
+        log.error(
+            "optimizer_no_feasible_lineup",
+            n_filtered=len(pool.sampling),
+            n_games=n_games,
+            best_ev=float(best_ev),
+            note="no feasible 5-combo after all relaxations; EV clamped to 0.0",
+        )
+        return LineupRecommendation(
+            player_ids=tuple(int(pool.player_ids[index]) for index in best_indices),
+            slot_multipliers=tuple(float(value) for value in slot_multipliers),
+            expected_payout=0.0,
+            lineup_score_p10=0.0,
+            lineup_score_p50=0.0,
+            lineup_score_p90=0.0,
+            entry_flag="enter_with_caveat" if cfg.never_skip else "skip",
+        )
+
+    if cfg.ceiling_tilt_slots:
+        sort_key = np.quantile(real_score_samples[:, list(best_indices)], 0.9, axis=0)
+        sort_method = "p90 (ceiling-tilted)"
+    else:
+        sort_key = np.median(real_score_samples[:, list(best_indices)], axis=0)
+        sort_method = "p50 (rearrangement)"
+    order = np.argsort(sort_key, kind="stable")[::-1]
+    ordered_player_ids = tuple(pool.player_ids[best_indices[index]] for index in order)
+    p10, p50, p90 = np.quantile(best_samples, [0.1, 0.5, 0.9])
+
+    if best_ev < cfg.skip_if_expected_payout_below:
+        entry_flag = "skip"
+    elif best_ev < cfg.caveat_if_expected_payout_below:
+        entry_flag = "skip" if cfg.caveat_is_skip else "enter_with_caveat"
+    else:
+        entry_flag = "enter"
+    if cfg.never_skip and entry_flag == "skip":
+        entry_flag = "enter_with_caveat"
+    log.debug("optimizer_slot_assignment", method=sort_method)
+
+    return LineupRecommendation(
+        player_ids=ordered_player_ids,
+        slot_multipliers=tuple(float(value) for value in slot_multipliers),
+        expected_payout=float(best_ev),
+        lineup_score_p10=float(p10),
+        lineup_score_p50=float(p50),
+        lineup_score_p90=float(p90),
+        entry_flag=entry_flag,
+    )
+
+
 def optimize_lineup(
     sampling_specs: list[PlayerSamplingSpec],
     field_specs: list[FieldPlayerSpec],
@@ -310,377 +674,48 @@ def optimize_lineup(
     if n_all < 5:
         raise ValueError(f"pool too small ({n_all}) - need >= 5 players")
 
-    # Slate size from the full pool (not the filtered top-N, which can drop
-    # an entire team). Keyed on distinct-team count rather than games so odd
-    # counts degrade gracefully. 2 teams = 1 game, 3-4 teams = 2 games,
-    # 5+ teams = 3+ games. Drives the dynamic team cap below.
-    n_teams = len({s.team for s in sampling_specs if s.team})
-    n_games = max(n_teams // 2, 1)
-    effective_max_per_team = cfg.max_per_team
-    if cfg.dynamic_team_cap and n_teams > 0:
-        if n_teams <= 2:  # 1-game slate: cap of 2 is infeasible (forfeit)
-            effective_max_per_team = 5  # uncapped: 5 players / 2 teams forces 3+
-        elif n_teams <= 4:  # 2-game slate: ~32% of top-20 finishers stack 3+
-            effective_max_per_team = max(cfg.max_per_team, 3)
+    n_games, max_per_team = _slate_limits(sampling_specs, cfg)
+    pool = _filter_pool(sampling_specs, field_specs, cfg.top_n_filter)
+    log.info("optimizer_stage1", n_all=n_all, n_filtered=len(pool.sampling))
 
-    # Stage 1: filter to top-N by visible value.
-    # The (MAX_SLOT_MULT + card_boost) factor is the player's max possible
-    # effective multiplier (when assigned to slot 2.0 by rearrangement).
-    # Prior bug used (1.0 + card_boost) which under-weighted low-boost
-    # players relative to high-boost ones, biasing the pool toward chalk.
-    # rank_pred_override lets the caller nudge stage-1 ranking without
-    # perturbing sampling. Used by the 2026-07-04 boost-tail lift: for
-    # head-served players with card_boost >= threshold, the caller sets
-    # this to pred_p90 * (mults) so the ranker prefers ceiling for the
-    # tail; the sampler still sees pred_p50 via pred_real_score.
-    visible_value = np.array(
-        [
-            (s.rank_pred_override if s.rank_pred_override is not None else s.pred_real_score)
-            * (MAX_SLOT_MULT + s.card_boost)
-            for s in field_specs
-        ],
-        dtype=float,
+    real_score_samples = _sample_filtered_scores(pool, cfg, mixture_variance_enabled)
+    ownership, field_lineups, field_scores = _simulate_field_scores(
+        pool,
+        real_score_samples,
+        slot_multipliers,
+        cfg,
     )
-    # kind='stable' so ties resolve in input order (the build-specs caller
-    # already orders by EB-tier confidence + player_id), removing
-    # quicksort's implementation-defined nondeterminism on tied
-    # visible_value scores.
-    order = np.argsort(visible_value, kind="stable")[::-1]
-    keep = order[: min(cfg.top_n_filter, n_all)]
-    filtered_sampling = [sampling_specs[i] for i in keep]
-    filtered_field = [field_specs[i] for i in keep]
-    keep_ids = [s.player_id for s in filtered_sampling]
-    keep_boosts = np.array([s.boost for s in filtered_sampling], dtype=float)
-    log.info("optimizer_stage1", n_all=n_all, n_filtered=len(filtered_sampling))
-
-    # Joint sample once for the filtered pool.
-    # D107 (Tier 2): mixture-variance sampling. When enabled, pass availability probs
-    # to gate each draw by Bernoulli(P(active)), creating spike-at-zero + tail instead
-    # of just shifting the mean (expectation form). When disabled, sample without gating
-    # (pure lognormal, no availability variance).
-    avail_probs_arg = None
-    if mixture_variance_enabled:
-        avail_probs = np.array([s.p_active for s in filtered_sampling], dtype=float)
-        # Only gate if any player has P(active) < 1.0
-        avail_probs_arg = avail_probs if np.any(avail_probs < 1.0) else None
-    real_score_samples = sample_joint_real_scores(
-        filtered_sampling,
-        cfg.n_samples,
-        CopulaConfig(seed=cfg.seed, score_offset=cfg.score_offset),
-        availability_probs=avail_probs_arg,
-    )
-    # Project field ownership + sample opponent lineups.
-    ownership = project_ownership(filtered_field)
-    # D88 (Phase 3): stack-aware field. When either boost is != 1.0 the
-    # sampler conditions each draw on prior picks. The correlated helper
-    # delegates back to the independent sampler when both boosts are 1.0, so
-    # the default config is byte-identical to pre-D88.
-    keep_teams_pre = [s.team or "" for s in filtered_sampling]
-    keep_opponents_pre = [s.opponent or "" for s in filtered_sampling]
-    keep_game_keys = [
-        "|".join(sorted([t, o])) if t and o else ""
-        for t, o in zip(keep_teams_pre, keep_opponents_pre)
-    ]
-    field_lineup_idx = simulate_field_lineups_correlated(
-        ownership,
-        game_keys=keep_game_keys,
-        team_keys=keep_teams_pre,
-        same_game_boost=cfg.field_same_game_boost,
-        same_team_boost=cfg.field_same_team_boost,
-        n_lineups=cfg.n_field_lineups,
-        lineup_size=5,
-        seed=cfg.seed + 1,
-    )
-    # Pre-compute field-lineup score samples
-    field_scores = np.zeros((cfg.n_field_lineups, cfg.n_samples))
-    for r in range(cfg.n_field_lineups):
-        field_scores[r] = lineup_score_samples(
-            real_score_samples,
-            keep_boosts,
-            list(field_lineup_idx[r]),
-            slot_multipliers,
-            committed_order=cfg.committed_order_objective,
-        )
-
-    # Stage 2: enumerate C(n_filtered, 5) lineups. Skip any that violate
-    # max_per_team early - counting same-team membership is much cheaper
-    # than scoring then rejecting.
-    keep_teams = [s.team for s in filtered_sampling]
-    keep_opponents = [s.opponent for s in filtered_sampling]
-    keep_is_anchor = [bool(s.is_anchor) for s in filtered_sampling]
-    # If the cap admits no valid 5-combo from the filtered pool (e.g. a
-    # 1-game slate with dynamic_team_cap disabled), relax to uncapped so we
-    # never ship an empty lineup. n_evaluated==0 below would otherwise leave
-    # best_indices=() and freeze a no-player recommendation.
-    if effective_max_per_team < 5 and not _cap_is_feasible(keep_teams, effective_max_per_team):
-        log.warning(
-            "optimizer_cap_infeasible",
-            effective_max_per_team=effective_max_per_team,
-            n_games=n_games,
-            note="relaxing to uncapped",
-        )
-        effective_max_per_team = 5
-
-    # Anchor floor (D57, Tier 1 seatbelt): clamp the requested floor to the
-    # anchors actually present in the filtered pool so it can never demand more
-    # than exist (the relaxation below is the second safety net).
-    n_anchors_pool = sum(keep_is_anchor)
-    effective_min_anchors = min(cfg.min_anchors, n_anchors_pool)
-    if effective_min_anchors < cfg.min_anchors:
-        log.warning(
-            "optimizer_anchor_floor_clamped",
-            requested=cfg.min_anchors,
-            available=n_anchors_pool,
-        )
-
-    # D70 (R2): clamp the boost caps to the filtered pool's reality. If even
-    # the five smallest-boost players in the pool would violate the requested
-    # caps, disable them (with a warning) up front rather than relying on the
-    # post-scan relax. The relax below still catches the cap+team-cap joint
-    # infeasibility.
-    effective_boost_sum_cap = cfg.boost_sum_cap
-    effective_max_single_boost = cfg.max_single_boost
-    if (effective_boost_sum_cap > 0.0 or effective_max_single_boost > 0.0) and not (
-        _boost_cap_is_feasible(keep_boosts, effective_boost_sum_cap, effective_max_single_boost)
-    ):
-        log.warning(
-            "optimizer_boost_cap_infeasible_at_pool",
-            boost_sum_cap=cfg.boost_sum_cap,
-            max_single_boost=cfg.max_single_boost,
-            note="relaxing both caps to 0 (cannot starve the slate)",
-        )
-        effective_boost_sum_cap = 0.0
-        effective_max_single_boost = 0.0
-
-    # D87 (Phase 1): pre-compute log-ownership over the filtered pool once so
-    # the per-combo leverage term is a 5-element gather, not a per-call np call.
-    # Clip at 1e-4 to bound the -log term (very-rare players don't earn
-    # unbounded leverage credit). Identity vector when leverage_weight==0.
-    keep_log_own = np.log(np.clip(ownership, 1e-4, 1.0))
-    field_size_total = cfg.n_field_lineups + 1
-    # D88 (Phase 3): pre-tabulate field lineup sets as a Counter so the
-    # per-combo duplicate count is an O(1) dictionary hit instead of an O(n_field)
-    # scan. With n_field=500 and C(30,5)~142k combos the scan path would burn
-    # ~70M frozenset-equality checks per slate, breaching the 30s budget noted
-    # in the module docstring. Only built when duplication_aware_payout is on
-    # so the default path skips the allocation entirely.
-    field_lineup_counter: Counter[frozenset[int]] | None = (
-        Counter(frozenset(int(j) for j in row) for row in field_lineup_idx)
+    constraints = _prepare_constraints(pool, cfg, n_games, max_per_team)
+    field_lineup_counter = (
+        Counter(frozenset(int(index) for index in row) for row in field_lineups)
         if cfg.duplication_aware_payout
         else None
     )
-
-    def _scan(
-        min_anchors_req: int,
-    ) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
-        """Enumerate C(n,5) under team cap + anchor floor + boost cap; return the best."""
-        b_ev = -np.inf
-        b_idx: tuple[int, ...] = ()
-        b_samp: np.ndarray = np.zeros(cfg.n_samples)
-        n_eval = n_skip_team = n_skip_anchor = n_skip_boost = 0
-        boost_cap_on = effective_boost_sum_cap > 0.0 or effective_max_single_boost > 0.0
-        leverage_on = cfg.leverage_weight > 0.0
-        ceiling_on = cfg.ceiling_weight > 0.0
-        dup_on = cfg.duplication_weight > 0.0
-        for combo in itertools.combinations(range(len(filtered_sampling)), 5):
-            if effective_max_per_team < 5 and _exceeds_team_cap(
-                combo, keep_teams, effective_max_per_team
-            ):
-                n_skip_team += 1
-                continue
-            if min_anchors_req > 0 and _anchor_count(combo, keep_is_anchor) < min_anchors_req:
-                n_skip_anchor += 1
-                continue
-            if boost_cap_on and _exceeds_boost_cap(
-                combo, keep_boosts, effective_boost_sum_cap, effective_max_single_boost
-            ):
-                n_skip_boost += 1
-                continue
-            own_samples = lineup_score_samples(
-                real_score_samples,
-                keep_boosts,
-                list(combo),
-                slot_multipliers,
-                committed_order=cfg.committed_order_objective,
-            )
-            ev = expected_payout(own_samples, field_scores, curve, field_size=field_size_total)
-            # D88 (Phase 3): research-preferred duplication treatment.
-            # `lineup_score_samples` reads the global `real_score_samples`
-            # matrix by player index, so any field lineup with the SAME 5
-            # players as `combo` produces an identical lineup_score per
-            # sample. `expected_payout` uses strict > for rank, so these
-            # clones tie us (do not beat us). The actual contest pays the
-            # tied rank's prize split across (1 + n_clones) entries.
-            # Dividing the post-MC EV by (1 + n_clones) is therefore the
-            # correct, unbiased tie-share treatment -- E[payout(rank)] is
-            # constant across the tied entries, so the divide is exact.
-            if field_lineup_counter is not None:
-                clones = field_lineup_counter.get(frozenset(combo), 0)
-                if clones > 0:
-                    ev /= float(1 + clones)
-            # D70 (R3): game-stack bonus. Small additive EV bias per stack
-            # pair so the optimizer mildly prefers stacked lineups when EVs
-            # are near-equal. Bonus is in expected_payout units; tuned via
-            # OPTIMIZER_GAME_STACK_BONUS (default 0.0 = no bias).
-            if cfg.game_stack_bonus > 0.0:
-                pairs = _game_stack_pairs(combo, keep_teams, keep_opponents)
-                if pairs > 0:
-                    ev += cfg.game_stack_bonus * pairs
-            # D87 (Phase 1) objective-shaping terms. Each gated by a weight; all
-            # default 0.0 so the loop is byte-identical to pre-D87 when off.
-            if leverage_on:
-                # Mean of -log(own_i) over the 5 chosen players. A 50% owned
-                # chalk player contributes 0.69; a 5% contrarian play 3.0.
-                leverage = float(-keep_log_own[list(combo)].mean())
-                ev += cfg.leverage_weight * leverage
-            if ceiling_on:
-                # Upper-tail width on a stable denominator. Earlier draft used
-                # (p90 - p50)/p50, but lineup_score_samples can sit at or below
-                # zero on punt combos (D52 K=2 makes real_score - K naturally
-                # negative for cold-starts), and dividing by a p50 near or
-                # below zero either silently dropped the term or blew up to
-                # +inf. Anchor on max(|p50|, 1.0) so the ratio stays in a
-                # bounded, dimensionless band that is comparable across pools.
-                p50, p90 = np.quantile(own_samples, [0.5, 0.9])
-                denom = max(abs(float(p50)), 1.0)
-                ev += cfg.ceiling_weight * float((p90 - p50) / denom)
-            if dup_on:
-                # Probability another single random opponent draws the SAME 5
-                # players under independence = prod of ownerships. Multiply by
-                # field size for expected mirror entries.
-                dup_prob = float(np.prod(ownership[list(combo)]))
-                ev -= cfg.duplication_weight * dup_prob * float(field_size_total)
-            n_eval += 1
-            if ev > b_ev:
-                b_ev, b_idx, b_samp = ev, combo, own_samples
-        return b_ev, b_idx, b_samp, n_eval, n_skip_team, n_skip_anchor, n_skip_boost
-
-    (
-        best_ev,
-        best_indices,
-        best_samples,
-        n_evaluated,
-        n_skipped_team_cap,
-        n_skipped_anchor,
-        n_skipped_boost,
-    ) = _scan(effective_min_anchors)
-    if n_evaluated == 0 and effective_min_anchors > 0:
-        # Anchor floor + team cap were jointly infeasible on the filtered pool.
-        # Relax the floor and re-scan so we never freeze an empty lineup.
-        log.warning("optimizer_anchor_floor_infeasible", note="relaxing anchor floor to 0")
-        (
-            best_ev,
-            best_indices,
-            best_samples,
-            n_evaluated,
-            n_skipped_team_cap,
-            n_skipped_anchor,
-            n_skipped_boost,
-        ) = _scan(0)
-    if n_evaluated == 0 and (effective_boost_sum_cap > 0.0 or effective_max_single_boost > 0.0):
-        # D70: boost caps were jointly infeasible with the team cap on the
-        # filtered pool. Drop the boost caps and re-scan; never forfeit.
-        log.warning(
-            "optimizer_boost_cap_infeasible_post_scan",
-            boost_sum_cap=effective_boost_sum_cap,
-            max_single_boost=effective_max_single_boost,
-            note="relaxing both boost caps to 0",
-        )
-        effective_boost_sum_cap = 0.0
-        effective_max_single_boost = 0.0
-        (
-            best_ev,
-            best_indices,
-            best_samples,
-            n_evaluated,
-            n_skipped_team_cap,
-            n_skipped_anchor,
-            n_skipped_boost,
-        ) = _scan(effective_min_anchors)
-    log.info(
-        "optimizer_stage2",
-        evaluated=n_evaluated,
-        skipped_team_cap=n_skipped_team_cap,
-        skipped_anchor_floor=n_skipped_anchor,
-        skipped_boost_cap=n_skipped_boost,
-        max_per_team=cfg.max_per_team,
-        effective_max_per_team=effective_max_per_team,
-        effective_min_anchors=effective_min_anchors,
-        effective_boost_sum_cap=effective_boost_sum_cap,
-        effective_max_single_boost=effective_max_single_boost,
-        n_games=n_games,
+    scan_inputs = _ScanInputs(
+        cfg=cfg,
+        filtered_count=len(pool.sampling),
+        effective_max_per_team=constraints.max_per_team,
+        effective_boost_sum_cap=constraints.boost_sum_cap,
+        effective_max_single_boost=constraints.max_single_boost,
+        keep_teams=constraints.teams,
+        keep_opponents=constraints.opponents,
+        keep_is_anchor=constraints.is_anchor,
+        keep_boosts=pool.boosts,
+        keep_log_own=np.log(np.clip(ownership, 1e-4, 1.0)),
+        real_score_samples=real_score_samples,
+        field_scores=field_scores,
+        ownership=ownership,
+        slot_multipliers=slot_multipliers,
+        curve=curve,
+        field_size_total=cfg.n_field_lineups + 1,
+        field_lineup_counter=field_lineup_counter,
     )
-
-    # Guard the -inf sentinel. If every candidate combo was skipped (the
-    # filtered pool holds fewer than five draftable players, so C(n,5) is
-    # empty even after the team-cap / anchor-floor / boost-cap relaxations
-    # above), best_ev is still the -np.inf the scan initialised it to and
-    # best_indices is (). Recording that float("-inf") is exactly how the
-    # 2026-05-31 two-team slate froze an -inf expected_payout -- it pre-dated
-    # the _cap_is_feasible relaxation, and the empty best_indices also feeds
-    # np.median an empty slice (NaN + RuntimeWarning). Never persist -inf:
-    # clamp the EV to 0.0 (a slate with no feasible lineup has zero expected
-    # payout, not negative-infinite) and return the empty recommendation the
-    # caller's slate_labels fallback can take over from.
-    if n_evaluated == 0 or not np.isfinite(best_ev):
-        log.error(
-            "optimizer_no_feasible_lineup",
-            n_filtered=len(filtered_sampling),
-            n_games=n_games,
-            best_ev=float(best_ev),
-            note="no feasible 5-combo after all relaxations; EV clamped to 0.0",
-        )
-        flag = "enter_with_caveat" if cfg.never_skip else "skip"
-        return LineupRecommendation(
-            player_ids=tuple(int(keep_ids[i]) for i in best_indices),
-            slot_multipliers=tuple(float(x) for x in slot_multipliers),
-            expected_payout=0.0,
-            lineup_score_p10=0.0,
-            lineup_score_p50=0.0,
-            lineup_score_p90=0.0,
-            entry_flag=flag,
-        )
-
-    # Lineup assembly: assign slots by rearrangement inequality.
-    # D107 (Phase 4): ceiling-tilted slots sort by p90 instead of p50 to
-    # prioritize upside in high-multiplier slots. Default is p50 (rearrangement
-    # inequality, which optimizes expected value). kind='stable' so tied values
-    # (e.g. two boost-3 rookies with the same EB shrinkage, as on 2026-05-28's
-    # R.Johnson/G.VanSlooten tie at 1.71) resolve deterministically by input
-    # order, not by quicksort implementation detail.
-    if cfg.ceiling_tilt_slots:
-        rs_sort_key = np.quantile(real_score_samples[:, list(best_indices)], 0.9, axis=0)
-        sort_method = "p90 (ceiling-tilted)"
-    else:
-        rs_sort_key = np.median(real_score_samples[:, list(best_indices)], axis=0)
-        sort_method = "p50 (rearrangement)"
-    order = np.argsort(rs_sort_key, kind="stable")[::-1]
-    ordered_pids = tuple(keep_ids[best_indices[i]] for i in order)
-
-    p10, p50, p90 = np.quantile(best_samples, [0.1, 0.5, 0.9])
-
-    if best_ev < cfg.skip_if_expected_payout_below:
-        flag = "skip"
-    elif best_ev < cfg.caveat_if_expected_payout_below:
-        flag = "skip" if cfg.caveat_is_skip else "enter_with_caveat"
-    else:
-        flag = "enter"
-    # never_skip: the product surfaces a playable lineup every slate and
-    # never tells the operator to sit out. Promote any 'skip' to
-    # 'enter_with_caveat' so the marginal-EV signal survives (via the
-    # caveat flag + expected_payout) without suppressing the slate.
-    if cfg.never_skip and flag == "skip":
-        flag = "enter_with_caveat"
-
-    # D107: log which slot assignment method was used (p50 vs p90)
-    log.debug("optimizer_slot_assignment", method=sort_method)
-
-    return LineupRecommendation(
-        player_ids=ordered_pids,
-        slot_multipliers=tuple(float(x) for x in slot_multipliers),
-        expected_payout=float(best_ev),
-        lineup_score_p10=float(p10),
-        lineup_score_p50=float(p50),
-        lineup_score_p90=float(p90),
-        entry_flag=flag,
+    result = _run_constraint_scans(scan_inputs, constraints)
+    return _assemble_recommendation(
+        result,
+        pool,
+        real_score_samples,
+        slot_multipliers,
+        cfg,
+        n_games,
     )

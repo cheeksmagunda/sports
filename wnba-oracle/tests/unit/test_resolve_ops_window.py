@@ -12,7 +12,9 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 
 
 def _load_resolver() -> ModuleType:
-    common_spec = importlib.util.spec_from_file_location("ops_common", SCRIPTS_DIR / "ops_common.py")
+    common_spec = importlib.util.spec_from_file_location(
+        "ops_common", SCRIPTS_DIR / "ops_common.py"
+    )
     assert common_spec is not None and common_spec.loader is not None
     common = importlib.util.module_from_spec(common_spec)
     sys.modules[common_spec.name] = common

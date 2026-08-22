@@ -23,11 +23,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+from wnba_oracle.common.paths import resolve_project_root
+
+REPO_ROOT = resolve_project_root(__file__)
 PAYOUT_ARCHIVE_DIR = REPO_ROOT / "data" / "contest_payouts"
 
 

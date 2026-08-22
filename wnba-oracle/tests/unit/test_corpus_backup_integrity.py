@@ -17,7 +17,9 @@ TABLES = {"slate_labels", "contest_leaderboards"}
 
 
 def _load_common() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("corpus_backup_common", SCRIPTS_DIR / "corpus_backup_common.py")
+    spec = importlib.util.spec_from_file_location(
+        "corpus_backup_common", SCRIPTS_DIR / "corpus_backup_common.py"
+    )
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -72,9 +74,7 @@ def test_restore_validation_rejects_tampered_payload(tmp_path) -> None:
     common = _load_common()
     _write_valid_snapshot(common, tmp_path)
     payload = (tmp_path / "slate_labels.csv").read_text(encoding="utf-8")
-    (tmp_path / "slate_labels.csv").write_text(
-        payload.replace("1", "2", 1), encoding="utf-8"
-    )
+    (tmp_path / "slate_labels.csv").write_text(payload.replace("1", "2", 1), encoding="utf-8")
 
     with pytest.raises(common.SnapshotValidationError, match="hash"):
         common.validate_snapshot(tmp_path, expected_tables=TABLES)
@@ -159,9 +159,7 @@ def test_restore_records_convert_missing_numeric_values_to_null() -> None:
     assert records == [{"drafts": 12}, {"drafts": None}]
 
 
-def test_restore_apply_uses_one_transaction_and_disposes_engine(
-    monkeypatch, tmp_path
-) -> None:
+def test_restore_apply_uses_one_transaction_and_disposes_engine(monkeypatch, tmp_path) -> None:
     common = _load_common()
     _write_valid_snapshot(common, tmp_path)
     restore = _load_script("restore_corpus")

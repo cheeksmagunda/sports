@@ -26,7 +26,7 @@ from wnba_oracle.common.settings import Settings, get_settings
 from wnba_oracle.db.engine import get_engine
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig, optimize_lineup
-from wnba_oracle.picker.payout import default_curve_for_regime, load_curve_from_archive
+from wnba_oracle.picker.payout import PayoutCurve, default_curve_for_regime, load_curve_from_archive
 from wnba_oracle.picker.popularity import ContrarianConfig, apply_contrarian_adjustment
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 from wnba_oracle.predict.base import player_volatility
@@ -260,7 +260,9 @@ def _build_specs(
     )
 
     # Apply contrarian adjustment
-    adjusted = apply_contrarian_adjustment(preds.pred_real_scores, popularity_scores, contrarian_cfg)
+    adjusted = apply_contrarian_adjustment(
+        preds.pred_real_scores, popularity_scores, contrarian_cfg
+    )
 
     # Per-player sampling sigma from volatility (D52/D55). A flat sigma priced
     # every player the same; ceiling plays (high game-to-game variance) should
@@ -288,6 +290,215 @@ def _build_specs(
     )
 
     return samps, fields, projection_by_pid
+
+
+def _record_serving_schema_findings(slate_date: str, enrichment: list[dict]) -> None:
+    """Persist warn-only serving-boundary findings without blocking a freeze."""
+    try:
+        from wnba_oracle.features.serving_schema import validate_enrichment
+        from wnba_oracle.scheduler.watchdog import (
+            SEVERITY_WARN,
+            WatchdogEvent,
+            persist_events,
+        )
+
+        findings = validate_enrichment(enrichment, strict=False)
+        if findings:
+            persist_events(
+                [
+                    WatchdogEvent(
+                        slate_date=slate_date,
+                        trigger=finding.trigger,
+                        severity=SEVERITY_WARN,
+                        payload=finding.payload,
+                    )
+                    for finding in findings
+                ]
+            )
+    except Exception as exc:
+        log.warning("serving_schema_check_failed", reason=str(exc)[:160])
+
+
+def _resolve_refreeze(
+    *,
+    slate_date: str,
+    model_sha: str,
+    settings: Settings,
+    now_utc: dt.datetime,
+    deadline: dt.datetime | None,
+    upcoming_tip: dt.datetime | None,
+    n_started: int,
+    lock_time: dt.datetime | None,
+) -> tuple[bool, str | None, str | None]:
+    """Return force flag, freeze provenance override, and terminal reason."""
+    force_refreeze = False
+    frozen_via_override: str | None = None
+    if settings.pool_exclude_started_games and upcoming_tip is not None and n_started > 0:
+        try:
+            engine = get_engine()
+            with engine.connect() as connection:
+                already = connection.execute(
+                    FROZEN_EXISTS,
+                    {"sd": slate_date, "ms": model_sha},
+                ).first()
+        except Exception as exc:
+            log.warning("job2_frozen_exists_check_failed", reason=str(exc)[:120])
+            already = None
+        if already:
+            allowed, gate_reason = _late_refreeze_allowed(now_utc, upcoming_tip, settings)
+            if allowed:
+                force_refreeze = True
+                frozen_via_override = "job2_upcoming_games_only"
+            else:
+                log.warning(
+                    "job2_upcoming_refreeze_gated",
+                    slate_date=slate_date,
+                    reason=gate_reason,
+                    upcoming_tip_utc=upcoming_tip.isoformat(),
+                )
+                return False, None, "upcoming_refreeze_gated"
+
+    if deadline is None and settings.late_refreeze_enabled:
+        try:
+            hour, minute = (int(value) for value in settings.late_refreeze_after_utc.split(":"))
+            cutoff = now_utc.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            force_refreeze = now_utc >= cutoff
+        except (ValueError, AttributeError):
+            log.warning("job2_late_refreeze_bad_config", val=settings.late_refreeze_after_utc)
+        if force_refreeze:
+            allowed, gate_reason = _late_refreeze_allowed(now_utc, lock_time, settings)
+            if not allowed:
+                force_refreeze = False
+                log.warning(
+                    "job2_late_refreeze_gated",
+                    slate_date=slate_date,
+                    reason=gate_reason,
+                    lock_time_utc=lock_time.isoformat() if lock_time else None,
+                )
+                try:
+                    from wnba_oracle.scheduler.watchdog import (
+                        SEVERITY_WARN,
+                        WatchdogEvent,
+                        persist_events,
+                    )
+
+                    persist_events(
+                        [
+                            WatchdogEvent(
+                                slate_date=slate_date,
+                                trigger="late_refreeze_gated",
+                                severity=SEVERITY_WARN,
+                                payload={
+                                    "reason": gate_reason,
+                                    "lock_time_utc": (lock_time.isoformat() if lock_time else None),
+                                },
+                            )
+                        ]
+                    )
+                except Exception as exc:
+                    log.warning("job2_gate_event_failed", reason=str(exc)[:120])
+    return force_refreeze, frozen_via_override, None
+
+
+def _freeze_recommendation(
+    *,
+    slate_date: str,
+    model_sha: str,
+    recommendation: LineupRecommendation,
+    curve: PayoutCurve,
+    cfg: OptimizeConfig,
+    projection_by_pid: dict[int, dict],
+    force_refreeze: bool,
+    frozen_via_override: str | None,
+) -> tuple[bool, str]:
+    payout_curve_payload = {
+        "regime": curve.regime,
+        "cash_line_percentile": curve.cash_line_percentile,
+        "percentile_to_payout": {
+            str(percentile): float(payout)
+            for percentile, payout in curve.percentile_to_payout.items()
+        },
+    }
+    serving_knobs_payload = {
+        "n_samples": cfg.n_samples,
+        "n_field_lineups": cfg.n_field_lineups,
+        "top_n_filter": cfg.top_n_filter,
+        "max_per_team": cfg.max_per_team,
+        "min_anchors": cfg.min_anchors,
+        "boost_sum_cap": cfg.boost_sum_cap,
+        "max_single_boost": cfg.max_single_boost,
+        "game_stack_bonus": cfg.game_stack_bonus,
+        "leverage_weight": cfg.leverage_weight,
+        "ceiling_weight": cfg.ceiling_weight,
+        "duplication_weight": cfg.duplication_weight,
+        "field_same_game_boost": cfg.field_same_game_boost,
+        "field_same_team_boost": cfg.field_same_team_boost,
+        "duplication_aware_payout": cfg.duplication_aware_payout,
+        "never_skip": cfg.never_skip,
+        "caveat_is_skip": cfg.caveat_is_skip,
+    }
+    frozen = _freeze(
+        slate_date,
+        model_sha,
+        recommendation,
+        curve.regime,
+        projection_by_pid,
+        force=force_refreeze,
+        payout_curve=payout_curve_payload,
+        serving_knobs=serving_knobs_payload,
+        via=frozen_via_override,
+    )
+    if frozen:
+        return True, "ok"
+    if force_refreeze:
+        return False, "late_refreeze_skipped"
+    with get_engine().connect() as connection:
+        persisted = connection.execute(
+            FROZEN_EXISTS,
+            {"sd": slate_date, "ms": model_sha},
+        ).first()
+    return False, "already_frozen" if persisted else "freeze_not_persisted"
+
+
+def _run_shadow_evaluation(
+    settings: Settings,
+    slate_date: str,
+    model_sha: str,
+    enrichment: list[dict],
+) -> None:
+    if not (settings.model_challenger_sha or getattr(settings, "picker_knob_challenger_json", "")):
+        return
+    try:
+        from wnba_oracle.scheduler.shadow import _maybe_run_knob_shadow, _maybe_run_shadow
+
+        incumbent_artifact = _load_model_artifact(settings.model_artifact_sha)
+        incumbent_head = _predict_heads_for_pool(incumbent_artifact, enrichment)
+        boost_by_player = {
+            int(row["real_sports_player_id"]): float(row.get("card_boost", 0.0) or 0.0)
+            for row in enrichment
+            if row.get("real_sports_player_id") is not None
+        }
+        if settings.model_challenger_sha:
+            _maybe_run_shadow(
+                slate_date,
+                enrichment,
+                incumbent_sha=model_sha,
+                incumbent_head=incumbent_head,
+                boost_by_pid=boost_by_player,
+                challenger_sha=settings.model_challenger_sha,
+            )
+        overlay_json = getattr(settings, "picker_knob_challenger_json", "")
+        if overlay_json:
+            _maybe_run_knob_shadow(
+                slate_date,
+                enrichment,
+                incumbent_sha=model_sha,
+                incumbent_head=incumbent_head,
+                boost_by_pid=boost_by_player,
+                overlay_json=overlay_json,
+            )
+    except Exception as exc:
+        log.warning("shadow_run_wrapper_failed", reason=str(exc)[:160])
 
 
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
@@ -344,33 +555,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
             now_utc=now_utc.isoformat(),
         )
         return Job2Result(sd, model_sha, None, False, "pre_freeze_window")
-    # Serving-schema boundary check (warn-only rollout). Rejects the
-    # 2026-07-02-style degraded pool (all-G positions, null minutes) as
-    # watchdog events without blocking the freeze; escalate to strict
-    # after the count stays at zero for a rolling week.
-    try:
-        from wnba_oracle.features.serving_schema import validate_enrichment
-        from wnba_oracle.scheduler.watchdog import (
-            SEVERITY_WARN,
-            WatchdogEvent,
-            persist_events,
-        )
-
-        findings = validate_enrichment(enrichment_raw, strict=False)
-        if findings:
-            persist_events(
-                [
-                    WatchdogEvent(
-                        slate_date=sd,
-                        trigger=f.trigger,
-                        severity=SEVERITY_WARN,
-                        payload=f.payload,
-                    )
-                    for f in findings
-                ]
-            )
-    except Exception as schema_exc:
-        log.warning("serving_schema_check_failed", reason=str(schema_exc)[:160])
+    _record_serving_schema_findings(sd, enrichment_raw)
     # Injury cascade (D55): redistribute OUT players' recent minutes to active
     # teammates BEFORE dropping the OUT players from the pool (they are the
     # donors). job1 now ships recent_minutes per player, so the full D33/D29
@@ -440,168 +625,29 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # When the tip is UNKNOWN (slate_meta empty), fall back to the legacy static
     # behaviour: freeze on the first fire + optional late re-freeze at
     # LATE_REFREEZE_AFTER_UTC (D75), gated by the D83 lock gate.
-    force_refreeze = False
-    frozen_via_override: str | None = None
-    if settings.pool_exclude_started_games and upcoming_tip is not None and n_started > 0:
-        # A game has tipped since the slate froze, so the frozen lineup was
-        # drawn partly from players nobody can still draft. Append a scoped
-        # freeze so the operator sees an enterable lineup, gated by the same
-        # D83 lock buffer against the game we are actually entering. Before
-        # the first tip (n_started == 0) the scope is a no-op and freeze
-        # semantics are untouched: one freeze per slate, never re-rolled.
-        try:
-            eng = get_engine()
-            with eng.connect() as conn:
-                already = conn.execute(FROZEN_EXISTS, {"sd": sd, "ms": model_sha}).first()
-        except Exception as exc:
-            log.warning("job2_frozen_exists_check_failed", reason=str(exc)[:120])
-            already = None
-        if already:
-            allowed, gate_reason = _late_refreeze_allowed(now_utc, upcoming_tip, settings)
-            if allowed:
-                force_refreeze = True
-                frozen_via_override = "job2_upcoming_games_only"
-            else:
-                log.warning(
-                    "job2_upcoming_refreeze_gated",
-                    slate_date=sd,
-                    reason=gate_reason,
-                    upcoming_tip_utc=upcoming_tip.isoformat(),
-                )
-                return Job2Result(sd, model_sha, rec, False, "upcoming_refreeze_gated")
-    if deadline is None and settings.late_refreeze_enabled:
-        # tip unknown: legacy static late-refreeze trigger (D75).
-        try:
-            h, m = (int(x) for x in settings.late_refreeze_after_utc.split(":"))
-            cutoff = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
-            force_refreeze = now_utc >= cutoff
-        except (ValueError, AttributeError):
-            log.warning("job2_late_refreeze_bad_config", val=settings.late_refreeze_after_utc)
-        if force_refreeze:
-            allowed, gate_reason = _late_refreeze_allowed(now_utc, lock_time, settings)
-            if not allowed:
-                force_refreeze = False
-                log.warning(
-                    "job2_late_refreeze_gated",
-                    slate_date=sd,
-                    reason=gate_reason,
-                    lock_time_utc=lock_time.isoformat() if lock_time else None,
-                )
-                try:
-                    from wnba_oracle.scheduler.watchdog import (
-                        SEVERITY_WARN,
-                        WatchdogEvent,
-                        persist_events,
-                    )
-
-                    persist_events(
-                        [
-                            WatchdogEvent(
-                                slate_date=sd,
-                                trigger="late_refreeze_gated",
-                                severity=SEVERITY_WARN,
-                                payload={
-                                    "reason": gate_reason,
-                                    "lock_time_utc": (lock_time.isoformat() if lock_time else None),
-                                },
-                            )
-                        ]
-                    )
-                except Exception as exc:
-                    log.warning("job2_gate_event_failed", reason=str(exc)[:120])
-
-    # D90: capture the curve + serving knobs the optimizer used so the
-    # placement reader can later join the freeze-time forecast to the
-    # realized outcome. Strings/floats only (no Decimal/NaN) so the JSONB
-    # column round-trips cleanly.
-    payout_curve_payload = {
-        "regime": curve.regime,
-        "cash_line_percentile": curve.cash_line_percentile,
-        "percentile_to_payout": {str(k): float(v) for k, v in curve.percentile_to_payout.items()},
-    }
-    serving_knobs_payload = {
-        "n_samples": cfg.n_samples,
-        "n_field_lineups": cfg.n_field_lineups,
-        "top_n_filter": cfg.top_n_filter,
-        "max_per_team": cfg.max_per_team,
-        "min_anchors": cfg.min_anchors,
-        "boost_sum_cap": cfg.boost_sum_cap,
-        "max_single_boost": cfg.max_single_boost,
-        "game_stack_bonus": cfg.game_stack_bonus,
-        "leverage_weight": cfg.leverage_weight,
-        "ceiling_weight": cfg.ceiling_weight,
-        "duplication_weight": cfg.duplication_weight,
-        "field_same_game_boost": cfg.field_same_game_boost,
-        "field_same_team_boost": cfg.field_same_team_boost,
-        "duplication_aware_payout": cfg.duplication_aware_payout,
-        "never_skip": cfg.never_skip,
-        "caveat_is_skip": cfg.caveat_is_skip,
-    }
-    frozen = _freeze(
-        sd,
-        model_sha,
-        rec,
-        curve.regime,
-        projection_by_pid,
-        force=force_refreeze,
-        payout_curve=payout_curve_payload,
-        serving_knobs=serving_knobs_payload,
-        via=frozen_via_override,
+    force_refreeze, frozen_via_override, terminal_reason = _resolve_refreeze(
+        slate_date=sd,
+        model_sha=model_sha,
+        settings=settings,
+        now_utc=now_utc,
+        deadline=deadline,
+        upcoming_tip=upcoming_tip,
+        n_started=n_started,
+        lock_time=lock_time,
     )
-    if frozen:
-        status = "ok"
-    elif force_refreeze:
-        status = "late_refreeze_skipped"
-    else:
-        # A Redis lock miss is only an expected no-op if the canonical
-        # Postgres row now exists. Otherwise this run produced no durable
-        # lineup and must be retried as a failure, not mislabeled frozen.
-        with get_engine().connect() as conn:
-            persisted = conn.execute(FROZEN_EXISTS, {"sd": sd, "ms": model_sha}).first()
-        status = "already_frozen" if persisted else "freeze_not_persisted"
-    # Shadow-eval the challenger head against the same enrichment. Guarded:
-    # any failure logs and returns without touching the freeze result. The
-    # writer is idempotent per (slate_date, challenger_sha) via ON CONFLICT
-    # so the every-15-min cron cadence naturally dedups. Realized delta is
-    # backfilled in dayclose once slate_labels finalize.
-    if settings.model_challenger_sha or getattr(settings, "picker_knob_challenger_json", ""):
-        try:
-            from wnba_oracle.scheduler.shadow import (
-                _maybe_run_knob_shadow,
-                _maybe_run_shadow,
-            )
-
-            # Reload the incumbent here rather than plumbing it out of
-            # _build_specs -- the artifact is cached by _load_model_artifact
-            # in practice, so this is a no-cost second call.
-            incumbent_art = _load_model_artifact(settings.model_artifact_sha)
-            incumbent_head = _predict_heads_for_pool(incumbent_art, enrichment)
-            boost_by_pid = {
-                int(r["real_sports_player_id"]): float(r.get("card_boost", 0.0) or 0.0)
-                for r in enrichment
-                if r.get("real_sports_player_id") is not None
-            }
-            if settings.model_challenger_sha:
-                _maybe_run_shadow(
-                    sd,
-                    enrichment,
-                    incumbent_sha=model_sha,
-                    incumbent_head=incumbent_head,
-                    boost_by_pid=boost_by_pid,
-                    challenger_sha=settings.model_challenger_sha,
-                )
-            overlay_json = getattr(settings, "picker_knob_challenger_json", "")
-            if overlay_json:
-                _maybe_run_knob_shadow(
-                    sd,
-                    enrichment,
-                    incumbent_sha=model_sha,
-                    incumbent_head=incumbent_head,
-                    boost_by_pid=boost_by_pid,
-                    overlay_json=overlay_json,
-                )
-        except Exception as exc:
-            log.warning("shadow_run_wrapper_failed", reason=str(exc)[:160])
+    if terminal_reason is not None:
+        return Job2Result(sd, model_sha, rec, False, terminal_reason)
+    frozen, status = _freeze_recommendation(
+        slate_date=sd,
+        model_sha=model_sha,
+        recommendation=rec,
+        curve=curve,
+        cfg=cfg,
+        projection_by_pid=projection_by_pid,
+        force_refreeze=force_refreeze,
+        frozen_via_override=frozen_via_override,
+    )
+    _run_shadow_evaluation(settings, sd, model_sha, enrichment)
     return Job2Result(sd, model_sha, rec, frozen, status)
 
 

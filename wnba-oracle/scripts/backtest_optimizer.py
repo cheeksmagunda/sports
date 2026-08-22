@@ -10,6 +10,7 @@ the upper bound is what a perfect oracle would pick.
 
 Not a model evaluation — it tests the optimizer math, not the predictor.
 """
+
 from __future__ import annotations
 
 import json
@@ -104,10 +105,14 @@ def main() -> int:
         eff = slot_mult + boost
         pts = eff * rs
         total += pts
-        print(f"  slot {slot_mult:.1f}x + boost {boost:.1f} = {eff:.1f}x * value {rs:.2f} = {pts:.2f}  ({nm})")
+        print(
+            f"  slot {slot_mult:.1f}x + boost {boost:.1f} = {eff:.1f}x * value {rs:.2f} = {pts:.2f}  ({nm})"
+        )
     print(f"  TOTAL: {total:.2f}")
     print(f"  Optimizer expected_payout: {rec.expected_payout:.3f}")
-    print(f"  p10/p50/p90: {rec.lineup_score_p10:.2f} / {rec.lineup_score_p50:.2f} / {rec.lineup_score_p90:.2f}")
+    print(
+        f"  p10/p50/p90: {rec.lineup_score_p10:.2f} / {rec.lineup_score_p50:.2f} / {rec.lineup_score_p90:.2f}"
+    )
 
     print()
     print("=== Actual top-3 finishers for comparison ===")
@@ -115,13 +120,16 @@ def main() -> int:
         lineup = json.loads(r["lineup_json"])
         print(f"  rank {r['rank']:2d}  user={r['user_id']}  score={r['score']:.2f}")
         for p in lineup:
-            print(f"      {p['displayName']:18s}  {p['multiplier']:.1f}x  value={float(p['value']):.2f}")
+            print(
+                f"      {p['displayName']:18s}  {p['multiplier']:.1f}x  value={float(p['value']):.2f}"
+            )
 
     # Optimal possible: pick 5 highest (slot_mult + boost) * realized_score values via brute force.
     # Sort players by their "max contribution" (boost+2) * rs, then by next slot, etc.
     print()
     print("=== Brute force optimal (for sanity) ===")
     import itertools
+
     best_score = -np.inf
     best_combo = None
     for combo in itertools.combinations(range(len(pool)), 5):
@@ -138,7 +146,9 @@ def main() -> int:
     for slot_idx, pidx in enumerate(best_combo):
         p = pool[pidx]
         eff = DEFAULT_SLOT_MULTIPLIERS[slot_idx] + p["card_boost"]
-        print(f"    slot {DEFAULT_SLOT_MULTIPLIERS[slot_idx]:.1f}x  {p['name']:18s}  boost {p['card_boost']:.1f}  value {p['real_score']:.2f}  pts {eff * p['real_score']:.2f}")
+        print(
+            f"    slot {DEFAULT_SLOT_MULTIPLIERS[slot_idx]:.1f}x  {p['name']:18s}  boost {p['card_boost']:.1f}  value {p['real_score']:.2f}  pts {eff * p['real_score']:.2f}"
+        )
 
     return 0
 

@@ -41,7 +41,7 @@ import argparse
 import json
 import statistics as st
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pandas as pd
@@ -133,12 +133,25 @@ def build_value_book() -> ValueBook:
 
     gl = _load("wnba_game_logs")
     for _, r in gl.iterrows():
-        box = {k: (0.0 if pd.isna(r.get(k)) else float(r.get(k))) for k in
-               ("pts", "reb", "oreb", "dreb", "ast", "stl", "blk", "tov",
-                "fgm", "fga", "fg3m", "ftm", "fta")}
-        by_name.setdefault(
-            (str(r["game_date"]), _fold(r["player_name"])), box_to_real_score(box)
-        )
+        box = {
+            k: (0.0 if pd.isna(r.get(k)) else float(r.get(k)))
+            for k in (
+                "pts",
+                "reb",
+                "oreb",
+                "dreb",
+                "ast",
+                "stl",
+                "blk",
+                "tov",
+                "fgm",
+                "fga",
+                "fg3m",
+                "ftm",
+                "fta",
+            )
+        }
+        by_name.setdefault((str(r["game_date"]), _fold(r["player_name"])), box_to_real_score(box))
     return ValueBook(by_pid, by_name)
 
 
@@ -368,9 +381,94 @@ def assert_artifact_present(pkl_path: Path, slate: str) -> None:
         )
 
 
-def run_variant(
-    overrides: dict[str, object], last: int | None, served_only: bool = True
-) -> None:
+def _variant_inputs() -> tuple[
+    ValueBook,
+    pd.DataFrame,
+    pd.DataFrame,
+    dict[str, list[tuple[int, float]]],
+]:
+    book = build_value_book()
+    enrichment = _load("job1_enrichment")
+    regime = _load("slate_regime").set_index("slate_date")
+    leaderboard = _load("contest_leaderboards")
+    by_slate: dict[str, list[tuple[int, float]]] = {}
+    for _, row in leaderboard.iterrows():
+        by_slate.setdefault(str(row["slate_date"]), []).append(
+            (int(row["rank"]), float(row["score"]))
+        )
+    return book, enrichment, regime, by_slate
+
+
+def _serving_knobs(base_config: object) -> dict[str, dict]:
+    knobs_by_slate: dict[str, dict] = {}
+    for _, freeze in latest_freeze_per_slate(_load("frozen_lineups")).iterrows():
+        lineup = _jload(freeze["lineup"]) or {}
+        knobs = lineup.get("serving_knobs") if isinstance(lineup, dict) else None
+        if isinstance(knobs, dict):
+            knobs_by_slate[str(freeze["slate_date"])] = {
+                key: value for key, value in knobs.items() if hasattr(base_config, key)
+            }
+    return knobs_by_slate
+
+
+def _eligible_variant_slates(
+    enrichment: pd.DataFrame,
+    leaderboard: dict[str, list[tuple[int, float]]],
+    knobs_by_slate: dict[str, dict],
+    served_only: bool,
+    last: int | None,
+) -> list[str]:
+    slates = sorted({str(value) for value in enrichment["slate_date"].unique()} & set(leaderboard))
+    if served_only:
+        before = len(slates)
+        slates = [slate for slate in slates if slate in knobs_by_slate]
+        print(f"served-only: {len(slates)} of {before} slates have recorded serving knobs")
+    return slates[-last:] if last else slates
+
+
+def _score_variant_slate(
+    slate: str,
+    artifact_path: Path,
+    enrichment: pd.DataFrame,
+    book: ValueBook,
+    base_config: object,
+    overrides: dict[str, object],
+    serving_knobs: dict | None,
+) -> tuple[float, float] | None:
+    from wnba_oracle.picker.optimize import optimize_lineup
+    from wnba_oracle.picker.payout import default_curve_for_regime, load_curve_from_archive
+    from wnba_oracle.scheduler.job2 import _build_specs
+
+    assert_artifact_present(artifact_path, slate)
+    rows = [
+        {key: (_jload(value) if key == "features_json" else value) for key, value in row.items()}
+        for row in enrichment[enrichment["slate_date"].astype(str) == slate].to_dict("records")
+    ]
+    try:
+        samples, fields, _ = _build_specs(rows, slate_date=slate)
+    except Exception as exc:
+        print(f"{slate:12s}  spec build failed: {type(exc).__name__}: {exc}")
+        return None
+    if len(samples) < 5:
+        return None
+
+    curve = load_curve_from_archive(slate) or default_curve_for_regime("top_20")
+    slate_base = replace(base_config, **serving_knobs) if serving_knobs else base_config
+    configs = (slate_base, replace(slate_base, **overrides))
+    scores: list[float] = []
+    for config in configs:
+        recommendation = optimize_lineup(samples, fields, curve, cfg=config)
+        by_pid = {int(sample.player_id): sample for sample in samples}
+        values = [book.get(slate, int(pid), None) or 0.0 for pid in recommendation.player_ids]
+        boosts = [
+            float(by_pid[int(pid)].boost) if int(pid) in by_pid else 0.0
+            for pid in recommendation.player_ids
+        ]
+        scores.append(committed_order_score(values, boosts))
+    return scores[0], scores[1]
+
+
+def run_variant(overrides: dict[str, object], last: int | None, served_only: bool = True) -> None:
     """Re-run the production optimizer under an OptimizeConfig override.
 
     Reuses ``job2._build_specs`` and ``picker.optimize_lineup`` directly so the
@@ -382,25 +480,13 @@ def run_variant(
     142,506 at 5x the samples, which is where the original unusable runtime came
     from.
     """
-    from dataclasses import replace
-
     sha, artifact_path = arm_model_artifact()
     print(f"model artifact armed: {sha[:12]}")
 
     from wnba_oracle.common.settings import get_settings
-    from wnba_oracle.picker.optimize import optimize_lineup
-    from wnba_oracle.picker.payout import default_curve_for_regime, load_curve_from_archive
-    from wnba_oracle.scheduler.job2 import _build_specs, build_optimize_config
+    from wnba_oracle.scheduler.job2 import build_optimize_config
 
-    book = build_value_book()
-    enrich = _load("job1_enrichment")
-    regime = _load("slate_regime").set_index("slate_date")
-    lb = _load("contest_leaderboards")
-    lb_by_slate: dict[str, list[tuple[int, float]]] = {}
-    for _, r in lb.iterrows():
-        lb_by_slate.setdefault(str(r["slate_date"]), []).append((int(r["rank"]), float(r["score"])))
-
-    slates = sorted({str(s) for s in enrich["slate_date"].unique()} & set(lb_by_slate))
+    book, enrich, regime, lb_by_slate = _variant_inputs()
 
     # The base arm must be what production serves, not the dataclass defaults.
     # OptimizeConfig() alone is top_n_filter=30 / n_samples=5000 /
@@ -422,26 +508,8 @@ def run_variant(
     # carry (min_anchors 2 vs the local default 0, game_stack_bonus 0.01,
     # field_same_game_boost 3.0). Slates without them fall back to Settings and
     # are marked so in the output.
-    knobs_by_slate: dict[str, dict] = {}
-    for _, fr_row in latest_freeze_per_slate(_load("frozen_lineups")).iterrows():
-        lu = _jload(fr_row["lineup"]) or {}
-        knobs = lu.get("serving_knobs")
-        if isinstance(knobs, dict):
-            knobs_by_slate[str(fr_row["slate_date"])] = {
-                k: v for k, v in knobs.items() if hasattr(base_cfg, k)
-            }
-
-    if served_only:
-        # Default. Slates with no recorded serving_knobs are pre-deployment 2025
-        # history: the replay would run them under local Settings, which is not a
-        # config production ever served, and many have no realized values at all
-        # (they score 0.00 on both arms and only add noise). ~212 enrichment
-        # slates collapse to the ~60 we actually froze lineups for.
-        before = len(slates)
-        slates = [s for s in slates if s in knobs_by_slate]
-        print(f"served-only: {len(slates)} of {before} slates have recorded serving knobs")
-    if last:
-        slates = slates[-last:]
+    knobs_by_slate = _serving_knobs(base_cfg)
+    slates = _eligible_variant_slates(enrich, lb_by_slate, knobs_by_slate, served_only, last)
 
     print(f"\n=== VARIANT {overrides} over {len(slates)} slates ===")
     print(
@@ -450,52 +518,32 @@ def run_variant(
     )
     deltas: list[float] = []
     for slate in slates:
-        assert_artifact_present(artifact_path, slate)
-        rows = [
-            {k: (_jload(v) if k == "features_json" else v) for k, v in r.items()}
-            for r in enrich[enrich["slate_date"].astype(str) == slate].to_dict("records")
-        ]
-        try:
-            samps, fields, _ = _build_specs(rows, slate_date=slate)
-        except Exception as exc:
-            print(f"{slate:12s}  spec build failed: {type(exc).__name__}: {exc}")
-            continue
-        if len(samps) < 5:
-            continue
-
-        # Same curve resolution job2 uses, so the variant is scored against the
-        # payout structure that slate actually ran under.
-        curve = load_curve_from_archive(slate) or default_curve_for_regime("top_20")
         served = knobs_by_slate.get(slate)
-        slate_base = replace(base_cfg, **served) if served else base_cfg
-        slate_var = replace(slate_base, **overrides)
-        scored: dict[str, float] = {}
-        for label, cfg in (("base", slate_base), ("variant", slate_var)):
-            rec = optimize_lineup(samps, fields, curve, cfg=cfg)
-            by_pid = {int(s.player_id): s for s in samps}
-            vals, boos = [], []
-            for pid in rec.player_ids:
-                spec = by_pid.get(int(pid))
-                v = book.get(slate, int(pid), None)
-                vals.append(v if v is not None else 0.0)
-                boos.append(float(spec.boost) if spec else 0.0)
-            scored[label] = committed_order_score(vals, boos)
-
-        d = scored["variant"] - scored["base"]
+        scores = _score_variant_slate(
+            slate, artifact_path, enrich, book, base_cfg, overrides, served
+        )
+        if scores is None:
+            continue
+        base_score, variant_score = scores
+        d = variant_score - base_score
         deltas.append(d)
         has_min = bool(regime["minutes_features_present"].get(slate, False))
         print(
-            f"{slate:12s} {scored['base']:7.2f} {scored['variant']:8.2f} {d:+7.2f} "
+            f"{slate:12s} {base_score:7.2f} {variant_score:8.2f} {d:+7.2f} "
             f"{sorted(lb_by_slate[slate])[0][1]:7.2f} {'Y' if has_min else 'n':>4s} "
             f"{'served' if served else 'LOCAL':>5s}",
             flush=True,
         )
     if deltas:
         wins = sum(1 for d in deltas if d > 0)
-        print(f"\n  mean delta {st.mean(deltas):+.3f} over {len(deltas)} slates; "
-              f"variant better on {wins}, worse on {sum(1 for d in deltas if d < 0)}")
-        print("  Treat a small mean delta on a few dozen slates as noise. Check the sign\n"
-              "  consistency and segment by the minutes regime before believing it.")
+        print(
+            f"\n  mean delta {st.mean(deltas):+.3f} over {len(deltas)} slates; "
+            f"variant better on {wins}, worse on {sum(1 for d in deltas if d < 0)}"
+        )
+        print(
+            "  Treat a small mean delta on a few dozen slates as noise. Check the sign\n"
+            "  consistency and segment by the minutes regime before believing it."
+        )
 
 
 def main() -> int:

@@ -11,6 +11,7 @@ Sweep space (16 combos, leverage=0 per synthesis):
 Usage:
   DATABASE_URL=$DATABASE_PUBLIC_URL uv run python scripts/calibrate_knobs.py
 """
+
 from __future__ import annotations
 
 import json
@@ -24,8 +25,10 @@ import polars as pl
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-os.environ.setdefault("WNBA_ORACLE_MODEL_ARTIFACT_SHA",
-                       "94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd")
+os.environ.setdefault(
+    "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
+    "94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd",
+)
 os.environ.setdefault("PAYOUT_REGIME", "top_20")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
 os.environ.setdefault("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
@@ -42,11 +45,13 @@ from wnba_oracle.picker.optimize import (  # noqa: E402
 from wnba_oracle.picker.payout import default_curve_for_regime  # noqa: E402
 from wnba_oracle.scheduler.job2 import _build_specs  # noqa: E402
 
-GRID = list(product(
-    [1.0, 2.0, 3.0, 4.0],   # field_same_game_boost
-    [1.0, 2.0],              # field_same_team_boost
-    [False, True],           # duplication_aware_payout
-))
+GRID = list(
+    product(
+        [1.0, 2.0, 3.0, 4.0],  # field_same_game_boost
+        [1.0, 2.0],  # field_same_team_boost
+        [False, True],  # duplication_aware_payout
+    )
+)
 CURVE = default_curve_for_regime("top_20")
 
 
@@ -96,15 +101,17 @@ def main() -> int:
             rs = float(r["real_score"]) if r["real_score"] is not None else 0.0
             boost_by[pid] = boost
             rs_by[pid] = rs
-            enrichment.append({
-                "real_sports_player_id": str(pid),
-                "name": r["display_name"],
-                "team": r["team_key"],
-                "opponent": team_to_opp.get(r["team_key"], "UNK"),
-                "position": "F",
-                "card_boost": boost,
-                "features_json": json.dumps({}),
-            })
+            enrichment.append(
+                {
+                    "real_sports_player_id": str(pid),
+                    "name": r["display_name"],
+                    "team": r["team_key"],
+                    "opponent": team_to_opp.get(r["team_key"], "UNK"),
+                    "position": "F",
+                    "card_boost": boost,
+                    "features_json": json.dumps({}),
+                }
+            )
 
         samps, fields, _ = _build_specs(enrichment, slate_date=sd)
         if len(samps) < 5:
@@ -136,7 +143,7 @@ def main() -> int:
             d = precomputed[sd]
             cfg = OptimizeConfig(
                 top_n_filter=min(20, len(d["samps"])),
-                n_samples=80,        # fast for sweep; validate winner at 400
+                n_samples=80,  # fast for sweep; validate winner at 400
                 n_field_lineups=40,
                 seed=2026,
                 max_per_team=2,
@@ -161,13 +168,15 @@ def main() -> int:
             top5 = lb[min(4, len(lb) - 1)]
             median = lb[min(9, len(lb) - 1)]
 
-            slate_results.append({
-                "beat_median": 1 if our_score > median else 0,
-                "beat_top5": 1 if our_score > top5 else 0,
-                "beat_top1": 1 if our_score >= top1 else 0,
-                "gap": top1 - our_score,
-                "our_score": our_score,
-            })
+            slate_results.append(
+                {
+                    "beat_median": 1 if our_score > median else 0,
+                    "beat_top5": 1 if our_score > top5 else 0,
+                    "beat_top1": 1 if our_score >= top1 else 0,
+                    "gap": top1 - our_score,
+                    "our_score": our_score,
+                }
+            )
             done += 1
 
         if done % (n // 2 or 1) == 0:
@@ -176,23 +185,27 @@ def main() -> int:
 
         if not slate_results:
             continue
-        combo_results.append({
-            "label": label,
-            "game_boost": game_boost,
-            "team_boost": team_boost,
-            "dup_payout": dup_payout,
-            "n": len(slate_results),
-            "beat_median_pct": 100 * np.mean([r["beat_median"] for r in slate_results]),
-            "beat_top5_pct": 100 * np.mean([r["beat_top5"] for r in slate_results]),
-            "beat_top1_pct": 100 * np.mean([r["beat_top1"] for r in slate_results]),
-            "mean_gap": np.mean([r["gap"] for r in slate_results]),
-        })
+        combo_results.append(
+            {
+                "label": label,
+                "game_boost": game_boost,
+                "team_boost": team_boost,
+                "dup_payout": dup_payout,
+                "n": len(slate_results),
+                "beat_median_pct": 100 * np.mean([r["beat_median"] for r in slate_results]),
+                "beat_top5_pct": 100 * np.mean([r["beat_top5"] for r in slate_results]),
+                "beat_top1_pct": 100 * np.mean([r["beat_top1"] for r in slate_results]),
+                "mean_gap": np.mean([r["gap"] for r in slate_results]),
+            }
+        )
 
     print(f"\n{'=' * 80}")
     print(f"CALIBRATION RESULTS -- {n} slates, top-20 leaderboard benchmark")
     print(f"{'=' * 80}")
     combo_results.sort(key=lambda x: (-x["beat_median_pct"], -x["beat_top5_pct"]))
-    print(f"  {'Config':28s} {'beat>=med':>9s} {'beat>=top5':>10s} {'beat>=top1':>10s} {'gap_vs_1st':>11s}")
+    print(
+        f"  {'Config':28s} {'beat>=med':>9s} {'beat>=top5':>10s} {'beat>=top1':>10s} {'gap_vs_1st':>11s}"
+    )
     print(f"  {'-' * 28} {'-' * 9} {'-' * 10} {'-' * 10} {'-' * 11}")
     for r in combo_results:
         print(

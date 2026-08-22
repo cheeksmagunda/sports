@@ -55,12 +55,8 @@ SELECT_GAME_LOGS = text(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--slate-date", default=dt.date.today().isoformat(), help="ISO date"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Print plan, do not write"
-    )
+    parser.add_argument("--slate-date", default=dt.date.today().isoformat(), help="ISO date")
+    parser.add_argument("--dry-run", action="store_true", help="Print plan, do not write")
     args = parser.parse_args()
     sd = args.slate_date
 
@@ -71,9 +67,9 @@ def main() -> int:
     # Project uses psycopg v3 (per pyproject); coerce both schemes to the
     # postgresql+psycopg:// driver SQLAlchemy needs.
     if db_url.startswith("postgres://"):
-        db_url = "postgresql+psycopg://" + db_url[len("postgres://"):]
+        db_url = "postgresql+psycopg://" + db_url[len("postgres://") :]
     elif db_url.startswith("postgresql://"):
-        db_url = "postgresql+psycopg://" + db_url[len("postgresql://"):]
+        db_url = "postgresql+psycopg://" + db_url[len("postgresql://") :]
 
     eng = sa.create_engine(db_url)
 

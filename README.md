@@ -9,11 +9,13 @@ endpoints. `packages/oracle-core` owns reusable technical infrastructure only.
 
 Requirements: Python 3.11 or 3.12, `uv`, and Git. Use existing native `gh` and
 Railway CLI logins for those services. Runtime secrets come from the process
-environment.
+environment. Docker is required only for the container and database acceptance
+path.
 
 ```sh
 uv sync --all-packages --all-extras
 make test
+make security
 make lint
 make typecheck
 make check-boundaries
@@ -111,11 +113,18 @@ Passwords and are entered through browser Autofill or user interaction.
 ```sh
 make test-core
 make test-wnba
+make test-integration  # requires PostgreSQL, Redis, and their URL variables
 make test-contract
+make security
 make lint
 make typecheck
 make build
 make check-boundaries
 ```
+
+Backend CI calls these same targets, then builds the WNBA image and probes each
+runtime role plus API startup against PostgreSQL and Redis. Operational workflow
+schedules and production evidence are application state, so their current values
+belong in `wnba-oracle/STATUS.md`.
 
 See `wnba-oracle/AGENTS.md` for WNBA-specific commands and verification rules.

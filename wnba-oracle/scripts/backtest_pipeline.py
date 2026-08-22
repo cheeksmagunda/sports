@@ -24,6 +24,7 @@ Caveats:
 
 Outputs a per-slate table + aggregate stats.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,8 +38,10 @@ import polars as pl
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 # Match production env exactly
-os.environ.setdefault("WNBA_ORACLE_MODEL_ARTIFACT_SHA",
-                       "db18f6c9f495555e9df8f995e17679b93a7d26b1de77b39546d51ce2f5538f62")
+os.environ.setdefault(
+    "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
+    "db18f6c9f495555e9df8f995e17679b93a7d26b1de77b39546d51ce2f5538f62",
+)
 os.environ.setdefault("CONTRARIAN_STRENGTH", "0.3")
 os.environ.setdefault("CONTRARIAN_ENABLED", "true")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
@@ -76,9 +79,7 @@ def main() -> int:
 
     sl = read_slate_labels()
     lb = read_leaderboards()
-    test_slates = sorted(
-        [d for d in sl["slate_date"].unique().to_list() if d.startswith("2026-")]
-    )
+    test_slates = sorted([d for d in sl["slate_date"].unique().to_list() if d.startswith("2026-")])
     print(f"Backtesting on {len(test_slates)} 2026 slates")
     print(f"Using artifact SHA: {os.environ['WNBA_ORACLE_MODEL_ARTIFACT_SHA'][:16]}...")
     print()
@@ -99,15 +100,17 @@ def main() -> int:
             rs = float(r["real_score"]) if r["real_score"] is not None else 0.0
             boost_by_pid[pid] = boost
             rs_by_pid[pid] = rs
-            enrichment.append({
-                "real_sports_player_id": str(pid),
-                "name": r["display_name"],
-                "team": r["team_key"],
-                "opponent": team_to_opp.get(r["team_key"], "UNK"),
-                "position": "F",
-                "card_boost": boost,
-                "features_json": json.dumps({}),
-            })
+            enrichment.append(
+                {
+                    "real_sports_player_id": str(pid),
+                    "name": r["display_name"],
+                    "team": r["team_key"],
+                    "opponent": team_to_opp.get(r["team_key"], "UNK"),
+                    "position": "F",
+                    "card_boost": boost,
+                    "features_json": json.dumps({}),
+                }
+            )
 
         # Run the same pipeline cron-job2 runs
         samps, fields, _projection_by_pid = _build_specs(enrichment, slate_date=sd)
@@ -127,14 +130,11 @@ def main() -> int:
         actual_top1 = float(slate_lb.row(0, named=True)["score"]) if slate_lb.height else 0.0
         actual_top5 = (
             float(slate_lb.filter(pl.col("rank") <= 5)["score"].min())
-            if slate_lb.height >= 5 else 0.0
+            if slate_lb.height >= 5
+            else 0.0
         )
-        actual_top20 = (
-            float(slate_lb["score"].min()) if slate_lb.height else 0.0
-        )
-        actual_median = (
-            float(slate_lb["score"].median()) if slate_lb.height else 0.0
-        )
+        actual_top20 = float(slate_lb["score"].min()) if slate_lb.height else 0.0
+        actual_median = float(slate_lb["score"].median()) if slate_lb.height else 0.0
 
         # Where would we have placed?
         all_scores = sorted(slate_lb["score"].to_list(), reverse=True)
@@ -148,17 +148,19 @@ def main() -> int:
             win_pids = {int(p["playerId"]) for p in win_lineup}
         overlap = len(our_pids & win_pids)
 
-        rows.append({
-            "slate_date": sd,
-            "our_score": round(our_score, 2),
-            "top1": round(actual_top1, 2),
-            "top5": round(actual_top5, 2),
-            "top20": round(actual_top20, 2),
-            "median": round(actual_median, 2),
-            "placement": placement,
-            "overlap_with_winner": overlap,
-            "n_pool": len(samps),
-        })
+        rows.append(
+            {
+                "slate_date": sd,
+                "our_score": round(our_score, 2),
+                "top1": round(actual_top1, 2),
+                "top5": round(actual_top5, 2),
+                "top20": round(actual_top20, 2),
+                "median": round(actual_median, 2),
+                "placement": placement,
+                "overlap_with_winner": overlap,
+                "n_pool": len(samps),
+            }
+        )
 
     df = pl.DataFrame(rows)
     print()
@@ -172,9 +174,9 @@ def main() -> int:
     n_top20 = sum(1 for r in rows if r["placement"] <= 20)
     n_top5 = sum(1 for r in rows if r["placement"] <= 5)
     n_top1 = sum(1 for r in rows if r["placement"] == 1)
-    print(f"Top-20 finishes: {n_top20}/{len(rows)} ({100*n_top20/len(rows):.0f}%)")
-    print(f"Top-5  finishes: {n_top5}/{len(rows)} ({100*n_top5/len(rows):.0f}%)")
-    print(f"Top-1  finishes: {n_top1}/{len(rows)} ({100*n_top1/len(rows):.0f}%)")
+    print(f"Top-20 finishes: {n_top20}/{len(rows)} ({100 * n_top20 / len(rows):.0f}%)")
+    print(f"Top-5  finishes: {n_top5}/{len(rows)} ({100 * n_top5 / len(rows):.0f}%)")
+    print(f"Top-1  finishes: {n_top1}/{len(rows)} ({100 * n_top1 / len(rows):.0f}%)")
     print(f"Median placement: {int(np.median([r['placement'] for r in rows]))}")
     print(f"Mean score gap vs top-1: {np.mean([r['top1'] - r['our_score'] for r in rows]):.2f}")
     print(f"Mean overlap with winner: {np.mean([r['overlap_with_winner'] for r in rows]):.2f}/5")

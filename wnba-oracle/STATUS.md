@@ -63,9 +63,10 @@ Use Postgres, not local parquet.
 | `contest_placements` | Realized placement feedback |
 | `watchdog_events` | Operational alerts |
 
-Corpus size (2026-07-03): 167 slates in `slate_labels` (2025-05-16 through
-2026-07-02, ~4,900 rows); ~14,900 player-games in `wnba_game_logs`. The
-day-close cron extends both nightly. All reads go through
+Corpus size (read-only production query, 2026-08-22): 211 slates and 6,335 rows
+in `slate_labels` (2025-05-16 through 2026-08-21); 17,444 player-games in
+`wnba_game_logs` (2024-05-03 through 2026-08-21). The day-close cron extends
+both nightly. All reads go through
 `src/wnba_oracle/db/reads.py`.
 
 ## Live services
@@ -94,14 +95,6 @@ Repository workflow schedules:
 | corpus backup | `43 6 * * *` |
 | WNBA pre-freeze guard | `30 13 * * *` |
 | WNBA day-close verify | `0 7 * * *` |
-
-Recorded legacy external routine identifiers, retained only for migration
-traceability and not as current execution proof:
-
-| Routine | Trigger | Schedule UTC |
-| --- | --- | --- |
-| WNBA pre-freeze guard | `trig_01FzJJAJ89ggeMgkgoPRTEzg` | `30 13 * * *` |
-| WNBA day-close verify | `trig_015HXQzUQjAgVFwfv6b7q8y6` | `0 7 * * *` |
 
 - api: https://api-production-7033.up.railway.app (`/health`, `/lineup/{date}`,
   `/slate/{date}`, `/watchdog/today`)
@@ -289,7 +282,11 @@ issue labeled `ops-results` (#15). No model change was made.
 
 ## Quality gates
 
-- Last local verification, 2026-08-22: 608 WNBA tests and 48 oracle-core tests
+- Read-only production refresh, 2026-08-22: Railway reported the API deployment
+  successful, the API `/health` response and watchdog were `ok`, today's
+  watchdog had zero events, and backend CI run `32573760266` passed commit
+  `5ac8cc24e2dfd1872c6334b260c917576fae9710`. `main` remains unprotected.
+- Last local verification, 2026-08-22: 612 WNBA tests and 48 oracle-core tests
   passed; Ruff, mypy, import-boundary checks, package builds, the medium-severity
   Bandit gate, and the dependency audit passed.
 - Docker acceptance passed against PostgreSQL and Redis containers: an empty
@@ -321,3 +318,28 @@ issue labeled `ops-results` (#15). No model change was made.
   (1985 lines) was similarly split into `frontend/src/styles/partials/`,
   one file per numbered section (§1 through §15); verified byte-identical
   via the built CSS bundle's content hash before and after.
+- `picker/optimize.py` was reorganized 2026-08-22 around typed filtering,
+  simulation, constraint-scan, and recommendation boundaries. The public
+  optimizer no longer carries an F-rated cyclomatic complexity score; its two
+  most complex internal functions are C-rated at 17 and 14, with selection and
+  random-call order preserved by focused behavior tests.
+- Job 1 enrichment, Job 2 freeze orchestration, and player prediction were
+  decomposed behind their existing public entry points. Their complexity fell
+  from F47, F51, and F55 to D28, D22, and C12 respectively. No F-rated backend
+  function remains. The Real Sports pool fetch and serve-time schema validator
+  were also reduced from E32 and E36 to small orchestrators. The remaining
+  E-rated offline backfill, model-lab, and loss-ledger scripts were decomposed
+  as well. No E- or F-rated function remains in backend source or scripts, and
+  Ruff enforces a maximum McCabe complexity of 20 so that boundary cannot
+  silently regress.
+- Dependabot is configured for weekly Python workspace and GitHub Actions
+  updates. Frontend dependency automation remains outside this backend-owned
+  change. The configuration is active from the default branch.
+- App-owned runtime paths now resolve the WNBA checkout under both source and
+  non-editable workspace installs. This closes a local operational gap where
+  the served artifact, identity overrides, cache, payout archive, and watchdog
+  checks could incorrectly look beneath `site-packages`. The pinned production
+  artifact loads locally with 11,205 training rows and six trained heads.
+- Backend Python source, tests, and operational scripts are Ruff-formatted, and
+  the standard lint target now checks formatting so style drift fails locally
+  and in backend CI.

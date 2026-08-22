@@ -119,7 +119,10 @@ def main() -> int:
         return 1
 
     tables = manifest["tables"]
-    print("verified corpus backup:", ", ".join(f"{name}={tables[name]['rows']}" for name in sorted(tables)))
+    print(
+        "verified corpus backup:",
+        ", ".join(f"{name}={tables[name]['rows']}" for name in sorted(tables)),
+    )
     if not args.apply:
         print("validation only; pass --apply and --confirm-restore RESTORE_CORPUS to restore")
         return 0
@@ -134,7 +137,9 @@ def main() -> int:
     except Exception as exc:
         print(f"ERROR: corpus restore failed ({type(exc).__name__})", file=sys.stderr)
         return 1
-    print("restored corpus rows:", ", ".join(f"{name}={restored[name]}" for name in sorted(restored)))
+    print(
+        "restored corpus rows:", ", ".join(f"{name}={restored[name]}" for name in sorted(restored))
+    )
     return 0
 
 

@@ -8,6 +8,8 @@ Railway cron run shows failed. The 2026-06-08 morning capture
 
 from __future__ import annotations
 
+import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from wnba_oracle.scheduler import job1
@@ -80,3 +82,47 @@ def test_valid_capture_replaces_the_whole_slate_atomically() -> None:
     assert str(first.args[0]) == str(job1.JOB1_DELETE_SLATE)
     assert first.args[1] == {"slate_date": "2026-06-08"}
     assert [call.args[1] for call in conn.execute.call_args_list[1:]] == rows
+
+
+def test_enrichment_row_preserves_provider_signal_shape() -> None:
+    player = SimpleNamespace(
+        platform_id="123",
+        display_name="A. Wilson",
+        first_name="A'ja",
+        last_name="Wilson",
+        team="LVA",
+        injury_status="",
+        primary_ranking=1,
+        position="F",
+        multiplier_bonus=1.5,
+        game_start_utc="2026-06-08T23:00:00Z",
+    )
+    context = job1._EnrichmentContext(
+        team_to_opp={"LVA": "NYL"},
+        team_to_vegas={"LVA": {"vegas_total": 164.5, "vegas_spread": -4.0, "is_home": 1.0}},
+        rotowire=job1._index_rotowire([]),
+        minutes={},
+        head_features={},
+        resolver=None,
+        team_stats={},
+        opponent_dvp={"NYL": 2.1},
+        props={
+            ("a. wilson", "player_points"): {
+                "line": 22.5,
+                "implied_over_prob": 0.52,
+                "implied_under_prob": 0.48,
+            }
+        },
+    )
+
+    rows, stats, misses = job1._build_enrichment_rows("2026-06-08", [player], context)
+
+    assert len(rows) == 1
+    assert rows[0]["player_id"] == 123
+    assert rows[0]["opponent"] == "NYL"
+    features = json.loads(rows[0]["features_json"])
+    assert features["vegas_total"] == 164.5
+    assert features["prop_points_line"] == 22.5
+    assert features["game_start_utc"] == "2026-06-08T23:00:00Z"
+    assert stats.props_matched == 1
+    assert misses == ["A. Wilson (LVA) [unresolved]"]

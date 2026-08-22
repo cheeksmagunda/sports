@@ -140,7 +140,9 @@ def deployment_status_check(name: str, deployments: Iterable[Mapping[str, Any]])
 
     latest = next(iter(deployments), None)
     if latest is None:
-        return Check(name, "alert", "No Railway deployment was returned for the requested run window.")
+        return Check(
+            name, "alert", "No Railway deployment was returned for the requested run window."
+        )
     status = normalized_status(latest.get("status"))
     if status in SUCCESSFUL_DEPLOYMENT_STATUSES:
         return Check(name, "ok", f"Railway deployment status is {status}.")
@@ -327,14 +329,17 @@ class RailwayClient:
             return [], []
         selected = max(
             matched,
-            key=lambda item: parse_timestamp(item.get("createdAt"))
-            or dt.datetime.min.replace(tzinfo=dt.UTC),
+            key=lambda item: (
+                parse_timestamp(item.get("createdAt")) or dt.datetime.min.replace(tzinfo=dt.UTC)
+            ),
         )
         deployment_id = selected.get("id")
         if not isinstance(deployment_id, str) or not deployment_id:
             return [selected], []
         logs = self.deployment_logs(deployment_id, limit=log_limit)
-        return [selected], [item for item in logs if window.contains(parse_timestamp(item.get("timestamp")))]
+        return [selected], [
+            item for item in logs if window.contains(parse_timestamp(item.get("timestamp")))
+        ]
 
     def deploy_service(self, service_id: str, environment_id: str) -> str:
         data = self.execute(
@@ -416,7 +421,11 @@ def run_evidence_checks(
     checks = [deployment_status_check(deployment_name, deployments)]
     if role_evidence(logs, window):
         checks.append(
-            Check(f"{completion_name} role", "ok", f"Observed {window.role} in the requested run window.")
+            Check(
+                f"{completion_name} role",
+                "ok",
+                f"Observed {window.role} in the requested run window.",
+            )
         )
     else:
         checks.append(
