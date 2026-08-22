@@ -30,7 +30,8 @@ def read_label_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
     q = text(
         "SELECT slate_date, platform_player_id AS player_id, display_name, "
         "team_key AS team, card_boost, real_score, 'F' AS position "
-        "FROM slate_labels WHERE real_score IS NOT NULL ORDER BY slate_date"
+        "FROM slate_labels WHERE real_score IS NOT NULL "
+        "ORDER BY slate_date, platform_player_id"
     )
     with eng.connect() as conn:
         rows = conn.execute(q).fetchall()

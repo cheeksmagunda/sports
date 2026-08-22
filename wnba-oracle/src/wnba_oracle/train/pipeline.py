@@ -7,7 +7,7 @@ models/picker_<commit>_<ts>.pkl, with a SHA-256 sidecar.
 Determinism: numpy / lightgbm / python seeds pinned. OMP_NUM_THREADS=1
 in the Makefile target. `assert_byte_equal_after_two_runs` is the gate.
 
-If labeled rows < configs/models.yaml::low_data_mode.min_labeled_rows
+If labeled rows < train/models.yaml::low_data_mode.min_labeled_rows
 (default 2000), the pipeline switches to fallback hyperparameters and
 emits a warning. The serving picker reads this flag from the artifact
 metadata and shows a transparent heuristic ranking instead of LightGBM
@@ -55,7 +55,7 @@ log = get_logger("oracle.train.pipeline")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MODELS_DIR = REPO_ROOT / "models"
-CONFIG_PATH = REPO_ROOT / "configs" / "models.yaml"
+CONFIG_PATH = Path(__file__).with_name("models.yaml")
 
 
 # z-score spread between the P10 and P90 quantiles: norm.ppf(0.9) - norm.ppf(0.1).
@@ -343,12 +343,17 @@ def _git_sha_short() -> str:
         return "no-git"
 
 
-def write_artifact(art: PickerArtifact, *, commit: str) -> Path:
+def write_artifact(
+    art: PickerArtifact,
+    *,
+    commit: str,
+    directory: Path | None = None,
+) -> Path:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     import time as _time
 
     ts = int(_time.time())
-    path = MODELS_DIR / f"picker_{commit[:8]}_{ts}.pkl"
+    path = (directory or MODELS_DIR) / f"picker_{commit[:8]}_{ts}.pkl"
     payload = pickle.dumps(art, protocol=pickle.HIGHEST_PROTOCOL)
     info = persist_artifact(path, payload)
     sha = info.sha256
@@ -390,7 +395,9 @@ def load_artifact(path: Path) -> PickerArtifact:
         expected = sha_path.read_text().strip()
         if not verify_sha256(path, expected):
             raise RuntimeError(f"artifact SHA mismatch for {path}")
-    artifact = pickle.loads(path.read_bytes())
+    # Model artifacts are operator-controlled local files. Production resolves
+    # the sidecar against the configured SHA before this verified load.
+    artifact = pickle.loads(path.read_bytes())  # nosec B301
     if not isinstance(artifact, PickerArtifact):
         raise TypeError(f"artifact has unexpected type: {type(artifact).__name__}")
     return artifact

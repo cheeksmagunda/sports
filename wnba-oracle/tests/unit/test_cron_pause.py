@@ -6,6 +6,7 @@ import datetime as dt
 from unittest.mock import patch
 
 import pytest
+from oracle_core.jobs import JobResult
 
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.common.settings import Settings
@@ -39,11 +40,13 @@ def test_paused_does_not_skip_dayclose() -> None:
     with (
         patch("sys.argv", ["oracle-cron", "--job", "dayclose"]),
         patch("wnba_oracle.scheduler.cron.get_settings", return_value=PAUSED),
-        patch("wnba_oracle.scheduler.job_dayclose.main", return_value=0) as dayclose_main,
+        patch(
+            "wnba_oracle.scheduler.job_dayclose.run", return_value=JobResult.success()
+        ) as dayclose_run,
     ):
         rc = cron.main()
     assert rc == 0
-    dayclose_main.assert_called_once()
+    dayclose_run.assert_called_once()
 
 
 def test_not_paused_dispatches_job1late() -> None:

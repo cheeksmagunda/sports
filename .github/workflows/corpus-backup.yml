@@ -1,6 +1,8 @@
 name: corpus-backup
 
 on:
+  schedule:
+    - cron: "43 6 * * *"
   workflow_dispatch:
     inputs:
       confirm_backup:
@@ -15,7 +17,7 @@ on:
         default: false
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: corpus-backup
@@ -23,15 +25,17 @@ concurrency:
 
 jobs:
   backup:
-    if: inputs.confirm_backup == true
+    permissions:
+      contents: write
+    if: github.event_name == 'schedule' || inputs.confirm_backup == true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.11"
 
@@ -60,7 +64,7 @@ jobs:
 
       - name: Export corpus snapshot
         env:
-          CORPUS_BACKUP_ALLOW_REGRESSION: ${{ inputs.allow_regression }}
+          CORPUS_BACKUP_ALLOW_REGRESSION: ${{ inputs.allow_regression || false }}
           CORPUS_BACKUP_DIR: ${{ runner.temp }}/corpus-backup
           CORPUS_PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
           DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}

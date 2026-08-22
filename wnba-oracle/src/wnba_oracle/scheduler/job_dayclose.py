@@ -23,6 +23,10 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import os
+from collections.abc import Callable
+from typing import Any
+
+from oracle_core.jobs import JobResult
 
 from wnba_oracle.common.clock import previous_slate_date
 from wnba_oracle.common.clock import slate_date as current_slate_date
@@ -37,7 +41,7 @@ log = get_logger("oracle.dayclose")
 DEFAULT_WALK_WINDOW = 12  # cover yesterday + the prior day's residue
 
 
-def _auto_record_placement(slate_date: str) -> None:
+def _auto_record_placement(slate_date: str) -> dict[str, Any]:
     """Score yesterday's frozen lineup against the captured leaderboard and
     append a row to contest_placements. Entry count is not stored (we only
     have the top-20 capture, not the full field size), so finish_percentile
@@ -56,13 +60,13 @@ def _auto_record_placement(slate_date: str) -> None:
 
     settings = get_settings()
     if not settings.database_url:
-        return
+        raise RuntimeError("DATABASE_URL not set")
 
     sl = read_slate_labels().filter(_pl.col("slate_date") == slate_date)
     lb = read_leaderboards().filter(_pl.col("slate_date") == slate_date)
     if sl.height == 0 or lb.height == 0:
         log.info("auto_placement_no_data", slate_date=slate_date)
-        return
+        return {"status": "degraded", "reason": "missing_labels_or_leaderboard"}
 
     # Build real-score lookup from finalized slate_labels
     rs_by_pid: dict[int, float] = {}
@@ -84,12 +88,12 @@ def _auto_record_placement(slate_date: str) -> None:
         ).first()
         if row is None:
             log.info("auto_placement_no_frozen_lineup", slate_date=slate_date)
-            return
+            return {"status": "degraded", "reason": "no_frozen_lineup"}
 
         lineup_json = row[0] if isinstance(row[0], dict) else _json.loads(row[0])
         player_ids = [int(p) for p in lineup_json.get("player_ids", [])]
         if not player_ids:
-            return
+            raise ValueError("frozen lineup has no player ids")
         if len(player_ids) != len(DEFAULT_SLOT_BASES):
             # committed_order_score requires a full slate of slots. A short
             # lineup means the freeze itself was malformed; record nothing
@@ -99,7 +103,7 @@ def _auto_record_placement(slate_date: str) -> None:
                 slate_date=slate_date,
                 n_players=len(player_ids),
             )
-            return
+            raise ValueError("frozen lineup does not contain five players")
 
         # Realized lineup score with the slots taken AS COMMITTED. player_ids is
         # positionally paired with the lineup's slot_multipliers, so index 0 held
@@ -152,18 +156,23 @@ def _auto_record_placement(slate_date: str) -> None:
         )
         if result is None:
             log.info("auto_placement_skipped", slate_date=slate_date, reason="no_frozen_lineup")
-        else:
-            log.info(
-                "auto_placement_recorded",
-                slate_date=slate_date,
-                our_score=round(our_score, 3),
-                relative_rank=result.get("entry_rank"),
-                n_lb_entries=len(lb_scores),
-            )
+            return {"status": "degraded", "reason": "placement_not_recorded"}
+        log.info(
+            "auto_placement_recorded",
+            slate_date=slate_date,
+            our_score=round(our_score, 3),
+            relative_rank=result.get("entry_rank"),
+            n_lb_entries=len(lb_scores),
+        )
         conn.commit()
+        return {
+            "status": "success",
+            "entry_rank": result.get("entry_rank"),
+            "leaderboard_entries": len(lb_scores),
+        }
 
 
-def _cleanup_append_only_tables(retention_days: int = 14) -> None:
+def _cleanup_append_only_tables(retention_days: int = 14) -> dict[str, Any]:
     """Delete expired operational events without touching audit records.
 
     ``frozen_lineups`` is intentionally append-only. Every row represents a
@@ -177,49 +186,131 @@ def _cleanup_append_only_tables(retention_days: int = 14) -> None:
 
     settings = get_settings()
     if not settings.database_url:
-        return
+        raise RuntimeError("DATABASE_URL not set")
 
     cutoff_date = (current_slate_date() - dt.timedelta(days=retention_days)).isoformat()
     engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("DELETE FROM watchdog_events WHERE slate_date < :cutoff"),
+            {"cutoff": cutoff_date},
+        )
+        n_watchdog = result.rowcount or 0
+
+        conn.commit()
+        log.info(
+            "dayclose_retention_cleanup",
+            watchdog_old_days=retention_days,
+            watchdog_deleted=n_watchdog,
+            frozen_deleted=0,
+        )
+    return {"status": "success", "watchdog_deleted": n_watchdog}
+
+
+def _audit_label_coverage(slate_date: str) -> dict[str, Any]:
+    from wnba_oracle.scheduler.watchdog import (
+        _check_label_coverage,
+        _check_prediction_drift,
+        persist_events,
+    )
+
+    coverage_events = _check_label_coverage(slate_date)
+    drift_events = _check_prediction_drift(slate_date)
+    events = [*coverage_events, *drift_events]
+    if events:
+        persist_events(events)
+        return {
+            "status": "degraded",
+            "coverage_events": len(coverage_events),
+            "drift_events": len(drift_events),
+        }
+    log.info("dayclose_label_coverage_clean", slate_date=slate_date)
+    log.info("dayclose_drift_clean", slate_date=slate_date)
+    return {"status": "success", "coverage_events": 0, "drift_events": 0}
+
+
+def _backfill_shadow_results() -> dict[str, Any]:
+    from wnba_oracle.scheduler.shadow import backfill_realized_value_delta
+
+    n = backfill_realized_value_delta(days_back=30)
+    if n:
+        log.info("dayclose_shadow_backfilled", n=n)
+    return {"status": "success", "rows": n}
+
+
+def _refresh_current_game_logs() -> dict[str, Any]:
+    from wnba_oracle.ingest.minutes_backfill import refresh_game_logs
+
+    season = str(current_slate_date().year)
+    n = refresh_game_logs([season])
+    log.info("dayclose_game_logs_refreshed", season=season, rows=n)
+    return {"status": "success", "season": season, "rows": n}
+
+
+def _run_substep(
+    name: str,
+    operation: Callable[[], dict[str, Any]],
+    *,
+    required: bool,
+    outcomes: dict[str, dict[str, Any]],
+    required_failures: list[str],
+    degradations: list[str],
+) -> None:
     try:
-        with engine.connect() as conn:
-            # Truncate old watchdog_events
-            result = conn.execute(
-                text("DELETE FROM watchdog_events WHERE slate_date < :cutoff"),
-                {"cutoff": cutoff_date},
-            )
-            n_watchdog = result.rowcount or 0
-
-            conn.commit()
-            log.info(
-                "dayclose_retention_cleanup",
-                watchdog_old_days=retention_days,
-                watchdog_deleted=n_watchdog,
-                frozen_deleted=0,
-            )
+        outcome = operation()
     except Exception as exc:
-        log.exception("dayclose_retention_cleanup_failed", error=str(exc))
+        status = "failed" if required else "degraded"
+        outcomes[name] = {"status": status, "error_type": type(exc).__name__}
+        (required_failures if required else degradations).append(name)
+        log.exception(
+            "dayclose_substep_failed",
+            substep=name,
+            required=required,
+            error_type=type(exc).__name__,
+        )
+        return
+
+    outcomes[name] = outcome
+    if outcome.get("status") == "degraded":
+        degradations.append(name)
 
 
-def main() -> int:
+def run() -> JobResult:
+    """Run day-close and return durable, substep-level completion semantics."""
+
+
     settings = get_settings()
     walk_window = int(os.environ.get("WNBA_DAYCLOSE_WALK_WINDOW", DEFAULT_WALK_WINDOW))
+    outcomes: dict[str, dict[str, Any]] = {}
+    required_failures: list[str] = []
+    degradations: list[str] = []
 
     if not settings.database_url:
         log.error(
             "dayclose_no_persistence_target",
             hint="Set DATABASE_URL; Postgres is the canonical store.",
         )
-        return 1
+        return JobResult.failed(
+            "day-close has no persistence target",
+            substeps={"database": {"status": "failed", "reason": "not_configured"}},
+        )
 
     try:
         top_cid = asyncio.run(discover_wnba_contest_id())
     except Exception as exc:
-        log.exception("dayclose_discover_failed", error=str(exc))
-        return 1
+        log.exception("dayclose_discover_failed", error_type=type(exc).__name__)
+        return JobResult.retryable_failure(
+            "contest discovery failed",
+            substeps={"contest_discovery": {"status": "failed", "error_type": type(exc).__name__}},
+        )
     if top_cid is None:
         log.warning("dayclose_no_contest_id")
-        return 0
+        return JobResult.retryable_failure(
+            "contest discovery returned no identifier",
+            substeps={"contest_discovery": {"status": "failed", "reason": "no_contest_id"}},
+        )
+
+    outcomes["contest_discovery"] = {"status": "success", "contest_id": top_cid}
 
     start_id = top_cid - 1
     stop_id = max(1, top_cid - walk_window)
@@ -236,81 +327,101 @@ def main() -> int:
         dry_run=False,
         with_leaderboards=True,
     )
+    if rc == 0:
+        outcomes["historical_backfill"] = {
+            "status": "success",
+            "start_id": start_id,
+            "stop_id": stop_id,
+        }
+    else:
+        outcomes["historical_backfill"] = {"status": "failed", "source_exit_code": rc}
+        required_failures.append("historical_backfill")
 
-    # D85: audit yesterday's label coverage against the pool universe so a
+    # D85: audit yesterday's label coverage against the contest universe so a
     # player silently absent from slate_labels (the 2026-06-08 Loyd/Boston
-    # gap) pages instead of permanently losing training labels. Best-effort;
-    # never changes the dayclose exit code.
+    # gap) pages instead of permanently losing training labels. The check is
+    # required to execute; detected gaps produce a degraded outcome.
     yesterday = previous_slate_date().isoformat()
-    try:
-        from wnba_oracle.scheduler.watchdog import (
-            _check_label_coverage,
-            _check_prediction_drift,
-            persist_events,
-        )
+    _run_substep(
+        "label_coverage",
+        lambda: _audit_label_coverage(yesterday),
+        required=True,
+        outcomes=outcomes,
+        required_failures=required_failures,
+        degradations=degradations,
+    )
 
-        coverage_events = _check_label_coverage(yesterday)
-        if coverage_events:
-            persist_events(coverage_events)
-        else:
-            log.info("dayclose_label_coverage_clean", slate_date=yesterday)
-
-        # Loss-ledger-anchored drift alert (2026-07-03). Fires only on
-        # regression from the D77 walk-forward baseline / loss-ledger
-        # median gap; steady-state under baseline is intentionally silent.
-        drift_events = _check_prediction_drift(yesterday)
-        if drift_events:
-            persist_events(drift_events)
-        else:
-            log.info("dayclose_drift_clean", slate_date=yesterday)
-    except Exception as exc:
-        log.exception("dayclose_label_coverage_failed", error=str(exc))
-
-    # D90 / D91: auto-record placement against the captured top-20 leaderboard.
-    # Best-effort; never changes the dayclose exit code.
-    if settings.database_url:
-        try:
-            _auto_record_placement(yesterday)
-        except Exception as exc:
-            log.exception("dayclose_auto_placement_failed", error=str(exc))
+    # D90 / D91: placement capture is required to execute. A legitimately
+    # unavailable finalized board or freeze is degraded rather than successful.
+    _run_substep(
+        "placement_capture",
+        lambda: _auto_record_placement(yesterday),
+        required=True,
+        outcomes=outcomes,
+        required_failures=required_failures,
+        degradations=degradations,
+    )
 
     # Fill model_shadow_runs.realized_value_delta for any pending shadow rows
-    # whose slate_labels are now finalized. Best-effort; never changes the
-    # dayclose exit code. Silent no-op when no challenger has been running.
-    try:
-        from wnba_oracle.scheduler.shadow import backfill_realized_value_delta
-
-        n = backfill_realized_value_delta(days_back=30)
-        if n:
-            log.info("dayclose_shadow_backfilled", n=n)
-    except Exception as exc:
-        log.exception("dayclose_shadow_backfill_failed", error=str(exc))
+    # whose slate_labels are now finalized. This is optional because there may
+    # be no challenger, but failure is persisted as degraded.
+    _run_substep(
+        "shadow_results",
+        _backfill_shadow_results,
+        required=False,
+        outcomes=outcomes,
+        required_failures=required_failures,
+        degradations=degradations,
+    )
 
     # D102: keep wnba_game_logs (the head-training corpus AND the live Tier-0
     # head-feature source) fresh every night, so the rolling windows never go
     # stale and a debuting player still gets head_features the next day. This
     # was the deeper root cause of the D99 C. Leite staleness -- previously the
     # only writer was the manual backfill_minutes.py. Current season only (the
-    # one that changes); offseason is a clean no-op. Best-effort, gated by
-    # WNBA_DAYCLOSE_REFRESH_GAMELOGS (default on); never changes the exit code.
+    # one that changes); offseason is a clean no-op. When enabled, freshness is
+    # required durable work and a refresh failure fails day-close.
     if os.environ.get("WNBA_DAYCLOSE_REFRESH_GAMELOGS", "1").strip() not in {"0", "false", ""}:
-        try:
-            from wnba_oracle.ingest.minutes_backfill import refresh_game_logs
-
-            season = str(current_slate_date().year)
-            n = refresh_game_logs([season])
-            log.info("dayclose_game_logs_refreshed", season=season, rows=n)
-        except Exception as exc:
-            log.exception("dayclose_game_logs_refresh_failed", error=str(exc))
+        _run_substep(
+            "game_log_refresh",
+            _refresh_current_game_logs,
+            required=True,
+            outcomes=outcomes,
+            required_failures=required_failures,
+            degradations=degradations,
+        )
+    else:
+        outcomes["game_log_refresh"] = {"status": "skipped", "reason": "disabled"}
 
     # D102 item 32a: operational-event retention. Frozen lineup records remain
     # append-only because they are the incident and operator audit trail.
-    try:
-        _cleanup_append_only_tables(retention_days=14)
-    except Exception as exc:
-        log.exception("dayclose_retention_cleanup_failed", error=str(exc))
+    _run_substep(
+        "retention_cleanup",
+        lambda: _cleanup_append_only_tables(retention_days=14),
+        required=False,
+        outcomes=outcomes,
+        required_failures=required_failures,
+        degradations=degradations,
+    )
 
-    return rc
+    if required_failures:
+        return JobResult.failed(
+            "required day-close work failed",
+            required_failures=required_failures,
+            degraded_substeps=degradations,
+            substeps=outcomes,
+        )
+    if degradations:
+        return JobResult.degraded(
+            "day-close completed with degraded substeps",
+            degraded_substeps=degradations,
+            substeps=outcomes,
+        )
+    return JobResult.success(substeps=outcomes)
+
+
+def main() -> int:
+    return run().exit_code
 
 
 if __name__ == "__main__":

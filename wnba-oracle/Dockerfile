@@ -78,6 +78,7 @@ COPY wnba-oracle/alembic.ini ./
 COPY wnba-oracle/models/ ./models/
 COPY wnba-oracle/data/ ./data/
 COPY wnba-oracle/scripts/seed_storage_state.py ./scripts/seed_storage_state.py
+COPY wnba-oracle/scripts/runtime_role_probe.py ./scripts/runtime_role_probe.py
 
 ENV PYTHONPATH=/app/wnba-oracle/src \
     PORT=8000

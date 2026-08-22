@@ -1,4 +1,4 @@
-# Model + picker config. Loaded by the train CLI and the predict path.
+# Model + picker config. Packaged with the train pipeline.
 # Hyperparameters live here, not in code.
 
 # Cohort split. Single positional cohort per the Step 4 / Part 4 decision.

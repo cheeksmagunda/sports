@@ -65,7 +65,7 @@ def _handler(job_name: str, settings: Settings) -> Callable[[JobContext], JobRes
         if job_name == "dayclose":
             from wnba_oracle.scheduler import job_dayclose
 
-            return _from_exit_code(job_name, job_dayclose.main())
+            return job_dayclose.run()
         if job_name == "backfill":
             from wnba_oracle.scheduler import job_backfill
 

@@ -7,7 +7,7 @@ determinism + parity gates, and writes a pickled artifact to models/.
 Usage:
     uv run oracle-train                          # reads from Postgres
     uv run oracle-train --corpus path/to/file.parquet  # reads parquet
-    uv run oracle-train --commit abc1234 --metrics-path /tmp/train_metrics.json
+    uv run oracle-train --commit abc1234 --metrics-path path/to/train_metrics.json
 """
 
 from __future__ import annotations
@@ -16,7 +16,9 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 
@@ -25,6 +27,25 @@ from wnba_oracle.eval.cv import WalkForwardSplitter
 from wnba_oracle.train.pipeline import train_picker, write_artifact
 
 log = get_logger("oracle.train.cli")
+
+
+def _write_metrics(metrics: dict[str, Any], requested_path: str | None) -> Path:
+    """Write metrics to the requested path or a unique operator-local temporary file."""
+
+    body = json.dumps(metrics, indent=2)
+    if requested_path:
+        path = Path(requested_path)
+        path.write_text(body)
+        return path
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        prefix="wnba_train_metrics_",
+        suffix=".json",
+        delete=False,
+    ) as handle:
+        handle.write(body)
+        return Path(handle.name)
 
 
 def _git_sha() -> str:
@@ -66,7 +87,10 @@ def _load_label_corpus(path: str | None) -> pl.DataFrame:
     return read_label_corpus()
 
 
-def _load_gamelog_corpus(path: str | None) -> pl.DataFrame:
+def _load_gamelog_corpus(path: str | None, prepared_path: str | None = None) -> pl.DataFrame:
+    if prepared_path:
+        return pl.read_parquet(Path(prepared_path))
+
     from wnba_oracle.features.corpus import build_gamelog_corpus
 
     if path:
@@ -91,6 +115,11 @@ def main() -> int:
         help="path to wnba_game_logs (parquet) for the heads corpus. If omitted, reads from Postgres.",
     )
     parser.add_argument(
+        "--heads-corpus",
+        default=None,
+        help="prepared head-feature parquet; bypasses raw game-log feature construction",
+    )
+    parser.add_argument(
         "--corpus-mode",
         choices=("gamelog", "label", "both"),
         default="both",
@@ -98,14 +127,27 @@ def main() -> int:
         "label: EB-only (reproduces the pre-D63 artifact). gamelog: heads + EB on game logs.",
     )
     parser.add_argument("--commit", default=_git_sha())
-    parser.add_argument("--metrics-path", default="/tmp/train_metrics.json")
+    parser.add_argument(
+        "--artifact-dir",
+        default=None,
+        help="artifact directory; defaults to the repository models directory",
+    )
+    parser.add_argument(
+        "--metrics-path",
+        default=None,
+        help="metrics JSON destination; defaults to a unique temporary file",
+    )
     args = parser.parse_args()
+    if args.game_logs and args.heads_corpus:
+        parser.error("--game-logs and --heads-corpus are mutually exclusive")
 
     configure_logging("INFO")
 
     label_df = _load_label_corpus(args.corpus) if args.corpus_mode in ("label", "both") else None
     heads_df = (
-        _load_gamelog_corpus(args.game_logs) if args.corpus_mode in ("gamelog", "both") else None
+        _load_gamelog_corpus(args.game_logs, args.heads_corpus)
+        if args.corpus_mode in ("gamelog", "both")
+        else None
     )
     if args.corpus_mode == "label":
         heads_df = label_df  # heads skip (no target columns); EB-only artifact.
@@ -131,7 +173,12 @@ def main() -> int:
         label_train = None
 
     art = train_picker(heads_train, heads_valid, label_train=label_train)
-    path = write_artifact(art, commit=args.commit)
+    artifact_dir = Path(args.artifact_dir) if args.artifact_dir else None
+    path = (
+        write_artifact(art, commit=args.commit, directory=artifact_dir)
+        if artifact_dir is not None
+        else write_artifact(art, commit=args.commit)
+    )
 
     metrics = {
         "git_sha": args.commit,
@@ -142,7 +189,8 @@ def main() -> int:
         "feature_module_sha": art.feature_module_sha,
         "artifact_path": str(path),
     }
-    Path(args.metrics_path).write_text(json.dumps(metrics, indent=2))
+    metrics_path = _write_metrics(metrics, args.metrics_path)
+    log.info("training_metrics_written", path=str(metrics_path))
     print(json.dumps(metrics, indent=2))
     return 0
 

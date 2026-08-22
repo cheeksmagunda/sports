@@ -1,6 +1,8 @@
 name: wnba-pre-freeze-guard
 
 on:
+  schedule:
+    - cron: "30 13 * * *"
   workflow_dispatch:
     inputs:
       slate_date:
@@ -23,7 +25,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 env:
   OPS_LABEL: ops-guard
@@ -42,18 +43,30 @@ concurrency:
 
 jobs:
   guard:
+    permissions:
+      contents: read
+      issues: write
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve run window
+        env:
+          MANUAL_RUN_END_UTC: ${{ inputs.run_end_utc }}
+          MANUAL_RUN_START_UTC: ${{ inputs.run_start_utc }}
+          MANUAL_SLATE_DATE: ${{ inputs.slate_date }}
+        run: >-
+          python wnba-oracle/scripts/resolve_ops_window.py
+          --role job1
+          --github-env "$GITHUB_ENV"
 
       - name: Check production
         id: guard
         env:
           INPUT_REPAIR: ${{ inputs.repair }}
-          INPUT_RUN_END_UTC: ${{ inputs.run_end_utc }}
-          INPUT_RUN_START_UTC: ${{ inputs.run_start_utc }}
-          INPUT_SLATE_DATE: ${{ inputs.slate_date }}
           RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
         run: |
           repair_args=()

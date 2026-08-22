@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-08-21
+Last verified: 2026-08-22
 
 This file is a mutable operational snapshot. Verify service state, schedules,
 repository commits, environment configuration, and artifact identity against
@@ -15,6 +15,11 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
 - The frontend builds from `wnba-oracle/frontend`; PostgreSQL and Redis remain
   the same managed Railway services.
 - The previous WNBA repository is an archive only. Do not deploy from it.
+- GitHub reports `main` as unprotected. Private-repository rulesets require an
+  account-plan decision. Railway `Wait for CI` is enabled on all seven
+  GitHub-backed production services, so a push cannot deploy until the GitHub
+  check suite succeeds. Treat every push to `main` as a production-source
+  change even though the deployment boundary is now gated.
 
 ## Production
 
@@ -32,8 +37,14 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
 - Production watchdog state is available at `/watchdog/today` and
   `/watchdog/jobs/today` on the API.
 - Root GitHub Actions own backend CI, provider contracts, corpus backup,
-  watchdog monitoring, pre-freeze checks, and day-close verification. Check
-  their current schedule state in GitHub before relying on a run window.
+  watchdog monitoring, pre-freeze checks, and day-close verification. The
+  operational workflows retain manual dispatch and define portable repository
+  schedules. The 2026-08-22 default-branch update activates those schedules;
+  scheduled workflows run from the latest default-branch commit.
+- Day-close records required and optional substeps separately. Discovery,
+  historical backfill, label audit, placement capture, and enabled game-log
+  refresh are required. Missing data or optional shadow/cleanup failures persist
+  a degraded result; required execution failures persist a failed result.
 - Operational history belongs in the corresponding GitHub issues and workflow
   logs. Keep this file to current state, known gaps, and recovery facts.
 
@@ -74,7 +85,18 @@ Recorded Railway identifiers:
 | postgres | `5e827da3-6df6-4349-97ad-a800ece2716d` |
 | redis | `bb131bec-4edd-4809-accd-e09e09aacbf6` |
 
-Recorded legacy routine identifiers:
+Repository workflow schedules:
+
+| Workflow | Schedule UTC |
+| --- | --- |
+| watchdog monitor | `23 * * * *` |
+| provider contracts | `17 10 * * *` |
+| corpus backup | `43 6 * * *` |
+| WNBA pre-freeze guard | `30 13 * * *` |
+| WNBA day-close verify | `0 7 * * *` |
+
+Recorded legacy external routine identifiers, retained only for migration
+traceability and not as current execution proof:
 
 | Routine | Trigger | Schedule UTC |
 | --- | --- | --- |
@@ -201,13 +223,13 @@ issue labeled `ops-results` (#15). No model change was made.
   Those 11 also still carry the bogus `entry_rank = 21` sentinel. Treat any
   pre-2026-08-19 placement row with a 21 rank as unusable, not merely imprecise.
 
-- **No placement has ever been recorded.** `contest_placements` holds 16 rows
-  from one batch on 2026-06-13, all with `entry_rank = 21` (the "not in the
-  top-20 leaderboard" sentinel) and `entry_count` / `finish_percentile` /
-  `roi` fully NULL. Separate from the psycopg2 dialect bug fixed in `75f92f2`:
-  even with the write path working, no percentile is computable without
-  `entry_count`. The 2026-08-02 entry finished 16th of 7,400 and the system
-  captured nothing.
+- **Automatic outcome measurement remains right-censored.** The current code
+  records committed-order score and consumes `num_brawlers` as the full field
+  size. It records an exact rank and percentile only when the lineup reaches
+  the captured top 20; below that boundary it retains a lower-bound percentile
+  in metadata and leaves rank and ROI unset. The production rows written after
+  2026-08-20 were not re-audited from PostgreSQL during this update, so verify
+  them before claiming KPI coverage.
 - **`prediction_calibration_drift` was a false alarm for a month.** It
   correlates over the five optimizer-selected picks only, whose predicted
   spread is range-restricted, and compared that against the D77 full-corpus
@@ -267,9 +289,25 @@ issue labeled `ops-results` (#15). No model change was made.
 
 ## Quality gates
 
-- Last local verification, 2026-08-21: 596 WNBA tests and 48 oracle-core tests
-  passed; Ruff, mypy, import-boundary checks, and package builds passed.
-- `make determinism-check` compares model content, not pickle SHA (D93).
+- Last local verification, 2026-08-22: 608 WNBA tests and 48 oracle-core tests
+  passed; Ruff, mypy, import-boundary checks, package builds, the medium-severity
+  Bandit gate, and the dependency audit passed.
+- Docker acceptance passed against PostgreSQL and Redis containers: an empty
+  database and the previous schema both upgraded to Alembic head, retained data
+  was verified, three marked integration tests passed, and the final image
+  accepted all six runtime roles while rejecting a mismatched role. The API
+  started against those services and returned a healthy response; Chromium also
+  launched from the final image.
+- Backend CI now repeats the PostgreSQL, Redis, migration, runtime-role, image,
+  and API health acceptance path with pinned service images.
+- Runtime dependency auditing is now a backend CI gate. Narrow ignores cover
+  advisories whose affected APIs are not reachable in the current Linux API;
+  each ignore is documented beside the CI command and must be removed if those
+  assumptions change.
+- `make determinism-check` compares model content, not pickle SHA (D93). The
+  2026-08-22 live read-only run snapshotted 16,986 heads rows and 6,334 label
+  rows once, trained twice from that identical snapshot, and passed with
+  content-identical outputs.
 - `src/wnba_oracle/scheduler/` was split 2026-08-21: `job1.py`, `job2.py`,
   `watchdog.py`, `placements.py`, and `shadow.py` (each 500-1700+ lines) were
   each broken into a handful of `<name>_<concern>.py` sibling modules (io/

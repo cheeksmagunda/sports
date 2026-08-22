@@ -78,7 +78,7 @@ _STORED_TO_NBA_API: dict[str, str] = {
 }
 
 # The per-game head targets produced by add_targets (keep in sync with
-# configs/models.yaml::heads and features/spec.py::HEAD_SPECS targets).
+# train/models.yaml::heads and features/spec.py::HEAD_SPECS targets).
 # real_score_per_min is the validated rate term (predict/minutes.py): the
 # serve-time recompose is E[real_score] = E[minutes] x E[real_score_per_min].
 TARGET_COLUMNS: tuple[str, ...] = (

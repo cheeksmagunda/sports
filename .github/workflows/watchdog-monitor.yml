@@ -1,11 +1,12 @@
 name: watchdog-monitor
 
 on:
+  schedule:
+    - cron: "23 * * * *"
   workflow_dispatch: {}
 
 permissions:
   contents: read
-  issues: write
 
 env:
   ALERT_LABEL: ops-guard
@@ -19,10 +20,15 @@ concurrency:
 
 jobs:
   check:
+    permissions:
+      contents: read
+      issues: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
 
       - name: Probe production
         id: probe

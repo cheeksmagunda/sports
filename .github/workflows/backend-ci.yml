@@ -57,11 +57,12 @@ jobs:
     name: secret-scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff  # v5
         with:
           go-version: "1.26.x"
 
@@ -77,13 +78,15 @@ jobs:
     needs: secret-scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.11"
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
         with:
           enable-cache: true
           version: "0.11.13"
@@ -93,6 +96,28 @@ jobs:
 
       - name: Install workspace
         run: uv sync --frozen --all-packages --all-extras
+
+      - name: Audit runtime dependencies
+        run: |
+          uv export --quiet --frozen --all-packages --no-dev --no-hashes \
+            --output-file "$RUNNER_TEMP/runtime-requirements.txt"
+          # Narrow reachability exceptions for the current Linux API:
+          # Arrow's affected pre-buffer API is not exposed in Python bindings.
+          # The API has no request-URL authorization, form parsing, StaticFiles,
+          # or HTTPEndpoint subclasses covered by the listed Starlette advisories.
+          uv run --package wnba-oracle pip-audit \
+            --requirement "$RUNNER_TEMP/runtime-requirements.txt" \
+            --ignore-vuln GHSA-rgxp-2hwp-jwgg \
+            --ignore-vuln GHSA-86qp-5c8j-p5mr \
+            --ignore-vuln GHSA-jp82-jpqv-5vv3 \
+            --ignore-vuln GHSA-82w8-qh3p-5jfq \
+            --ignore-vuln GHSA-wqp7-x3pw-xc5r \
+            --ignore-vuln GHSA-x746-7m8f-x49c
+
+      - name: Scan backend security issues
+        run: >-
+          uv run --package wnba-oracle bandit -q -r wnba-oracle/src
+          --severity-level medium --confidence-level medium
 
       - name: Test oracle-core
         run: uv run --package oracle-core python -m pytest packages/oracle-core/tests -q
@@ -126,11 +151,100 @@ jobs:
       - name: Build Python packages
         run: uv build --all-packages
 
-  docker:
+  integration-and-container:
     needs: test-and-quality
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/wnba
+      POSTGRES_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      REDIS_URL: redis://127.0.0.1:6379/0
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_DB: wnba
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6
+        with:
+          enable-cache: true
+          version: "0.11.13"
+
+      - name: Install backend workspace
+        run: uv sync --frozen --all-packages --all-extras
+
+      - name: Test empty and existing-schema migrations
+        run: uv run --package wnba-oracle python wnba-oracle/scripts/check_migrations.py
+
+      - name: Upgrade acceptance database
+        working-directory: wnba-oracle
+        run: uv run --package wnba-oracle alembic upgrade head
+
+      - name: Test PostgreSQL and Redis boundaries
+        run: >-
+          uv run --package wnba-oracle python -m pytest
+          wnba-oracle/tests/integration -m integration -q
 
       - name: Build WNBA backend image
-        run: docker build -f wnba-oracle/Dockerfile .
+        run: docker build -t wnba-oracle:ci -f wnba-oracle/Dockerfile .
+
+      - name: Smoke every cron role in the built image
+        run: |
+          for role in job1 job1games job1late job2 dayclose backfill; do
+            docker run --rm \
+              -e WNBA_CRON_ROLE="$role" \
+              wnba-oracle:ci \
+              python scripts/runtime_role_probe.py --job "$role"
+          done
+          if docker run --rm \
+            -e WNBA_CRON_ROLE=job2 \
+            wnba-oracle:ci \
+            python scripts/runtime_role_probe.py --job job1; then
+            echo "runtime role mismatch was accepted" >&2
+            exit 1
+          fi
+
+      - name: Smoke API startup, migrations, PostgreSQL, and Redis
+        run: |
+          container_id=$(docker run -d \
+            --network host \
+            -e DATABASE_URL \
+            -e REDIS_URL \
+            -e PORT=18000 \
+            wnba-oracle:ci)
+          cleanup() {
+            docker rm -f "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs "$container_id"
+          exit 1

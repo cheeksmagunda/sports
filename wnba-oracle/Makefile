@@ -52,20 +52,30 @@ deploy:
 	@echo "Deploy through the documented Railway CLI or HTTPS workflow."
 
 determinism-check:
-	@D=$$(mktemp -d -t wnba_determ.XXXXXX); \
+	@set -eu; \
+	  D=$$(mktemp -d -t wnba_determ.XXXXXX); \
+	  trap 'rm -rf "$$D"' EXIT; \
 	  echo "Scratch dir: $$D"; \
+	  echo "Snapshotting immutable training inputs..."; \
+	  $(UV_RUN) python scripts/snapshot_training_inputs.py --output-dir "$$D"; \
 	  echo "Run 1..."; \
-	  OMP_NUM_THREADS=1 $(UV_RUN) oracle-train --commit determ01 \
-	    --metrics-path $$D/run1.json | tail -3; \
-	  PKL1=$$(find models -name "picker_determ01_*.pkl" | head -1); \
-	  mv $$PKL1 $$D/run1.pkl; \
+	  OMP_NUM_THREADS=1 POLARS_MAX_THREADS=1 PYTHONHASHSEED=0 \
+	    $(UV_RUN) oracle-train --commit determ01 \
+	    --corpus "$$D/labels.parquet" --heads-corpus "$$D/heads.parquet" \
+	    --artifact-dir "$$D" --metrics-path "$$D/run1.json" >"$$D/run1.log"; \
+	  tail -3 "$$D/run1.log"; \
+	  PKL1=$$(find "$$D" -maxdepth 1 -name "picker_determ01_*.pkl" -print -quit); \
+	  test -n "$$PKL1"; \
 	  echo "Run 2..."; \
-	  OMP_NUM_THREADS=1 $(UV_RUN) oracle-train --commit determ02 \
-	    --metrics-path $$D/run2.json | tail -3; \
-	  PKL2=$$(find models -name "picker_determ02_*.pkl" | head -1); \
-	  mv $$PKL2 $$D/run2.pkl; \
+	  OMP_NUM_THREADS=1 POLARS_MAX_THREADS=1 PYTHONHASHSEED=0 \
+	    $(UV_RUN) oracle-train --commit determ02 \
+	    --corpus "$$D/labels.parquet" --heads-corpus "$$D/heads.parquet" \
+	    --artifact-dir "$$D" --metrics-path "$$D/run2.json" >"$$D/run2.log"; \
+	  tail -3 "$$D/run2.log"; \
+	  PKL2=$$(find "$$D" -maxdepth 1 -name "picker_determ02_*.pkl" -print -quit); \
+	  test -n "$$PKL2"; \
 	  echo "Comparing trained model content"; \
-	  $(UV_RUN) python scripts/compare_artifacts.py $$D/run1.pkl $$D/run2.pkl
+	  $(UV_RUN) python scripts/compare_artifacts.py "$$PKL1" "$$PKL2"
 
 rotation-check-help:
 	$(UV_RUN) oracle-rotate-check --help

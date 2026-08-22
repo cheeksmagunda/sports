@@ -71,7 +71,8 @@ def _run_dayclose(player_ids: list[int]) -> MagicMock:
             return_value=MagicMock(),
         ) as record,
     ):
-        job_dayclose._auto_record_placement(SLATE)
+        outcome = job_dayclose._auto_record_placement(SLATE)
+    assert outcome["status"] == "success"
     return record
 
 
@@ -99,9 +100,8 @@ def test_entry_score_tracks_the_order_we_actually_committed() -> None:
 
 def test_short_lineup_records_nothing() -> None:
     """A malformed freeze must not be scored against the wrong slot bases."""
-    record = _run_dayclose([1, 2, 3])
-
-    record.assert_not_called()
+    with pytest.raises(ValueError, match="does not contain five players"):
+        _run_dayclose([1, 2, 3])
 
 
 def test_retention_cleanup_never_deletes_frozen_lineups() -> None:
@@ -115,9 +115,10 @@ def test_retention_cleanup_never_deletes_frozen_lineups() -> None:
         patch.object(job_dayclose, "get_settings", return_value=MagicMock(database_url="x")),
         patch("wnba_oracle.db.engine.get_engine", return_value=engine),
     ):
-        job_dayclose._cleanup_append_only_tables(retention_days=14)
+        outcome = job_dayclose._cleanup_append_only_tables(retention_days=14)
 
     statements = [str(call.args[0]) for call in conn.execute.call_args_list]
     assert len(statements) == 1
     assert "DELETE FROM watchdog_events" in statements[0]
     assert all("frozen_lineups" not in statement for statement in statements)
+    assert outcome == {"status": "success", "watchdog_deleted": 3}

@@ -99,8 +99,12 @@ def train_quantile_head(
             "min_gain_to_split": cfg.min_gain_to_split,
             "deterministic": True,
             "force_col_wise": True,
+            "num_threads": 1,
             "verbosity": -1,
             "seed": cfg.seed,
+            "bagging_seed": cfg.seed,
+            "data_random_seed": cfg.seed,
+            "feature_fraction_seed": cfg.seed,
             "feature_pre_filter": False,
         }
         train_set = lgb.Dataset(
