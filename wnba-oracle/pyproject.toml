@@ -30,7 +30,7 @@ dependencies = [
     # Dataframes
     "polars>=1.16,<2.0",
     "pandas>=2.2,<3.0",
-    "pyarrow>=18.0,<22.0",
+    "pyarrow>=18.0,<24.0",
     "pandera[polars]>=0.21,<1.0",
     # ML stack. Exact pins on libs whose version influences pickled bytes
     # so the determinism gate (train twice, assert pickle SHA equality)
