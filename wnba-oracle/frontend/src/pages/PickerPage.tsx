@@ -12,6 +12,11 @@ import { SlateBand } from "../components/SlateBand";
 import { Slip } from "../components/Slip";
 import { useLiveBoxScores } from "../hooks/useLiveBoxScores";
 import { useSlateLifecycle } from "../hooks/useSlateLifecycle";
+import {
+  effectiveLockUtc,
+  getRecommendationActionability,
+} from "../lib/actionability";
+import { localSlateDate } from "../lib/api";
 import { combineBoxLines } from "../lib/playerMatch";
 
 // Brief intro animation on first paint so the page never flashes the
@@ -69,6 +74,37 @@ export function PickerPage() {
   const intro = useFirstMountLoader();
   const lifecycle = useSlateLifecycle();
   const boxLines = useLiveBoxScores(lifecycle.games);
+  const [actionabilityNowMs, setActionabilityNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    // A newly fetched freeze needs a fresh comparison clock. Defer the update
+    // so the effect never performs a synchronous state write.
+    const refreshTimer = setTimeout(() => setActionabilityNowMs(Date.now()), 0);
+    const lockUtc = effectiveLockUtc(
+      lifecycle.contestLockUtc,
+      lifecycle.firstTipUtc,
+    );
+    const lockMs = lockUtc ? Date.parse(lockUtc) : Number.NaN;
+    if (Number.isNaN(lockMs)) return () => clearTimeout(refreshTimer);
+
+    // Re-evaluate just after the strict lock boundary even when no network
+    // poll or scoreboard update happens at that instant.
+    const lockTimer = setTimeout(
+      () => setActionabilityNowMs(Date.now()),
+      Math.max(0, lockMs - Date.now() + 1),
+    );
+    return () => {
+      clearTimeout(refreshTimer);
+      clearTimeout(lockTimer);
+    };
+  }, [
+    lifecycle.contestLockUtc,
+    lifecycle.firstTipUtc,
+    lifecycle.lineup?.frozen_at,
+    lifecycle.lineupFresh,
+    lifecycle.picksPaused,
+    lifecycle.timingSlateDate,
+  ]);
 
   const view = useMemo(() => {
     if (lifecycle.picksPaused) {
@@ -105,6 +141,22 @@ export function PickerPage() {
   const frozenAtDisplay = fmtFrozenAt(
     view.kind === "lineup" ? view.lineup.frozen_at : null,
   );
+  const recommendationActionability =
+    view.kind === "lineup"
+      ? getRecommendationActionability({
+          recommendation: view.lineup.entry_recommendation,
+          lineupSlateDate: view.lineup.slate_date,
+          timingSlateDate: lifecycle.timingSlateDate,
+          todaySlateDate: localSlateDate(),
+          frozenAtUtc: view.lineup.frozen_at,
+          frozenVia: view.lineup.frozen_via,
+          lineupFresh: lifecycle.lineupFresh,
+          picksPaused: lifecycle.picksPaused,
+          firstTipUtc: lifecycle.firstTipUtc,
+          contestLockUtc: lifecycle.contestLockUtc,
+          nowMs: actionabilityNowMs,
+        })
+      : undefined;
 
   // Show loader during intro AND while waiting for a freeze. Unmount
   // once a lineup arrives so cards render at full opacity. `fading`
@@ -136,6 +188,7 @@ export function PickerPage() {
           lifecycleState={lifecycle.state}
           combined={combined}
           gamesRemaining={gamesRemaining}
+          recommendationActionability={recommendationActionability}
         />
         <main
           id="lineup"

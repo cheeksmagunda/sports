@@ -10,6 +10,9 @@ import { fetchSlateTiming } from "../lib/api";
 const POLL_MS = 120_000;
 
 interface State {
+  slateDate: string | null;
+  firstTipUtc: string | null;
+  contestLockUtc: string | null;
   freezeTargetUtc: string | null;
   picksPaused: boolean;
   resumesOn: string | null;
@@ -21,6 +24,9 @@ interface State {
 }
 
 const INITIAL_STATE: State = {
+  slateDate: null,
+  firstTipUtc: null,
+  contestLockUtc: null,
   freezeTargetUtc: null,
   picksPaused: false,
   resumesOn: null,
@@ -39,6 +45,9 @@ export function useSlateTiming(): State {
         const timing = await fetchSlateTiming();
         if (!stopped) {
           setState({
+            slateDate: timing?.slate_date ?? null,
+            firstTipUtc: timing?.first_tip_utc ?? null,
+            contestLockUtc: timing?.contest_lock_utc ?? null,
             freezeTargetUtc: timing?.freeze_target_utc ?? null,
             picksPaused: timing?.picks_paused ?? false,
             resumesOn: timing?.resumes_on ?? null,

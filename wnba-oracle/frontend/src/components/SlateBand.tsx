@@ -8,6 +8,7 @@
 import { Link } from "react-router-dom";
 import type { FrozenLineup } from "../lib/api";
 import type { SlateLifecycleState } from "../hooks/useSlateLifecycle";
+import type { RecommendationActionability } from "../lib/actionability";
 import type { CombinedBoxLine } from "../lib/playerMatch";
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
   lifecycleState?: SlateLifecycleState;
   combined?: CombinedBoxLine;
   gamesRemaining?: number;
+  recommendationActionability?: RecommendationActionability;
 }
 
 const REC_LABEL: Record<string, string> = {
@@ -23,7 +25,13 @@ const REC_LABEL: Record<string, string> = {
   skip: "Skip",
 };
 
-export function SlateBand({ lineup, lifecycleState, combined, gamesRemaining }: Props) {
+export function SlateBand({
+  lineup,
+  lifecycleState,
+  combined,
+  gamesRemaining,
+  recommendationActionability,
+}: Props) {
   if (!lineup) {
     return (
       <section className="slate-band" aria-label="Slate summary">
@@ -38,7 +46,10 @@ export function SlateBand({ lineup, lifecycleState, combined, gamesRemaining }: 
   }
 
   const rec = lineup.entry_recommendation;
-  const recLabel = REC_LABEL[rec] ?? rec.replaceAll("_", " ");
+  const recordedLabel = REC_LABEL[rec] ?? rec.replaceAll("_", " ");
+  const recLabel =
+    recommendationActionability?.label ?? `Frozen call: ${recordedLabel}`;
+  const recIsActionable = recommendationActionability?.actionable ?? false;
   const { lineup_score_p10: p10, lineup_score_p50: p50, lineup_score_p90: p90 } =
     lineup.lineup;
   const nFreezes = lineup.n_freezes ?? 1;
@@ -61,7 +72,7 @@ export function SlateBand({ lineup, lifecycleState, combined, gamesRemaining }: 
         <div className="slate-band__chips">
           <span
             className={`slate-band__chip slate-band__chip--${rec}`}
-            aria-label={`Entry recommendation: ${recLabel}`}
+            aria-label={`${recIsActionable ? "Current" : "Recorded"} entry recommendation: ${recLabel}`}
           >
             {recLabel}
           </span>

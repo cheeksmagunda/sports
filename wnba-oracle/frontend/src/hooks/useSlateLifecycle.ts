@@ -105,8 +105,12 @@ export function useSlateLifecycle() {
   return {
     state,
     lineup: lineupData.lineup,
+    lineupFresh: lineupData.uiState === "success",
     error: lineupData.error,
     refresh: lineupData.refresh,
+    timingSlateDate: slateTiming.slateDate,
+    firstTipUtc: slateTiming.firstTipUtc,
+    contestLockUtc: slateTiming.contestLockUtc,
     freezeTargetUtc: slateTiming.freezeTargetUtc,
     picksPaused: slateTiming.picksPaused,
     resumesOn: slateTiming.resumesOn,

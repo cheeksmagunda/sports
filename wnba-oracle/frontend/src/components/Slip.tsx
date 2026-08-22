@@ -1,10 +1,12 @@
 // Five ordered rows, read top to bottom as an ordered list so screen
 // readers announce rank first. Replaces the five-card grid.
 
-import type { FrozenLineup, PlayerProjection } from "../lib/api";
+import type { FrozenLineup } from "../lib/api";
 import type { SlateLifecycleState } from "../hooks/useSlateLifecycle";
 import type { PlayerBoxLine } from "../lib/espn";
+import { resolveOrderedLineup } from "../lib/lineup";
 import { resolveBoxLine } from "../lib/playerMatch";
+import { ErrorState } from "./ErrorState";
 import { SlipRow } from "./SlipRow";
 
 interface Props {
@@ -14,39 +16,32 @@ interface Props {
 }
 
 export function Slip({ lineup, boxLines = [], lifecycleState }: Props) {
-  const projections = lineup.lineup.per_player ?? [];
-  const ids = lineup.lineup.player_ids;
-  const mults = lineup.lineup.slot_multipliers;
+  const orderedLineup = resolveOrderedLineup(lineup.lineup);
 
-  // Fallback when the API hasn't joined per-player projections (older
-  // slate freezes pre-D32, still reachable via /lineup/{date}/history).
-  // Synthesize placeholder rows so the layout doesn't collapse.
-  const rows: PlayerProjection[] =
-    projections.length === ids.length
-      ? projections
-      : ids.map((pid) => ({
-          player_id: pid,
-          display_name: `Player ${pid}`,
-          team: "—",
-          opponent: "—",
-          position: "F",
-          card_boost: 0,
-          pred_real_score_p50: 0,
-          pred_minutes_p10: 0,
-          pred_minutes_p50: 0,
-          pred_minutes_p90: 0,
-        }));
+  if (!orderedLineup.ok) {
+    return (
+      <ErrorState
+        title="Lineup unavailable"
+        copy="This frozen lineup cannot be displayed safely."
+        detail={orderedLineup.error}
+      />
+    );
+  }
 
   return (
     <ol className="slip" aria-label="Five-player frozen lineup, ranked">
-      {rows.map((p, i) => (
-        <li key={p.player_id} className="slip__item">
+      {orderedLineup.rows.map(({ player, slotMultiplier }, index) => (
+        <li key={player.player_id} className="slip__item">
           <SlipRow
-            rank={i + 1}
-            slotMultiplier={mults[i] ?? 1}
-            player={p}
+            rank={index + 1}
+            slotMultiplier={slotMultiplier}
+            player={player}
             slateDate={lineup.slate_date}
-            boxLine={resolveBoxLine(p.display_name, p.team, boxLines)}
+            boxLine={resolveBoxLine(
+              player.display_name,
+              player.team,
+              boxLines,
+            )}
             lifecycleState={lifecycleState}
           />
         </li>
