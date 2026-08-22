@@ -15,6 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from wnba_oracle.modeling.policy import ModelPolicy
+from wnba_oracle.modeling.provenance import ScoringProvenance
 from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig
 from wnba_oracle.picker.payout import default_curve_for_regime
 from wnba_oracle.scheduler import job2, job2_freeze
@@ -151,7 +153,14 @@ def test_freeze_payload_includes_per_player() -> None:
         patch.object(job2_freeze, "get_engine", return_value=eng),
         patch.object(job2_freeze, "get_redis", return_value=rd),
     ):
-        job2._freeze("2026-05-27", "heuristic-v1", _rec(), "top_20", _proj())
+        job2._freeze(
+            "2026-05-27",
+            "heuristic-v1",
+            _rec(),
+            "top_20",
+            _proj(),
+            model_provenance={"model_policy_sha256": "policy-sha"},
+        )
     insert_call = eng.begin.return_value.__enter__.return_value.execute.call_args
     payload = insert_call.args[1]
     import json
@@ -160,11 +169,20 @@ def test_freeze_payload_includes_per_player() -> None:
     assert "per_player" in lineup
     assert len(lineup["per_player"]) == 5
     assert {row["player_id"] for row in lineup["per_player"]} == {1, 2, 3, 4, 5}
+    assert lineup["model_provenance"] == {"model_policy_sha256": "policy-sha"}
 
 
 def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
     curve = default_curve_for_regime("top_20")
     cfg = OptimizeConfig(n_samples=250, n_field_lineups=125, min_anchors=2)
+    policy = ModelPolicy(artifact_sha="a" * 64, optimizer=cfg)
+    provenance = ScoringProvenance.capture(
+        model_policy=policy,
+        enrichment=[],
+        sampling_specs=[],
+        field_specs=[],
+        payout_curve=curve,
+    )
     with patch.object(job2, "_freeze", return_value=True) as freeze:
         frozen, status = job2._freeze_recommendation(
             slate_date="2026-05-27",
@@ -175,6 +193,7 @@ def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
             projection_by_pid=_proj(),
             force_refreeze=False,
             frozen_via_override=None,
+            scoring_provenance=provenance,
         )
 
     assert frozen is True
@@ -184,3 +203,6 @@ def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
     assert call.kwargs["serving_knobs"]["n_samples"] == 250
     assert call.kwargs["serving_knobs"]["n_field_lineups"] == 125
     assert call.kwargs["serving_knobs"]["min_anchors"] == 2
+    assert call.kwargs["model_provenance"]["model_policy_sha256"] == policy.sha256
+    assert call.kwargs["model_provenance"]["enrichment_rows"] == 0
+    assert len(call.kwargs["model_provenance"]["optimizer_inputs_sha256"]) == 64

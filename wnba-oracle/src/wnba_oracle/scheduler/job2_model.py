@@ -12,13 +12,15 @@ import numpy as np
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.paths import resolve_project_root
-from wnba_oracle.features.spec import cohort_for_position
-from wnba_oracle.scheduler.job2_scoring import _features_dict
+from wnba_oracle.modeling.artifact import eb_predict_one as _eb_predict_one
+from wnba_oracle.modeling.scoring import _features_dict
 from wnba_oracle.train.pipeline import PickerArtifact, load_artifact
 
 log = get_logger("oracle.job2")
 
 REPO_ROOT = resolve_project_root(__file__)
+
+__all__ = ["REPO_ROOT", "_eb_predict_one", "_load_model_artifact", "_predict_heads_for_pool"]
 
 
 def _load_model_artifact(sha: str) -> PickerArtifact | None:
@@ -77,27 +79,6 @@ def _load_model_artifact(sha: str) -> PickerArtifact | None:
         return art
     log.warning("model_artifact_sha_not_found", sha=sha[:12])
     return None
-
-
-def _eb_predict_one(art: PickerArtifact | None, player_id: int, position: str) -> float | None:
-    """Single-player EB prediction with cohort + player-alpha lookup.
-
-    Returns None if (a) no artifact, (b) no EB baseline in artifact, or
-    (c) player_id wasn't seen in training. Caller falls back to the
-    heuristic on None -- this preserves graceful degradation for new
-    players the model never saw. The `team_pace` term is dropped
-    because job1_enrichment doesn't yet carry team pace.
-    """
-    if art is None or art.eb_baseline is None:
-        return None
-    eb = art.eb_baseline
-    if int(player_id) not in eb.player_alpha:
-        return None
-    cohort = cohort_for_position(position)
-    mu = eb.cohort_means.get(cohort, 0.0)
-    alpha = eb.player_alpha[int(player_id)]
-    pred = mu + alpha
-    return max(0.5, float(pred))
 
 
 def _predict_heads_for_pool(

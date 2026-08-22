@@ -10,6 +10,31 @@ from pathlib import Path
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 CORE_SOURCE = WORKSPACE_ROOT / "packages" / "oracle-core" / "src"
+WNBA_SOURCE = WORKSPACE_ROOT / "wnba-oracle" / "src" / "wnba_oracle"
+MODEL_KERNEL_DIRS = (
+    WNBA_SOURCE / "modeling",
+    WNBA_SOURCE / "picker",
+    WNBA_SOURCE / "predict",
+)
+MODEL_FORBIDDEN_PREFIXES = (
+    "wnba_oracle.api",
+    "wnba_oracle.common.clock",
+    "wnba_oracle.common.settings",
+    "wnba_oracle.db",
+    "wnba_oracle.ingest",
+    "wnba_oracle.scheduler",
+    "oracle_core",
+)
+MODEL_FORBIDDEN_MODULES = {
+    "fastapi",
+    "httpx",
+    "os",
+    "playwright",
+    "redis",
+    "requests",
+    "sqlalchemy",
+    "subprocess",
+}
 
 
 @dataclass(frozen=True)
@@ -73,6 +98,29 @@ def _violations() -> list[str]:
                         f"{relative}:{line}: {application.name} cannot import another league "
                         f"module {module!r}"
                     )
+
+    for source in MODEL_KERNEL_DIRS:
+        for path in sorted(source.rglob("*.py")):
+            for line, module in _imports(path):
+                top_level = module.split(".", 1)[0]
+                forbidden_prefix = next(
+                    (
+                        prefix
+                        for prefix in MODEL_FORBIDDEN_PREFIXES
+                        if module == prefix or module.startswith(f"{prefix}.")
+                    ),
+                    None,
+                )
+                if (
+                    forbidden_prefix is None
+                    and top_level not in MODEL_FORBIDDEN_MODULES
+                ):
+                    continue
+                relative = path.relative_to(WORKSPACE_ROOT)
+                violations.append(
+                    f"{relative}:{line}: model kernel cannot import operational module "
+                    f"{module!r}"
+                )
     return violations
 
 

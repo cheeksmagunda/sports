@@ -146,6 +146,7 @@ def _freeze(
     force: bool = False,
     payout_curve: dict | None = None,
     serving_knobs: dict | None = None,
+    model_provenance: dict | None = None,
     via: str | None = None,
 ) -> bool:
     """Idempotent freeze: first job2 fire writes, subsequent fires no-op.
@@ -245,6 +246,8 @@ def _freeze(
         lineup_payload["payout_curve"] = payout_curve
     if serving_knobs is not None:
         lineup_payload["serving_knobs"] = serving_knobs
+    if model_provenance is not None:
+        lineup_payload["model_provenance"] = model_provenance
 
     payload = {
         "slate_date": slate_date,

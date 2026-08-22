@@ -20,18 +20,101 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 
+import numpy as np
+
 from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import Settings, get_settings
 from wnba_oracle.db.engine import get_engine
+from wnba_oracle.features.provenance import feature_module_sha
+from wnba_oracle.modeling.artifact import eb_predict_one as _eb_predict_one
+from wnba_oracle.modeling.policy import ModelPolicy
+from wnba_oracle.modeling.prediction import (
+    ANCHOR_MIN_GAMES,
+    ANCHOR_MIN_MINUTES,
+    PlayerPredictions,
+    _compute_popularity_scores,
+    attach_archetypes,
+    materialize_specs,
+    predict_players,
+)
+from wnba_oracle.modeling.provenance import ScoringProvenance
+from wnba_oracle.modeling.scoring import (
+    _cascade_bonuses,
+    _effective_confirmed,
+    _features_dict,
+    _floor_tilt_multiplier,
+    _heuristic_real_score,
+    _is_out_from_features,
+    _minutes_features,
+    _prop_signal_multiplier,
+    _starter_minutes_lift,
+    _starter_multiplier,
+    _vegas_from_features,
+)
 from wnba_oracle.picker.field import FieldPlayerSpec
-from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig, optimize_lineup
+from wnba_oracle.picker.game_script import GameScriptConfig
+from wnba_oracle.picker.optimize import (
+    DEFAULT_SLOT_MULTIPLIERS,
+    LineupRecommendation,
+    OptimizeConfig,
+    optimize_lineup,
+)
 from wnba_oracle.picker.payout import PayoutCurve, default_curve_for_regime, load_curve_from_archive
 from wnba_oracle.picker.popularity import ContrarianConfig, apply_contrarian_adjustment
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 from wnba_oracle.predict.base import player_volatility
+from wnba_oracle.train.pipeline import PickerArtifact
 
 log = get_logger("oracle.job2")
+
+MODEL_POLICY_SETTING_FIELDS = frozenset(
+    {
+        "availability_model_enabled",
+        "boost_tail_lift_factor",
+        "boost_tail_lift_threshold",
+        "caveat_is_skip",
+        "ceiling_sigma_blowout_boost",
+        "ceiling_sigma_low_history_boost",
+        "contrarian_enabled",
+        "contrarian_strength",
+        "field_measured_ownership_enabled",
+        "field_same_game_boost",
+        "field_same_team_boost",
+        "game_script_minutes_enabled",
+        "lineup_anchor_floor",
+        "minutes_model_enabled",
+        "model_artifact_sha",
+        "never_skip",
+        "optimizer_boost_sum_cap",
+        "optimizer_ceiling_tilt_slots",
+        "optimizer_ceiling_weight",
+        "optimizer_duplication_aware_payout",
+        "optimizer_duplication_weight",
+        "optimizer_dynamic_team_cap",
+        "optimizer_game_stack_bonus",
+        "optimizer_leverage_weight",
+        "optimizer_max_per_team",
+        "optimizer_max_single_boost",
+        "optimizer_mixture_variance_enabled",
+        "optimizer_n_field_lineups",
+        "optimizer_n_samples",
+        "optimizer_top_n_filter",
+        "payout_regime",
+        "picker_boost_tail_lift",
+        "picker_floor_tilt_max_boost",
+        "picker_floor_tilt_weight",
+        "prop_signal_scale",
+        "sampling_score_offset",
+        "starter_minutes_lift_cap",
+        "starter_minutes_lift_enabled",
+        "starter_minutes_lift_weight",
+        "starter_minutes_norm",
+        "starter_signal_enabled",
+        "starter_signal_use_expected",
+        "starter_unknown_fade",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +134,7 @@ class Job2Result:
             "pool_too_small",
             "specs_too_small",
             "freeze_not_persisted",
+            "model_policy_invalid",
         }
         return 1 if self.reason in failures else 0
 
@@ -81,31 +165,8 @@ from wnba_oracle.scheduler.job2_io import (  # noqa: E402
 )
 from wnba_oracle.scheduler.job2_model import (  # noqa: E402
     REPO_ROOT,
-    _eb_predict_one,
     _load_model_artifact,
     _predict_heads_for_pool,
-)
-from wnba_oracle.scheduler.job2_scoring import (  # noqa: E402
-    _cascade_bonuses,
-    _effective_confirmed,
-    _features_dict,
-    _floor_tilt_multiplier,
-    _heuristic_real_score,
-    _is_out_from_features,
-    _minutes_features,
-    _prop_signal_multiplier,
-    _starter_minutes_lift,
-    _starter_multiplier,
-    _vegas_from_features,
-)
-from wnba_oracle.scheduler.job2_specs import (  # noqa: E402
-    ANCHOR_MIN_GAMES,
-    ANCHOR_MIN_MINUTES,
-    PlayerPredictions,
-    _compute_popularity_scores,
-    attach_archetypes,
-    materialize_specs,
-    predict_players,
 )
 from wnba_oracle.scheduler.job2_timing import (  # noqa: E402
     _freeze_deadline_utc,
@@ -122,6 +183,7 @@ __all__ = [
     "FROZEN_APPEND",
     "FROZEN_EXISTS",
     "FROZEN_OPERATION_EXISTS",
+    "MODEL_POLICY_SETTING_FIELDS",
     "REPO_ROOT",
     "SLATE_LOCK_Q",
     "PlayerPredictions",
@@ -154,6 +216,7 @@ __all__ = [
     "_starter_multiplier",
     "_vegas_from_features",
     "attach_archetypes",
+    "build_model_policy",
     "materialize_specs",
     "predict_players",
     "scope_to_upcoming_games",
@@ -183,14 +246,64 @@ def build_optimize_config(settings: Settings) -> OptimizeConfig:
         boost_sum_cap=settings.optimizer_boost_sum_cap,
         max_single_boost=settings.optimizer_max_single_boost,
         game_stack_bonus=settings.optimizer_game_stack_bonus,
-        leverage_weight=getattr(settings, "optimizer_leverage_weight", 0.0),
-        ceiling_weight=getattr(settings, "optimizer_ceiling_weight", 0.0),
-        duplication_weight=getattr(settings, "optimizer_duplication_weight", 0.0),
-        ceiling_tilt_slots=getattr(settings, "optimizer_ceiling_tilt_slots", False),
-        field_same_game_boost=getattr(settings, "field_same_game_boost", 1.0),
-        field_same_team_boost=getattr(settings, "field_same_team_boost", 1.0),
-        duplication_aware_payout=getattr(settings, "optimizer_duplication_aware_payout", False),
+        leverage_weight=settings.optimizer_leverage_weight,
+        ceiling_weight=settings.optimizer_ceiling_weight,
+        duplication_weight=settings.optimizer_duplication_weight,
+        ceiling_tilt_slots=settings.optimizer_ceiling_tilt_slots,
+        field_same_game_boost=settings.field_same_game_boost,
+        field_same_team_boost=settings.field_same_team_boost,
+        duplication_aware_payout=settings.optimizer_duplication_aware_payout,
     )
+
+
+def build_model_policy(settings: Settings) -> ModelPolicy:
+    """Strictly compile every runtime-configurable model setting once."""
+    game_script_minutes_enabled = settings.game_script_minutes_enabled
+    return ModelPolicy(
+        artifact_sha=str(settings.model_artifact_sha or "").strip().lower(),
+        payout_regime=settings.payout_regime,
+        optimizer=build_optimize_config(settings),
+        contrarian=ContrarianConfig(
+            enabled=settings.contrarian_enabled,
+            strength=settings.contrarian_strength,
+        ),
+        mixture_variance_enabled=settings.optimizer_mixture_variance_enabled,
+        slot_multipliers=tuple(float(value) for value in DEFAULT_SLOT_MULTIPLIERS),
+        starter_signal_enabled=settings.starter_signal_enabled,
+        starter_signal_use_expected=settings.starter_signal_use_expected,
+        starter_unknown_fade=settings.starter_unknown_fade,
+        starter_minutes_lift_enabled=settings.starter_minutes_lift_enabled,
+        starter_minutes_norm=settings.starter_minutes_norm,
+        starter_minutes_lift_weight=settings.starter_minutes_lift_weight,
+        starter_minutes_lift_cap=settings.starter_minutes_lift_cap,
+        prop_signal_scale=settings.prop_signal_scale,
+        picker_floor_tilt_weight=settings.picker_floor_tilt_weight,
+        picker_floor_tilt_max_boost=settings.picker_floor_tilt_max_boost,
+        picker_boost_tail_lift=settings.picker_boost_tail_lift,
+        boost_tail_lift_threshold=settings.boost_tail_lift_threshold,
+        boost_tail_lift_factor=settings.boost_tail_lift_factor,
+        minutes_model_enabled=settings.minutes_model_enabled,
+        game_script_minutes_enabled=game_script_minutes_enabled,
+        availability_model_enabled=settings.availability_model_enabled,
+        ceiling_sigma_blowout_boost=settings.ceiling_sigma_blowout_boost,
+        ceiling_sigma_low_history_boost=settings.ceiling_sigma_low_history_boost,
+        field_measured_ownership_enabled=settings.field_measured_ownership_enabled,
+        game_script=(
+            GameScriptConfig(blowout_penalty=1.0)
+            if game_script_minutes_enabled
+            else GameScriptConfig()
+        ),
+    )
+
+
+def _build_legacy_model_policy(settings: object) -> ModelPolicy:
+    """Adapt sparse historical test and script doubles to the strict compiler."""
+    overrides = {
+        name: getattr(settings, name)
+        for name in MODEL_POLICY_SETTING_FIELDS
+        if hasattr(settings, name)
+    }
+    return build_model_policy(Settings.model_construct(**overrides))
 
 
 def _build_specs(
@@ -201,6 +314,9 @@ def _build_specs(
     player_history: dict[int, float] | None = None,
     prior_by_player: dict[int, list[float]] | None = None,
     injury_bonus_by_pid: dict[int, float] | None = None,
+    policy: ModelPolicy | None = None,
+    art: PickerArtifact | None = None,
+    artifact_resolved: bool = False,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict]]:
     """Build the (sampling, field) specs the optimizer reads.
 
@@ -219,11 +335,15 @@ def _build_specs(
     `per_player` into the frozen JSONB (display_name, team, opponent,
     position, card_boost, final pred_real_score after contrarian).
     """
-    if contrarian_cfg is None:
-        s = get_settings()
-        contrarian_cfg = ContrarianConfig(
-            enabled=s.contrarian_enabled, strength=s.contrarian_strength
+    if policy is None:
+        settings = get_settings()
+        policy = (
+            build_model_policy(settings)
+            if isinstance(settings, Settings)
+            else _build_legacy_model_policy(settings)
         )
+    if contrarian_cfg is None:
+        contrarian_cfg = policy.contrarian
     if not enrichment:
         return [], [], {}
 
@@ -236,10 +356,10 @@ def _build_specs(
     # picker_*.pkl under models/. EB baseline predictions replace the
     # heuristic for any player seen in training; unseen players still
     # use _heuristic_real_score. None on missing/mismatched artifact
-    # means the entire pool falls back to heuristic — same path as before
+    # means the entire pool falls back to heuristic, the same path as before
     # D45 wiring. This makes deployment of a new model SHA non-destructive.
-    settings = get_settings()
-    art = _load_model_artifact(settings.model_artifact_sha)
+    if not artifact_resolved:
+        art = _load_model_artifact(policy.artifact_sha)
     # D69 / Phase 2b Tier-0: batch-predict from the D63 quantile heads up-front.
     # Empty dict means no head served (no features, no trained heads, or predict
     # failure) -- the per-player loop falls through to the existing ladder for
@@ -252,7 +372,7 @@ def _build_specs(
     bonus = injury_bonus_by_pid or {}
     preds = predict_players(
         enrichment,
-        settings=settings,
+        policy=policy,
         art=art,
         head_predictions=head_predictions,
         player_history=player_history,
@@ -270,13 +390,13 @@ def _build_specs(
     # minutes-derived volatility (minutes_vol x rate, D55) for matched players,
     # else fall back to realized real_score volatility. K and sigma share the
     # same score_offset the copula un-offsets.
-    K = float(settings.sampling_score_offset)
+    K = float(policy.optimizer.score_offset)
     volatility = player_volatility(prior_by_player or {})
 
     samps, fields, projection_by_pid = materialize_specs(
         adjusted,
         preds=preds,
-        settings=settings,
+        policy=policy,
         measured_drafts=measured_drafts,
         label_names=label_names,
         K=K,
@@ -410,6 +530,7 @@ def _freeze_recommendation(
     projection_by_pid: dict[int, dict],
     force_refreeze: bool,
     frozen_via_override: str | None,
+    scoring_provenance: ScoringProvenance,
 ) -> tuple[bool, str]:
     payout_curve_payload = {
         "regime": curve.regime,
@@ -446,6 +567,7 @@ def _freeze_recommendation(
         force=force_refreeze,
         payout_curve=payout_curve_payload,
         serving_knobs=serving_knobs_payload,
+        model_provenance=scoring_provenance.to_payload(),
         via=frozen_via_override,
     )
     if frozen:
@@ -504,14 +626,25 @@ def _run_shadow_evaluation(
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     settings = get_settings()
     sd = slate_date or current_slate_date().isoformat()
-    model_sha = settings.model_artifact_sha or "heuristic-v1"
+    try:
+        policy = (
+            build_model_policy(settings)
+            if isinstance(settings, Settings)
+            else _build_legacy_model_policy(settings)
+        )
+    except ValueError as exc:
+        log.error("job2_model_policy_invalid", slate_date=sd, reason=str(exc)[:160])
+        model_sha = str(settings.model_artifact_sha or "invalid-policy")
+        return Job2Result(sd, model_sha, None, False, "model_policy_invalid")
+    model_sha = policy.artifact_sha or "heuristic-v1"
 
     log.info("job2_start", slate_date=sd, model_sha=model_sha)
+    art = _load_model_artifact(policy.artifact_sha)
     if getattr(settings, "env", "dev") == "prod":
-        if not settings.model_artifact_sha:
+        if not policy.artifact_sha:
             log.error("job2_model_artifact_required", slate_date=sd)
             return Job2Result(sd, model_sha, None, False, "model_artifact_unset")
-        if _load_model_artifact(settings.model_artifact_sha) is None:
+        if art is None:
             log.error("job2_model_artifact_invalid", slate_date=sd, sha=model_sha[:12])
             return Job2Result(sd, model_sha, None, False, "model_artifact_invalid")
     enrichment_raw = _load_enrichment(sd)
@@ -591,15 +724,47 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         player_history=player_history,
         prior_by_player=prior_by_player,
         injury_bonus_by_pid=injury_bonus,
+        policy=policy,
+        art=art,
+        artifact_resolved=True,
     )
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
 
-    curve = load_curve_from_archive(sd) or default_curve_for_regime(settings.payout_regime)
-    cfg = build_optimize_config(settings)
-    mixture_variance_enabled = getattr(settings, "optimizer_mixture_variance_enabled", True)
+    curve = load_curve_from_archive(sd) or default_curve_for_regime(policy.payout_regime)
+    try:
+        serving_feature_sha = feature_module_sha()
+    except OSError as exc:
+        log.warning("serving_feature_hash_unavailable", reason=str(exc)[:120])
+        serving_feature_sha = None
+    scoring_provenance = ScoringProvenance.capture(
+        model_policy=policy,
+        enrichment=enrichment_raw,
+        sampling_specs=samps,
+        field_specs=fields,
+        payout_curve=curve,
+        artifact_loaded=art is not None,
+        artifact_feature_module_sha=(art.feature_module_sha if art is not None else None),
+        serving_feature_module_sha=serving_feature_sha,
+    )
+    log.info(
+        "model_boundary_captured",
+        model_policy_sha=policy.sha256[:12],
+        enrichment_sha=scoring_provenance.enrichment_sha256[:12],
+        enrichment_sequence_sha=scoring_provenance.enrichment_sequence_sha256[:12],
+        optimizer_inputs_sha=scoring_provenance.optimizer_inputs_sha256[:12],
+        enrichment_rows=scoring_provenance.enrichment_rows,
+        canonical_order_active=False,
+    )
+    cfg = policy.optimizer
+    mixture_variance_enabled = policy.mixture_variance_enabled
     rec = optimize_lineup(
-        samps, fields, curve, cfg=cfg, mixture_variance_enabled=mixture_variance_enabled
+        samps,
+        fields,
+        curve,
+        slot_multipliers=np.asarray(policy.slot_multipliers, dtype=float),
+        cfg=cfg,
+        mixture_variance_enabled=mixture_variance_enabled,
     )
     log.info(
         "job2_optimizer_done",
@@ -646,6 +811,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         projection_by_pid=projection_by_pid,
         force_refreeze=force_refreeze,
         frozen_via_override=frozen_via_override,
+        scoring_provenance=scoring_provenance,
     )
     _run_shadow_evaluation(settings, sd, model_sha, enrichment)
     return Job2Result(sd, model_sha, rec, frozen, status)

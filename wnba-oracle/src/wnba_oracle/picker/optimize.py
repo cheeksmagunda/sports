@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import itertools
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TypeVar
 
 import numpy as np
 
@@ -56,6 +58,8 @@ DEFAULT_SLOT_MULTIPLIERS = np.array([2.0, 1.8, 1.6, 1.4, 1.2])
 # rank by since rearrangement-inequality slot assignment will hand the
 # highest-pred player slot 2.0.
 MAX_SLOT_MULT = float(DEFAULT_SLOT_MULTIPLIERS.max())
+
+_PlayerSpecT = TypeVar("_PlayerSpecT", PlayerSamplingSpec, FieldPlayerSpec)
 
 
 def _exceeds_team_cap(combo: tuple[int, ...], teams: list[str], max_per_team: int) -> bool:
@@ -419,6 +423,60 @@ class _ConstraintState:
     is_anchor: list[bool]
 
 
+def _align_player_specs(
+    sampling_specs: list[PlayerSamplingSpec],
+    field_specs: list[FieldPlayerSpec],
+) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec]]:
+    """Validate and align the optimizer's parallel player contracts.
+
+    List position is an adapter detail, not model meaning.  The optimizer
+    consumes two views of each player, so it joins those views by the stable
+    Real Sports player id before any filtering, sampling, or constraint work.
+    The sampling order remains unchanged in this phase to preserve incumbent
+    scoring; canonical model ordering is a separate, measured change.
+    """
+    if len(sampling_specs) != len(field_specs):
+        raise ValueError(
+            f"sampling/field spec length mismatch: {len(sampling_specs)} != {len(field_specs)}"
+        )
+
+    def _index_unique(specs: Sequence[_PlayerSpecT], label: str) -> dict[int, _PlayerSpecT]:
+        indexed: dict[int, _PlayerSpecT] = {}
+        duplicates: set[int] = set()
+        for spec in specs:
+            player_id = int(spec.player_id)
+            if player_id in indexed:
+                duplicates.add(player_id)
+            indexed[player_id] = spec
+        if duplicates:
+            values = ", ".join(str(value) for value in sorted(duplicates))
+            raise ValueError(f"duplicate {label} player_id values: {values}")
+        return indexed
+
+    sampling_by_id = _index_unique(sampling_specs, "sampling")
+    field_by_id = _index_unique(field_specs, "field")
+    sampling_ids = set(sampling_by_id)
+    field_ids = set(field_by_id)
+    if sampling_ids != field_ids:
+        missing_field = sorted(sampling_ids - field_ids)
+        missing_sampling = sorted(field_ids - sampling_ids)
+        raise ValueError(
+            "sampling/field player_id mismatch: "
+            f"missing_field={missing_field}, missing_sampling={missing_sampling}"
+        )
+
+    aligned_field: list[FieldPlayerSpec] = []
+    for sampling in sampling_specs:
+        field = field_by_id[int(sampling.player_id)]
+        if not np.isclose(float(sampling.boost), float(field.card_boost), rtol=0.0, atol=1e-12):
+            raise ValueError(
+                f"player {sampling.player_id} boost mismatch: "
+                f"sampling={sampling.boost}, field={field.card_boost}"
+            )
+        aligned_field.append(field)
+    return list(sampling_specs), aligned_field
+
+
 def _slate_limits(sampling_specs: list[PlayerSamplingSpec], cfg: OptimizeConfig) -> tuple[int, int]:
     """Return slate game count and the small-slate-aware team cap."""
     n_teams = len({spec.team for spec in sampling_specs if spec.team})
@@ -435,6 +493,7 @@ def _filter_pool(
     sampling_specs: list[PlayerSamplingSpec],
     field_specs: list[FieldPlayerSpec],
     top_n: int,
+    max_slot_multiplier: float,
 ) -> _FilteredPool:
     """Keep the strongest visible-value players with stable tie ordering."""
     visible_value = np.array(
@@ -444,7 +503,7 @@ def _filter_pool(
                 if spec.rank_pred_override is not None
                 else spec.pred_real_score
             )
-            * (MAX_SLOT_MULT + spec.card_boost)
+            * (max_slot_multiplier + spec.card_boost)
             for spec in field_specs
         ],
         dtype=float,
@@ -670,12 +729,18 @@ def optimize_lineup(
     cfg: OptimizeConfig = OptimizeConfig(),
     mixture_variance_enabled: bool = True,
 ) -> LineupRecommendation:
+    sampling_specs, field_specs = _align_player_specs(sampling_specs, field_specs)
     n_all = len(sampling_specs)
     if n_all < 5:
         raise ValueError(f"pool too small ({n_all}) - need >= 5 players")
 
     n_games, max_per_team = _slate_limits(sampling_specs, cfg)
-    pool = _filter_pool(sampling_specs, field_specs, cfg.top_n_filter)
+    pool = _filter_pool(
+        sampling_specs,
+        field_specs,
+        cfg.top_n_filter,
+        float(np.max(slot_multipliers)),
+    )
     log.info("optimizer_stage1", n_all=n_all, n_filtered=len(pool.sampling))
 
     real_score_samples = _sample_filtered_scores(pool, cfg, mixture_variance_enabled)
