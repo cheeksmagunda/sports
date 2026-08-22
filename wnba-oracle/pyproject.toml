@@ -25,7 +25,7 @@ dependencies = [
     "tenacity>=9.0,<10.0",
     "tzdata>=2024.2",
     # Logging / config
-    "structlog>=24.4,<26.0",
+    "structlog>=24.4,<27.0",
     "pyyaml>=6.0.3",
     # Dataframes
     "polars>=1.16,<2.0",
