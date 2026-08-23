@@ -60,14 +60,14 @@ jobs:
               --body-file "$RUNNER_TEMP/watchdog-report.md"
           fi
 
-      - name: Close incident on recovery
-        if: always() && steps.probe.outcome == 'success' && steps.probe.outputs.status == 'ok'
+      - name: Close incident when no alert remains
+        if: always() && steps.probe.outcome == 'success' && steps.probe.outputs.status != 'alert'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           for number in $(gh issue list --label "$ALERT_LABEL" --state open --json number,title \
             --jq '.[] | select(.title == "WNBA Oracle watchdog alert") | .number'); do
-            gh issue comment "$number" --body "Production recovered at $(date -u +'%F %T') UTC."
+            gh issue comment "$number" --body "Production has no active watchdog alert as of $(date -u +'%F %T') UTC."
             gh issue close "$number"
           done
 
