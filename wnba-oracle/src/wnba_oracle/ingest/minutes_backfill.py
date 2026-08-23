@@ -48,6 +48,7 @@ COLS = [
 # Phoenix changed abbreviation from PHO (2024) to PHX (2025+). Same franchise;
 # unify so cross-season joins work.
 TEAM_ALIASES = {"PHO": "PHX"}
+GAME_LOG_RETRY_DELAYS = (2.0, 5.0)
 
 
 class GameLogRefreshError(RuntimeError):
@@ -110,19 +111,43 @@ UPSERT_SQL = text(
 )
 
 
-def _fetch_season_logs(season: str):
+def _fetch_season_logs(
+    season: str,
+    *,
+    retry_delays: tuple[float, ...] = GAME_LOG_RETRY_DELAYS,
+):
     """One PlayerGameLogs call for a WNBA season (league_id 10). Returns a
-    pandas DataFrame, or None on any nba_api failure (caller degrades)."""
+    pandas DataFrame, or None after bounded nba_api retries are exhausted."""
     from nba_api.stats.endpoints import playergamelogs
 
-    try:
-        df = playergamelogs.PlayerGameLogs(
-            season_nullable=season, league_id_nullable="10"
-        ).get_data_frames()[0]
-    except Exception as exc:
-        log.warning("game_logs_fetch_failed", season=season, error=str(exc)[:120])
-        return None
-    return df
+    attempts = len(retry_delays) + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            return playergamelogs.PlayerGameLogs(
+                season_nullable=season, league_id_nullable="10"
+            ).get_data_frames()[0]
+        except Exception as exc:
+            if attempt == attempts:
+                log.warning(
+                    "game_logs_fetch_failed",
+                    season=season,
+                    attempt=attempt,
+                    attempts=attempts,
+                    error_type=type(exc).__name__,
+                )
+                return None
+            retry_delay = retry_delays[attempt - 1]
+            log.warning(
+                "game_logs_fetch_retry",
+                season=season,
+                attempt=attempt,
+                attempts=attempts,
+                retry_delay_seconds=retry_delay,
+                error_type=type(exc).__name__,
+            )
+            time.sleep(retry_delay)
+
+    raise AssertionError("unreachable")
 
 
 def _to_rows(raw) -> pl.DataFrame:

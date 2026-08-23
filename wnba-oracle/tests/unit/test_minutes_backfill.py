@@ -55,6 +55,39 @@ def test_to_rows_maps_schema_and_normalizes() -> None:
     assert z["last_name"] == "zandalasini"  # accent folded
 
 
+def test_fetch_retries_transient_failure() -> None:
+    endpoint = MagicMock()
+    endpoint.get_data_frames.return_value = [_fake_frame()]
+    with (
+        patch(
+            "nba_api.stats.endpoints.playergamelogs.PlayerGameLogs",
+            side_effect=[TimeoutError, endpoint],
+        ) as player_game_logs,
+        patch.object(mb.time, "sleep") as sleep,
+    ):
+        result = mb._fetch_season_logs("2026", retry_delays=(0.25, 0.5))
+
+    assert result is not None
+    assert result.equals(_fake_frame())
+    assert player_game_logs.call_count == 2
+    sleep.assert_called_once_with(0.25)
+
+
+def test_fetch_returns_none_after_bounded_retries() -> None:
+    with (
+        patch(
+            "nba_api.stats.endpoints.playergamelogs.PlayerGameLogs",
+            side_effect=TimeoutError,
+        ) as player_game_logs,
+        patch.object(mb.time, "sleep") as sleep,
+    ):
+        result = mb._fetch_season_logs("2026", retry_delays=(0.25, 0.5))
+
+    assert result is None
+    assert player_game_logs.call_count == 3
+    assert [call.args[0] for call in sleep.call_args_list] == [0.25, 0.5]
+
+
 def test_refresh_upserts_and_returns_count() -> None:
     with (
         patch.object(mb, "_fetch_season_logs", return_value=_fake_frame()),
