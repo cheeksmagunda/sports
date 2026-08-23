@@ -210,3 +210,28 @@ def test_monitor_withholds_heartbeat_and_recovery_while_a_job_is_running(
     assert any(check.status == "warn" for check in checks)
     assert heartbeat_calls == []
     assert monitor.summarize_status(checks) == "warn"
+
+
+def test_monitor_alerts_when_frontend_omits_production_api_route(monkeypatch) -> None:
+    monitor = _load_monitor()
+    now = dt.datetime(2026, 8, 20, 5, tzinfo=dt.UTC)
+
+    def get_json(url: str):
+        if url.endswith("/health"):
+            return 200, {"status": "ok"}
+        if url.endswith("/watchdog/jobs/today"):
+            return 200, _payload(now, {})
+        return 200, {"slate_date": "2026-08-20", "events": []}
+
+    monkeypatch.setattr(monitor, "get_json", get_json)
+    monkeypatch.setattr(monitor, "get_text", lambda _url: (200, '<div id="root"></div>'))
+
+    checks = monitor.run(
+        "https://api.wnba.example",
+        frontend_url="https://wnba.example",
+        heartbeat_url="https://heartbeat",
+        now=now,
+    )
+
+    frontend = next(check for check in checks if check.name == "Frontend serving")
+    assert frontend.status == "alert"

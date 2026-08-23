@@ -19,7 +19,7 @@ from sqlalchemy import text
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
 from wnba_oracle.common.settings import get_settings
-from wnba_oracle.db.engine import get_engine
+from wnba_oracle.db.engine import get_api_engine as get_engine
 
 router = APIRouter(prefix="/slate", tags=["slate"])
 

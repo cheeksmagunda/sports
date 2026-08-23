@@ -61,6 +61,10 @@ def test_job_run_surface_includes_missing_jobs() -> None:
             "started_at": started,
             "completed_at": started + dt.timedelta(minutes=2),
             "exit_code": 0,
+            "details_json": {
+                "source_exit_code": 0,
+                "secret": "must-not-be-served",
+            },
         }
     )
     connection = MagicMock()
@@ -72,8 +76,40 @@ def test_job_run_surface_includes_missing_jobs() -> None:
         response = watchdog_router.get_job_runs_today()
 
     assert response["jobs"]["job1"]["status"] == "success"
+    assert response["jobs"]["job1"]["details"] == {"source_exit_code": 0}
+    assert "must-not-be-served" not in str(response)
     assert response["jobs"]["job2"] is None
     assert set(response["jobs"]) == set(JOB_NAMES)
+
+
+def test_dayclose_surface_exposes_only_substep_statuses() -> None:
+    details = {
+        "processed_slate_date": "2026-08-22",
+        "degraded_substeps": ["shadow_results"],
+        "substeps": {
+            "historical_backfill": {
+                "status": "success",
+                "provider_payload": "must-not-be-served",
+            },
+            "shadow_results": {
+                "status": "degraded",
+                "error": "must-not-be-served",
+            },
+        },
+        "unlisted": "must-not-be-served",
+    }
+
+    public = watchdog_router._public_job_details("dayclose", details)
+
+    assert public == {
+        "processed_slate_date": "2026-08-22",
+        "degraded_substeps": ["shadow_results"],
+        "substeps": {
+            "historical_backfill": {"status": "success"},
+            "shadow_results": {"status": "degraded"},
+        },
+    }
+    assert "must-not-be-served" not in str(public)
 
 
 def test_job_run_route_precedes_dynamic_watchdog_route() -> None:

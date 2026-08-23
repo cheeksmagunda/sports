@@ -36,3 +36,17 @@ updates:
       actions:
         patterns:
           - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/wnba-oracle/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Chicago"
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

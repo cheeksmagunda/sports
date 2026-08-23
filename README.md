@@ -55,6 +55,15 @@ only the appropriate part:
 So `sports` is both the shared repository and the deployment source. WNBA
 remains a self-contained application inside it.
 
+Production source deploys are limited to `main` and wait for the applicable
+GitHub CI checks. The API serves frozen picks from PostgreSQL without requiring
+Redis; Redis is isolated to Job 2 coordination, and API database sessions are
+enforced read-only. The historical backfill service has no cron or source
+auto-deploy and can run only through its explicit exact-commit workflow after
+that commit passes backend CI. The corpus backup exports with database read
+authority in one job, then publishes the verified artifact from a separate job
+that has repository write authority but no database credential.
+
 ## Local backend authentication
 
 Normal commands run directly. They use exported environment values, deployment
@@ -126,5 +135,9 @@ Backend CI calls these same targets, then builds the WNBA image and probes each
 runtime role plus API startup against PostgreSQL and Redis. Operational workflow
 schedules and production evidence are application state, so their current values
 belong in `wnba-oracle/STATUS.md`.
+
+Frontend CI audits the locked npm graph, runs lint, types, and tests, builds the
+exact production container, and verifies that its HTML API marker and browser
+security policy use the same configured HTTPS origin.
 
 See `wnba-oracle/AGENTS.md` for WNBA-specific commands and verification rules.

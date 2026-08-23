@@ -132,6 +132,18 @@ def test_backup_url_removes_only_the_machine_local_tls_root_path() -> None:
     assert "application_name=backup" in portable
 
 
+def test_backup_requires_database_server_identity_verification() -> None:
+    _load_common()
+    backup = _load_script("backup_corpus")
+
+    backup._require_verified_tls("postgresql://example.invalid/database?sslmode=verify-full")
+    backup._require_verified_tls("postgresql://example.invalid/database?sslmode=verify-ca")
+    with pytest.raises(RuntimeError, match="verify-ca or verify-full"):
+        backup._require_verified_tls("postgresql://example.invalid/database?sslmode=require")
+    with pytest.raises(RuntimeError, match="verify-ca or verify-full"):
+        backup._require_verified_tls("postgresql://example.invalid/database")
+
+
 def test_restore_entry_point_only_accepts_a_verified_snapshot(tmp_path) -> None:
     common = _load_common()
     _write_valid_snapshot(common, tmp_path)

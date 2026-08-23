@@ -1,4 +1,5 @@
 import { getDemoMode } from "./demo";
+import { fetchPublic } from "./http";
 
 export type Archetype =
   | "ceiling_anchor"
@@ -176,7 +177,7 @@ export async function fetchLineupForDate(
   modelSha?: string,
 ): Promise<FrozenLineup | null> {
   const qs = modelSha ? `?model_sha=${encodeURIComponent(modelSha)}` : "";
-  const r = await fetch(`${API_URL}/lineup/${date}${qs}`);
+  const r = await fetchPublic(`${API_URL}/lineup/${date}${qs}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as FrozenLineup;
@@ -204,7 +205,7 @@ export type SlateTiming = {
 
 export async function fetchSlateTiming(): Promise<SlateTiming | null> {
   const today = localSlateDate();
-  const r = await fetch(`${API_URL}/slate/${today}`);
+  const r = await fetchPublic(`${API_URL}/slate/${today}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as SlateTiming;
@@ -215,7 +216,7 @@ export async function fetchSlateTiming(): Promise<SlateTiming | null> {
 export async function fetchLineupHistory(
   date: string,
 ): Promise<FrozenLineup[] | null> {
-  const r = await fetch(`${API_URL}/lineup/${date}/history`);
+  const r = await fetchPublic(`${API_URL}/lineup/${date}/history`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as FrozenLineup[];
@@ -226,7 +227,7 @@ export async function fetchLineupHistory(
 export async function fetchRecentSlates(
   limit = 60,
 ): Promise<SlateSummary[]> {
-  const r = await fetch(`${API_URL}/lineup?limit=${limit}`);
+  const r = await fetchPublic(`${API_URL}/lineup?limit=${limit}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as SlateSummary[];
 }
@@ -234,7 +235,7 @@ export async function fetchRecentSlates(
 export async function fetchWatchdogToday(
   severityMin: WatchdogSeverity = "warn",
 ): Promise<WatchdogToday> {
-  const r = await fetch(`${API_URL}/watchdog/today?severity_min=${severityMin}`);
+  const r = await fetchPublic(`${API_URL}/watchdog/today?severity_min=${severityMin}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (await r.json()) as WatchdogToday;
 }

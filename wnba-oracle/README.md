@@ -57,6 +57,21 @@ capture, and enabled game-log refresh as required work. A required failure makes
 the durable job record fail. Optional shadow and cleanup failures remain visible
 as degraded substeps without falsely marking required data work complete.
 
+Normal production services deploy from `main` only after GitHub CI succeeds.
+Historical enrichment backfill is isolated from source pushes: it has no cron,
+source auto-deploy, or restart loop, and the manual workflow accepts only an
+exact `main` commit with successful backend CI. The workflow then verifies a new
+successful durable backfill record, while partial, empty-input, and write
+failures return nonzero.
+
+Scheduled watchdog, pre-freeze, and day-close verification steps retain a safe
+report and escalate before failing their workflow. Corpus backup keeps database
+credentials in its read-only export job and transfers a hash-verified artifact
+to a separate repository-writing job, where the hashes are verified again.
+Browser requests to the API and public score feed are no-store and time-bounded,
+so a stalled connector reaches the existing retry/error state instead of
+holding the interface open indefinitely.
+
 ## Model and infrastructure isolation
 
 The model kernel owns policy, feature interpretation, prediction, sampling,
@@ -83,7 +98,10 @@ service was available.
 
 ## Canonical data
 
-PostgreSQL is the durable source. Redis is a cache and coordination service.
+PostgreSQL is the durable source and the API's only state dependency. Redis is
+restricted to Job 2 coordination, so a Redis outage cannot take already frozen
+picks off the serving path. API and health database sessions are bounded and
+enforced read-only; migrations and scheduled writers use separate job paths.
 
 | Frame | Grain | Source table | Primary consumer |
 | --- | --- | --- | --- |

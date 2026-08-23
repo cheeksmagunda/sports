@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import uuid
 from unittest.mock import patch
@@ -14,6 +15,7 @@ from oracle_core.storage import create_redis_client
 
 from wnba_oracle.common.db_utils import normalize_postgres_url
 from wnba_oracle.common.logging import get_logger
+from wnba_oracle.scheduler.job_backfill import UPSERT_SQL as BACKFILL_UPSERT_SQL
 from wnba_oracle.scheduler.job_runtime import PostgresJobRunHook
 
 pytestmark = pytest.mark.integration
@@ -105,3 +107,80 @@ def test_redis_round_trip_and_atomic_lease_semantics() -> None:
     finally:
         client.delete(key)
         client.close()
+
+
+def test_backfill_upsert_preserves_live_enrichment_fields() -> None:
+    engine = sa.create_engine(_database_url())
+    player_id = uuid.uuid4().int % 9_000_000_000 + 1_000_000_000
+    slate_date = dt.date(2099, 12, 31)
+    connection = engine.connect()
+    transaction = connection.begin()
+    try:
+        connection.execute(
+            sa.text(
+                """
+                INSERT INTO job1_enrichment (
+                    slate_date, player_id, real_sports_player_id, name, team,
+                    opponent, position, card_boost, features_json, captured_at
+                ) VALUES (
+                    :slate_date, :player_id, :real_sports_player_id, :name, :team,
+                    :opponent, :position, :card_boost, CAST(:features_json AS JSONB), now()
+                )
+                """
+            ),
+            {
+                "slate_date": slate_date,
+                "player_id": player_id,
+                "real_sports_player_id": str(player_id),
+                "name": "Preserved Player",
+                "team": "CHI",
+                "opponent": "NYL",
+                "position": "G",
+                "card_boost": 0.2,
+                "features_json": json.dumps(
+                    {
+                        "head_features": None,
+                        "rotowire_confirmed": 1,
+                        "vegas_total": 161.5,
+                    }
+                ),
+            },
+        )
+        connection.execute(
+            BACKFILL_UPSERT_SQL,
+            {
+                "slate_date": slate_date,
+                "player_id": player_id,
+                "real_sports_player_id": str(player_id),
+                "name": "Backfill Player",
+                "team": "",
+                "opponent": "",
+                "position": "G",
+                "card_boost": 0.0,
+                "features_json": json.dumps(
+                    {
+                        "head_features": {"minutes_l10": 29.0},
+                        "rotowire_confirmed": 0,
+                        "vegas_total": 0.0,
+                        "_backfilled": True,
+                    }
+                ),
+            },
+        )
+        features = connection.execute(
+            sa.text(
+                """
+                SELECT features_json FROM job1_enrichment
+                WHERE slate_date = :slate_date AND player_id = :player_id
+                """
+            ),
+            {"slate_date": slate_date, "player_id": player_id},
+        ).scalar_one()
+        assert features["head_features"] == {"minutes_l10": 29.0}
+        assert features["rotowire_confirmed"] == 1
+        assert features["vegas_total"] == 161.5
+        assert "_backfilled" not in features
+    finally:
+        transaction.rollback()
+        connection.close()
+        engine.dispose()

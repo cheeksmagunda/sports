@@ -65,6 +65,18 @@ def _portable_database_url(url: str) -> str:
     )
 
 
+def _require_verified_tls(url: str) -> None:
+    """Reject backup connections that do not authenticate the database server."""
+
+    parsed = urllib.parse.urlsplit(url)
+    query = {
+        name.lower(): value.lower()
+        for name, value in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    }
+    if query.get("sslmode") not in {"verify-ca", "verify-full"}:
+        raise RuntimeError("backup database URL must use sslmode=verify-ca or verify-full")
+
+
 def _csv_bytes(frame: pd.DataFrame) -> bytes:
     return frame.to_csv(index=False).encode("utf-8")
 
@@ -162,6 +174,11 @@ def main() -> int:
     url = os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
     if not url:
         print("ERROR: set DATABASE_PUBLIC_URL or DATABASE_URL", file=sys.stderr)
+        return 1
+    try:
+        _require_verified_tls(url)
+    except RuntimeError as exc:
+        print(f"ERROR: corpus backup configuration rejected: {exc}", file=sys.stderr)
         return 1
     engine = create_engine(
         _portable_database_url(url).replace("postgresql://", "postgresql+psycopg://", 1),

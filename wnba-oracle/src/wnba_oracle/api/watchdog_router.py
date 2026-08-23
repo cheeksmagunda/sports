@@ -9,13 +9,14 @@ today's slate.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
-from wnba_oracle.db.engine import get_engine
+from wnba_oracle.db.engine import get_api_engine as get_engine
 from wnba_oracle.scheduler.job_runtime import JOB_NAMES
 
 router = APIRouter(prefix="/watchdog", tags=["watchdog"])
@@ -51,7 +52,7 @@ def get_job_runs_today() -> dict[str, Any]:
 
     query = text(
         "SELECT DISTINCT ON (job_name) job_name, role, status, started_at, "
-        "completed_at, exit_code FROM job_runs WHERE slate_date = :slate_date "
+        "completed_at, exit_code, details_json FROM job_runs WHERE slate_date = :slate_date "
         "ORDER BY job_name, started_at DESC"
     )
     with engine.connect() as connection:
@@ -66,6 +67,7 @@ def get_job_runs_today() -> dict[str, Any]:
             "started_at": _isoformat(values.get("started_at")),
             "completed_at": _isoformat(values.get("completed_at")),
             "exit_code": values.get("exit_code"),
+            "details": _public_job_details(str(values["job_name"]), values.get("details_json")),
         }
     return {
         "slate_date": today,
@@ -142,3 +144,39 @@ def _summarize(events: list[dict]) -> str:
 
 def _isoformat(value: Any) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+def _public_job_details(job_name: str, value: object) -> dict[str, Any]:
+    """Project durable details onto a value-free, explicitly allowed shape."""
+
+    if not isinstance(value, Mapping):
+        return {}
+    public: dict[str, Any] = {}
+    source_exit_code = value.get("source_exit_code")
+    if isinstance(source_exit_code, int):
+        public["source_exit_code"] = source_exit_code
+    if job_name != "dayclose":
+        return public
+
+    processed_slate_date = value.get("processed_slate_date")
+    if isinstance(processed_slate_date, str):
+        try:
+            public["processed_slate_date"] = dt.date.fromisoformat(processed_slate_date).isoformat()
+        except ValueError:
+            pass
+
+    for key in ("required_failures", "degraded_substeps"):
+        raw = value.get(key)
+        if isinstance(raw, list) and all(isinstance(item, str) for item in raw):
+            public[key] = list(raw)
+    raw_substeps = value.get("substeps")
+    if isinstance(raw_substeps, Mapping):
+        substeps: dict[str, dict[str, str]] = {}
+        for name, outcome in raw_substeps.items():
+            if not isinstance(name, str) or not isinstance(outcome, Mapping):
+                continue
+            status = outcome.get("status")
+            if status in {"success", "degraded", "failed", "skipped"}:
+                substeps[name] = {"status": str(status)}
+        public["substeps"] = substeps
+    return public

@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  VITE_API_URL: https://api-production-7033.up.railway.app
+
 defaults:
   run:
     working-directory: wnba-oracle/frontend
@@ -22,16 +25,47 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: wnba-oracle/frontend/package-lock.json
 
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
+
+      - name: Build the exact production container path
+        working-directory: ${{ github.workspace }}
+        run: >-
+          docker build
+          --build-arg VITE_API_URL="$VITE_API_URL"
+          --tag wnba-oracle-frontend:ci
+          wnba-oracle/frontend
+
+      - name: Smoke production routing and response assurance
+        working-directory: ${{ github.workspace }}
+        run: |
+          container_id=$(docker run --detach --publish 4173:4173 wnba-oracle-frontend:ci)
+          cleanup() {
+            docker rm --force "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > "$RUNNER_TEMP/frontend.html"; then
+              break
+            fi
+            sleep 1
+          done
+          grep --fixed-strings "content=\"$VITE_API_URL\"" "$RUNNER_TEMP/frontend.html"
+          curl --fail --silent --head http://127.0.0.1:4173/ > "$RUNNER_TEMP/frontend.headers"
+          grep --ignore-case "^content-security-policy:.*connect-src.*$VITE_API_URL" "$RUNNER_TEMP/frontend.headers"
+          grep --ignore-case '^strict-transport-security: max-age=31536000' "$RUNNER_TEMP/frontend.headers"
+          grep --ignore-case '^x-content-type-options: nosniff' "$RUNNER_TEMP/frontend.headers"

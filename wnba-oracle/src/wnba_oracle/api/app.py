@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Protocol
+import asyncio
+from collections.abc import Awaitable, Callable
 
 import sqlalchemy as sa
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from oracle_core import (
     HealthCheck,
@@ -20,11 +20,7 @@ from sqlalchemy.engine import Engine
 from wnba_oracle import __version__
 from wnba_oracle.common.logging import configure_logging
 from wnba_oracle.common.settings import Settings, get_settings
-from wnba_oracle.db.engine import get_engine, get_redis
-
-
-class _RedisPingClient(Protocol):
-    def ping(self) -> object: ...
+from wnba_oracle.db.engine import get_health_engine
 
 
 class _DatabaseHealth:
@@ -33,44 +29,30 @@ class _DatabaseHealth:
     def __init__(self, engine_factory: Callable[[], Engine]) -> None:
         self._engine_factory = engine_factory
 
-    def check(self) -> HealthCheck:
+    async def check(self) -> HealthCheck:
+        return await asyncio.to_thread(self._check_sync)
+
+    def _check_sync(self) -> HealthCheck:
         with self._engine_factory().connect() as connection:
             value = connection.execute(sa.text("SELECT 1")).scalar_one()
         return HealthCheck(status="ok" if value == 1 else "error")
-
-
-class _RedisHealth:
-    name = "redis"
-
-    def __init__(self, client_factory: Callable[[], _RedisPingClient]) -> None:
-        self._client_factory = client_factory
-
-    def check(self) -> HealthCheck:
-        return HealthCheck(status="ok" if self._client_factory().ping() else "error")
 
 
 def _health_payload(status: HealthStatus) -> dict[str, str]:
     return {"status": status.status, "version": __version__}
 
 
-def _get_redis_ping_client() -> _RedisPingClient:
-    return get_redis()
-
-
 def create_app(
     *,
     settings: Settings | None = None,
     engine_factory: Callable[[], Engine] | None = None,
-    redis_factory: Callable[[], _RedisPingClient] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
     health_contributors: list[HealthContributor] = []
     if settings.env == "prod" or settings.database_url:
-        health_contributors.append(_DatabaseHealth(engine_factory or get_engine))
-    if settings.env == "prod" or settings.redis_url:
-        health_contributors.append(_RedisHealth(redis_factory or _get_redis_ping_client))
+        health_contributors.append(_DatabaseHealth(engine_factory or get_health_engine))
 
     from wnba_oracle.api.lineup import router as lineup_router
     from wnba_oracle.api.slate import router as slate_router
@@ -97,6 +79,24 @@ def create_app(
         allow_methods=["GET", "OPTIONS"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def add_assurance_headers(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        if response.headers.get("Content-Type", "").startswith("application/json"):
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; frame-ancestors 'none'"
+            )
+        response.headers["Permissions-Policy"] = "camera=(), geolocation=(), microphone=()"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
 
     return app
 

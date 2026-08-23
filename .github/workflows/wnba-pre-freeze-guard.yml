@@ -32,10 +32,6 @@ env:
   WNBA_RAILWAY_PROJECT_ID: ab83f44c-0bbc-4a58-931c-37d9fbfda73a
   WNBA_RAILWAY_ENVIRONMENT_ID: d57a759e-e189-439b-a612-bd220ef59c39
   WNBA_RAILWAY_API_SERVICE_ID: f4750eda-fd6c-432b-b6f5-34254013c271
-  WNBA_RAILWAY_JOB1_SERVICE_ID: 2e110589-9527-4541-a754-41c4719515ba
-  WNBA_RAILWAY_JOB1_LATE_SERVICE_ID: 2b0cd5aa-8793-45a5-bca0-e81c6d8455ff
-  WNBA_RAILWAY_JOB2_SERVICE_ID: 4a511ed2-10ad-441f-bf9a-3748c1e6b929
-  WNBA_EXPECTED_MODEL_SHA: ${{ vars.WNBA_EXPECTED_MODEL_SHA }}
 
 concurrency:
   group: wnba-pre-freeze-guard
@@ -65,9 +61,10 @@ jobs:
 
       - name: Check production
         id: guard
+        continue-on-error: true
         env:
           INPUT_REPAIR: ${{ inputs.repair }}
-          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+          RAILWAY_WORKSPACE_TOKEN: ${{ inputs.repair == true && secrets.RAILWAY_WORKSPACE_TOKEN || '' }}
         run: |
           repair_args=()
           if [ "$INPUT_REPAIR" = "true" ]; then
@@ -80,8 +77,15 @@ jobs:
             --report "$RUNNER_TEMP/pre-freeze-report.md" \
             "${repair_args[@]}"
 
+      - name: Ensure an incident-safe report exists
+        if: always()
+        run: |
+          if [ ! -s "$RUNNER_TEMP/pre-freeze-report.md" ]; then
+            printf '# WNBA pre-freeze operations\n\n- ALERT: the production guard did not produce a report.\n' > "$RUNNER_TEMP/pre-freeze-report.md"
+          fi
+
       - name: Escalate an unhealthy guard
-        if: steps.guard.outputs.status == 'alert'
+        if: always() && (steps.guard.outcome != 'success' || steps.guard.outputs.status == 'alert')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -95,3 +99,7 @@ jobs:
               --title "WNBA pre-freeze operations" \
               --body-file "$RUNNER_TEMP/pre-freeze-report.md"
           fi
+
+      - name: Fail an unhealthy guard after escalation
+        if: always() && (steps.guard.outcome != 'success' || steps.guard.outputs.status == 'alert')
+        run: exit 1

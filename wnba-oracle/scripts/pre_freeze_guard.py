@@ -18,7 +18,6 @@ from ops_common import (
     get_json,
     parse_timestamp,
     perform_repair,
-    safe_sha,
     summarize_status,
     write_report,
 )
@@ -154,60 +153,6 @@ def _api_checks(
     return checks, health_failed
 
 
-def _railway_checks(
-    railway: RailwayClient,
-    *,
-    project_id: str,
-    environment_id: str,
-    job1_service_id: str,
-    job1_late_service_id: str,
-    job2_service_id: str,
-    expected_model_sha: str,
-) -> list[Check]:
-    checks: list[Check] = []
-    service_ids = {
-        "job1": job1_service_id,
-        "job1-late": job1_late_service_id,
-        "job2": job2_service_id,
-    }
-    configured: dict[str, str] = {}
-    try:
-        for name, service_id in service_ids.items():
-            values = railway.variables(project_id, environment_id, service_id)
-            configured[name] = values.get("WNBA_ORACLE_MODEL_ARTIFACT_SHA", "").strip().lower()
-        present = {value for value in configured.values() if value}
-        missing = sorted(name for name, value in configured.items() if not value)
-        if missing:
-            checks.append(
-                Check(
-                    "Model configuration", "alert", f"Model SHA is unset on: {', '.join(missing)}."
-                )
-            )
-        elif len(present) != 1:
-            shown = ", ".join(f"{name}={safe_sha(value)}" for name, value in configured.items())
-            checks.append(Check("Model configuration", "alert", f"Service SHAs differ: {shown}."))
-        elif expected_model_sha and present != {expected_model_sha.lower()}:
-            actual = safe_sha(next(iter(present)))
-            checks.append(
-                Check(
-                    "Model configuration",
-                    "alert",
-                    f"Configured SHA {actual} differs from expected {safe_sha(expected_model_sha)}.",
-                )
-            )
-        else:
-            checks.append(
-                Check(
-                    "Model configuration",
-                    "ok",
-                    f"All prediction services use SHA {safe_sha(next(iter(present)))}.",
-                )
-            )
-    except SafeRequestError as exc:
-        checks.append(Check("Model configuration", "alert", str(exc)))
-    return checks
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-base", default=os.environ.get("WNBA_API_BASE", ""))
@@ -217,18 +162,6 @@ def main() -> int:
     )
     parser.add_argument(
         "--api-service-id", default=os.environ.get("WNBA_RAILWAY_API_SERVICE_ID", "")
-    )
-    parser.add_argument(
-        "--job1-service-id", default=os.environ.get("WNBA_RAILWAY_JOB1_SERVICE_ID", "")
-    )
-    parser.add_argument(
-        "--job1-late-service-id", default=os.environ.get("WNBA_RAILWAY_JOB1_LATE_SERVICE_ID", "")
-    )
-    parser.add_argument(
-        "--job2-service-id", default=os.environ.get("WNBA_RAILWAY_JOB2_SERVICE_ID", "")
-    )
-    parser.add_argument(
-        "--expected-model-sha", default=os.environ.get("WNBA_EXPECTED_MODEL_SHA", "")
     )
     parser.add_argument("--slate-date", required=True)
     parser.add_argument("--run-start-utc", required=True)
@@ -241,16 +174,15 @@ def main() -> int:
     parser.add_argument("--github-output", default=os.environ.get("GITHUB_OUTPUT"))
     args = parser.parse_args()
 
-    required = {
-        "api-base": args.api_base,
-        "project-id": args.project_id,
-        "environment-id": args.environment_id,
-        "api-service-id": args.api_service_id,
-        "job1-service-id": args.job1_service_id,
-        "job1-late-service-id": args.job1_late_service_id,
-        "job2-service-id": args.job2_service_id,
-        "expected-model-sha": args.expected_model_sha,
-    }
+    required = {"api-base": args.api_base}
+    if args.repair:
+        required.update(
+            {
+                "project-id": args.project_id,
+                "environment-id": args.environment_id,
+                "api-service-id": args.api_service_id,
+            }
+        )
     missing = [name for name, value in required.items() if not value]
     if missing:
         parser.error(f"missing required configuration: {', '.join(missing)}")
@@ -272,21 +204,18 @@ def main() -> int:
 
     api_base = args.api_base.rstrip("/")
     checks, health_failed = _api_checks(api_base, args.slate_date, window=window)
-    token = os.environ.get("RAILWAY_WORKSPACE_TOKEN", "")
-    if token:
-        railway = RailwayClient(token)
-        checks.extend(
-            _railway_checks(
-                railway,
-                project_id=args.project_id,
-                environment_id=args.environment_id,
-                job1_service_id=args.job1_service_id,
-                job1_late_service_id=args.job1_late_service_id,
-                job2_service_id=args.job2_service_id,
-                expected_model_sha=args.expected_model_sha,
+    if args.repair:
+        token = os.environ.get("RAILWAY_WORKSPACE_TOKEN", "")
+        if not token:
+            checks.append(
+                Check(
+                    "Allowlisted repair",
+                    "alert",
+                    "RAILWAY_WORKSPACE_TOKEN is missing for the requested repair.",
+                )
             )
-        )
-        if args.repair:
+        else:
+            railway = RailwayClient(token)
             if not health_failed:
                 checks.append(
                     Check(
@@ -317,8 +246,6 @@ def main() -> int:
                             f"API health did not recover after {result.attempts} bounded redeploy attempt(s).",
                         )
                     )
-    else:
-        checks.append(Check("Railway credential", "alert", "RAILWAY_WORKSPACE_TOKEN is missing."))
 
     report = pathlib.Path(args.report)
     write_report(
@@ -327,13 +254,14 @@ def main() -> int:
         checks,
         notes=[
             f"Durable Job 1 evidence was limited to {window.describe()}.",
-            "Railway validates model configuration only, not cron execution evidence.",
+            "The scheduled path uses public API and durable application evidence only.",
             "Repair is manual, limited to API redeploys, and requires a health postcheck.",
             "Real Sports session recovery always requires the documented operator flow.",
         ],
     )
-    append_github_output(args.github_output, status=summarize_status(checks))
-    return 0
+    status = summarize_status(checks)
+    append_github_output(args.github_output, status=status)
+    return 1 if status == "alert" else 0
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ These fields default to zero/null, same as the early-2026 pre-odds era.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import unicodedata
 
@@ -59,13 +60,21 @@ ON CONFLICT (slate_date, player_id) DO UPDATE SET
         WHEN job1_enrichment.features_json->>'head_features' IS NOT NULL
             AND job1_enrichment.features_json->'head_features' != 'null'::jsonb
         THEN job1_enrichment.features_json
-        ELSE EXCLUDED.features_json
+        WHEN EXCLUDED.features_json->>'head_features' IS NOT NULL
+            AND EXCLUDED.features_json->'head_features' != 'null'::jsonb
+        THEN job1_enrichment.features_json || jsonb_build_object(
+            'head_features', EXCLUDED.features_json->'head_features'
+        )
+        ELSE job1_enrichment.features_json
     END,
     captured_at = CASE
         WHEN job1_enrichment.features_json->>'head_features' IS NOT NULL
             AND job1_enrichment.features_json->'head_features' != 'null'::jsonb
         THEN job1_enrichment.captured_at
-        ELSE now()
+        WHEN EXCLUDED.features_json->>'head_features' IS NOT NULL
+            AND EXCLUDED.features_json->'head_features' != 'null'::jsonb
+        THEN now()
+        ELSE job1_enrichment.captured_at
     END;
 """)
 
@@ -79,7 +88,7 @@ WHERE slate_date = :slate_date AND player_id = :player_id
 """)
 
 
-def _get_all_slate_dates(conn: psycopg.Connection) -> list:
+def _get_all_slate_dates(conn: psycopg.Connection) -> list[dt.date]:
     with conn.cursor() as cur:
         cur.execute("""
             SELECT DISTINCT slate_date FROM slate_labels
@@ -88,9 +97,9 @@ def _get_all_slate_dates(conn: psycopg.Connection) -> list:
         return [r[0] for r in cur.fetchall()]
 
 
-def _get_existing_enrichment_dates(conn: psycopg.Connection) -> set:
+def _get_existing_enrichment_dates(conn: psycopg.Connection) -> set[dt.date]:
     with conn.cursor() as cur:
-        cur.execute("SELECT DISTINCT slate_date::varchar FROM job1_enrichment")
+        cur.execute("SELECT DISTINCT slate_date FROM job1_enrichment")
         return {r[0] for r in cur.fetchall()}
 
 
@@ -283,6 +292,9 @@ def main() -> int:
     log.info("backfill_loading_game_logs")
     game_logs = read_game_logs()
     log.info("backfill_game_logs_loaded", n_rows=len(game_logs))
+    if not game_logs:
+        log.error("backfill_failed", reason="game_log_corpus_empty")
+        return 1
 
     engine = get_engine()
     opp_dvp = build_opp_dvp_lookup(game_logs)
@@ -294,6 +306,11 @@ def main() -> int:
     existing = _get_existing_enrichment_dates(psyconn)
     name_to_team = _get_name_to_team_map(psyconn)
 
+    if not all_dates:
+        psyconn.close()
+        log.error("backfill_failed", reason="eligible_slate_set_empty")
+        return 1
+
     log.info(
         "backfill_slate_summary",
         total=len(all_dates),
@@ -303,12 +320,19 @@ def main() -> int:
 
     total_inserted = 0
     total_updated = 0
+    failed_feature_builds = 0
+    failed_required_writes = 0
 
     for i, slate_date in enumerate(all_dates):
         try:
             head_feats = build_head_feature_lookup(game_logs, slate_date=slate_date)
         except Exception as exc:
-            log.warning("backfill_head_feats_failed", slate_date=slate_date, reason=str(exc)[:120])
+            failed_feature_builds += 1
+            log.warning(
+                "backfill_head_feats_failed",
+                slate_date=slate_date,
+                error_type=type(exc).__name__,
+            )
             continue
 
         n_feats = len(head_feats) // 2
@@ -320,7 +344,12 @@ def main() -> int:
                 if n > 0:
                     log.info("backfill_updated", slate_date=slate_date, n=n, n_feats=n_feats)
             except Exception as exc:
-                log.warning("backfill_update_failed", slate_date=slate_date, reason=str(exc)[:120])
+                failed_required_writes += 1
+                log.warning(
+                    "backfill_update_failed",
+                    slate_date=slate_date,
+                    error_type=type(exc).__name__,
+                )
         else:
             try:
                 n = _process_historical_slate(
@@ -330,11 +359,28 @@ def main() -> int:
                 if n > 0:
                     log.info("backfill_inserted", slate_date=slate_date, n=n, n_feats=n_feats)
             except Exception as exc:
-                log.warning("backfill_insert_failed", slate_date=slate_date, reason=str(exc)[:120])
+                failed_required_writes += 1
+                log.warning(
+                    "backfill_insert_failed",
+                    slate_date=slate_date,
+                    error_type=type(exc).__name__,
+                )
 
         if (i + 1) % 20 == 0:
             log.info("backfill_progress", done=i + 1, total=len(all_dates))
 
     psyconn.close()
-    log.info("backfill_done", inserted=total_inserted, updated=total_updated)
+    failed_slates = failed_feature_builds + failed_required_writes
+    completion = {
+        "inserted": total_inserted,
+        "updated": total_updated,
+        "attempted_slates": len(all_dates),
+        "failed_slates": failed_slates,
+        "failed_feature_builds": failed_feature_builds,
+        "failed_required_writes": failed_required_writes,
+    }
+    if failed_slates:
+        log.error("backfill_failed", **completion)
+        return 1
+    log.info("backfill_done", **completion)
     return 0

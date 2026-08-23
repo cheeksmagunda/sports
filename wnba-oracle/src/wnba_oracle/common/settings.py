@@ -451,7 +451,7 @@ def get_settings() -> Settings:
 
 
 _PRODUCTION_ROLE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
-    "api": ("DATABASE_URL", "REDIS_URL"),
+    "api": ("DATABASE_URL",),
     "job1": ("DATABASE_URL", "REALSPORTS_STORAGE_STATE_B64GZ"),
     "job1games": ("DATABASE_URL", "REALSPORTS_STORAGE_STATE_B64GZ"),
     "job1late": ("DATABASE_URL",),

@@ -9,17 +9,19 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
 ## Monorepo cutover
 
 - Completed 2026-08-21. Railway uses `cheeksmagunda/sports`, branch `main`, as
-  the source for the API, six backend roles, and frontend.
+  the source for the API, four scheduled backend services, the isolated
+  backfill service, and frontend.
 - Backend services build from the workspace root with
   `wnba-oracle/Dockerfile`, so they can import `oracle-core`.
 - The frontend builds from `wnba-oracle/frontend`; PostgreSQL and Redis remain
   the same managed Railway services.
 - The previous WNBA repository is an archive only. Do not deploy from it.
 - GitHub reports `main` as unprotected. Private-repository rulesets require an
-  account-plan decision. Railway `Wait for CI` is enabled on all seven
-  GitHub-backed production services, so a push cannot deploy until the GitHub
-  check suite succeeds. Treat every push to `main` as a production-source
-  change even though the deployment boundary is now gated.
+  account-plan decision. Railway `Wait for CI` is enabled on the API, four
+  scheduled backend services, and frontend, so source pushes do not deploy
+  until the applicable GitHub checks succeed. Backfill source auto-deploy is
+  disabled entirely. Treat every push to `main` as a production-source change
+  even though the deployment boundary is gated.
 
 ## Production
 
@@ -30,7 +32,14 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
 - Backend: FastAPI on Railway
 - Frontend: Vite React on Railway
 - Canonical store: Railway Postgres
-- Cache/freeze coordination: Redis
+- Serving state: PostgreSQL only
+- Freeze coordination: Redis, required by Job 2 but not by the API
+- Current production source commit: `c1facd04530ef41099d4db0c6aa184220ecf060d`
+- 2026-08-22 T-40 freeze completed at 22:22:40 UTC with an `enter`
+  recommendation and expected payout 1.4332. The served order was Breanna
+  Stewart, Sabrina Ionescu, Kennedy Burke, Makayla Timpson, and Noemie Brochant
+  at 2.0x, 1.8x, 1.6x, 1.4x, and 1.2x. The operator confirmed picks were
+  received before first tip.
 
 ## Monitoring and ops record
 
@@ -47,6 +56,24 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   a degraded result; required execution failures persist a failed result.
 - Operational history belongs in the corresponding GitHub issues and workflow
   logs. Keep this file to current state, known gaps, and recovery facts.
+- The latest scheduled watchdog workflow on the production source commit was
+  GitHub run `32605850803` and completed successfully. Its application status
+  was `warn`, not `ok`: `WATCHDOG_HEARTBEAT_URL` is not configured, and today's
+  API watchdog retains one historical `enrichment_stale` warning because the
+  13:07 UTC Job 1 capture preceded the monitor's 13:30 UTC freshness floor.
+  Current durable Job 1, Job 1 late, Job 2, day-close, and backfill records are
+  successful. External dead-man monitoring remains an explicit connector gap.
+- The live Railway deployment-trigger inventory has six normal source triggers:
+  API, frontend, Job 1, Job 1 late, Job 2, and day-close. Each points to
+  `cheeksmagunda/sports` on `main` with `Wait for CI`; backfill has no trigger.
+  This manifest is checked before an explicitly requested backfill, but it is
+  not polled by a scheduled workflow. Add continuous control-plane drift
+  monitoring only after a dedicated read-only Railway credential exists;
+  reusing the workspace mutation token would weaken the current trust boundary.
+- The first scheduled day-close, corpus-backup, and live-provider contract
+  cycles on the activated default-branch workflows have not all completed yet.
+  Do not describe the nightly acceptance cycle as proven until their durable
+  records and workflow results are verified.
 
 ## Canonical Data
 
@@ -83,6 +110,7 @@ Recorded Railway identifiers:
 | cron-job1-late | `2b0cd5aa-8793-45a5-bca0-e81c6d8455ff` |
 | cron-job2 | `4a511ed2-10ad-441f-bf9a-3748c1e6b929` |
 | cron-dayclose | `606d950d-7d7d-4f5a-a049-b9fa69799169` |
+| backfill-enrichment | `633aa1db-6c54-466d-8f89-39517a889fb4` |
 | postgres | `5e827da3-6df6-4349-97ad-a800ece2716d` |
 | redis | `bb131bec-4edd-4809-accd-e09e09aacbf6` |
 
@@ -99,6 +127,10 @@ Repository workflow schedules:
 - api: https://api-production-7033.up.railway.app (`/health`, `/lineup/{date}`,
   `/slate/{date}`, `/watchdog/today`)
 - frontend: https://frontend-production-a739.up.railway.app/
+  The app-owned `frontend/railway.toml` selects its Dockerfile; the package
+  start command also generates the same assured static-server configuration if
+  a Railpack fallback is selected. Verify the live builder path after release
+  before describing the new CSP and HSTS headers as active.
 - postgres: internal + public TCP proxy (TLS via start-command cert, D61);
   role `oracle_ro` for read-only laptop access
 - redis: internal, password-protected
@@ -110,10 +142,21 @@ Repository workflow schedules:
   freeze to Redis + Postgres, late re-freeze when enabled
 - cron-dayclose `0 6 * * *` UTC: ingest finalized contests, refresh game
   logs, record placements, retention cleanup
-- backfill-enrichment: cron=None, on-demand only; never repoint the live
-  crons at `--job backfill` (D103)
+- backfill-enrichment: no cron, source auto-deploy disabled, restart policy
+  `NEVER`, and source watch limited to the inert
+  `/wnba-oracle/.manual-backfill-trigger` sentinel. Normal source pushes cannot
+  run it. Use only the exact-commit manual workflow; never repoint a live cron
+  at `--job backfill` (D103). The `c1facd0` source deployment ran backfill once
+  before this isolation was applied and completed with zero inserted or updated
+  rows.
 - corpus-backup (GitHub Action) `43 6 * * *` UTC: nightly export to the
   off-main `backups` branch
+
+Only the API and frontend have Railway HTTP domains. Redis and backfill have no
+public HTTP domain. PostgreSQL retains one intentional public TCP proxy for the
+TLS-verified read-only operator path; production services use private Railway
+networking. Accidental HTTP domains created during the 2026-08-22 control-plane
+audit were deleted immediately and verified absent.
 
 ## Active Railway env vars (cron-job2)
 
@@ -263,7 +306,9 @@ issue labeled `ops-results` (#15). No model change was made.
   build failed at `uv sync` while image-reuse redeploys kept succeeding.
   Fixed by setting config-file `railway.toml` + `Dockerfile` path on api,
   cron-job1, cron-job1-late, cron-job2, cron-dayclose, and
-  backfill-enrichment (frontend stays Railpack; it is the Node app).
+  backfill-enrichment. Frontend remained Railpack during incident recovery; its
+  app-owned source configuration now selects the frontend Dockerfile and keeps
+  an equivalent package start path.
   Durable lessons: a Railway billing lapse stops every service at once,
   crons do not catch up on their own after redeploy, and builder drift is
   invisible until the next cold build.
@@ -282,19 +327,24 @@ issue labeled `ops-results` (#15). No model change was made.
 
 ## Quality gates
 
-- Read-only production refresh, 2026-08-22: Railway reported the API deployment
-  successful, the API `/health` response and watchdog were `ok`, today's
-  watchdog had zero events, and backend CI run `32573760266` passed commit
-  `5ac8cc24e2dfd1872c6334b260c917576fae9710`. `main` remains unprotected.
-- Last local verification, 2026-08-22: 612 WNBA tests and 48 oracle-core tests
-  passed; Ruff, mypy, import-boundary checks, package builds, the medium-severity
-  Bandit gate, and the dependency audit passed.
-- Docker acceptance passed against PostgreSQL and Redis containers: an empty
-  database and the previous schema both upgraded to Alembic head, retained data
-  was verified, three marked integration tests passed, and the final image
-  accepted all six runtime roles while rejecting a mismatched role. The API
-  started against those services and returned a healthy response; Chromium also
-  launched from the final image.
+- Production source commit `c1facd04530ef41099d4db0c6aa184220ecf060d`
+  passed backend CI run `32605402072`; all seven application services built and
+  deployed successfully. API health and the exact T-40 lineup were then verified
+  live. The latest watchdog workflow passed operationally but reported the two
+  explicit warnings described above. `main` remains unprotected.
+- Pre-release local verification, 2026-08-22: 694 WNBA tests passed with seven
+  contract/integration tests intentionally deselected, and 48 oracle-core tests
+  passed. Ruff, formatting, mypy, import boundaries, Bandit, and the Python
+  dependency audit passed. Frontend lint, type checking, 33 tests, and the
+  production build passed.
+- The established Docker acceptance provisions PostgreSQL and Redis, upgrades
+  both an empty database and the previous schema to Alembic head, verifies
+  retained data, exercises all runtime roles, and starts the API and production
+  frontend images. Four marked integration tests now cover these boundaries,
+  including preservation of non-enrichment data during historical backfill.
+  The latest tree's final local Docker rerun and npm audit were unavailable, so
+  the exact pushed commit must pass the equivalent backend and frontend CI gates
+  before deployment is treated as verified.
 - Backend CI now repeats the PostgreSQL, Redis, migration, runtime-role, image,
   and API health acceptance path with pinned service images.
 - Runtime dependency auditing is now a backend CI gate. Narrow ignores cover
@@ -332,9 +382,8 @@ issue labeled `ops-results` (#15). No model change was made.
   as well. No E- or F-rated function remains in backend source or scripts, and
   Ruff enforces a maximum McCabe complexity of 20 so that boundary cannot
   silently regress.
-- Dependabot is configured for weekly Python workspace and GitHub Actions
-  updates. Frontend dependency automation remains outside this backend-owned
-  change. The configuration is active from the default branch.
+- Dependabot is configured for weekly Python workspace, frontend npm, and GitHub
+  Actions updates. The configuration becomes active from the default branch.
 - App-owned runtime paths now resolve the WNBA checkout under both source and
   non-editable workspace installs. This closes a local operational gap where
   the served artifact, identity overrides, cache, payout archive, and watchdog

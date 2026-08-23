@@ -12,6 +12,7 @@ env:
   ALERT_LABEL: ops-guard
   WATCHDOG_TITLE: WNBA Oracle watchdog alert
   WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WNBA_FRONTEND_URL: https://frontend-production-a739.up.railway.app
   WATCHDOG_HEARTBEAT_URL: ${{ secrets.WATCHDOG_HEARTBEAT_URL }}
 
 concurrency:
@@ -32,12 +33,20 @@ jobs:
 
       - name: Probe production
         id: probe
+        continue-on-error: true
         run: >-
           python wnba-oracle/scripts/watchdog_monitor.py
           --report "$RUNNER_TEMP/watchdog-report.md"
 
+      - name: Ensure an incident-safe report exists
+        if: always()
+        run: |
+          if [ ! -s "$RUNNER_TEMP/watchdog-report.md" ]; then
+            printf '# WNBA Oracle watchdog\n\n- ALERT: the production probe did not produce a report.\n' > "$RUNNER_TEMP/watchdog-report.md"
+          fi
+
       - name: Open one issue per incident
-        if: steps.probe.outputs.status == 'alert'
+        if: always() && (steps.probe.outcome != 'success' || steps.probe.outputs.status == 'alert')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -52,7 +61,7 @@ jobs:
           fi
 
       - name: Close incident on recovery
-        if: steps.probe.outputs.status == 'ok'
+        if: always() && steps.probe.outcome == 'success' && steps.probe.outputs.status == 'ok'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -61,3 +70,7 @@ jobs:
             gh issue comment "$number" --body "Production recovered at $(date -u +'%F %T') UTC."
             gh issue close "$number"
           done
+
+      - name: Fail an unhealthy monitor after escalation
+        if: always() && (steps.probe.outcome != 'success' || steps.probe.outputs.status == 'alert')
+        run: exit 1

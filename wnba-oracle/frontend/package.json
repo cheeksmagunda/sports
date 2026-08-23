@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "start": "node build-serve-config.mjs serve.template.json serve.json && serve -c serve.json -s dist -l ${PORT:-4173}",
     "preview": "vite preview --port 4173 --host 0.0.0.0",
     "lint": "eslint .",
     "typecheck": "tsc -b",
@@ -15,7 +16,8 @@
   "dependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.18.2"
+    "react-router-dom": "^7.18.2",
+    "serve": "14.2.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

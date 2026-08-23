@@ -5,6 +5,7 @@
 // bot-blocked, and AGENTS.md forbids it from the browser entirely).
 
 import { getDemoMode } from "./demo";
+import { fetchPublic } from "./http";
 
 const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/basketball/wnba";
 
@@ -110,7 +111,7 @@ export async function fetchScoreboard(dateYyyymmdd: string): Promise<ScoreboardG
   if (demo === "live" && getDemoGames) return getDemoGames("live");
   if (demo === "final" && getDemoGames) return getDemoGames("final");
 
-  const r = await fetch(`${ESPN_BASE}/scoreboard?dates=${dateYyyymmdd}`);
+  const r = await fetchPublic(`${ESPN_BASE}/scoreboard?dates=${dateYyyymmdd}`);
   if (!r.ok) throw new Error(`ESPN scoreboard HTTP ${r.status}`);
   const data = await r.json();
   const events: unknown[] = Array.isArray(data?.events) ? data.events : [];
@@ -169,7 +170,7 @@ export async function fetchSummary(eventId: string): Promise<PlayerBoxLine[]> {
     return getDemoBoxLines(eventId);
   }
 
-  const r = await fetch(`${ESPN_BASE}/summary?event=${eventId}`);
+  const r = await fetchPublic(`${ESPN_BASE}/summary?event=${eventId}`);
   if (!r.ok) throw new Error(`ESPN summary HTTP ${r.status}`);
   const data = await r.json();
   const groups: unknown[] = Array.isArray(data?.boxscore?.players) ? data.boxscore.players : [];

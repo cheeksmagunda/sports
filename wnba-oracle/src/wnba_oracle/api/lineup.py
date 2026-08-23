@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
-from wnba_oracle.db.engine import get_engine
+from wnba_oracle.db.engine import get_api_engine as get_engine
 
 router = APIRouter(prefix="/lineup", tags=["lineup"])
 

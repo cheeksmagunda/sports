@@ -318,6 +318,7 @@ def run() -> JobResult:
     """Run day-close and return durable, substep-level completion semantics."""
 
     settings = get_settings()
+    processed_slate_date = previous_slate_date().isoformat()
     walk_window = int(os.environ.get("WNBA_DAYCLOSE_WALK_WINDOW", DEFAULT_WALK_WINDOW))
     outcomes: dict[str, dict[str, Any]] = {}
     required_failures: list[str] = []
@@ -330,6 +331,7 @@ def run() -> JobResult:
         )
         return JobResult.failed(
             "day-close has no persistence target",
+            processed_slate_date=processed_slate_date,
             substeps={"database": {"status": "failed", "reason": "not_configured"}},
         )
 
@@ -339,12 +341,14 @@ def run() -> JobResult:
         log.exception("dayclose_discover_failed", error_type=type(exc).__name__)
         return JobResult.retryable_failure(
             "contest discovery failed",
+            processed_slate_date=processed_slate_date,
             substeps={"contest_discovery": {"status": "failed", "error_type": type(exc).__name__}},
         )
     if top_cid is None:
         log.warning("dayclose_no_contest_id")
         return JobResult.retryable_failure(
             "contest discovery returned no identifier",
+            processed_slate_date=processed_slate_date,
             substeps={"contest_discovery": {"status": "failed", "reason": "no_contest_id"}},
         )
 
@@ -371,7 +375,7 @@ def run() -> JobResult:
     # player silently absent from slate_labels (the 2026-06-08 Loyd/Boston
     # gap) pages instead of permanently losing training labels. The check is
     # required to execute; detected gaps produce a degraded outcome.
-    yesterday = previous_slate_date().isoformat()
+    yesterday = processed_slate_date
     _run_substep(
         "label_coverage",
         lambda: _audit_label_coverage(yesterday),
@@ -437,6 +441,7 @@ def run() -> JobResult:
     if required_failures:
         return JobResult.failed(
             "required day-close work failed",
+            processed_slate_date=processed_slate_date,
             required_failures=required_failures,
             degraded_substeps=degradations,
             substeps=outcomes,
@@ -444,10 +449,11 @@ def run() -> JobResult:
     if degradations:
         return JobResult.degraded(
             "day-close completed with degraded substeps",
+            processed_slate_date=processed_slate_date,
             degraded_substeps=degradations,
             substeps=outcomes,
         )
-    return JobResult.success(substeps=outcomes)
+    return JobResult.success(processed_slate_date=processed_slate_date, substeps=outcomes)
 
 
 def main() -> int:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe WNBA API health, durable job runs, and the freeze watchdog."""
+"""Probe WNBA serving, durable job runs, and the freeze watchdog."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from ops_common import (
     SafeRequestError,
     append_github_output,
     get_json,
+    get_text,
     parse_timestamp,
     post_heartbeat,
     summarize_status,
@@ -229,6 +230,23 @@ def _api_check(api_base: str) -> Check:
     return Check("API health", "alert", f"The public health endpoint returned HTTP {status}.")
 
 
+def _frontend_check(frontend_url: str, api_base: str) -> Check:
+    try:
+        status, html = get_text(f"{frontend_url.rstrip('/')}/")
+    except SafeRequestError as exc:
+        return Check("Frontend serving", "alert", str(exc))
+    if status != 200:
+        return Check("Frontend serving", "alert", f"The frontend returned HTTP {status}.")
+    required_markers = ('id="root"', f'content="{api_base}"')
+    if not all(marker in html for marker in required_markers):
+        return Check(
+            "Frontend serving",
+            "alert",
+            "The frontend omitted its app root or production API route marker.",
+        )
+    return Check("Frontend serving", "ok", "The frontend routes to the production API.")
+
+
 def _job_checks(api_base: str, *, now: dt.datetime) -> list[Check]:
     try:
         status, payload = get_json(f"{api_base}/watchdog/jobs/today")
@@ -272,12 +290,15 @@ def _freeze_check(api_base: str) -> Check:
 def run(
     api_base: str,
     *,
+    frontend_url: str = "",
     heartbeat_url: str = "",
     now: dt.datetime | None = None,
 ) -> list[Check]:
     base = api_base.rstrip("/")
     observed_at = (now or dt.datetime.now(dt.UTC)).astimezone(dt.UTC)
     checks = [_api_check(base)]
+    if frontend_url:
+        checks.append(_frontend_check(frontend_url, base))
     if checks[0].status != "alert":
         checks.extend(_job_checks(base, now=observed_at))
         checks.append(_freeze_check(base))
@@ -311,18 +332,23 @@ def _heartbeat_checks(checks: list[Check], heartbeat_url: str) -> list[Check]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-base", default=os.environ.get("WNBA_API_BASE", ""))
+    parser.add_argument("--frontend-url", default=os.environ.get("WNBA_FRONTEND_URL", ""))
     parser.add_argument("--heartbeat-url", default=os.environ.get("WATCHDOG_HEARTBEAT_URL", ""))
     parser.add_argument("--report", required=True)
     parser.add_argument("--github-output", default=os.environ.get("GITHUB_OUTPUT"))
     args = parser.parse_args()
-    if not args.api_base:
-        parser.error("--api-base or WNBA_API_BASE is required")
+    if not args.api_base or not args.frontend_url:
+        parser.error("API and frontend production URLs are required")
 
-    checks = run(args.api_base, heartbeat_url=args.heartbeat_url)
+    checks = run(
+        args.api_base,
+        frontend_url=args.frontend_url,
+        heartbeat_url=args.heartbeat_url,
+    )
     write_report(pathlib.Path(args.report), "WNBA Oracle watchdog", checks)
     status = summarize_status(checks)
     append_github_output(args.github_output, status=status, monitor_status=status)
-    return 0
+    return 1 if status == "alert" else 0
 
 
 if __name__ == "__main__":

@@ -39,10 +39,12 @@ def test_all_required_and_optional_steps_complete_successfully() -> None:
         patches[5],
         patches[6],
         patches[7],
+        patch.object(job_dayclose, "previous_slate_date", return_value=dt.date(2026, 8, 22)),
     ):
         result = job_dayclose.run()
 
     assert result.status is JobStatus.SUCCESS
+    assert result.details["processed_slate_date"] == "2026-08-22"
     assert set(result.details["substeps"]) == {
         "contest_discovery",
         "historical_backfill",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the WNBA day-close cron using public HTTP and Railway GraphQL."""
+"""Verify the WNBA day-close cron using public durable application evidence."""
 
 from __future__ import annotations
 
@@ -9,28 +9,24 @@ import pathlib
 
 from ops_common import (
     Check,
-    RailwayClient,
     RunWindow,
     SafeRequestError,
     append_github_output,
-    contains_any,
     get_json,
-    log_messages,
-    run_evidence_checks,
+    parse_timestamp,
     safe_sha,
-    structured_events,
     summarize_status,
     write_report,
 )
 
-AUTH_FAILURE_MARKERS = (
-    "auth_required_stats",
-    "auth_required_entries",
-    "platformauthrequired",
-    "storage state not found",
-    "session has expired",
-    "did not capture authenticated headers",
-    "401 on",
+REQUIRED_DAYCLOSE_SUBSTEPS = frozenset(
+    {
+        "contest_discovery",
+        "historical_backfill",
+        "label_coverage",
+        "placement_capture",
+        "game_log_refresh",
+    }
 )
 
 
@@ -106,92 +102,140 @@ def _public_api_checks(api_base: str, slate_date: str) -> list[Check]:
     return checks
 
 
-def _railway_checks(
-    railway: RailwayClient, project_id: str, service_id: str, window: RunWindow
-) -> list[Check]:
-    checks: list[Check] = []
+def _durable_dayclose_checks(api_base: str, window: RunWindow) -> list[Check]:
     try:
-        deployments, logs = railway.evidence_for_window(project_id, service_id, window)
+        status, payload = get_json(f"{api_base}/watchdog/jobs/today")
     except SafeRequestError as exc:
-        return [Check("Day-close Railway check", "alert", str(exc))]
+        return [Check("Durable day-close", "alert", str(exc))]
+    if status != 200 or not isinstance(payload, dict):
+        return [Check("Durable day-close", "alert", f"The job endpoint returned HTTP {status}.")]
+    jobs = payload.get("jobs")
+    row = jobs.get("dayclose") if isinstance(jobs, dict) else None
+    if not isinstance(row, dict) or row.get("role") != "dayclose":
+        return [Check("Durable day-close", "alert", "No valid day-close record was returned.")]
 
-    checks.extend(
-        run_evidence_checks(
-            deployment_name="Day-close deployment",
-            completion_name="Day-close",
-            completion_event="historical_backfill_done",
-            deployments=deployments,
-            logs=logs,
-            window=window,
-            require_slate_event=False,
-        )
+    started_at = parse_timestamp(row.get("started_at"))
+    completed_at = parse_timestamp(row.get("completed_at"))
+    if not window.contains(started_at) or not window.contains(completed_at):
+        return [
+            Check(
+                "Durable day-close",
+                "alert",
+                "The latest completion falls outside the declared run window.",
+            )
+        ]
+
+    job_status = str(row.get("status") or "").lower()
+    exit_code = row.get("exit_code")
+    if job_status not in {"success", "degraded"}:
+        return [
+            Check(
+                "Durable day-close",
+                "alert",
+                f"The durable run ended with status {job_status or 'unknown'}.",
+            )
+        ]
+    expected_exit_code = 0 if job_status == "success" else 2
+    if exit_code != expected_exit_code:
+        return [
+            Check(
+                "Durable day-close",
+                "alert",
+                "The durable status and process exit code disagree.",
+            )
+        ]
+
+    details = row.get("details")
+    processed_slate_date = (
+        details.get("processed_slate_date") if isinstance(details, dict) else None
     )
-
-    messages = log_messages(logs)
-    if contains_any(messages, AUTH_FAILURE_MARKERS):
-        checks.append(
+    if processed_slate_date != window.slate_date:
+        return [
             Check(
-                "Real Sports session",
+                "Durable day-close",
                 "alert",
-                "Day-close logs contain the session-expiry or HTTP 401 signature.",
+                "The durable run did not prove the requested processed slate.",
             )
-        )
-    else:
-        checks.append(
-            Check("Real Sports session", "ok", "No authentication failure signature was found.")
-        )
-
-    completed = structured_events(logs, "historical_backfill_done", window=window)
-    if completed:
-        latest = completed[-1]
-        n_success = int(latest.get("n_success") or 0)
-        n_auth_failed = int(latest.get("n_auth_failed") or 0)
-        n_entries = int(latest.get("n_lb_entries") or 0)
-        level = "alert" if n_auth_failed else "ok"
-        checks.append(
+        ]
+    substeps = details.get("substeps") if isinstance(details, dict) else None
+    if not isinstance(substeps, dict):
+        return [Check("Durable day-close", "alert", "Substep outcomes were not recorded.")]
+    missing = sorted(REQUIRED_DAYCLOSE_SUBSTEPS - set(substeps))
+    allowed_statuses = {
+        name: ({"success", "skipped"} if name == "game_log_refresh" else {"success", "degraded"})
+        for name in REQUIRED_DAYCLOSE_SUBSTEPS
+    }
+    invalid = sorted(
+        name
+        for name in REQUIRED_DAYCLOSE_SUBSTEPS
+        if not isinstance(substeps.get(name), dict)
+        or substeps[name].get("status") not in allowed_statuses[name]
+    )
+    if missing or invalid:
+        summary_parts = []
+        if missing:
+            summary_parts.append(f"missing: {', '.join(missing)}")
+        if invalid:
+            summary_parts.append(f"failed: {', '.join(invalid)}")
+        return [
             Check(
-                "Corpus walk",
-                level,
-                f"Completed with {n_success} contests, {n_entries} leaderboard rows, and {n_auth_failed} auth failures.",
-            )
-        )
-    else:
-        checks.append(
-            Check(
-                "Corpus walk",
+                "Durable day-close",
                 "alert",
-                "No historical_backfill_done event was visible in the declared run window.",
+                "Required substep evidence is incomplete (" + "; ".join(summary_parts) + ").",
             )
-        )
+        ]
 
-    if contains_any(messages, ("dayclose_game_logs_refreshed",)):
-        checks.append(Check("Game-log refresh", "ok", "The refresh completion event was present."))
-    elif contains_any(messages, ("dayclose_game_logs_refresh_failed",)):
-        checks.append(
-            Check("Game-log refresh", "warn", "The best-effort refresh reported a failure.")
+    required_failures = details.get("required_failures") if isinstance(details, dict) else None
+    degraded = details.get("degraded_substeps") if isinstance(details, dict) else None
+    required_degraded = any(
+        substeps[name].get("status") == "degraded" for name in REQUIRED_DAYCLOSE_SUBSTEPS
+    )
+    if required_failures or (job_status == "success" and required_degraded):
+        return [
+            Check(
+                "Durable day-close",
+                "alert",
+                "The overall result conflicts with its required substep outcomes.",
+            )
+        ]
+
+    if job_status == "degraded":
+        if not isinstance(degraded, list) or not degraded:
+            return [
+                Check(
+                    "Durable day-close",
+                    "alert",
+                    "The degraded result omitted its degraded substep list.",
+                )
+            ]
+        names = ", ".join(degraded)
+        return [
+            Check(
+                "Durable day-close",
+                "warn",
+                f"Required work completed with degraded substeps: {names}.",
+            )
+        ]
+    return [
+        Check(
+            "Durable day-close",
+            "ok",
+            "Required durable substeps completed successfully in the declared window.",
         )
-    else:
-        checks.append(
-            Check("Game-log refresh", "warn", "No refresh event was visible in recent logs.")
-        )
-    return checks
+    ]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-base", default=os.environ.get("WNBA_API_BASE", ""))
-    parser.add_argument("--project-id", default=os.environ.get("WNBA_RAILWAY_PROJECT_ID", ""))
-    parser.add_argument(
-        "--dayclose-service-id", default=os.environ.get("WNBA_RAILWAY_DAYCLOSE_SERVICE_ID", "")
-    )
     parser.add_argument("--slate-date", required=True)
     parser.add_argument("--run-start-utc", required=True)
     parser.add_argument("--run-end-utc", required=True)
     parser.add_argument("--report", required=True)
     parser.add_argument("--github-output", default=os.environ.get("GITHUB_OUTPUT"))
     args = parser.parse_args()
-    if not args.api_base or not args.project_id or not args.dayclose_service_id:
-        parser.error("API base, Railway project ID, and day-close service ID are required")
+    if not args.api_base:
+        parser.error("API base is required")
 
     try:
         window = RunWindow.from_strings(
@@ -204,28 +248,21 @@ def main() -> int:
         parser.error(str(exc))
 
     checks = _public_api_checks(args.api_base.rstrip("/"), args.slate_date)
-    token = os.environ.get("RAILWAY_WORKSPACE_TOKEN", "")
-    if token:
-        checks.extend(
-            _railway_checks(RailwayClient(token), args.project_id, args.dayclose_service_id, window)
-        )
-    else:
-        checks.append(Check("Railway credential", "alert", "RAILWAY_WORKSPACE_TOKEN is missing."))
+    checks.extend(_durable_dayclose_checks(args.api_base.rstrip("/"), window))
 
     write_report(
         pathlib.Path(args.report),
         f"WNBA day-close verification for {args.slate_date}",
         checks,
         notes=[
-            f"Railway evidence was limited to {window.describe()}.",
+            f"Durable application evidence was limited to {window.describe()}.",
             "Contest labels can arrive several days late because the bounded walk intentionally overlaps.",
             "Real Sports session recovery is operator-only and is never attempted by this workflow.",
         ],
     )
-    append_github_output(
-        args.github_output, status=summarize_status(checks), slate_date=args.slate_date
-    )
-    return 0
+    status = summarize_status(checks)
+    append_github_output(args.github_output, status=status, slate_date=args.slate_date)
+    return 1 if status == "alert" else 0
 
 
 if __name__ == "__main__":

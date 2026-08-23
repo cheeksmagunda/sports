@@ -25,8 +25,6 @@ env:
   RESULTS_LABEL: ops-results
   GUARD_LABEL: ops-guard
   WNBA_API_BASE: https://api-production-7033.up.railway.app
-  WNBA_RAILWAY_PROJECT_ID: ab83f44c-0bbc-4a58-931c-37d9fbfda73a
-  WNBA_RAILWAY_DAYCLOSE_SERVICE_ID: 606d950d-7d7d-4f5a-a049-b9fa69799169
 
 concurrency:
   group: wnba-dayclose-verify
@@ -56,8 +54,7 @@ jobs:
 
       - name: Verify day-close
         id: verify
-        env:
-          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+        continue-on-error: true
         run: >-
           python wnba-oracle/scripts/dayclose_verify.py
           --slate-date "$INPUT_SLATE_DATE"
@@ -65,7 +62,15 @@ jobs:
           --run-end-utc "$INPUT_RUN_END_UTC"
           --report "$RUNNER_TEMP/dayclose-report.md"
 
+      - name: Ensure an incident-safe report exists
+        if: always()
+        run: |
+          if [ ! -s "$RUNNER_TEMP/dayclose-report.md" ]; then
+            printf '# WNBA day-close verification\n\n- ALERT: verification did not produce a report.\n' > "$RUNNER_TEMP/dayclose-report.md"
+          fi
+
       - name: Append results digest
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -81,7 +86,7 @@ jobs:
           fi
 
       - name: Escalate day-close failure
-        if: steps.verify.outputs.status == 'alert'
+        if: always() && (steps.verify.outcome != 'success' || steps.verify.outputs.status == 'alert')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -95,3 +100,7 @@ jobs:
               --title "WNBA production operations" \
               --body-file "$RUNNER_TEMP/dayclose-report.md"
           fi
+
+      - name: Fail unhealthy verification after escalation
+        if: always() && (steps.verify.outcome != 'success' || steps.verify.outputs.status == 'alert')
+        run: exit 1

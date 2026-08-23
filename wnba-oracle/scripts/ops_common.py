@@ -172,6 +172,37 @@ def get_json(url: str, *, timeout: float = 20.0) -> tuple[int, Any]:
         raise SafeRequestError(f"HTTPS response was not valid JSON (status {status})") from exc
 
 
+def get_text(
+    url: str,
+    *,
+    timeout: float = 20.0,
+    max_bytes: int = 262_144,
+) -> tuple[int, str]:
+    """Fetch one bounded public text response without exposing its body in errors."""
+
+    if max_bytes < 1:
+        raise ValueError("max_bytes must be positive")
+    request = urllib.request.Request(
+        url,
+        headers={"Accept": "text/html", "User-Agent": "wnba-oracle-ops/2"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status = int(response.status)
+            raw = response.read(max_bytes + 1)
+    except urllib.error.HTTPError as exc:
+        status = int(exc.code)
+        raw = exc.read(max_bytes + 1)
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
+        raise SafeRequestError(f"HTTPS request failed ({type(exc).__name__})") from exc
+    if len(raw) > max_bytes:
+        raise SafeRequestError(f"HTTPS text response exceeded {max_bytes} bytes")
+    try:
+        return status, raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise SafeRequestError(f"HTTPS response was not UTF-8 text (status {status})") from exc
+
+
 def post_heartbeat(url: str, *, timeout: float = 10.0) -> None:
     """Post a positive monitor heartbeat without exposing the target URL."""
 

@@ -9,16 +9,6 @@ from wnba_oracle.api.app import create_app
 from wnba_oracle.common.settings import Settings
 
 
-class _RedisStub:
-    def __init__(self, result: bool = True) -> None:
-        self.result = result
-        self.ping_calls = 0
-
-    def ping(self) -> bool:
-        self.ping_calls += 1
-        return self.result
-
-
 def test_api_preserves_root_docs_cors_routes_and_openapi_contract() -> None:
     application = create_app(settings=Settings())
     client = TestClient(application)
@@ -38,6 +28,15 @@ def test_api_preserves_root_docs_cors_routes_and_openapi_contract() -> None:
     assert preflight.status_code == 200
     assert preflight.headers["access-control-allow-origin"] == "*"
     assert "GET" in preflight.headers["access-control-allow-methods"]
+
+    health = client.get("/health")
+    assert health.headers["cache-control"] == "no-store"
+    assert health.headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+    assert health.headers["permissions-policy"] == "camera=(), geolocation=(), microphone=()"
+    assert health.headers["referrer-policy"] == "no-referrer"
+    assert health.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+    assert health.headers["x-content-type-options"] == "nosniff"
+    assert health.headers["x-frame-options"] == "DENY"
 
     schema = application.openapi()
     assert schema["info"] == {"title": "WNBA Oracle API", "version": "0.1.0"}
@@ -91,22 +90,22 @@ def test_api_preserves_root_docs_cors_routes_and_openapi_contract() -> None:
             "summary": "Health",
         }
     }
+    assert {
+        method for path in schema["paths"].values() for method in path if method != "parameters"
+    } == {"get"}
 
 
-def test_configured_database_and_redis_are_checked() -> None:
+def test_configured_database_is_checked() -> None:
     engine = sa.create_engine("sqlite+pysqlite:///:memory:")
-    redis = _RedisStub()
     application = create_app(
         settings=Settings(DATABASE_URL="postgresql://configured", REDIS_URL="redis://configured"),
         engine_factory=lambda: engine,
-        redis_factory=lambda: redis,
     )
 
     response = TestClient(application).get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "version": "0.1.0"}
-    assert redis.ping_calls == 1
     engine.dispose()
 
 
@@ -116,11 +115,9 @@ def test_database_health_failure_is_safe_and_returns_503() -> None:
     def broken_engine() -> sa.Engine:
         raise RuntimeError(secret_marker)
 
-    redis = _RedisStub()
     application = create_app(
         settings=Settings(DATABASE_URL="postgresql://configured", REDIS_URL="redis://configured"),
         engine_factory=broken_engine,
-        redis_factory=lambda: redis,
     )
 
     response = TestClient(application).get("/health")
@@ -129,23 +126,19 @@ def test_database_health_failure_is_safe_and_returns_503() -> None:
     assert response.json() == {"status": "error", "version": "0.1.0"}
     assert secret_marker not in response.text
     assert secret_marker not in str(response.headers)
-    assert redis.ping_calls == 1
 
 
-def test_redis_false_ping_returns_503_without_dependency_details() -> None:
+def test_redis_is_not_a_serving_dependency() -> None:
     engine = sa.create_engine("sqlite+pysqlite:///:memory:")
-    redis = _RedisStub(result=False)
     application = create_app(
-        settings=Settings(DATABASE_URL="postgresql://configured", REDIS_URL="redis://configured"),
+        settings=Settings(ENV="prod", DATABASE_URL="postgresql://configured"),
         engine_factory=lambda: engine,
-        redis_factory=lambda: redis,
     )
 
     response = TestClient(application).get("/health")
 
-    assert response.status_code == 503
-    assert response.json() == {"status": "error", "version": "0.1.0"}
-    assert "database" not in response.text
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "version": "0.1.0"}
     assert "redis" not in response.text
     engine.dispose()
 
@@ -157,14 +150,9 @@ def test_production_missing_dependencies_does_not_block_startup_but_fails_health
         calls.append("database")
         raise RuntimeError("not configured")
 
-    def missing_redis() -> _RedisStub:
-        calls.append("redis")
-        raise RuntimeError("not configured")
-
     application = create_app(
         settings=Settings(ENV="prod"),
         engine_factory=missing_database,
-        redis_factory=missing_redis,
     )
     assert calls == []
 
@@ -172,4 +160,4 @@ def test_production_missing_dependencies_does_not_block_startup_but_fails_health
 
     assert response.status_code == 503
     assert response.json() == {"status": "error", "version": "0.1.0"}
-    assert calls == ["database", "redis"]
+    assert calls == ["database"]

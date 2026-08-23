@@ -1,0 +1,140 @@
+name: wnba-backfill-enrichment
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact 40-character main commit to build and run
+        required: true
+        type: string
+      confirmation:
+        description: Explicitly authorize the production historical backfill
+        required: true
+        type: choice
+        default: DO_NOT_RUN
+        options:
+          - DO_NOT_RUN
+          - RUN_BACKFILL
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: wnba-backfill-enrichment-production
+  cancel-in-progress: false
+
+env:
+  WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WNBA_RAILWAY_ENVIRONMENT_ID: d57a759e-e189-439b-a612-bd220ef59c39
+  WNBA_RAILWAY_BACKFILL_SERVICE_ID: 633aa1db-6c54-466d-8f89-39517a889fb4
+
+jobs:
+  run:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'RUN_BACKFILL'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require an exact main commit with successful backend CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ inputs.commit_sha }}
+        run: |
+          if [ "${#TARGET_SHA}" -ne 40 ] || printf '%s' "$TARGET_SHA" | grep --quiet '[^0-9a-f]'; then
+            echo "commit_sha must be exactly 40 lowercase hexadecimal characters" >&2
+            exit 1
+          fi
+          git cat-file -e "$TARGET_SHA^{commit}"
+          git merge-base --is-ancestor "$TARGET_SHA" origin/main
+          green_runs=$(gh run list \
+            --workflow backend-ci.yml \
+            --commit "$TARGET_SHA" \
+            --branch main \
+            --event push \
+            --limit 20 \
+            --json conclusion,event,headBranch,headSha)
+          green_count=$(printf '%s' "$green_runs" | jq \
+            --arg sha "$TARGET_SHA" \
+            '[.[] | select(
+              .headSha == $sha
+              and .headBranch == "main"
+              and .event == "push"
+              and .conclusion == "success"
+            )] | length')
+          if [ "$green_count" -lt 1 ]; then
+            echo "the exact commit has no successful backend CI run" >&2
+            exit 1
+          fi
+
+      - name: Deploy the exact commit to the isolated one-shot service
+        id: deploy
+        env:
+          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+          TARGET_SHA: ${{ inputs.commit_sha }}
+        run: |
+          trigger_query='query BackfillTriggers($environmentId: String!) { environment(id: $environmentId) { deploymentTriggers { edges { node { serviceId } } } } }'
+          trigger_variables=$(jq --null-input \
+            --arg environmentId "$WNBA_RAILWAY_ENVIRONMENT_ID" \
+            '{environmentId: $environmentId}')
+          trigger_response=$(printf '%s' "$trigger_variables" | \
+            wnba-oracle/scripts/rwgql.sh "$trigger_query" --variables-stdin)
+          trigger_count=$(printf '%s' "$trigger_response" | jq --exit-status \
+            --arg serviceId "$WNBA_RAILWAY_BACKFILL_SERVICE_ID" \
+            '[.data.environment.deploymentTriggers.edges[].node | select(.serviceId == $serviceId)] | length')
+          if [ "$trigger_count" -ne 0 ]; then
+            echo "backfill source auto-deploy is enabled; refusing to run" >&2
+            exit 1
+          fi
+
+          run_started_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          query='mutation RunBackfill($serviceId: String!, $environmentId: String!, $commitSha: String!) { serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId, commitSha: $commitSha) }'
+          variables=$(jq --null-input \
+            --arg serviceId "$WNBA_RAILWAY_BACKFILL_SERVICE_ID" \
+            --arg environmentId "$WNBA_RAILWAY_ENVIRONMENT_ID" \
+            --arg commitSha "$TARGET_SHA" \
+            '{serviceId: $serviceId, environmentId: $environmentId, commitSha: $commitSha}')
+          response=$(printf '%s' "$variables" | \
+            wnba-oracle/scripts/rwgql.sh "$query" --variables-stdin)
+          deployment_id=$(printf '%s' "$response" | \
+            jq --exit-status --raw-output '.data.serviceInstanceDeployV2 | select(type == "string" and length > 0)')
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "run_started_at=$run_started_at" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for terminal Railway success
+        env:
+          DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
+          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+        run: |
+          query='query BackfillDeployment($id: String!) { deployment(id: $id) { status } }'
+          for attempt in $(seq 1 120); do
+            variables=$(jq --null-input --arg id "$DEPLOYMENT_ID" '{id: $id}')
+            response=$(printf '%s' "$variables" | \
+              wnba-oracle/scripts/rwgql.sh "$query" --variables-stdin)
+            status=$(printf '%s' "$response" | jq --exit-status --raw-output '.data.deployment.status')
+            case "$status" in
+              SUCCESS)
+                exit 0
+                ;;
+              CRASHED|FAILED|NEEDS_APPROVAL|REMOVED|SKIPPED)
+                echo "backfill deployment ended with status $status" >&2
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "backfill deployment did not reach terminal success within 20 minutes" >&2
+          exit 1
+
+      - name: Verify the new durable backfill outcome
+        run: >-
+          python wnba-oracle/scripts/verify_durable_job.py
+          --api-base "$WNBA_API_BASE"
+          --role backfill
+          --started-after "${{ steps.deploy.outputs.run_started_at }}"
+          --timeout-seconds 600
+          --interval-seconds 10
