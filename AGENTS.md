@@ -141,3 +141,19 @@ these files change so re-uploads are not forgotten.
 
 Never act on remembered or cached copies of these files when a live copy
 is reachable.
+
+## Pull request autonomy
+
+- The operator never has to approve or merge a pull request through manual
+  action. When a PR's required checks are green and the change is within the
+  scope the operator authorized, the acting agent merges it. Every access
+  point (Copilot CLI, Claude Code, Codex, the Claude GitHub App, and the
+  Copilot coding agent) follows this rule identically.
+- Merge with squash to keep `main` linear, then delete the branch.
+- This autonomy covers only routine, reversible work. Destructive actions,
+  production data mutation, schedule changes, and scope-expanding changes
+  still stop for explicit operator authorization, per Engineering and
+  verification.
+- Agents must not leave stale PRs open. If a PR the agent owns cannot merge
+  (failing checks, conflicts, review feedback), the agent fixes it, asks
+  for help, or closes it with a reason.
