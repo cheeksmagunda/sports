@@ -10,31 +10,14 @@ facts are in `STATUS.md` and must be reverified before production work.
 
 ## Local backend setup
 
-From the monorepo root:
+See root `README.md` for workspace setup, authentication, and optional encrypted
+file configuration. From the monorepo root:
 
 ```sh
 uv sync --all-packages --all-extras
 scripts/auth-check wnba-oracle --offline
 make test-wnba
-make security
-make lint
-make typecheck
 ```
-
-Commands use the existing process environment and native `gh` and Railway CLI
-sessions. SOPS and age are optional at-rest helpers, not a normal command
-requirement. If optional encrypted local files are in use, the in-memory loader
-can inject them into one child process:
-
-```sh
-scripts/with-secrets wnba-oracle -- make test
-scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
-```
-
-No plaintext `.env` file is needed. Do not duplicate native CLI credentials in
-SOPS. See root `README.md` and `.env.example` for the optional encrypted-file
-contract. Frontend login passwords remain in iCloud Passwords and are never
-backend environment variables.
 
 ## Runtime roles
 

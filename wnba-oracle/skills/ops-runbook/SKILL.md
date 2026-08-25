@@ -61,7 +61,7 @@ with engine.connect() as conn:
 "
 
 # 3. API health
-curl -s https://<WNBA_API_BASE>/healthz
+curl -s https://<WNBA_API_BASE>/health
 curl -s https://<WNBA_API_BASE>/watchdog/today | python3 -m json.tool | head -40
 ```
 
