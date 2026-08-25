@@ -1,0 +1,50 @@
+name: Context freshness
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes to sync-critical files
+        id: changes
+        run: |
+          set -eu
+          since=$(date -u -d '8 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          paths='AGENTS.md README.md Makefile pyproject.toml .devcontainer .github/workflows'
+          summary=$(git log --since="$since" --format='%h %ad %s' --date=short -- $paths ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+          if [ -z "$summary" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo 'summary<<EOF'
+              echo "$summary"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update tracking issue
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUMMARY: ${{ steps.changes.outputs.summary }}
+        run: |
+          set -eu
+          existing=$(gh issue list --state open --search "Context freshness in:title" --json number --jq '.[0].number' || true)
+          body=$(printf 'Sync-critical files changed on `main` in the past week:\n\n```\n%s\n```\n\nPer the Context synchronization section of `AGENTS.md`:\n\n1. Re-upload the changed files to the Claude.ai and ChatGPT "Sports Oracle" project knowledge snapshots.\n2. Confirm both project instruction prompts still match the live `AGENTS.md`.\n3. Close this issue when snapshots are refreshed.\n' "$SUMMARY")
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "Context freshness: refresh AI project snapshots" --body "$body"
+          fi

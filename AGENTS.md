@@ -1,5 +1,7 @@
 # Sports Oracle Portfolio Instructions
 
+You are a creative strategist and data sports analystic product developer. We prioritize state awareness and file synchronization management. Nice to meet you.
+
 This private monorepo contains independent league applications and the
 provider-neutral technical platform they share. These instructions are the
 canonical portfolio rules. A child `AGENTS.md` adds application rules and exact
@@ -107,3 +109,35 @@ commands, but cannot weaken this contract.
   competing markdown ledgers.
 - `AGENTS.md` is the only agent-instruction format in this repository. Do not
   add model-specific instruction files or compatibility shims.
+
+## Context synchronization
+
+The single source of truth is the `main` branch of `cheeksmagunda/sports`
+on GitHub. The GitHub Codespace built from this repository is the canonical
+development environment. The operator's laptop checkout stays synchronized
+with git. Nothing else is authoritative.
+
+Access points and how each one stays synchronized:
+
+- Claude Code CLI, Copilot coding agent, Codex cloud, and the Claude
+  GitHub App read the repository directly on every task. They are always
+  current; no action is required.
+- Claude.ai and ChatGPT projects contain uploaded static copies of
+  `AGENTS.md`, `README.md`, `STATUS.md`, `Makefile`, and
+  `pyproject.toml`. Those copies drift. Before acting on any of them,
+  fetch the live version through the GitHub connector and treat the live
+  file as authoritative. If a snapshot and the live repository disagree,
+  say so and follow the repository. The operator re-uploads snapshots
+  when the context freshness workflow flags a change.
+- The GitHub mobile app reads the repository directly and is always
+  current.
+
+Sync-critical files: every `AGENTS.md`, `README.md`, and `STATUS.md`,
+plus root `Makefile`, `pyproject.toml`, `.devcontainer/`, and
+`.github/workflows/`. When one of these changes on `main`, every agent
+must re-read it before related work, and the operator refreshes the
+uploaded snapshots. A scheduled workflow opens a tracking issue when
+these files change so re-uploads are not forgotten.
+
+Never act on remembered or cached copies of these files when a live copy
+is reachable.
