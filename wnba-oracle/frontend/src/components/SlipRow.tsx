@@ -122,12 +122,15 @@ export function SlipRow({
             {player.pred_real_score_p50.toFixed(1)}
           </span>
           {hasScoreBand ? (
-            <span className="slip-row__proj-band-track">
-              <span
-                className="slip-row__proj-band"
-                style={{ left: `${bandLeftPct}%`, width: `${bandWidthPct}%` }}
-              />
-            </span>
+            <>
+              <span className="slip-row__proj-band-track">
+                <span
+                  className="slip-row__proj-band"
+                  style={{ left: `${bandLeftPct}%`, width: `${bandWidthPct}%` }}
+                />
+              </span>
+              <span className="slip-row__proj-band-label">range</span>
+            </>
           ) : null}
         </span>
 
@@ -164,6 +167,12 @@ export function SlipRow({
         ) : (
           <span className="slip-row__live-placeholder">&mdash;</span>
         )}
+      </span>
+
+      <span className="slip-row__chevron" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
       </span>
     </Link>
   );

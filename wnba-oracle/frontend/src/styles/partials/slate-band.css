@@ -83,6 +83,19 @@
   color: var(--accent-text);
 }
 
+/* One-line editorial beneath the title -- explains what the page is
+   to a first-time user without adding cognitive load. */
+.slate-band__editorial {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+  line-height: var(--line-h-body);
+}
+
 .slate-band__right {
   display: grid;
   grid-template-columns: auto 1px auto 1px auto;
@@ -187,6 +200,9 @@
   }
   .slate-band__title {
     font-size: clamp(26px, 8vw, 34px);
+  }
+  .slate-band__editorial {
+    display: none;
   }
   .slate-band__right {
     grid-template-columns: auto 1px auto;

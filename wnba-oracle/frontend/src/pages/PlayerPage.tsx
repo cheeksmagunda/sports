@@ -86,23 +86,23 @@ export function PlayerPage() {
             <h2>Projection</h2>
             <div className="player-page__stats-grid">
               <div className="player-page__stat-item">
-                <div className="player-page__stat-label">P50 Score</div>
+                <div className="player-page__stat-label">Projected Score</div>
                 <div className="player-page__stat-value">{player.pred_real_score_p50.toFixed(1)}</div>
               </div>
               {player.pred_real_score_p10 !== undefined && (
                 <div className="player-page__stat-item">
-                  <div className="player-page__stat-label">P10 Score</div>
+                  <div className="player-page__stat-label">Floor (P10)</div>
                   <div className="player-page__stat-value">{player.pred_real_score_p10.toFixed(1)}</div>
                 </div>
               )}
               {player.pred_real_score_p90 !== undefined && (
                 <div className="player-page__stat-item">
-                  <div className="player-page__stat-label">P90 Score</div>
+                  <div className="player-page__stat-label">Ceiling (P90)</div>
                   <div className="player-page__stat-value">{player.pred_real_score_p90.toFixed(1)}</div>
                 </div>
               )}
               <div className="player-page__stat-item">
-                <div className="player-page__stat-label">Minutes P50</div>
+                <div className="player-page__stat-label">Minutes (median)</div>
                 <div className="player-page__stat-value">{player.pred_minutes_p50.toFixed(1)}</div>
               </div>
             </div>
