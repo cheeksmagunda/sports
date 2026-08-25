@@ -130,7 +130,7 @@ class Settings(RuntimeConfig):
     # down the stage-1 rank. 1.0 disables (pre-2026-07-04 behavior). Applies
     # symmetrically to the head p50 and the p10/p90 interval so the sampler's
     # sigma stays proportional. See scripts/calibrate_starter_and_boost.py.
-    starter_unknown_fade: float = Field(default=1.0, alias="STARTER_UNKNOWN_FADE")
+    starter_unknown_fade: float = Field(default=0.75, alias="STARTER_UNKNOWN_FADE")
     # starter_signal_use_expected: act on RotoWire EXPECTED starters, not only
     # CONFIRMED ones. Confirmed lineups for every game on a slate are not all
     # posted by the T-40 freeze of the first tip (they land ~30-90 min before

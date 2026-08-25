@@ -125,10 +125,11 @@ def test_tier0_fires_when_heads_and_features_present(monkeypatch) -> None:
     )
     assert art.predict_calls, "predict_real_score never called"
     p = proj[101]
-    # p50 7.5 floored at 0.5, no game-script (Vegas total 0 -> 1.0x) so passthrough.
-    assert p["pred_real_score_p50"] == 7.5
-    assert p["pred_real_score_p10"] == 3.0
-    assert p["pred_real_score_p90"] == 14.0
+    # p50 7.5 floored at 0.5, no game-script (Vegas total 0 -> 1.0x).
+    # No RotoWire signal -> starter_unknown_fade applied (calibrated default 0.75).
+    assert p["pred_real_score_p50"] == 7.5 * 0.75
+    assert p["pred_real_score_p10"] == 3.0 * 0.75
+    assert p["pred_real_score_p90"] == 14.0 * 0.75
 
 
 def test_tier0_skips_when_artifact_missing_heads(monkeypatch) -> None:
@@ -184,7 +185,7 @@ def test_tier0_swallows_predict_failure(monkeypatch) -> None:
 # restores the same-day starter signal at serve time. Magnitudes:
 #   - confirmed starter (rotowire_confirmed=1, is_starter=1) -> 1.10
 #   - confirmed bench   (rotowire_confirmed=1, is_starter=0) -> 0.82
-#   - unmatched         (rotowire_confirmed=0)               -> 1.00
+#   - unmatched         (rotowire_confirmed=0)               -> 0.75 (calibrated default, STARTER_UNKNOWN_FADE)
 # These three tests pin all three magnitudes against the same base p50/p10/p90
 # (7.5 / 3.0 / 14.0 from _FakeArtifact.predict_real_score).
 
@@ -219,7 +220,8 @@ def test_tier0_confirmed_bench_scales_quantiles_down(monkeypatch) -> None:
     assert p["pred_real_score_p90"] == 14.0 * 0.82
 
 
-def test_tier0_unmatched_player_unchanged(monkeypatch) -> None:
+def test_tier0_unmatched_player_faded(monkeypatch) -> None:
+    """Unmatched player (no rotowire signal) -> starter_unknown_fade applied (calibrated 0.75)."""
     art = _FakeArtifact(with_heads=True)
     _common_patch(monkeypatch, art)
     enrichment = [_enrich(503, with_head_features=True)]  # rotowire_confirmed default 0
@@ -229,6 +231,6 @@ def test_tier0_unmatched_player_unchanged(monkeypatch) -> None:
         contrarian_cfg=ContrarianConfig(enabled=False, strength=0.0),
     )
     p = proj[503]
-    assert p["pred_real_score_p50"] == 7.5
-    assert p["pred_real_score_p10"] == 3.0
-    assert p["pred_real_score_p90"] == 14.0
+    assert p["pred_real_score_p50"] == 7.5 * 0.75
+    assert p["pred_real_score_p10"] == 3.0 * 0.75
+    assert p["pred_real_score_p90"] == 14.0 * 0.75
