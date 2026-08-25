@@ -90,22 +90,36 @@
 .header__nav {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2);
 }
 
 .header__nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
   font-family: var(--font-mono);
   font-size: var(--fs-meta);
   font-weight: 700;
-  letter-spacing: var(--tracking-loose);
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--text-secondary);
   text-decoration: none;
-  transition: color var(--dur-2) var(--ease-out);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  transition:
+    color var(--dur-2) var(--ease-out),
+    background var(--dur-2) var(--ease-out),
+    border-color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
 }
 
 .header__nav-link:hover {
   color: var(--text-primary);
+  background: var(--bg-inset);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .header__nav-link:focus-visible {

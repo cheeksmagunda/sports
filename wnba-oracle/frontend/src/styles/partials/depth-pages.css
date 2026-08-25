@@ -357,11 +357,42 @@
 }
 
 .player-page__header {
+  position: relative;
   display: flex;
   gap: var(--space-4);
   align-items: flex-start;
   border-bottom: 1px solid var(--border-neutral);
-  padding-bottom: var(--space-4);
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-5)) 0;
+  overflow: hidden;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+/* Full-bleed team-color wash -- mirrors the slate-band::before
+   technique, confined to this element so it doesn't bleed. */
+.player-page__header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 80% 160% at 10% 50%,
+      color-mix(in oklab, var(--team-primary, var(--primary)) 22%, transparent),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 60% 120% at 90% 0%,
+      color-mix(in oklab, var(--accent) 10%, transparent),
+      transparent 60%
+    );
+  filter: blur(32px);
+}
+
+.player-page__header > * {
+  position: relative;
+  z-index: 1;
 }
 
 .player-page__title {

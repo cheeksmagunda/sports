@@ -28,14 +28,15 @@
 .slip__item {
   container-type: inline-size;
   flex: 1 1 0;
-  min-height: 0;
-  max-height: var(--row-h);
+  min-height: var(--row-h);
+  /* No max-height: rows grow to fill the full viewport content area so
+     large screens don't leave a dead zone below the slip. */
 }
 
 .slip-row {
   display: grid;
-  grid-template-columns: var(--gutter-w) 1fr 72px 96px 120px 140px;
-  grid-template-areas: "rank identity slot proj minutes live";
+  grid-template-columns: var(--gutter-w) 1fr 72px 96px 120px 140px 28px;
+  grid-template-areas: "rank identity slot proj minutes live chevron";
   align-items: stretch;
   height: 100%;
   min-height: 0;
@@ -62,6 +63,26 @@
 .slip-row:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Chevron affordance: signals the row is a navigable link. */
+.slip-row__chevron {
+  grid-area: chevron;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  opacity: 0.4;
+  transition:
+    opacity var(--dur-2) var(--ease-out),
+    transform var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out);
+}
+
+.slip-row:hover .slip-row__chevron,
+.slip-row:focus-visible .slip-row__chevron {
+  opacity: 1;
+  color: var(--team-primary, var(--primary));
+  transform: translateX(3px);
 }
 
 .slip__item:nth-child(1) .slip-row { animation-delay: 0ms; }
@@ -92,8 +113,8 @@
   background: var(--team-primary, var(--primary));
   color: var(--team-ink, var(--on-primary));
   font-family: var(--font-display);
-  font-weight: 800;
-  font-size: clamp(24px, 4cqw, 34px);
+  font-weight: 900;
+  font-size: clamp(32px, 6cqw, 52px);
   line-height: 1;
 }
 
@@ -192,11 +213,13 @@
 }
 
 .slip-row__proj-num {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(22px, 3.5cqw, 30px);
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
 }
 
 .slip-row__proj-band-track {
@@ -213,6 +236,17 @@
   height: 2px;
   border-radius: 1px;
   background: var(--team-primary, var(--primary));
+}
+
+/* Whisper label so users know the bar is a score range. */
+.slip-row__proj-band-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
 /* Region 5: minutes. */
@@ -272,6 +306,7 @@
   }
   .slip-row__slot { display: none; }
   .slip-row__slot-mobile { display: inline; }
+  .slip-row__chevron { display: none; }
   .slip-row__identity { gap: var(--space-2); padding: 0 var(--space-2); }
   .slip-row__proj-minutes {
     grid-area: projmin;

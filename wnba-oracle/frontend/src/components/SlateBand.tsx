@@ -69,6 +69,11 @@ export function SlateBand({
         <h1 className="slate-band__title">
           The Five<em>.</em>
         </h1>
+        <p className="slate-band__editorial">
+          {isLiveOrFinal
+            ? "Tap any player to see their full stat line."
+            : "Model-ranked picks for today. Tap any player for projection detail."}
+        </p>
         <div className="slate-band__chips">
           <span
             className={`slate-band__chip slate-band__chip--${rec}`}
