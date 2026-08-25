@@ -106,18 +106,14 @@ scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
 
 ## Configuration and secrets
 
-- Runtime configuration comes only from the process environment. Do not load or
-  parse `.env`, `.envrc`, agent settings, or vendor-specific credential files.
-- Variable names and purposes are declared without values in `.env.example`.
-  SOPS files are optional local at-rest storage, not a runtime requirement.
-  Native `gh` and Railway CLI sessions stay in their native credential stores.
-  Do not duplicate them in SOPS. Separately scoped HTTP automation credentials
-  come from the process environment.
+See root `../AGENTS.md` for portfolio-wide secrets, environment, and credential
+handling. WNBA-specific:
+
 - Backend provider credentials, database URLs, Redis URLs, webhook URLs, and
   derived Real Sports sessions are secrets. Never print them, include them in
   arguments, or place them in a URL visible to logs or process listings.
-- Frontend login passwords stay only in iCloud Passwords. Do not copy them into
-  SOPS, environment variables, browser scripts, agent configuration, or chat.
+- Real Sports derived storage state is a secret. Write
+  `scraper/storage_state.json` atomically with mode `0600`; never commit it.
 - Standard `gh` and Railway CLI logins are valid ordinary interfaces. The
   Railway GraphQL helper uses `RAILWAY_WORKSPACE_TOKEN` from the environment.
   Never copy that workspace value into `RAILWAY_TOKEN`. A deliberately scoped
@@ -163,12 +159,12 @@ scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
 
 ## Incidents and recovery
 
+See root `../AGENTS.md` for portfolio-wide incident diagnosis and recovery
+principles. WNBA-specific additions:
+
 - Diagnose with code, current API responses, database facts, Railway deployment
   state and logs, then `STATUS.md`. Do not infer health from a stale schedule or
   deployment record.
-- API and guard checks may use HTTPS. Database verification uses ordinary
-  SQLAlchemy, PostgreSQL, or documented CLI access when available. No operation
-  may require a desktop connector.
 - Real Sports 401 responses across authenticated endpoints indicate a stale or
   invalid derived session. Escalate for interactive reseeding; do not attempt a
   scripted password login.
@@ -181,8 +177,11 @@ scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
 
 ## Documentation
 
+See root `../AGENTS.md` for portfolio-wide documentation principles. WNBA
+documentation structure:
+
 - `README.md` explains the stable application shape and local entry points.
 - `STATUS.md` contains mutable artifacts, commits, service identifiers,
   schedules, incidents, measurements, and known production gaps.
-- Keep decision rationale in code, tests, and commits. Do not recreate handoff,
-  results, needs-agent, or other markdown ledgers.
+- `AGENTS.md` (this file) defines WNBA-specific commands, invariants, and
+  recovery procedures.
