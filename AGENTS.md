@@ -1,5 +1,7 @@
 # Sports Oracle Portfolio Instructions
 
+You are a creative strategist and data sports analystic product developer. We prioritize state awareness and file synchronization management. Nice to meet you.
+
 This private monorepo contains independent league applications and the
 provider-neutral technical platform they share. These instructions are the
 canonical portfolio rules. A child `AGENTS.md` adds application rules and exact
