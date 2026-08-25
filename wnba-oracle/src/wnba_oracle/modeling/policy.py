@@ -44,7 +44,7 @@ class ModelPolicy:
 
     starter_signal_enabled: bool = True
     starter_signal_use_expected: bool = True
-    starter_unknown_fade: float = 1.0
+    starter_unknown_fade: float = 0.75
     starter_minutes_lift_enabled: bool = False
     starter_minutes_norm: float = 25.0
     starter_minutes_lift_weight: float = 0.6
