@@ -10,6 +10,8 @@ intra-window races.
 
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -19,6 +21,7 @@ from wnba_oracle.modeling.policy import ModelPolicy
 from wnba_oracle.modeling.provenance import ScoringProvenance
 from wnba_oracle.picker.optimize import LineupRecommendation, OptimizeConfig
 from wnba_oracle.picker.payout import default_curve_for_regime
+from wnba_oracle.picker.stacking import StackingDecision
 from wnba_oracle.scheduler import job2, job2_freeze
 
 
@@ -212,9 +215,59 @@ def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
     assert call.kwargs["serving_knobs"]["n_samples"] == 250
     assert call.kwargs["serving_knobs"]["n_field_lineups"] == 125
     assert call.kwargs["serving_knobs"]["min_anchors"] == 2
+    assert call.kwargs["serving_knobs"]["contextual_stacking_enabled"] is False
+    assert call.kwargs["serving_knobs"]["contextual_stack_ev_margin"] == 0.01
     assert call.kwargs["model_provenance"]["model_policy_sha256"] == policy.sha256
     assert call.kwargs["model_provenance"]["enrichment_rows"] == 0
     assert len(call.kwargs["model_provenance"]["optimizer_inputs_sha256"]) == 64
     assert call.kwargs["source_assurance"] == {
         "decision_input_sha256": provenance.enrichment_sha256
     }
+
+
+def test_freeze_persists_versioned_stack_decision() -> None:
+    decision = StackingDecision(
+        policy_version="contextual-stacking-v1",
+        enabled=True,
+        reason="team_balance_within_margin",
+        metadata_quality="provider_game_id",
+        slate_game_count=2,
+        slate_team_count=4,
+        preferred_min_games=2,
+        preferred_max_players_per_game=3,
+        preferred_team_count=4,
+        effective_max_players_per_team=3,
+        team_cap_reason="dynamic_small_slate",
+        selected_game_count=2,
+        selected_team_count=4,
+        selected_max_players_per_game=3,
+        selected_max_players_per_team=2,
+        selected_game_counts=(("g1", 3), ("g2", 2)),
+        selected_team_counts=(("A", 2), ("B", 1), ("C", 1), ("D", 1)),
+        selected_objective=1.19,
+        best_unrestricted_objective=1.20,
+        best_game_balanced_objective=1.195,
+        best_fully_balanced_objective=1.19,
+        objective_sacrifice=0.01,
+        override_margin=0.01,
+        legacy_stack_bonus_ignored=True,
+    )
+    eng = _fake_engine(existing_row=False, insert_returns_row=True)
+    rd = _fake_redis(lock_wins=True)
+    with (
+        patch.object(job2_freeze, "get_engine", return_value=eng),
+        patch.object(job2_freeze, "get_redis", return_value=rd),
+    ):
+        assert job2._freeze(
+            "2026-05-27",
+            "heuristic-v1",
+            replace(_rec(), stacking_decision=decision),
+            "top_20",
+            _proj(),
+        )
+
+    call = eng.begin.return_value.__enter__.return_value.execute.call_args
+    lineup = json.loads(call.args[1]["lineup"])
+    assert lineup["stack_decision"]["policy_version"] == "contextual-stacking-v1"
+    assert lineup["stack_decision"]["reason"] == "team_balance_within_margin"
+    assert lineup["stack_decision"]["selected_game_counts"] == [["g1", 3], ["g2", 2]]

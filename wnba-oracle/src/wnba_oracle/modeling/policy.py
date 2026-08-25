@@ -29,7 +29,11 @@ class ModelPolicy:
     application configuration object or reading process state itself.
     """
 
-    SCHEMA_VERSION: ClassVar[int] = 1
+    SCHEMA_VERSION: ClassVar[int] = 2
+    LEGACY_SCHEMA_VERSION: ClassVar[int] = 1
+    _V2_OPTIMIZER_FIELDS: ClassVar[frozenset[str]] = frozenset(
+        {"contextual_stacking_enabled", "contextual_stack_ev_margin"}
+    )
 
     optimizer: OptimizeConfig
     artifact_sha: str = ""
@@ -62,8 +66,18 @@ class ModelPolicy:
     availability: AvailabilityConfig = field(default_factory=AvailabilityConfig)
     game_script_minutes: GameScriptMinutesConfig = field(default_factory=GameScriptMinutesConfig)
     game_script: GameScriptConfig = field(default_factory=GameScriptConfig)
+    # Preserve the canonical payload version when replaying a historical
+    # policy. This field is deliberately excluded from equality and payloads.
+    _payload_schema_version: int = field(default=SCHEMA_VERSION, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        if self._payload_schema_version not in (
+            self.LEGACY_SCHEMA_VERSION,
+            self.SCHEMA_VERSION,
+        ):
+            raise ValueError(
+                f"unsupported model policy schema_version {self._payload_schema_version!r}"
+            )
         self._validate_finite_values()
         self._validate_identity()
         self._validate_optimizer()
@@ -104,6 +118,8 @@ class ModelPolicy:
             raise ValueError("optimizer caveat threshold must be at least the skip threshold")
         if self.optimizer.game_stack_bonus < 0:
             raise ValueError("optimizer.game_stack_bonus must be non-negative")
+        if self.optimizer.contextual_stack_ev_margin < 0:
+            raise ValueError("optimizer.contextual_stack_ev_margin must be non-negative")
         if (
             min(
                 self.optimizer.leverage_weight,
@@ -220,13 +236,19 @@ class ModelPolicy:
 
     def to_payload(self) -> dict[str, Any]:
         """Canonical JSON-compatible policy payload retained with a freeze."""
-        return {"schema_version": self.SCHEMA_VERSION, **asdict(self)}
+        values = asdict(self)
+        schema_version = values.pop("_payload_schema_version")
+        if schema_version == self.LEGACY_SCHEMA_VERSION:
+            optimizer = values["optimizer"]
+            for name in self._V2_OPTIMIZER_FIELDS:
+                optimizer.pop(name, None)
+        return {"schema_version": schema_version, **values}
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> ModelPolicy:
         """Rebuild and validate a persisted policy for an exact replay."""
         schema_version = payload.get("schema_version")
-        if schema_version != cls.SCHEMA_VERSION:
+        if schema_version not in (cls.LEGACY_SCHEMA_VERSION, cls.SCHEMA_VERSION):
             raise ValueError(f"unsupported model policy schema_version {schema_version!r}")
         values = dict(payload)
         values.pop("schema_version", None)
@@ -243,12 +265,21 @@ class ModelPolicy:
                 config_payload = values.get(name)
                 if not isinstance(config_payload, Mapping):
                     raise ValueError(f"model policy field {name!r} must be an object")
-                values[name] = config_type(**dict(config_payload))
+                config_values = dict(config_payload)
+                if name == "optimizer" and schema_version == cls.LEGACY_SCHEMA_VERSION:
+                    incompatible = cls._V2_OPTIMIZER_FIELDS.intersection(config_values)
+                    if incompatible:
+                        names = ", ".join(sorted(incompatible))
+                        raise ValueError(
+                            "model policy schema_version 1 cannot contain v2 optimizer "
+                            f"fields: {names}"
+                        )
+                values[name] = config_type(**config_values)
             slot_multipliers = values.get("slot_multipliers")
             if not isinstance(slot_multipliers, (list, tuple)):
                 raise ValueError("model policy slot_multipliers must be an array")
             values["slot_multipliers"] = tuple(float(value) for value in slot_multipliers)
-            return cls(**values)
+            return cls(**values, _payload_schema_version=schema_version)
         except TypeError as exc:
             raise ValueError(f"invalid model policy payload: {exc}") from exc
 

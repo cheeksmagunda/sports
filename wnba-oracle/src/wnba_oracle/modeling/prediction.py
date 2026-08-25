@@ -542,6 +542,8 @@ def materialize_specs(
         r = preds.rows_by_pid[pid]
         team = str(r.get("team", "") or "")
         opp = str(r.get("opponent", "") or "")
+        features = _features_dict(r.get("features_json"))
+        game_id = str(features.get("game_id") or "").strip()
         boost = float(r.get("card_boost", 0.0) or 0.0)
         mu_log = float(np.log(max(pred + K, 1.0)))
         # Convert the real_score-unit volatility to a log-scale sigma via the
@@ -576,6 +578,7 @@ def materialize_specs(
                 p_active=preds.p_active_by_pid.get(
                     pid, 1.0
                 ),  # D107 (Tier 2): P(active) for mixture-variance sampling
+                game_id=game_id,
             )
         )
         # D86: when enabled, attach the real measured draft count so the field
@@ -606,6 +609,8 @@ def materialize_specs(
             "card_boost": boost,
             "pred_real_score_p50": pred,
         }
+        if game_id:
+            proj["game_id"] = game_id
         # D69 / Phase 2b: surface the head quantiles when Tier-0 served this
         # pid. The frontend (_build_per_player) reads p10/p90 to draw the
         # real_score interval; absent for ladder-served players (unchanged).

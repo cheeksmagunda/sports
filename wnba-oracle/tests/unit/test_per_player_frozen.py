@@ -85,6 +85,17 @@ def test_per_player_slot_order_matches_player_ids() -> None:
     ]
 
 
+def test_per_player_includes_optional_game_id() -> None:
+    rec = _rec()
+    projections = {pid: _proj(str(pid), "LVA", "NYL", "G", 0.5, 3.0) for pid in rec.player_ids}
+    projections[101]["game_id"] = "4512"
+
+    out = _build_per_player(rec, projections)
+
+    assert out[0]["game_id"] == "4512"
+    assert all("game_id" not in row for row in out[1:])
+
+
 def test_per_player_higher_slot_gets_more_minutes() -> None:
     """Rank-aware minutes default — slot 1 leans starter, slot 5 trails."""
     rec = _rec()

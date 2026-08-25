@@ -119,6 +119,17 @@ class PlatformPlayer:
     # Tip time of the game this player is rostered in ("2026-08-19T23:30:00.000Z",
     # UTC). Empty when the slate payload carried no dateTime for their game.
     game_start_utc: str = ""
+    # Stable provider game id from /home plus the per-game roster endpoint.
+    # Empty for legacy payloads that did not retain roster identity.
+    game_id: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerGameContext:
+    """Authoritative provider identity and tip time for one player's game."""
+
+    game_id: str
+    game_start_utc: str
 
 
 class PlatformAuthRequired(RuntimeError):
@@ -394,11 +405,10 @@ async def _fetch_game_rosters(
 ) -> dict[str, dict[str, Any]]:
     """Union of tonight's per-game rosters, keyed by platform player id.
 
-    Each row carries `gameStartUtc`, the `dateTime` of the game it was
-    rostered in. That is the only place the platform ties a player to a
-    tip time: the pool endpoint is slate-wide and the /home payload lists
-    games without rosters. Downstream, features_json["game_start_utc"]
-    lets job2 scope the pool to games that have not started.
+    Each row carries `gameId` and `gameStartUtc` from the /home game whose
+    roster supplied the player. The pool endpoint is slate-wide and does not
+    retain that relationship. Downstream, the stable game id identifies
+    correlation groups while the tip time scopes pools to games not started.
     """
     home_r = await _real_sports_get_with_retry(
         client,
@@ -438,12 +448,46 @@ async def _fetch_game_rosters(
         gid, players = t.result()
         for p in players:
             pid = str(p.get("id", ""))
-            if not pid or pid in union:
+            if not pid:
+                continue
+            if pid in union:
+                existing_game_id = str(union[pid].get("gameId") or "")
+                if existing_game_id != str(gid):
+                    raise RuntimeError(
+                        "provider player appears in multiple game rosters; "
+                        "refusing ambiguous game identity"
+                    )
                 continue
             row = dict(p)
+            row["gameId"] = str(gid)
             row["gameStartUtc"] = start_by_game.get(gid, "")
             union[pid] = row
     return union
+
+
+async def fetch_game_context_by_player(
+    slate_date: str,
+    headers: RequestHeaders,
+    client: httpx.AsyncClient,
+    *,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
+) -> dict[str, PlayerGameContext]:
+    """Platform player id -> authoritative game identity for tonight's slate.
+
+    Cheap next to fetch_pool_for_date: one /home call plus one roster call
+    per game, no a..z card_boost sweep. Used to atomically backfill game_id
+    and game_start_utc onto enrichment that an earlier job1 persisted without
+    provider game context.
+    """
+    h = _http_headers(headers)
+    union = await _fetch_game_rosters(slate_date, h, client, refresh_headers=refresh_headers)
+    return {
+        pid: PlayerGameContext(
+            game_id=str(player.get("gameId") or "").strip(),
+            game_start_utc=str(player.get("gameStartUtc") or "").strip(),
+        )
+        for pid, player in union.items()
+    }
 
 
 async def fetch_game_start_by_player(
@@ -453,15 +497,14 @@ async def fetch_game_start_by_player(
     *,
     refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
 ) -> dict[str, str]:
-    """Platform player id -> their game's tip time, for tonight's slate.
-
-    Cheap next to fetch_pool_for_date: one /home call plus one roster call
-    per game, no a..z card_boost sweep. Used to backfill game_start_utc
-    onto enrichment that a pre-tip-time job1 run persisted without it.
-    """
-    h = _http_headers(headers)
-    union = await _fetch_game_rosters(slate_date, h, client, refresh_headers=refresh_headers)
-    return {pid: str(p.get("gameStartUtc") or "") for pid, p in union.items()}
+    """Compatibility wrapper returning only per-player tip times."""
+    contexts = await fetch_game_context_by_player(
+        slate_date,
+        headers,
+        client,
+        refresh_headers=refresh_headers,
+    )
+    return {pid: context.game_start_utc for pid, context in contexts.items()}
 
 
 async def _search_pool_ratings(
@@ -653,6 +696,7 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
                 primary_ranking=p.get("primaryRanking"),
                 injury_status=p.get("injuryStatus") or "",
                 game_start_utc=str(p.get("gameStartUtc") or ""),
+                game_id=str(p.get("gameId") or "").strip(),
             )
         )
     return out

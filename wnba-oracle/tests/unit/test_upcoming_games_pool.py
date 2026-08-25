@@ -81,6 +81,7 @@ def test_pool_parser_carries_the_game_tip_time() -> None:
                     "position": "F",
                     "team": {"key": "gsv"},
                     "multiplierBonus": 2.2,
+                    "gameId": 987,
                     "gameStartUtc": "2026-08-20T02:00:00.000Z",
                 },
                 {
@@ -96,4 +97,6 @@ def test_pool_parser_carries_the_game_tip_time() -> None:
     )
 
     assert players[0].game_start_utc == "2026-08-20T02:00:00.000Z"
+    assert players[0].game_id == "987"
     assert players[1].game_start_utc == ""
+    assert players[1].game_id == ""

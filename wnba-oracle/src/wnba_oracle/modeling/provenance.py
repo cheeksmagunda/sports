@@ -17,6 +17,7 @@ from wnba_oracle.picker.payout import PayoutCurve
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 
 MODEL_ENGINE_VERSION = "1"
+OPTIMIZER_INPUT_SCHEMA_VERSION = 2
 
 _ENRICHMENT_FIELDS = (
     "real_sports_player_id",
@@ -121,7 +122,7 @@ def optimizer_input_payload(
     """Serialize the exact finalized inputs consumed by the optimizer."""
     return _json_payload(
         {
-            "schema_version": 1,
+            "schema_version": OPTIMIZER_INPUT_SCHEMA_VERSION,
             "sampling_specs": [asdict(spec) for spec in sampling_specs],
             "field_specs": [asdict(spec) for spec in field_specs],
             "payout_curve": asdict(payout_curve),
@@ -189,7 +190,7 @@ class ScoringProvenance:
             "enrichment_sha256": self.enrichment_sha256,
             "enrichment_sequence_sha256": self.enrichment_sequence_sha256,
             "enrichment_rows": self.enrichment_rows,
-            "optimizer_inputs_schema_version": 1,
+            "optimizer_inputs_schema_version": OPTIMIZER_INPUT_SCHEMA_VERSION,
             "optimizer_inputs_sha256": self.optimizer_inputs_sha256,
             "optimizer_players": self.optimizer_players,
             "optimizer_inputs": self.optimizer_inputs,

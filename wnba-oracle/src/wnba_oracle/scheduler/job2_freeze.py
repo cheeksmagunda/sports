@@ -10,6 +10,7 @@ freeze and this module decides HOW.
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 
 from oracle_core.storage import Lease, RedisLeaseStore
 from sqlalchemy import text
@@ -100,6 +101,8 @@ def _build_per_player(
             "pred_minutes_p50": p50m,
             "pred_minutes_p90": p90m,
         }
+        if proj.get("game_id"):
+            entry["game_id"] = str(proj["game_id"])
         # D69 / Phase 2b: pass through the real_score interval when the
         # trained heads served this player. Absent fields are backward-compatible.
         if "pred_real_score_p10" in proj:
@@ -247,6 +250,8 @@ def _freeze(
         lineup_payload["payout_curve"] = payout_curve
     if serving_knobs is not None:
         lineup_payload["serving_knobs"] = serving_knobs
+    if rec.stacking_decision is not None:
+        lineup_payload["stack_decision"] = asdict(rec.stacking_decision)
     if model_provenance is not None:
         lineup_payload["model_provenance"] = model_provenance
     if source_assurance is not None:

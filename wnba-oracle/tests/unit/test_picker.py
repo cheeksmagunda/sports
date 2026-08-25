@@ -15,6 +15,7 @@ from wnba_oracle.picker.sample import (
     CopulaConfig,
     PlayerSamplingSpec,
     build_correlation_matrix,
+    game_key_for_spec,
     sample_joint_real_scores,
 )
 
@@ -52,6 +53,84 @@ def test_correlation_matrix_same_team_negative() -> None:
     assert R[0, 1] < 0
     # Players 1 and 3 are on opposing teams in same game -> positive
     assert R[0, 2] > 0
+
+
+def test_game_key_prefers_provider_id_with_canonical_legacy_fallback() -> None:
+    explicit = PlayerSamplingSpec(1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, game_id=" 4512 ")
+    legacy_home = PlayerSamplingSpec(2, "lva", "nyl", mu=0.0, sigma=0.1, boost=0.0)
+    legacy_away = PlayerSamplingSpec(3, "NYL", "LVA", mu=0.0, sigma=0.1, boost=0.0)
+
+    assert game_key_for_spec(explicit) == "realsports:4512"
+    assert game_key_for_spec(legacy_home) == "teams:LVA|NYL"
+    assert game_key_for_spec(legacy_away) == game_key_for_spec(legacy_home)
+
+
+def test_correlation_uses_provider_game_id_as_authoritative_identity() -> None:
+    different_games = [
+        PlayerSamplingSpec(1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, game_id="1"),
+        PlayerSamplingSpec(2, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, game_id="2"),
+    ]
+    same_game = [
+        PlayerSamplingSpec(3, "LVA", "", mu=0.0, sigma=0.1, boost=0.0, game_id="9"),
+        PlayerSamplingSpec(4, "NYL", "", mu=0.0, sigma=0.1, boost=0.0, game_id="9"),
+    ]
+
+    assert abs(build_correlation_matrix(different_games, CopulaConfig())[0, 1]) < 1e-12
+    assert build_correlation_matrix(same_game, CopulaConfig())[0, 1] > 0
+
+
+def test_partial_provider_ids_use_one_fallback_namespace_for_slate() -> None:
+    specs = [
+        PlayerSamplingSpec(1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, game_id="9"),
+        PlayerSamplingSpec(2, "NYL", "LVA", mu=0.0, sigma=0.1, boost=0.0),
+        PlayerSamplingSpec(3, "CON", "IND", mu=0.0, sigma=0.1, boost=0.0, game_id="10"),
+        PlayerSamplingSpec(4, "IND", "CON", mu=0.0, sigma=0.1, boost=0.0),
+    ]
+
+    correlation = build_correlation_matrix(specs, CopulaConfig())
+
+    assert correlation[0, 1] > 0
+    assert correlation[2, 3] > 0
+    assert abs(correlation[0, 2]) < 1e-12
+
+
+def test_incomplete_slate_identity_does_not_mix_provider_and_fallback_keys() -> None:
+    specs = [
+        PlayerSamplingSpec(1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, game_id="9"),
+        PlayerSamplingSpec(2, "NYL", "", mu=0.0, sigma=0.1, boost=0.0),
+    ]
+
+    correlation = build_correlation_matrix(specs, CopulaConfig())
+
+    assert abs(correlation[0, 1]) < 1e-12
+
+
+def test_correlation_uses_validated_fallback_when_provider_games_conflict() -> None:
+    specs = [
+        PlayerSamplingSpec(1, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, game_id="9"),
+        PlayerSamplingSpec(2, "NYL", "LVA", mu=0.0, sigma=0.1, boost=0.0, game_id="9"),
+        PlayerSamplingSpec(3, "LVA", "NYL", mu=0.0, sigma=0.1, boost=0.0, game_id="10"),
+        PlayerSamplingSpec(4, "NYL", "LVA", mu=0.0, sigma=0.1, boost=0.0, game_id="10"),
+    ]
+
+    correlation = build_correlation_matrix(specs, CopulaConfig())
+
+    assert correlation[0, 2] < 0
+    assert correlation[1, 3] < 0
+    assert correlation[0, 1] > 0
+
+
+def test_correlation_rejects_conflicting_fallback_matchups_for_one_team() -> None:
+    specs = [
+        PlayerSamplingSpec(1, "A", "B", mu=0.0, sigma=0.1, boost=0.0),
+        PlayerSamplingSpec(2, "B", "A", mu=0.0, sigma=0.1, boost=0.0),
+        PlayerSamplingSpec(3, "A", "C", mu=0.0, sigma=0.1, boost=0.0),
+        PlayerSamplingSpec(4, "C", "A", mu=0.0, sigma=0.1, boost=0.0),
+    ]
+
+    correlation = build_correlation_matrix(specs, CopulaConfig())
+
+    assert np.allclose(correlation, np.eye(4))
 
 
 def test_blowout_makes_bench_pair_positively_correlated() -> None:

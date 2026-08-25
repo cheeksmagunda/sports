@@ -96,6 +96,7 @@ def test_enrichment_row_preserves_provider_signal_shape() -> None:
         position="F",
         multiplier_bonus=1.5,
         game_start_utc="2026-06-08T23:00:00Z",
+        game_id="4512",
     )
     context = job1._EnrichmentContext(
         team_to_opp={"LVA": "NYL"},
@@ -124,5 +125,6 @@ def test_enrichment_row_preserves_provider_signal_shape() -> None:
     assert features["vegas_total"] == 164.5
     assert features["prop_points_line"] == 22.5
     assert features["game_start_utc"] == "2026-06-08T23:00:00Z"
+    assert features["game_id"] == "4512"
     assert stats.props_matched == 1
     assert misses == ["A. Wilson (LVA) [unresolved]"]

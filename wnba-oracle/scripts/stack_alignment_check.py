@@ -37,7 +37,16 @@ def _connect() -> psycopg.Connection:
     url = os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
     if not url:
         raise SystemExit("DATABASE_PUBLIC_URL / DATABASE_URL not set in environment")
-    return psycopg.connect(url, connect_timeout=20)
+    # Some dotenv serializers retain a single pair of wrapping quotes. Strip
+    # only that outer pair before handing the URI to libpq. Never include the
+    # connection value in an exception because it contains credentials.
+    url = url.strip()
+    if len(url) >= 2 and url[0] == url[-1] and url[0] in {"'", '"'}:
+        url = url[1:-1]
+    try:
+        return psycopg.connect(url, connect_timeout=20)
+    except psycopg.Error:
+        raise SystemExit("database connection failed; connection details redacted") from None
 
 
 def build_teamid_to_key(cur: psycopg.Cursor) -> dict[int, str]:

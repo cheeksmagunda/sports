@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -111,7 +112,10 @@ def test_model_policy_setting_inventory_covers_current_settings_surface() -> Non
     }
 
     assert model_fields == MODEL_POLICY_SETTING_FIELDS
-    assert build_model_policy(Settings.model_construct()).optimizer.ceiling_tilt_slots is True
+    optimizer = build_model_policy(Settings.model_construct()).optimizer
+    assert optimizer.ceiling_tilt_slots is True
+    assert optimizer.contextual_stacking_enabled is True
+    assert optimizer.contextual_stack_ev_margin == 0.01
 
 
 def test_model_policy_fingerprint_changes_with_model_setting() -> None:
@@ -124,9 +128,61 @@ def test_model_policy_fingerprint_changes_with_model_setting() -> None:
 def test_model_policy_round_trips_through_persisted_payload() -> None:
     policy = build_model_policy(_settings())
 
+    assert policy.to_payload()["schema_version"] == 2
     assert ModelPolicy.from_payload(policy.to_payload()) == policy
     with pytest.raises(ValueError, match="schema_version"):
         ModelPolicy.from_payload({**policy.to_payload(), "schema_version": 999})
+
+
+def test_historical_v1_policy_replay_preserves_payload_hash() -> None:
+    v1_payload = json.loads(json.dumps(build_model_policy(_settings()).to_payload()))
+    v1_payload["schema_version"] = 1
+    v1_payload["optimizer"].pop("contextual_stacking_enabled")
+    v1_payload["optimizer"].pop("contextual_stack_ev_margin")
+    canonical = json.dumps(
+        v1_payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    expected_sha256 = hashlib.sha256(canonical).hexdigest()
+
+    restored = ModelPolicy.from_payload(v1_payload)
+    provenance = ScoringProvenance(
+        model_policy=restored,
+        enrichment_sha256="e" * 64,
+        enrichment_sequence_sha256="s" * 64,
+        enrichment_rows=0,
+        optimizer_inputs_sha256="o" * 64,
+        optimizer_players=0,
+        optimizer_inputs={},
+        artifact_loaded=False,
+        artifact_feature_module_sha=None,
+        serving_feature_module_sha=None,
+    ).to_payload()
+
+    assert restored.optimizer.contextual_stacking_enabled is False
+    assert restored.optimizer.contextual_stack_ev_margin == 0.01
+    assert restored.sha256 == expected_sha256
+    assert provenance["model_policy"] == restored.to_payload()
+    assert provenance["model_policy_sha256"] == expected_sha256
+    assert (
+        json.dumps(
+            restored.to_payload(),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        == canonical
+    )
+
+
+def test_v1_policy_cannot_smuggle_v2_optimizer_fields_past_old_readers() -> None:
+    mislabeled = build_model_policy(_settings()).to_payload()
+    mislabeled["schema_version"] = 1
+
+    with pytest.raises(ValueError, match="schema_version 1 cannot contain v2 optimizer fields"):
+        ModelPolicy.from_payload(mislabeled)
 
 
 def test_invalid_model_policy_returns_a_structured_job_failure() -> None:
@@ -181,6 +237,7 @@ def test_legacy_prediction_module_preserves_settings_keyword_contract() -> None:
     ("override", "message"),
     [
         ({"optimizer_n_samples": 0}, "n_samples must be positive"),
+        ({"optimizer_contextual_stack_ev_margin": -0.1}, "stack_ev_margin must be non-negative"),
         ({"sampling_score_offset": -1.0}, "score_offset must be positive"),
         ({"starter_minutes_lift_weight": 2.0}, "lift_weight must be between"),
     ],
@@ -319,6 +376,7 @@ def test_scoring_provenance_records_policy_and_input_hashes_without_activating_s
             mu=1.0,
             sigma=0.2,
             boost=0.5,
+            game_id="4512",
         )
     ]
     field = [FieldPlayerSpec(player_id=11, pred_real_score=3.0, card_boost=0.5)]
@@ -337,13 +395,16 @@ def test_scoring_provenance_records_policy_and_input_hashes_without_activating_s
 
     assert payload["model_engine_version"] == "1"
     assert payload["model_policy_sha256"] == policy.sha256
-    assert payload["model_policy"]["schema_version"] == 1
+    assert payload["model_policy"]["schema_version"] == 2
     assert len(payload["enrichment_sha256"]) == 64
     assert len(payload["enrichment_sequence_sha256"]) == 64
     assert payload["enrichment_rows"] == 2
     assert len(payload["optimizer_inputs_sha256"]) == 64
     assert payload["optimizer_players"] == 1
+    assert payload["optimizer_inputs_schema_version"] == 2
+    assert payload["optimizer_inputs"]["schema_version"] == 2
     assert payload["optimizer_inputs"]["sampling_specs"][0]["player_id"] == 11
+    assert payload["optimizer_inputs"]["sampling_specs"][0]["game_id"] == "4512"
     assert payload["artifact_loaded"] is True
     assert payload["artifact_feature_module_match"] is False
     assert payload["canonical_order_active"] is False
@@ -357,3 +418,32 @@ def test_scoring_provenance_records_policy_and_input_hashes_without_activating_s
         payout_curve=changed_curve,
     )
     assert changed.optimizer_inputs_sha256 != provenance.optimizer_inputs_sha256
+
+
+def test_materialized_sampling_and_projection_carry_game_id() -> None:
+    policy = build_model_policy(_settings())
+    predictions = PlayerPredictions(
+        rows_by_pid={
+            11: {
+                "name": "Player A",
+                "team": "IND",
+                "opponent": "NYL",
+                "position": "G",
+                "card_boost": 0.5,
+                "features_json": {"game_id": "4512"},
+            }
+        }
+    )
+
+    sampling, _field, projections = materialize_model_specs(
+        {11: 3.0},
+        preds=predictions,
+        policy=policy,
+        measured_drafts={},
+        label_names={},
+        K=policy.optimizer.score_offset,
+        volatility={},
+    )
+
+    assert sampling[0].game_id == "4512"
+    assert projections[11]["game_id"] == "4512"

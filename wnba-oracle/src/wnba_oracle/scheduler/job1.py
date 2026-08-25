@@ -43,8 +43,9 @@ from wnba_oracle.ingest.odds import (
 )
 from wnba_oracle.ingest.realsports import (
     PlatformAuthRequired,
+    PlayerGameContext,
     capture_live_headers,
-    fetch_game_start_by_player,
+    fetch_game_context_by_player,
     fetch_pool_for_date,
     fetch_slate_game_times,
     headers_or_capture,
@@ -287,6 +288,9 @@ def _build_enrichment_rows(
                 break
         if player.game_start_utc:
             features["game_start_utc"] = player.game_start_utc
+        game_id = str(getattr(player, "game_id", "") or "").strip()
+        if game_id:
+            features["game_id"] = game_id
         rows.append(
             {
                 "slate_date": slate_date,
@@ -605,18 +609,19 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
 
 
 def run_game_starts(slate_date: str | None = None) -> int:
-    """Backfill features_json["game_start_utc"] onto tonight's enrichment.
+    """Backfill provider game identity onto tonight's enrichment.
 
     Credit-free (Real Sports only, no Odds API): one /home call plus one
     roster call per game. Exists because a slate spans several tip times
-    and the pool rows a pre-D109 job1 persisted carry no game start, so
-    POOL_EXCLUDE_STARTED_GAMES has nothing to filter on. Returns the number
-    of rows patched.
+    and pool rows persisted by an earlier job1 may carry neither game_id nor
+    game_start_utc. The two values are merged in one row update so the
+    correlation identity and started-game filter recover together. Returns
+    the number of rows patched.
     """
     sd = slate_date or current_slate_date().isoformat()
     log.info("job1_game_starts_start", slate_date=sd)
 
-    async def _fetch() -> dict[str, str]:
+    async def _fetch() -> dict[str, PlayerGameContext]:
         headers = await headers_or_capture(_device_uuid(), _device_name())
 
         async def _refresh():
@@ -624,34 +629,53 @@ def run_game_starts(slate_date: str | None = None) -> int:
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
-                return await fetch_game_start_by_player(
+                return await fetch_game_context_by_player(
                     sd, headers, client, refresh_headers=_refresh
                 )
             except PlatformAuthRequired:
                 headers = await capture_live_headers(_device_uuid(), _device_name())
-                return await fetch_game_start_by_player(
+                return await fetch_game_context_by_player(
                     sd, headers, client, refresh_headers=_refresh
                 )
 
-    start_by_pid = {pid: t for pid, t in asyncio.run(_fetch()).items() if t}
-    if not start_by_pid:
+    context_by_pid = asyncio.run(_fetch())
+    if not context_by_pid:
         log.warning("job1_game_starts_empty", slate_date=sd)
         return 0
     eng = get_engine()
     n_patched = 0
     with eng.begin() as conn:
         for row_id, rs_pid in conn.execute(GAME_START_READ, {"sd": sd}).fetchall():
-            start = start_by_pid.get(str(rs_pid or ""))
-            if not start:
+            context = context_by_pid.get(str(rs_pid or ""))
+            if context is None:
                 continue
-            conn.execute(LITE_PATCH, {"id": row_id, "patch": json.dumps({"game_start_utc": start})})
+            patch = {
+                key: value
+                for key, value in {
+                    "game_id": context.game_id,
+                    "game_start_utc": context.game_start_utc,
+                }.items()
+                if value
+            }
+            if not patch:
+                continue
+            conn.execute(LITE_PATCH, {"id": row_id, "patch": json.dumps(patch)})
             n_patched += 1
     log.info(
         "job1_game_starts_done",
         slate_date=sd,
-        n_players=len(start_by_pid),
+        n_players=len(context_by_pid),
         n_patched=n_patched,
-        n_distinct_starts=len(set(start_by_pid.values())),
+        n_distinct_games=len(
+            {context.game_id for context in context_by_pid.values() if context.game_id}
+        ),
+        n_distinct_starts=len(
+            {
+                context.game_start_utc
+                for context in context_by_pid.values()
+                if context.game_start_utc
+            }
+        ),
     )
     return n_patched
 

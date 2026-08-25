@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import itertools
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -41,6 +41,17 @@ from wnba_oracle.picker.sample import (
     PlayerSamplingSpec,
     lineup_score_samples,
     sample_joint_real_scores,
+)
+from wnba_oracle.picker.stacking import (
+    POLICY_VERSION,
+    LineupShape,
+    StackingDecision,
+    StackPreference,
+    describe_lineup,
+    meets_full_preference,
+    meets_game_preference,
+    preference_for_slate,
+    resolve_game_keys,
 )
 
 log = get_logger("oracle.picker.optimize")
@@ -93,6 +104,14 @@ def _cap_is_feasible(teams: list[str], max_per_team: int) -> bool:
             sizes[t] = sizes.get(t, 0) + 1
     capacity = n_teamless + sum(min(sz, max_per_team) for sz in sizes.values())
     return capacity >= 5
+
+
+def _smallest_feasible_team_cap(teams: list[str], requested: int) -> int:
+    """Relax only as far as needed to produce one five-player lineup."""
+    for candidate in range(max(1, requested), 6):
+        if _cap_is_feasible(teams, candidate):
+            return candidate
+    return 5
 
 
 def _anchor_count(combo: tuple[int, ...], is_anchor: list[bool]) -> int:
@@ -165,6 +184,7 @@ class LineupRecommendation:
     lineup_score_p50: float
     lineup_score_p90: float
     entry_flag: str  # 'enter' | 'skip' | 'enter_with_caveat'
+    stacking_decision: StackingDecision | None = None
 
 
 @dataclass(frozen=True)
@@ -239,6 +259,16 @@ class OptimizeConfig:
     # near-equal EV. Historical top-20 lineups often stack 2+ from one game;
     # this offsets the independent-pick assumption.
     game_stack_bonus: float = 0.0
+    # Contextual stacking is a soft, projections-first balance policy. The
+    # optimizer keeps unrestricted and balanced winners from the same scan.
+    # It selects the balanced candidate when its objective is within
+    # contextual_stack_ev_margin of the unrestricted winner. Concentration is
+    # still allowed when its advantage is larger, or when balance is
+    # infeasible. The legacy fixed game-stack bonus is ignored while this is
+    # enabled because correlation is already represented in the joint samples
+    # and field simulation. False restores the previous objective exactly.
+    contextual_stacking_enabled: bool = False
+    contextual_stack_ev_margin: float = 0.01
     # D87 (Phase 1 / objective shaping). Explicit additive terms on top of
     # E[payout]. The cleaner target is duplication-penalized E[payout]
     # alone, because leverage / ceiling / duplication are all emergent
@@ -312,6 +342,7 @@ class _ScanInputs:
     effective_max_single_boost: float
     keep_teams: list[str]
     keep_opponents: list[str]
+    keep_game_keys: list[str]
     keep_is_anchor: list[bool]
     keep_boosts: np.ndarray
     keep_log_own: np.ndarray
@@ -322,24 +353,66 @@ class _ScanInputs:
     curve: PayoutCurve
     field_size_total: int
     field_lineup_counter: Counter[frozenset[int]] | None
+    stack_preference: StackPreference | None
+    unrestricted_indices: frozenset[int]
+    balance_indices: frozenset[int]
+
+
+@dataclass(frozen=True)
+class _Candidate:
+    objective: float
+    indices: tuple[int, ...]
+    samples: np.ndarray
+    shape: LineupShape
+
+
+@dataclass(frozen=True)
+class _ScanResult:
+    best_unrestricted: _Candidate | None
+    best_game_balanced: _Candidate | None
+    best_fully_balanced: _Candidate | None
+    n_evaluated: int
+    n_skipped_team: int
+    n_skipped_anchor: int
+    n_skipped_boost: int
+
+
+def _candidate_pool_combinations(
+    unrestricted_indices: frozenset[int],
+    balance_indices: frozenset[int],
+) -> Iterator[tuple[tuple[int, ...], bool, bool]]:
+    """Enumerate each top-N universe directly and deduplicate their overlap."""
+    unrestricted = tuple(sorted(unrestricted_indices))
+    balance = tuple(sorted(balance_indices))
+    for combo in itertools.combinations(unrestricted, 5):
+        yield combo, True, all(index in balance_indices for index in combo)
+    if balance_indices == unrestricted_indices:
+        return
+    for combo in itertools.combinations(balance, 5):
+        if all(index in unrestricted_indices for index in combo):
+            continue
+        yield combo, False, True
 
 
 def _scan_lineups(
     inputs: _ScanInputs,
     min_anchors_req: int,
-) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
-    """Enumerate feasible five-player combinations and return the best."""
+) -> _ScanResult:
+    """Enumerate once and retain unrestricted and balanced winners."""
     cfg = inputs.cfg
-    best_ev = -np.inf
-    best_indices: tuple[int, ...] = ()
-    best_samples = np.zeros(cfg.n_samples)
+    best_unrestricted: _Candidate | None = None
+    best_game_balanced: _Candidate | None = None
+    best_fully_balanced: _Candidate | None = None
     n_evaluated = n_skipped_team = n_skipped_anchor = n_skipped_boost = 0
     boost_cap_on = inputs.effective_boost_sum_cap > 0.0 or inputs.effective_max_single_boost > 0.0
     leverage_on = cfg.leverage_weight > 0.0
     ceiling_on = cfg.ceiling_weight > 0.0
     duplication_penalty_on = cfg.duplication_weight > 0.0
 
-    for combo in itertools.combinations(range(inputs.filtered_count), 5):
+    for combo, eligible_unrestricted, eligible_balance_pool in _candidate_pool_combinations(
+        inputs.unrestricted_indices,
+        inputs.balance_indices,
+    ):
         if inputs.effective_max_per_team < 5 and _exceeds_team_cap(
             combo, inputs.keep_teams, inputs.effective_max_per_team
         ):
@@ -364,7 +437,7 @@ def _scan_lineups(
             inputs.slot_multipliers,
             committed_order=cfg.committed_order_objective,
         )
-        ev = expected_payout(
+        objective = expected_payout(
             own_samples,
             inputs.field_scores,
             inputs.curve,
@@ -373,33 +446,56 @@ def _scan_lineups(
         if inputs.field_lineup_counter is not None:
             clones = inputs.field_lineup_counter.get(frozenset(combo), 0)
             if clones > 0:
-                ev /= float(1 + clones)
-        if cfg.game_stack_bonus > 0.0:
+                objective /= float(1 + clones)
+        if not cfg.contextual_stacking_enabled and cfg.game_stack_bonus > 0.0:
             pairs = _game_stack_pairs(combo, inputs.keep_teams, inputs.keep_opponents)
             if pairs > 0:
-                ev += cfg.game_stack_bonus * pairs
+                objective += cfg.game_stack_bonus * pairs
         if leverage_on:
             leverage = float(-inputs.keep_log_own[list(combo)].mean())
-            ev += cfg.leverage_weight * leverage
+            objective += cfg.leverage_weight * leverage
         if ceiling_on:
             p50, p90 = np.quantile(own_samples, [0.5, 0.9])
             denominator = max(abs(float(p50)), 1.0)
-            ev += cfg.ceiling_weight * float((p90 - p50) / denominator)
+            objective += cfg.ceiling_weight * float((p90 - p50) / denominator)
         if duplication_penalty_on:
             duplication_probability = float(np.prod(inputs.ownership[list(combo)]))
-            ev -= cfg.duplication_weight * duplication_probability * float(inputs.field_size_total)
+            objective -= (
+                cfg.duplication_weight * duplication_probability * float(inputs.field_size_total)
+            )
         n_evaluated += 1
-        if ev > best_ev:
-            best_ev, best_indices, best_samples = ev, combo, own_samples
+        shape = describe_lineup(combo, inputs.keep_teams, inputs.keep_game_keys)
+        candidate = _Candidate(
+            objective=float(objective),
+            indices=combo,
+            samples=own_samples,
+            shape=shape,
+        )
+        if (eligible_unrestricted or eligible_balance_pool) and (
+            best_unrestricted is None or candidate.objective > best_unrestricted.objective
+        ):
+            best_unrestricted = candidate
+        preference = inputs.stack_preference
+        if (
+            preference is not None
+            and (eligible_unrestricted or eligible_balance_pool)
+            and meets_game_preference(shape, preference)
+        ):
+            if best_game_balanced is None or candidate.objective > best_game_balanced.objective:
+                best_game_balanced = candidate
+            if meets_full_preference(shape, preference) and (
+                best_fully_balanced is None or candidate.objective > best_fully_balanced.objective
+            ):
+                best_fully_balanced = candidate
 
-    return (
-        best_ev,
-        best_indices,
-        best_samples,
-        n_evaluated,
-        n_skipped_team,
-        n_skipped_anchor,
-        n_skipped_boost,
+    return _ScanResult(
+        best_unrestricted=best_unrestricted,
+        best_game_balanced=best_game_balanced,
+        best_fully_balanced=best_fully_balanced,
+        n_evaluated=n_evaluated,
+        n_skipped_team=n_skipped_team,
+        n_skipped_anchor=n_skipped_anchor,
+        n_skipped_boost=n_skipped_boost,
     )
 
 
@@ -409,6 +505,17 @@ class _FilteredPool:
     field: list[FieldPlayerSpec]
     player_ids: list[int]
     boosts: np.ndarray
+    unrestricted_player_ids: frozenset[int]
+    balance_player_ids: frozenset[int]
+
+
+@dataclass(frozen=True)
+class _StackContext:
+    game_key_by_player: dict[int, str]
+    metadata_quality: str
+    slate_game_count: int | None
+    slate_team_count: int
+    preference: StackPreference | None
 
 
 @dataclass
@@ -421,6 +528,7 @@ class _ConstraintState:
     teams: list[str]
     opponents: list[str]
     is_anchor: list[bool]
+    team_cap_reason: str
 
 
 def _align_player_specs(
@@ -477,10 +585,31 @@ def _align_player_specs(
     return list(sampling_specs), aligned_field
 
 
-def _slate_limits(sampling_specs: list[PlayerSamplingSpec], cfg: OptimizeConfig) -> tuple[int, int]:
+def _stack_context(sampling_specs: list[PlayerSamplingSpec]) -> _StackContext:
+    game_key_by_player, metadata_quality, slate_game_count = resolve_game_keys(sampling_specs)
+    slate_team_count = len({spec.team.strip().upper() for spec in sampling_specs if spec.team})
+    preference = (
+        preference_for_slate(slate_game_count, slate_team_count)
+        if slate_game_count is not None
+        else None
+    )
+    return _StackContext(
+        game_key_by_player=game_key_by_player,
+        metadata_quality=metadata_quality,
+        slate_game_count=slate_game_count,
+        slate_team_count=slate_team_count,
+        preference=preference,
+    )
+
+
+def _slate_limits(
+    sampling_specs: list[PlayerSamplingSpec],
+    cfg: OptimizeConfig,
+    resolved_n_games: int | None = None,
+) -> tuple[int, int]:
     """Return slate game count and the small-slate-aware team cap."""
     n_teams = len({spec.team for spec in sampling_specs if spec.team})
-    n_games = max(n_teams // 2, 1)
+    n_games = resolved_n_games if resolved_n_games is not None else max(n_teams // 2, 1)
     max_per_team = cfg.max_per_team
     if cfg.dynamic_team_cap and 0 < n_teams <= 2:
         max_per_team = 5
@@ -494,8 +623,10 @@ def _filter_pool(
     field_specs: list[FieldPlayerSpec],
     top_n: int,
     max_slot_multiplier: float,
+    stack_context: _StackContext,
+    coverage_aware: bool,
 ) -> _FilteredPool:
-    """Keep the strongest visible-value players with stable tie ordering."""
+    """Keep top value while retaining balance-feasible slate coverage."""
     visible_value = np.array(
         [
             (
@@ -508,8 +639,43 @@ def _filter_pool(
         ],
         dtype=float,
     )
-    order = np.argsort(visible_value, kind="stable")[::-1]
-    keep = order[: min(top_n, len(sampling_specs))]
+    if coverage_aware:
+        player_ids = np.array([int(spec.player_id) for spec in sampling_specs], dtype=np.int64)
+        order = np.lexsort((player_ids, -visible_value))
+    else:
+        # Exact legacy ordering, including reverse-stable tie behavior. This
+        # preserves the disabled policy as a byte-reversible rollback path.
+        order = np.argsort(visible_value, kind="stable")[::-1]
+    limit = min(top_n, len(sampling_specs))
+    legacy_keep = [int(index) for index in order[:limit]]
+    balance_keep = list(legacy_keep)
+    if coverage_aware and stack_context.preference is not None:
+        required: list[int] = []
+
+        def add_first_by_group(values: list[str], occurrence: int = 0) -> None:
+            seen: dict[str, int] = {}
+            for raw_index in order:
+                index = int(raw_index)
+                value = values[index]
+                if not value:
+                    continue
+                depth = seen.get(value, 0)
+                seen[value] = depth + 1
+                if depth == occurrence and index not in required and len(required) < limit:
+                    required.append(index)
+
+        all_game_keys = [
+            stack_context.game_key_by_player.get(int(spec.player_id), "") for spec in sampling_specs
+        ]
+        all_teams = [str(spec.team or "").strip().upper() for spec in sampling_specs]
+        add_first_by_group(all_game_keys)
+        add_first_by_group(all_teams)
+        for occurrence in range(1, stack_context.preference.max_players_per_game):
+            add_first_by_group(all_game_keys, occurrence)
+        keep_priority = required + [int(index) for index in order if int(index) not in required]
+        balance_keep = keep_priority[:limit]
+    selected = set(legacy_keep) | set(balance_keep)
+    keep = np.array([int(index) for index in order if int(index) in selected], dtype=int)
     sampling = [sampling_specs[index] for index in keep]
     field = [field_specs[index] for index in keep]
     return _FilteredPool(
@@ -517,6 +683,12 @@ def _filter_pool(
         field=field,
         player_ids=[spec.player_id for spec in sampling],
         boosts=np.array([spec.boost for spec in sampling], dtype=float),
+        unrestricted_player_ids=frozenset(
+            int(sampling_specs[index].player_id) for index in legacy_keep
+        ),
+        balance_player_ids=frozenset(
+            int(sampling_specs[index].player_id) for index in balance_keep
+        ),
     )
 
 
@@ -542,14 +714,23 @@ def _simulate_field_scores(
     real_score_samples: np.ndarray,
     slot_multipliers: np.ndarray,
     cfg: OptimizeConfig,
+    stack_context: _StackContext,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     ownership = project_ownership(pool.field)
     teams = [spec.team or "" for spec in pool.sampling]
-    opponents = [spec.opponent or "" for spec in pool.sampling]
-    game_keys = [
-        "|".join(sorted([team, opponent])) if team and opponent else ""
-        for team, opponent in zip(teams, opponents)
-    ]
+    if cfg.contextual_stacking_enabled:
+        game_keys = [
+            stack_context.game_key_by_player.get(int(spec.player_id), "") for spec in pool.sampling
+        ]
+    else:
+        # Keep the policy-disabled field simulation identical to the legacy
+        # team/opponent implementation. Provider identity remains available
+        # to the contextual path without changing rollback behavior.
+        opponents = [spec.opponent or "" for spec in pool.sampling]
+        game_keys = [
+            "|".join(sorted([team, opponent])) if team and opponent else ""
+            for team, opponent in zip(teams, opponents)
+        ]
     field_lineups = simulate_field_lineups_correlated(
         ownership,
         game_keys=game_keys,
@@ -581,14 +762,26 @@ def _prepare_constraints(
     teams = [spec.team for spec in pool.sampling]
     opponents = [spec.opponent for spec in pool.sampling]
     is_anchor = [bool(spec.is_anchor) for spec in pool.sampling]
+    team_cap_reason = "dynamic_small_slate" if max_per_team != cfg.max_per_team else "configured"
     if max_per_team < 5 and not _cap_is_feasible(teams, max_per_team):
+        relaxed_cap = (
+            _smallest_feasible_team_cap(teams, max_per_team + 1)
+            if cfg.contextual_stacking_enabled
+            else 5
+        )
         log.warning(
             "optimizer_cap_infeasible",
             effective_max_per_team=max_per_team,
             n_games=n_games,
-            note="relaxing to uncapped",
+            relaxed_max_per_team=relaxed_cap,
+            note=(
+                "relaxing to the smallest feasible cap"
+                if cfg.contextual_stacking_enabled
+                else "restoring the legacy uncapped fallback"
+            ),
         )
-        max_per_team = 5
+        max_per_team = relaxed_cap
+        team_cap_reason = "feasibility_relaxed"
 
     available_anchors = sum(is_anchor)
     min_anchors = min(cfg.min_anchors, available_anchors)
@@ -622,18 +815,21 @@ def _prepare_constraints(
         teams=teams,
         opponents=opponents,
         is_anchor=is_anchor,
+        team_cap_reason=team_cap_reason,
     )
 
 
 def _run_constraint_scans(
     inputs: _ScanInputs,
     constraints: _ConstraintState,
-) -> tuple[float, tuple[int, ...], np.ndarray, int, int, int, int]:
+) -> _ScanResult:
     result = _scan_lineups(inputs, constraints.min_anchors)
-    if result[3] == 0 and constraints.min_anchors > 0:
+    if result.n_evaluated == 0 and constraints.min_anchors > 0:
         log.warning("optimizer_anchor_floor_infeasible", note="relaxing anchor floor to 0")
         result = _scan_lineups(inputs, 0)
-    if result[3] == 0 and (constraints.boost_sum_cap > 0.0 or constraints.max_single_boost > 0.0):
+    if result.n_evaluated == 0 and (
+        constraints.boost_sum_cap > 0.0 or constraints.max_single_boost > 0.0
+    ):
         log.warning(
             "optimizer_boost_cap_infeasible_post_scan",
             boost_sum_cap=constraints.boost_sum_cap,
@@ -648,10 +844,10 @@ def _run_constraint_scans(
 
     log.info(
         "optimizer_stage2",
-        evaluated=result[3],
-        skipped_team_cap=result[4],
-        skipped_anchor_floor=result[5],
-        skipped_boost_cap=result[6],
+        evaluated=result.n_evaluated,
+        skipped_team_cap=result.n_skipped_team,
+        skipped_anchor_floor=result.n_skipped_anchor,
+        skipped_boost_cap=result.n_skipped_boost,
         max_per_team=inputs.cfg.max_per_team,
         effective_max_per_team=constraints.max_per_team,
         effective_min_anchors=constraints.min_anchors,
@@ -662,32 +858,136 @@ def _run_constraint_scans(
     return result
 
 
+def _select_contextual_candidate(
+    result: _ScanResult,
+    cfg: OptimizeConfig,
+    stack_context: _StackContext,
+    *,
+    effective_max_per_team: int = 5,
+    team_cap_reason: str = "not_recorded",
+) -> tuple[_Candidate | None, StackingDecision]:
+    best = result.best_unrestricted
+    preference = stack_context.preference
+    selected = best
+    reason = "no_feasible_lineup"
+    if best is not None and not cfg.contextual_stacking_enabled:
+        reason = "policy_disabled"
+    elif best is not None and preference is None:
+        reason = "metadata_incomplete"
+    elif best is not None and preference is not None:
+        full = result.best_fully_balanced
+        game = result.best_game_balanced
+        margin = cfg.contextual_stack_ev_margin
+        if full is not None and full.indices == best.indices:
+            reason = "best_projected_balanced"
+        elif full is not None and best.objective - full.objective <= margin + 1e-12:
+            selected = full
+            reason = "team_balance_within_margin"
+        elif game is not None and game.indices == best.indices:
+            reason = "best_projected_game_balanced"
+        elif game is not None and best.objective - game.objective <= margin + 1e-12:
+            selected = game
+            reason = "game_balance_within_margin"
+        elif game is not None or full is not None:
+            reason = "contextual_ev_override"
+        else:
+            reason = "balance_infeasible"
+
+    empty_shape = LineupShape(None, 0, None, 0, (), ())
+    selected_shape = selected.shape if selected is not None else empty_shape
+    selected_objective = selected.objective if selected is not None else 0.0
+    best_objective = best.objective if best is not None else 0.0
+    decision = StackingDecision(
+        policy_version=POLICY_VERSION,
+        enabled=cfg.contextual_stacking_enabled,
+        reason=reason,
+        metadata_quality=stack_context.metadata_quality,
+        slate_game_count=stack_context.slate_game_count,
+        slate_team_count=stack_context.slate_team_count,
+        preferred_min_games=preference.min_games if preference is not None else None,
+        preferred_max_players_per_game=(
+            preference.max_players_per_game if preference is not None else None
+        ),
+        preferred_team_count=preference.target_team_count if preference is not None else 0,
+        effective_max_players_per_team=effective_max_per_team,
+        team_cap_reason=team_cap_reason,
+        selected_game_count=selected_shape.game_count,
+        selected_team_count=selected_shape.team_count,
+        selected_max_players_per_game=selected_shape.max_players_per_game,
+        selected_max_players_per_team=selected_shape.max_players_per_team,
+        selected_game_counts=selected_shape.game_counts,
+        selected_team_counts=selected_shape.team_counts,
+        selected_objective=float(selected_objective),
+        best_unrestricted_objective=float(best_objective),
+        best_game_balanced_objective=(
+            float(result.best_game_balanced.objective)
+            if result.best_game_balanced is not None
+            else None
+        ),
+        best_fully_balanced_objective=(
+            float(result.best_fully_balanced.objective)
+            if result.best_fully_balanced is not None
+            else None
+        ),
+        objective_sacrifice=float(max(0.0, best_objective - selected_objective)),
+        override_margin=float(cfg.contextual_stack_ev_margin),
+        legacy_stack_bonus_ignored=(cfg.contextual_stacking_enabled and cfg.game_stack_bonus > 0.0),
+    )
+    log.info(
+        "optimizer_stacking_decision",
+        policy_version=decision.policy_version,
+        enabled=decision.enabled,
+        reason=decision.reason,
+        metadata_quality=decision.metadata_quality,
+        slate_game_count=decision.slate_game_count,
+        selected_game_count=decision.selected_game_count,
+        selected_team_count=decision.selected_team_count,
+        selected_max_players_per_game=decision.selected_max_players_per_game,
+        objective_sacrifice=decision.objective_sacrifice,
+        override_margin=decision.override_margin,
+    )
+    return selected, decision
+
+
 def _assemble_recommendation(
-    result: tuple[float, tuple[int, ...], np.ndarray, int, int, int, int],
+    result: _ScanResult,
     pool: _FilteredPool,
     real_score_samples: np.ndarray,
     slot_multipliers: np.ndarray,
     cfg: OptimizeConfig,
     n_games: int,
+    stack_context: _StackContext,
+    constraints: _ConstraintState,
 ) -> LineupRecommendation:
-    best_ev, best_indices, best_samples, n_evaluated, *_ = result
-    if n_evaluated == 0 or not np.isfinite(best_ev):
+    selected, stacking_decision = _select_contextual_candidate(
+        result,
+        cfg,
+        stack_context,
+        effective_max_per_team=constraints.max_per_team,
+        team_cap_reason=constraints.team_cap_reason,
+    )
+    if selected is None or not np.isfinite(selected.objective):
         log.error(
             "optimizer_no_feasible_lineup",
             n_filtered=len(pool.sampling),
             n_games=n_games,
-            best_ev=float(best_ev),
+            best_ev=float(selected.objective) if selected is not None else float("-inf"),
             note="no feasible 5-combo after all relaxations; EV clamped to 0.0",
         )
         return LineupRecommendation(
-            player_ids=tuple(int(pool.player_ids[index]) for index in best_indices),
+            player_ids=(),
             slot_multipliers=tuple(float(value) for value in slot_multipliers),
             expected_payout=0.0,
             lineup_score_p10=0.0,
             lineup_score_p50=0.0,
             lineup_score_p90=0.0,
             entry_flag="enter_with_caveat" if cfg.never_skip else "skip",
+            stacking_decision=stacking_decision,
         )
+
+    best_ev = selected.objective
+    best_indices = selected.indices
+    best_samples = selected.samples
 
     if cfg.ceiling_tilt_slots:
         sort_key = np.quantile(real_score_samples[:, list(best_indices)], 0.9, axis=0)
@@ -717,6 +1017,7 @@ def _assemble_recommendation(
         lineup_score_p50=float(p50),
         lineup_score_p90=float(p90),
         entry_flag=entry_flag,
+        stacking_decision=stacking_decision,
     )
 
 
@@ -734,12 +1035,19 @@ def optimize_lineup(
     if n_all < 5:
         raise ValueError(f"pool too small ({n_all}) - need >= 5 players")
 
-    n_games, max_per_team = _slate_limits(sampling_specs, cfg)
+    stack_context = _stack_context(sampling_specs)
+    n_games, max_per_team = _slate_limits(
+        sampling_specs,
+        cfg,
+        (stack_context.slate_game_count if cfg.contextual_stacking_enabled else None),
+    )
     pool = _filter_pool(
         sampling_specs,
         field_specs,
         cfg.top_n_filter,
         float(np.max(slot_multipliers)),
+        stack_context,
+        cfg.contextual_stacking_enabled,
     )
     log.info("optimizer_stage1", n_all=n_all, n_filtered=len(pool.sampling))
 
@@ -749,6 +1057,7 @@ def optimize_lineup(
         real_score_samples,
         slot_multipliers,
         cfg,
+        stack_context,
     )
     constraints = _prepare_constraints(pool, cfg, n_games, max_per_team)
     field_lineup_counter = (
@@ -764,6 +1073,9 @@ def optimize_lineup(
         effective_max_single_boost=constraints.max_single_boost,
         keep_teams=constraints.teams,
         keep_opponents=constraints.opponents,
+        keep_game_keys=[
+            stack_context.game_key_by_player.get(int(spec.player_id), "") for spec in pool.sampling
+        ],
         keep_is_anchor=constraints.is_anchor,
         keep_boosts=pool.boosts,
         keep_log_own=np.log(np.clip(ownership, 1e-4, 1.0)),
@@ -774,6 +1086,17 @@ def optimize_lineup(
         curve=curve,
         field_size_total=cfg.n_field_lineups + 1,
         field_lineup_counter=field_lineup_counter,
+        stack_preference=(stack_context.preference if cfg.contextual_stacking_enabled else None),
+        unrestricted_indices=frozenset(
+            index
+            for index, player_id in enumerate(pool.player_ids)
+            if int(player_id) in pool.unrestricted_player_ids
+        ),
+        balance_indices=frozenset(
+            index
+            for index, player_id in enumerate(pool.player_ids)
+            if int(player_id) in pool.balance_player_ids
+        ),
     )
     result = _run_constraint_scans(scan_inputs, constraints)
     return _assemble_recommendation(
@@ -783,4 +1106,6 @@ def optimize_lineup(
         slot_multipliers,
         cfg,
         n_games,
+        stack_context,
+        constraints,
     )

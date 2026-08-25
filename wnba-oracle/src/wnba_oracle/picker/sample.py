@@ -31,6 +31,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from wnba_oracle.picker.stacking import canonical_matchup_key, resolve_game_keys
+
 
 @dataclass(frozen=True)
 class PlayerSamplingSpec:
@@ -44,6 +46,7 @@ class PlayerSamplingSpec:
     blowout_prob: float = 0.0  # this player's game blowout propensity in [0, 1]
     is_anchor: bool = False  # confirmed-minutes floor player for the anchor floor (D57)
     p_active: float = 1.0  # D107 (Tier 2): P(player is active/logs minutes). Used by mixture-variance sampling to gate Bernoulli draws. Default 1.0 (backward compatible).
+    game_id: str = ""  # Stable Real Sports game id; empty on legacy inputs.
 
 
 @dataclass
@@ -66,6 +69,46 @@ class CopulaConfig:
     # the lognormal skew is preserved. mu MUST be built with the same K (the
     # caller and this module share it via this field).
     score_offset: float = 2.0
+
+
+def _fallback_game_key(spec: PlayerSamplingSpec) -> str:
+    return canonical_matchup_key(str(spec.team or ""), str(spec.opponent or ""))
+
+
+def game_key_for_spec(spec: PlayerSamplingSpec) -> str:
+    """Return the stable provider or fallback key for one player spec.
+
+    Callers comparing several specs should resolve their keys as one slate via
+    :func:`_game_keys_for_slate` so provider and fallback namespaces are never
+    mixed.
+    """
+    game_id = str(spec.game_id or "").strip()
+    if game_id:
+        return f"realsports:{game_id}"
+    return _fallback_game_key(spec)
+
+
+def _game_keys_for_slate(specs: list[PlayerSamplingSpec]) -> list[str]:
+    """Use the same validated, single namespace as lineup balance."""
+    keys_by_player, quality, _game_count = resolve_game_keys(specs)
+    if quality != "incomplete":
+        return [keys_by_player.get(int(spec.player_id), "") for spec in specs]
+
+    # The sampler is also a public numerical helper and may receive only one
+    # team's players. Preserve same-team covariance for that unambiguous local
+    # subset without treating a conflicting multi-team slate as complete.
+    teams = {str(spec.team or "").strip().upper() for spec in specs}
+    teams.discard("")
+    if len(teams) == 1:
+        provider_ids = [str(spec.game_id or "").strip() for spec in specs]
+        if provider_ids and all(provider_ids):
+            if len(set(provider_ids)) == 1:
+                return [f"realsports:{provider_ids[0]}"] * len(specs)
+            return [""] * len(specs)
+        fallback_keys = [_fallback_game_key(spec) for spec in specs]
+        if fallback_keys and all(fallback_keys) and len(set(fallback_keys)) == 1:
+            return fallback_keys
+    return [""] * len(specs)
 
 
 def _same_team_rho(a: PlayerSamplingSpec, b: PlayerSamplingSpec, cfg: CopulaConfig) -> float:
@@ -92,14 +135,18 @@ def _same_team_rho(a: PlayerSamplingSpec, b: PlayerSamplingSpec, cfg: CopulaConf
 def build_correlation_matrix(specs: list[PlayerSamplingSpec], cfg: CopulaConfig) -> np.ndarray:
     n = len(specs)
     R = np.eye(n)
+    game_keys = _game_keys_for_slate(specs)
     for i in range(n):
         for j in range(i + 1, n):
             a, b = specs[i], specs[j]
             if not a.team or not b.team:
                 continue
-            if a.team == b.team and a.opponent == b.opponent:
+            game_key = game_keys[i]
+            if not game_key or game_key != game_keys[j]:
+                continue
+            if a.team == b.team:
                 R[i, j] = R[j, i] = _same_team_rho(a, b, cfg)
-            elif a.team == b.opponent and b.team == a.opponent:
+            else:
                 R[i, j] = R[j, i] = cfg.rho_opp_team
     # Ensure PSD by light shrinkage if necessary
     return _make_psd(R)

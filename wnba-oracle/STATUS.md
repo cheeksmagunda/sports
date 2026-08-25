@@ -175,7 +175,9 @@ and never loads the artifact, so it does not need the SHA.
 | OPTIMIZER_N_FIELD_LINEUPS | 500 | D76 |
 | OPTIMIZER_BOOST_SUM_CAP | 9.0 | D70/R2 |
 | OPTIMIZER_MAX_SINGLE_BOOST | 3.0 | 2026-07-04 sweep_max_boost.py (+75 aggregate) |
-| OPTIMIZER_GAME_STACK_BONUS | 0.010 | D70/R3, D98 |
+| OPTIMIZER_GAME_STACK_BONUS | 0.010 | Legacy rollback objective; ignored while contextual policy is enabled |
+| OPTIMIZER_CONTEXTUAL_STACKING_ENABLED | true (code default) | contextual-stacking-v1 |
+| OPTIMIZER_CONTEXTUAL_STACK_EV_MARGIN | 0.010 (code default) | Balance indifference band in objective units |
 | MINUTES_MODEL_ENABLED | true (code default) | D55 |
 | STARTER_SIGNAL_ENABLED | true (code default) | D71 |
 | AVAILABILITY_MODEL_ENABLED | true | D73 |
@@ -201,6 +203,22 @@ and never loads the artifact, so it does not need the SHA.
 
 All flags reverse via env with no redeploy: set `*_ENABLED=false` or unset
 numeric knobs to revert to code defaults.
+
+### Contextual stacking baseline, 2026-08-25
+
+A read-only production aggregate over freezes since 2026-06-01 found 69
+slates, of which 67 had complete legacy team/opponent structure. Twenty-one
+complete multi-game slates selected more than two players from one game. The
+placement table contained zero exact placement rows and 22 score-only,
+censored rows, so this evidence measures lineup concentration only. It does
+not establish that stacking or balancing improves contest results.
+
+`contextual-stacking-v1` compares unrestricted and balanced candidates using
+the same samples and seed. It prefers balance only inside the 0.010 objective
+band and records any larger concentration advantage as
+`contextual_ev_override`. Real Sports game IDs are primary; validated
+reciprocal team/opponent pairs are the fallback. The complete rollback is
+`OPTIMIZER_CONTEXTUAL_STACKING_ENABLED=false`.
 
 `POOL_EXCLUDE_STARTED_GAMES=true` scopes the optimizer pool to games that
 have not tipped, using the `game_start_utc` job1 writes per player. Before

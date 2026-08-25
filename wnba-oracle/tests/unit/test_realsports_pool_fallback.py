@@ -122,6 +122,7 @@ async def test_fallback_recovers_unmatched_player_by_last_name() -> None:
     boosts = {p.platform_id: p.multiplier_bonus for p in out}
     assert boosts["711"] == 2.5
     assert boosts["100"] == 2.0
+    assert {p.game_id for p in out} == {"1"}
 
 
 @pytest.mark.asyncio

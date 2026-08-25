@@ -90,6 +90,8 @@ MODEL_POLICY_SETTING_FIELDS = frozenset(
         "optimizer_boost_sum_cap",
         "optimizer_ceiling_tilt_slots",
         "optimizer_ceiling_weight",
+        "optimizer_contextual_stack_ev_margin",
+        "optimizer_contextual_stacking_enabled",
         "optimizer_duplication_aware_payout",
         "optimizer_duplication_weight",
         "optimizer_dynamic_team_cap",
@@ -249,6 +251,8 @@ def build_optimize_config(settings: Settings) -> OptimizeConfig:
         boost_sum_cap=settings.optimizer_boost_sum_cap,
         max_single_boost=settings.optimizer_max_single_boost,
         game_stack_bonus=settings.optimizer_game_stack_bonus,
+        contextual_stacking_enabled=settings.optimizer_contextual_stacking_enabled,
+        contextual_stack_ev_margin=settings.optimizer_contextual_stack_ev_margin,
         leverage_weight=settings.optimizer_leverage_weight,
         ceiling_weight=settings.optimizer_ceiling_weight,
         duplication_weight=settings.optimizer_duplication_weight,
@@ -636,6 +640,8 @@ def _freeze_recommendation(
         "boost_sum_cap": cfg.boost_sum_cap,
         "max_single_boost": cfg.max_single_boost,
         "game_stack_bonus": cfg.game_stack_bonus,
+        "contextual_stacking_enabled": cfg.contextual_stacking_enabled,
+        "contextual_stack_ev_margin": cfg.contextual_stack_ev_margin,
         "leverage_weight": cfg.leverage_weight,
         "ceiling_weight": cfg.ceiling_weight,
         "duplication_weight": cfg.duplication_weight,
@@ -862,6 +868,13 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         n_pool=len(samps),
         expected_payout=rec.expected_payout,
         entry_flag=rec.entry_flag,
+        stacking_reason=(rec.stacking_decision.reason if rec.stacking_decision else None),
+        selected_game_count=(
+            rec.stacking_decision.selected_game_count if rec.stacking_decision else None
+        ),
+        selected_team_count=(
+            rec.stacking_decision.selected_team_count if rec.stacking_decision else None
+        ),
     )
     if dry_run:
         return Job2Result(sd, model_sha, rec, False, "dry_run")

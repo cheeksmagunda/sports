@@ -263,6 +263,19 @@ class Settings(RuntimeConfig):
     # {team, opponent}. Historical top-20 lineups often include a 2+ same-game
     # group. Default 0.0 disables.
     optimizer_game_stack_bonus: float = Field(default=0.0, alias="OPTIMIZER_GAME_STACK_BONUS")
+    # Projections-first contextual balance. When enabled, the optimizer keeps
+    # balanced alternatives from the same simulation and accepts the best one
+    # within the configured objective margin. Larger advantages may still
+    # justify a concentrated lineup. This switch also disables the legacy
+    # unconditional stack bonus inside the objective.
+    optimizer_contextual_stacking_enabled: bool = Field(
+        default=True,
+        alias="OPTIMIZER_CONTEXTUAL_STACKING_ENABLED",
+    )
+    optimizer_contextual_stack_ev_margin: float = Field(
+        default=0.01,
+        alias="OPTIMIZER_CONTEXTUAL_STACK_EV_MARGIN",
+    )
     # D86: feed the real measured draft counts (slate_labels.drafts) into the
     # field-ownership simulation instead of re-deriving the field from our own
     # projections. The estimator builds a strawman field that drafts exactly
@@ -409,6 +422,8 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "prop_signal_scale": 0.3,  # D78
     "optimizer_boost_sum_cap": 9.0,  # D70/R2
     "optimizer_game_stack_bonus": 0.010,  # D70/R3, raised D98
+    "optimizer_contextual_stacking_enabled": True,  # contextual-stacking-v1
+    "optimizer_contextual_stack_ev_margin": 0.01,  # objective indifference band
     "field_same_game_boost": 3.0,  # D88/D91
     "field_same_team_boost": 2.0,  # D88/D91
     "ceiling_sigma_blowout_boost": 0.15,  # D89/D92

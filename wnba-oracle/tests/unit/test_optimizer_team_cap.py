@@ -132,6 +132,31 @@ def test_static_cap_one_game_slate_relaxed_by_feasibility_guard() -> None:
     )
     rec = optimize_lineup(samp, fields, curve, cfg=cfg)
     assert len(rec.player_ids) == 5
+    assert rec.stacking_decision is not None
+    assert rec.stacking_decision.effective_max_players_per_team == 5
+    assert rec.stacking_decision.team_cap_reason == "feasibility_relaxed"
+
+
+def test_contextual_static_cap_relaxes_only_to_smallest_feasible_value() -> None:
+    samp, fields = _two_team_pool()
+    rec = optimize_lineup(
+        samp,
+        fields,
+        default_curve_for_regime("top_20"),
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=150,
+            n_field_lineups=40,
+            max_per_team=2,
+            dynamic_team_cap=False,
+            contextual_stacking_enabled=True,
+        ),
+    )
+
+    assert len(rec.player_ids) == 5
+    assert rec.stacking_decision is not None
+    assert rec.stacking_decision.effective_max_players_per_team == 3
+    assert rec.stacking_decision.team_cap_reason == "feasibility_relaxed"
 
 
 def test_two_team_slate_records_finite_payout_not_neg_inf() -> None:
