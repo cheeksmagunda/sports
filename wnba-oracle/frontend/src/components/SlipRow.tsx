@@ -15,6 +15,7 @@ import type { PlayerBoxLine } from "../lib/espn";
 import { teamInk, teamPrimary } from "../lib/teams";
 import { BoostBadge } from "./BoostBadge";
 import { Headshot } from "./Headshot";
+import { Icon } from "./Icon";
 import { IntervalBar } from "./IntervalBar";
 
 interface Props {
@@ -170,9 +171,7 @@ export function SlipRow({
       </span>
 
       <span className="slip-row__chevron" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+        <Icon name="chevron-right" size={14} />
       </span>
     </Link>
   );

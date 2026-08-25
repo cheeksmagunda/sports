@@ -7,7 +7,8 @@ type IconName =
   | "bolt"
   | "warn"
   | "moon"
-  | "sun";
+  | "sun"
+  | "chevron-right";
 
 interface Props {
   name: IconName;
@@ -24,16 +25,22 @@ const PATHS: Record<IconName, string> = {
   warn: "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 15.5a1.25 1.25 0 1 1 1.25-1.25A1.24 1.24 0 0 1 12 17.5zm1-4.5h-2V7h2z",
   moon: "M20 14.5A8.5 8.5 0 1 1 9.5 4 7 7 0 0 0 20 14.5z",
   sun: "M12 7a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm0-5a1 1 0 0 0-1 1v2a1 1 0 0 0 2 0V3a1 1 0 0 0-1-1zm0 17a1 1 0 0 0-1 1v2a1 1 0 0 0 2 0v-2a1 1 0 0 0-1-1zM5.64 4.22a1 1 0 1 0-1.41 1.41l1.41 1.42a1 1 0 0 0 1.42-1.42zM18.36 19.78a1 1 0 0 0 1.41-1.41l-1.41-1.42a1 1 0 1 0-1.42 1.42zM3 13H1a1 1 0 0 0 0-2h2a1 1 0 0 0 0 2zm20-2h-2a1 1 0 0 0 0 2h2a1 1 0 0 0 0-2zM5.64 19.78a1 1 0 0 0 1.42-1.42l-1.42-1.41a1 1 0 0 0-1.41 1.41zM18.36 4.22l-1.42 1.41a1 1 0 1 0 1.42 1.42l1.41-1.42a1 1 0 0 0-1.41-1.41z",
+  "chevron-right": "M9 6 l6 6 l-6 6",
 };
 
 export function Icon({ name, size = 16, className, style, ariaLabel }: Props) {
   const path = PATHS[name];
+  const isStroke = name === "chevron-right";
   return (
     <svg
       viewBox="0 0 24 24"
       width={size}
       height={size}
-      fill="currentColor"
+      fill={isStroke ? "none" : "currentColor"}
+      stroke={isStroke ? "currentColor" : undefined}
+      strokeWidth={isStroke ? "2.5" : undefined}
+      strokeLinecap={isStroke ? "round" : undefined}
+      strokeLinejoin={isStroke ? "round" : undefined}
       className={className}
       style={style}
       role={ariaLabel ? "img" : undefined}
