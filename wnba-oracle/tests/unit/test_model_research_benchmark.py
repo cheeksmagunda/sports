@@ -152,6 +152,62 @@ class TestRenderMarkdown:
         assert "generated artifact" in text
 
 
+class TestSelectShard:
+    def test_partition_is_exact_and_disjoint(self, mod):
+        items = [f"2026-06-{i:02d}" for i in range(1, 11)]
+        shards = [mod.select_shard(items, i, 3) for i in range(3)]
+        flat = sorted(x for s in shards for x in s)
+        assert flat == sorted(items)
+        assert all(len(set(a) & set(b)) == 0 for a in shards for b in shards if a is not b)
+
+    def test_single_shard_is_identity(self, mod):
+        assert mod.select_shard([1, 2, 3], 0, 1) == [1, 2, 3]
+
+    def test_invalid_shard_raises(self, mod):
+        with pytest.raises(ValueError, match="shard index"):
+            mod.select_shard([1], 2, 2)
+        with pytest.raises(ValueError, match="shard index"):
+            mod.select_shard([1], 0, 0)
+
+
+class TestCsvLoading:
+    def test_labels_csv_casts_float_drafts(self, mod, tmp_path):
+        p = tmp_path / "slate_labels.csv"
+        p.write_text(
+            "contest_id,slate_date,section,platform_player_id,display_name,"
+            "team_key,card_boost,drafts,real_score,ingested_at\n"
+            "1,2026-06-01,main,10,A Player,MIN,0.5,91.0,12.5,2026-06-02\n"
+            "1,2026-06-01,main,11,B Player,LVA,0.0,,3.0,2026-06-02\n"
+        )
+        sl = mod.load_labels_csv(p)
+        assert sl["drafts"].to_list() == [91, None]
+        assert sl["slate_date"].to_list() == ["2026-06-01", "2026-06-01"]
+
+    def test_leaderboards_csv_renames_lineup(self, mod, tmp_path):
+        p = tmp_path / "contest_leaderboards.csv"
+        p.write_text(
+            "contest_id,slate_date,entry_id,rank,paged_rank,user_id,score,"
+            "lineup,num_brawlers,ingested_at\n"
+            '1,2026-06-01,5,1,1,u1,99.5,"[]",5,2026-06-02\n'
+        )
+        lb = mod.load_leaderboards_csv(p)
+        assert "lineup_json" in lb.columns
+        assert lb["score"].to_list() == [99.5]
+
+    def test_drafts_by_slate_takes_max_and_skips_null(self, mod, tmp_path):
+        p = tmp_path / "slate_labels.csv"
+        p.write_text(
+            "contest_id,slate_date,section,platform_player_id,display_name,"
+            "team_key,card_boost,drafts,real_score,ingested_at\n"
+            "1,2026-06-01,main,10,A,MIN,0.5,7.0,1.0,x\n"
+            "2,2026-06-01,alt,10,A,MIN,0.5,9.0,1.0,x\n"
+            "1,2026-06-01,main,11,B,LVA,0.0,,1.0,x\n"
+            "1,2026-06-02,main,12,C,NYL,0.0,3.0,1.0,x\n"
+        )
+        out = mod.drafts_by_slate(mod.load_labels_csv(p))
+        assert out == {"2026-06-01": {10: 9}, "2026-06-02": {12: 3}}
+
+
 class TestAtomicWrite:
     def test_writes_content_and_creates_parents(self, mod, tmp_path):
         target = tmp_path / "nested" / "out.md"

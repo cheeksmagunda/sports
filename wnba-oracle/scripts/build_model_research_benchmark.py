@@ -15,8 +15,9 @@ capture under the top-20 curve). Variants are:
 Like scripts/backtest_walkforward.py, predictions for each slate come only
 from the production spec builder as of that slate, so results measure the live
 path. Configuration comes from the process environment (DATABASE_URL is
-required); no .env files are loaded. Output files are written atomically
-(temp file + os.replace) into --output-dir:
+required, or pass --labels-csv/--leaderboards-csv pointing at a verified
+corpus-backup snapshot for offline runs); no .env files are loaded. Output
+files are written atomically (temp file + os.replace) into --output-dir:
 
   benchmark_results.json       -- per-variant per-slate rows plus summaries
   MODEL_RESEARCH_BENCHMARK.md  -- rendered summary table
@@ -91,6 +92,14 @@ def build_variant_grid(n_temperature_variants: int) -> list[dict[str, Any]]:
         for t in temperature_values(n_temperature_variants)
     )
     return grid
+
+
+def select_shard(items: list[Any], index: int, count: int) -> list[Any]:
+    """Deterministic strided shard: element i goes to shard i % count.
+    Shards partition ``items`` exactly and each spans the full date range."""
+    if count < 1 or not 0 <= index < count:
+        raise ValueError("shard index must satisfy 0 <= index < count")
+    return [x for i, x in enumerate(items) if i % count == index]
 
 
 def scale_sigma(specs: list[Any], factor: float) -> list[Any]:
@@ -189,18 +198,88 @@ def atomic_write_text(path: Path, content: str) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def _precompute_slates(max_slates: int | None) -> dict[str, dict[str, Any]]:
-    """Load labels and leaderboards from the database and build the
-    production sampling and field specs once per eligible 2026 slate."""
+def load_labels_csv(path: Path) -> Any:
+    """Load a corpus-backup ``slate_labels.csv`` into the same frame shape
+    ``read_slate_labels`` returns. The file comes from the verified backups
+    branch (see .github/workflows/corpus-backup.yml)."""
     import polars as pl
 
-    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+    sl = pl.read_csv(
+        path,
+        schema_overrides={
+            "slate_date": pl.Utf8,
+            "platform_player_id": pl.Int64,
+            "display_name": pl.Utf8,
+            "team_key": pl.Utf8,
+            "card_boost": pl.Float64,
+            "drafts": pl.Float64,  # CSV serializes counts as floats
+            "real_score": pl.Float64,
+        },
+    )
+    return sl.with_columns(pl.col("drafts").cast(pl.Int64))
+
+
+def load_leaderboards_csv(path: Path) -> Any:
+    """Load a corpus-backup ``contest_leaderboards.csv`` into the same frame
+    shape ``read_leaderboards`` returns (``lineup`` renamed ``lineup_json``)."""
+    import polars as pl
+
+    lb = pl.read_csv(
+        path,
+        schema_overrides={"slate_date": pl.Utf8, "rank": pl.Int64, "score": pl.Float64},
+    )
+    if "lineup" in lb.columns and "lineup_json" not in lb.columns:
+        lb = lb.rename({"lineup": "lineup_json"})
+    return lb
+
+
+def drafts_by_slate(sl: Any) -> dict[str, dict[int, int]]:
+    """Measured draft counts per slate from the labels frame, matching the
+    shape of job2's ``_load_measured_drafts`` for one slate."""
+    out: dict[str, dict[int, int]] = {}
+    for r in sl.iter_rows(named=True):
+        d = r.get("drafts")
+        if d is None:
+            continue
+        sd = str(r["slate_date"])
+        pid = int(r["platform_player_id"])
+        cur = out.setdefault(sd, {})
+        cur[pid] = max(int(d), cur.get(pid, 0))
+    return out
+
+
+def _precompute_slates(
+    max_slates: int | None,
+    labels_csv: Path | None = None,
+    leaderboards_csv: Path | None = None,
+    shard: tuple[int, int] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Load labels and leaderboards (database, or offline corpus-backup CSVs)
+    and build the production sampling and field specs once per eligible
+    2026 slate. ``shard=(index, count)`` keeps every count-th slate starting
+    at index, so parallel shards partition the slate set exactly."""
+    import polars as pl
+
     from wnba_oracle.scheduler.job2 import _build_specs
 
-    sl = read_slate_labels()
-    lb = read_leaderboards()
+    if labels_csv is not None and leaderboards_csv is not None:
+        sl = load_labels_csv(labels_csv)
+        lb = load_leaderboards_csv(leaderboards_csv)
+        # Offline mode has no engine: serve measured drafts from the CSV so
+        # the D86 measured-ownership path matches the live path.
+        import wnba_oracle.scheduler.job2 as _job2
+
+        measured = drafts_by_slate(sl)
+        _job2._load_measured_drafts = lambda sd: measured.get(str(sd), {})
+    else:
+        from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+
+        sl = read_slate_labels()
+        lb = read_leaderboards()
     slates_2026 = {d for d in sl["slate_date"].unique().to_list() if str(d).startswith("2026-")}
     valid = sorted(slates_2026 & set(lb["slate_date"].unique().to_list()))
+    if shard is not None:
+        valid = select_shard(valid, shard[0], shard[1])
     if max_slates is not None:
         valid = valid[:max_slates]
 
@@ -300,10 +379,28 @@ def main() -> int:
     parser.add_argument("--temperature-variants", type=int, default=4)
     parser.add_argument("--n-samples", type=int, default=80)
     parser.add_argument("--max-slates", type=int, default=None)
+    parser.add_argument("--labels-csv", type=Path, default=None)
+    parser.add_argument("--leaderboards-csv", type=Path, default=None)
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument(
+        "--variant",
+        action="append",
+        default=None,
+        help="Run only the named variant(s); repeatable. Default: full grid.",
+    )
     args = parser.parse_args()
 
-    if not os.environ.get("DATABASE_URL"):
-        print("DATABASE_URL is required in the process environment", file=sys.stderr)
+    offline = args.labels_csv is not None and args.leaderboards_csv is not None
+    if (args.labels_csv is None) != (args.leaderboards_csv is None):
+        print("--labels-csv and --leaderboards-csv must be given together", file=sys.stderr)
+        return 2
+    if not offline and not os.environ.get("DATABASE_URL"):
+        print(
+            "DATABASE_URL is required in the process environment "
+            "(or pass --labels-csv/--leaderboards-csv for offline mode)",
+            file=sys.stderr,
+        )
         return 2
 
     os.environ.setdefault(
@@ -319,13 +416,25 @@ def main() -> int:
     structlog.configure(processors=[structlog.dev.ConsoleRenderer()])
 
     print("Precomputing production specs per slate...")
-    precomputed = _precompute_slates(args.max_slates)
+    precomputed = _precompute_slates(
+        args.max_slates,
+        args.labels_csv,
+        args.leaderboards_csv,
+        shard=(args.shard_index, args.shard_count),
+    )
     print(f"{len(precomputed)} slates eligible.")
     if not precomputed:
         print("No eligible slates; nothing to benchmark.", file=sys.stderr)
         return 1
 
     grid = build_variant_grid(args.temperature_variants)
+    if args.variant:
+        wanted = set(args.variant)
+        unknown = wanted - {v["name"] for v in grid}
+        if unknown:
+            print(f"unknown variant name(s): {sorted(unknown)}", file=sys.stderr)
+            return 2
+        grid = [v for v in grid if v["name"] in wanted]
     variants: list[dict[str, Any]] = []
     for i, variant in enumerate(grid, 1):
         print(f"[{i}/{len(grid)}] {variant['name']}")
@@ -347,6 +456,9 @@ def main() -> int:
             "n_samples": args.n_samples,
             "n_slates": len(precomputed),
             "temperature_variants": args.temperature_variants,
+            "shard_index": args.shard_index,
+            "shard_count": args.shard_count,
+            "offline_csv": bool(offline),
         },
         "variants": variants,
     }

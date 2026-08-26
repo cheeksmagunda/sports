@@ -1,0 +1,94 @@
+name: model-research-benchmark
+
+# Manually dispatched research run. Restores the verified corpus snapshot
+# from the backups branch (no database credentials needed), then replays
+# the full variant grid through the production optimizer across parallel
+# slate shards at high sample counts (default 3500 per variant per slate).
+# Results are uploaded as workflow artifacts; nothing is committed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      n_samples:
+        description: Monte Carlo samples per variant per slate
+        required: false
+        type: number
+        default: 3500
+      temperature_variants:
+        description: Number of sigma-temperature variants in the grid
+        required: false
+        type: number
+        default: 4
+
+permissions:
+  contents: read
+
+concurrency:
+  group: model-research-benchmark
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          enable-cache: true
+          version: "0.11.13"
+
+      - name: Install workspace
+        run: uv sync --frozen --all-packages --all-extras
+
+      - name: Restore verified corpus snapshot from backups branch
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus
+        run: |
+          git fetch origin backups
+          mkdir -p "$SNAPSHOT_DIR"
+          git show origin/backups:wnba-oracle/data/backups/slate_labels.csv > "$SNAPSHOT_DIR/slate_labels.csv"
+          git show origin/backups:wnba-oracle/data/backups/contest_leaderboards.csv > "$SNAPSHOT_DIR/contest_leaderboards.csv"
+          git show origin/backups:wnba-oracle/data/backups/manifest.json > "$SNAPSHOT_DIR/manifest.json"
+          python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+
+      - name: Run benchmark shard
+        working-directory: wnba-oracle
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus
+          OUTPUT_DIR: ${{ runner.temp }}/bench
+          N_SAMPLES: ${{ inputs.n_samples }}
+          TEMPERATURE_VARIANTS: ${{ inputs.temperature_variants }}
+          SHARD_INDEX: ${{ matrix.shard }}
+        run: >-
+          uv run --no-editable --package wnba-oracle python
+          scripts/build_model_research_benchmark.py
+          --output-dir "$OUTPUT_DIR"
+          --labels-csv "$SNAPSHOT_DIR/slate_labels.csv"
+          --leaderboards-csv "$SNAPSHOT_DIR/contest_leaderboards.csv"
+          --n-samples "$N_SAMPLES"
+          --temperature-variants "$TEMPERATURE_VARIANTS"
+          --shard-index "$SHARD_INDEX"
+          --shard-count 8
+
+      - name: Upload shard results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-research-benchmark-shard-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/bench/benchmark_results.json
+            ${{ runner.temp }}/bench/MODEL_RESEARCH_BENCHMARK.md
+          if-no-files-found: error
+          retention-days: 30
