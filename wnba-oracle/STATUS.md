@@ -56,6 +56,12 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   a degraded result; required execution failures persist a failed result.
 - Operational history belongs in the corresponding GitHub issues and workflow
   logs. Keep this file to current state, known gaps, and recovery facts.
+- Offline research tooling: `scripts/build_model_research_benchmark.py`
+  (added 2026-08-26) replays stored slates through the production optimizer
+  across a knob-ablation and sigma-temperature variant grid and writes
+  `benchmark_results.json` plus a generated `MODEL_RESEARCH_BENCHMARK.md` to
+  its `--output-dir`. It is read-only against production data; see the
+  Model research benchmark section in `README.md`.
 - The latest scheduled watchdog workflow on the production source commit was
   GitHub run `32605850803` and completed successfully. Its application status
   was `warn`, not `ok`: `WATCHDOG_HEARTBEAT_URL` is not configured, and today's

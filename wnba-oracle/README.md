@@ -109,6 +109,23 @@ The report separates exact, censored, and unknown outcomes and does not infer a
 performance advantage from unresolved placements. The design and evidence
 limits are documented in `../drive/2026-08-25-wnba-contextual-stacking.md`.
 
+## Model research benchmark
+
+`scripts/build_model_research_benchmark.py` replays stored 2026 slates through
+the production optimizer under a deterministic variant grid: the validated
+production knobs, one registered-knob ablation at a time, and sampling-sigma
+temperature variants. It measures realized placement against the stored
+leaderboards and payout capture under the top-20 curve, then atomically writes
+`benchmark_results.json` and a generated `MODEL_RESEARCH_BENCHMARK.md` into
+`--output-dir`. It requires `DATABASE_URL` in the process environment, is
+read-only against production data, and its outputs are generated artifacts,
+not committed documentation:
+
+```sh
+DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
+    scripts/build_model_research_benchmark.py --output-dir /tmp/bench
+```
+
 ## Canonical data
 
 PostgreSQL is the durable source and the API's only state dependency. Redis is
