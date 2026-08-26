@@ -7,7 +7,6 @@ import pytest
 
 from oracle_core.external_access import AccessGrant
 from oracle_core.jobs import JobContext, JobResult, JobStatus
-
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.scheduler import realsports_access
 
