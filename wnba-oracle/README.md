@@ -117,14 +117,23 @@ production knobs, one registered-knob ablation at a time, and sampling-sigma
 temperature variants. It measures realized placement against the stored
 leaderboards and payout capture under the top-20 curve, then atomically writes
 `benchmark_results.json` and a generated `MODEL_RESEARCH_BENCHMARK.md` into
-`--output-dir`. It requires `DATABASE_URL` in the process environment, is
-read-only against production data, and its outputs are generated artifacts,
-not committed documentation:
+`--output-dir`. It requires `DATABASE_URL` in the process environment, or
+`--labels-csv`/`--leaderboards-csv` pointing at a verified corpus-backup
+snapshot for offline runs. It is read-only against production data, and its
+outputs are generated artifacts, not committed documentation:
 
 ```sh
 DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
     scripts/build_model_research_benchmark.py --output-dir /tmp/bench
 ```
+
+For high-sample research runs, the manually dispatched
+`model-research-benchmark` GitHub Actions workflow restores and verifies the
+corpus snapshot from the backups branch, splits the slate set over eight
+parallel shards (`--shard-index`/`--shard-count`), runs the full grid at
+3500 samples per variant per slate by default, and uploads each shard's
+results as artifacts. Merge downloaded shard files with
+`--merge-shards shard*/benchmark_results.json --output-dir merged/`.
 
 ## Canonical data
 

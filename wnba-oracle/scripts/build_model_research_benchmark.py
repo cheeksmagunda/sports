@@ -373,6 +373,55 @@ def _run_variant(
     return rows
 
 
+def merge_shard_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Combine per-shard benchmark_results.json payloads into one result:
+    per-variant slate rows are concatenated (deduplicated by slate_date,
+    sorted) and summaries recomputed over the union."""
+    if not results:
+        raise ValueError("no shard results to merge")
+    by_variant: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    total_slates: set[str] = set()
+    for res in results:
+        for v in res["variants"]:
+            if v["name"] not in by_variant:
+                by_variant[v["name"]] = {
+                    "name": v["name"],
+                    "overrides": v.get("overrides", {}),
+                    "sigma_scale": v.get("sigma_scale", 1.0),
+                    "rows_by_slate": {},
+                }
+                order.append(v["name"])
+            rows = by_variant[v["name"]]["rows_by_slate"]
+            for row in v["slates"]:
+                rows[row["slate_date"]] = row
+                total_slates.add(row["slate_date"])
+    variants = []
+    for name in order:
+        entry = by_variant[name]
+        rows = [entry["rows_by_slate"][sd] for sd in sorted(entry["rows_by_slate"])]
+        variants.append(
+            {
+                "name": name,
+                "overrides": entry["overrides"],
+                "sigma_scale": entry["sigma_scale"],
+                "summary": summarize_variant(rows),
+                "slates": rows,
+            }
+        )
+    base_meta = dict(results[0]["meta"])
+    base_meta.update(
+        {
+            "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
+            "n_slates": len(total_slates),
+            "merged_shards": len(results),
+            "shard_index": None,
+            "shard_count": None,
+        }
+    )
+    return {"meta": base_meta, "variants": variants}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", required=True, type=Path)
@@ -384,12 +433,29 @@ def main() -> int:
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--shard-count", type=int, default=1)
     parser.add_argument(
+        "--merge-shards",
+        nargs="+",
+        type=Path,
+        default=None,
+        help="Merge existing shard benchmark_results.json files instead of running.",
+    )
+    parser.add_argument(
         "--variant",
         action="append",
         default=None,
         help="Run only the named variant(s); repeatable. Default: full grid.",
     )
     args = parser.parse_args()
+
+    if args.merge_shards:
+        payloads = [json.loads(p.read_text(encoding="utf-8")) for p in args.merge_shards]
+        merged = merge_shard_results(payloads)
+        atomic_write_text(
+            args.output_dir / "benchmark_results.json", json.dumps(merged, indent=2) + "\n"
+        )
+        atomic_write_text(args.output_dir / "MODEL_RESEARCH_BENCHMARK.md", render_markdown(merged))
+        print(f"Merged {len(payloads)} shard files into {args.output_dir}")
+        return 0
 
     offline = args.labels_csv is not None and args.leaderboards_csv is not None
     if (args.labels_csv is None) != (args.leaderboards_csv is None):

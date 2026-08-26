@@ -208,6 +208,67 @@ class TestCsvLoading:
         assert out == {"2026-06-01": {10: 9}, "2026-06-02": {12: 3}}
 
 
+class TestMergeShards:
+    def _shard(self, mod, variant_name, slates):
+        rows = [
+            {
+                "slate_date": sd,
+                "our_score": 10.0,
+                "placement": p,
+                "field_size": 20,
+                "gap": 1.0,
+                "beat_median": 1,
+                "payout": 1.0,
+                "payout_capture": 0.5,
+            }
+            for sd, p in slates
+        ]
+        return {
+            "meta": {
+                "generated_at": "x",
+                "seed": 2026,
+                "n_samples": 3500,
+                "n_slates": len(rows),
+                "temperature_variants": 4,
+                "shard_index": 0,
+                "shard_count": 2,
+            },
+            "variants": [
+                {
+                    "name": variant_name,
+                    "overrides": {},
+                    "sigma_scale": 1.0,
+                    "summary": mod.summarize_variant(rows),
+                    "slates": rows,
+                }
+            ],
+        }
+
+    def test_merge_unions_slates_and_recomputes(self, mod):
+        s0 = self._shard(mod, "baseline", [("2026-06-01", 1), ("2026-06-03", 3)])
+        s1 = self._shard(mod, "baseline", [("2026-06-02", 5)])
+        merged = mod.merge_shard_results([s0, s1])
+        assert merged["meta"]["n_slates"] == 3
+        assert merged["meta"]["merged_shards"] == 2
+        v = merged["variants"][0]
+        assert [r["slate_date"] for r in v["slates"]] == [
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+        ]
+        assert v["summary"]["n_slates"] == 3
+        assert v["summary"]["top5_pct"] == pytest.approx(100.0)
+
+    def test_duplicate_slates_dedupe(self, mod):
+        s0 = self._shard(mod, "baseline", [("2026-06-01", 1)])
+        merged = mod.merge_shard_results([s0, s0])
+        assert merged["variants"][0]["summary"]["n_slates"] == 1
+
+    def test_empty_raises(self, mod):
+        with pytest.raises(ValueError, match="no shard results"):
+            mod.merge_shard_results([])
+
+
 class TestAtomicWrite:
     def test_writes_content_and_creates_parents(self, mod, tmp_path):
         target = tmp_path / "nested" / "out.md"
