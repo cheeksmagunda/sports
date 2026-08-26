@@ -129,10 +129,12 @@ DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
 
 For high-sample research runs, the manually dispatched
 `model-research-benchmark` GitHub Actions workflow restores and verifies the
-corpus snapshot from the backups branch, splits the slate set over eight
+corpus snapshot from the backups branch, splits the slate set over sixteen
 parallel shards (`--shard-index`/`--shard-count`), runs the full grid at
-3500 samples per variant per slate by default, and uploads each shard's
-results as artifacts. Merge downloaded shard files with
+3500 samples per variant per slate by default, uploads each shard's results
+as artifacts, and then merges them into a single
+`model-research-benchmark-merged` artifact in a follow-up job. Merge
+downloaded shard files manually with
 `--merge-shards shard*/benchmark_results.json --output-dir merged/`.
 
 ## Canonical data
