@@ -1,6 +1,19 @@
 name: Context freshness
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "AGENTS.md"
+      - "README.md"
+      - "Makefile"
+      - "pyproject.toml"
+      - ".devcontainer/**"
+      - ".github/workflows/**"
+      - "**/AGENTS.md"
+      - "**/README.md"
+      - "**/STATUS.md"
   schedule:
     - cron: "0 14 * * 1"
   workflow_dispatch:
@@ -18,11 +31,19 @@ jobs:
 
       - name: Detect changes to sync-critical files
         id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
         run: |
           set -eu
-          since=$(date -u -d '8 days ago' +%Y-%m-%dT%H:%M:%SZ)
           paths='AGENTS.md README.md Makefile pyproject.toml .devcontainer .github/workflows'
-          summary=$(git log --since="$since" --format='%h %ad %s' --date=short -- $paths ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            summary=$(git log "$BEFORE_SHA..$CURRENT_SHA" --format='%h %ad %s' --date=short -- $paths ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+          else
+            since=$(date -u -d '8 days ago' +%Y-%m-%dT%H:%M:%SZ)
+            summary=$(git log --since="$since" --format='%h %ad %s' --date=short -- $paths ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+          fi
           if [ -z "$summary" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -42,7 +63,7 @@ jobs:
         run: |
           set -eu
           existing=$(gh issue list --state open --search "Context freshness in:title" --json number --jq '.[0].number' || true)
-          body=$(printf 'Sync-critical files changed on `main` in the past week:\n\n```\n%s\n```\n\nPer the Context synchronization section of `AGENTS.md`:\n\n1. Re-upload the changed files to the Claude.ai and ChatGPT "Sports Oracle" project knowledge snapshots.\n2. Confirm both project instruction prompts still match the live `AGENTS.md`.\n3. Close this issue when snapshots are refreshed.\n' "$SUMMARY")
+          body=$(printf 'Sync-critical files changed on `main`:\n\n```\n%s\n```\n\nPer the Context synchronization section of `AGENTS.md`:\n\n1. Re-upload the changed files to the Claude.ai and ChatGPT "Sports Oracle" project knowledge snapshots.\n2. Confirm both project instruction prompts still match the live `AGENTS.md`.\n3. Close this issue when snapshots are refreshed.\n' "$SUMMARY")
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
           else
