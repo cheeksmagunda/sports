@@ -274,37 +274,65 @@ class TestCsvLoading:
         out = mod.drafts_by_slate(mod.load_labels_csv(p))
         assert out == {"2026-06-01": {10: 9}, "2026-06-02": {12: 3}}
 
-    def test_game_identity_csv_indexes_by_slate_and_team(self, mod, tmp_path):
+    def test_game_identity_csv_indexes_per_player_with_game_id(self, mod, tmp_path):
         p = tmp_path / "game_identity.csv"
         p.write_text(
-            "slate_date,team,opponent\n2026-06-01,MIN,LVA\n2026-06-01,LVA,MIN\n2026-06-02,NYL,CHI\n"
+            "slate_date,real_sports_player_id,team,opponent,game_id\n"
+            "2026-06-01,10,MIN,LVA,g1\n"
+            "2026-06-01,11,LVA,MIN,g1\n"
+            "2026-06-02,12,NYL,CHI,\n"
         )
-        identity = mod.load_game_identity_csv(p)
-        by_slate = mod.index_game_identity(identity)
+        by_slate = mod.index_game_identity(mod.load_game_identity_csv(p))
         assert by_slate == {
-            "2026-06-01": {"MIN": "LVA", "LVA": "MIN"},
-            "2026-06-02": {"NYL": "CHI"},
+            "2026-06-01": {
+                10: {"team": "MIN", "opponent": "LVA", "game_id": "g1"},
+                11: {"team": "LVA", "opponent": "MIN", "game_id": "g1"},
+            },
+            "2026-06-02": {12: {"team": "NYL", "opponent": "CHI", "game_id": ""}},
         }
 
+    def test_game_identity_keeps_first_row_on_duplicate_player(self, mod, tmp_path):
+        # A conflicting re-capture must not be resolved silently by row order.
+        p = tmp_path / "game_identity.csv"
+        p.write_text(
+            "slate_date,real_sports_player_id,team,opponent,game_id\n"
+            "2026-06-01,10,MIN,LVA,g1\n"
+            "2026-06-01,10,MIN,NYL,g2\n"
+        )
+        by_slate = mod.index_game_identity(mod.load_game_identity_csv(p))
+        assert by_slate["2026-06-01"][10]["opponent"] == "LVA"
 
-class TestTeamToOppForSlate:
-    def test_returns_validated_reciprocal_mapping(self, mod):
-        by_slate = {"2026-06-01": {"MIN": "LVA", "LVA": "MIN"}}
-        got = mod.team_to_opp_for_slate(by_slate, "2026-06-01", ["MIN", "LVA"])
-        assert got == {"MIN": "LVA", "LVA": "MIN"}
+    def test_game_identity_skips_rows_without_a_player_id(self, mod, tmp_path):
+        p = tmp_path / "game_identity.csv"
+        p.write_text(
+            "slate_date,real_sports_player_id,team,opponent,game_id\n"
+            "2026-06-01,,MIN,LVA,g1\n"
+            "2026-06-01,11,LVA,MIN,g1\n"
+        )
+        by_slate = mod.index_game_identity(mod.load_game_identity_csv(p))
+        assert list(by_slate["2026-06-01"]) == [11]
 
-    def test_none_when_a_team_has_no_recorded_opponent(self, mod):
-        by_slate = {"2026-06-01": {"MIN": "LVA", "LVA": "MIN"}}
-        assert mod.team_to_opp_for_slate(by_slate, "2026-06-01", ["MIN", "LVA", "NYL"]) is None
 
-    def test_none_when_the_mapping_is_not_reciprocal(self, mod):
-        # NYL claims LVA as its opponent, but LVA's own row says MIN --
-        # unresolvable identity, never guessed.
-        by_slate = {"2026-06-01": {"MIN": "LVA", "LVA": "MIN", "NYL": "LVA"}}
-        assert mod.team_to_opp_for_slate(by_slate, "2026-06-01", ["NYL", "LVA"]) is None
+class TestCoverageNote:
+    def test_states_the_denominator_when_slates_were_dropped(self, mod):
+        note = mod._coverage_note(
+            {"n_slates": 35, "drop_reasons": {"no_identity_rows": 22, "too_few_specs": 0}}
+        )
+        assert "35 slates benchmarked, 22 dropped" in note
+        assert "no_identity_rows=22" in note
+        assert "too_few_specs" not in note  # zero-count reasons stay out of the note
 
-    def test_none_when_slate_is_unknown(self, mod):
-        assert mod.team_to_opp_for_slate({}, "2026-06-01", ["MIN", "LVA"]) is None
+    def test_flags_a_degraded_game_identity_path(self, mod):
+        note = mod._coverage_note(
+            {"n_slates": 10, "game_key_method": {"provider_game_id": 8, "incomplete": 2}}
+        )
+        assert "provider_game_id` on 8 slate(s)" in note
+        assert "degraded identity path" in note
+
+    def test_shouts_when_shards_are_missing(self, mod):
+        note = mod._coverage_note({"n_slates": 10, "shards_missing": [3, 7]})
+        assert "INCOMPLETE" in note
+        assert "[3, 7]" in note
 
 
 class TestMergeShards:
@@ -369,13 +397,36 @@ class TestMergeShards:
         merged = mod.merge_shard_results([s0, s0])
         assert merged["variants"][0]["summary"]["n_slates"] == 1
 
-    def test_dropped_no_identity_counts_sum_across_shards(self, mod):
+    def test_drop_reasons_sum_across_shards(self, mod):
         s0 = self._shard(mod, "baseline", [("2026-06-01", 1)])
-        s0["meta"]["n_slates_dropped_no_identity"] = 2
+        s0["meta"]["drop_reasons"] = {"no_identity_rows": 2, "too_few_specs": 1}
         s1 = self._shard(mod, "baseline", [("2026-06-02", 5)])
-        s1["meta"]["n_slates_dropped_no_identity"] = 3
+        s1["meta"]["drop_reasons"] = {"no_identity_rows": 3}
         merged = mod.merge_shard_results([s0, s1])
-        assert merged["meta"]["n_slates_dropped_no_identity"] == 5
+        assert merged["meta"]["drop_reasons"] == {"no_identity_rows": 5, "too_few_specs": 1}
+
+    def test_merge_records_which_shards_contributed(self, mod):
+        s0 = self._shard(mod, "baseline", [("2026-06-01", 1)])
+        s0["meta"]["shard_index"], s0["meta"]["shard_count"] = 0, 3
+        s2 = self._shard(mod, "baseline", [("2026-06-03", 2)])
+        s2["meta"]["shard_index"], s2["meta"]["shard_count"] = 2, 3
+        merged = mod.merge_shard_results([s0, s2])
+        # Shard 1 never reported: the artifact must say so rather than read as complete.
+        assert merged["meta"]["shards_contributed"] == [0, 2]
+        assert merged["meta"]["shards_missing"] == [1]
+        assert merged["meta"]["complete"] is False
+        assert "INCOMPLETE" in mod.render_markdown(merged)
+
+    def test_merge_marks_a_full_shard_set_complete(self, mod):
+        shards = []
+        for i in range(2):
+            s = self._shard(mod, "baseline", [(f"2026-06-0{i + 1}", 1)])
+            s["meta"]["shard_index"], s["meta"]["shard_count"] = i, 2
+            shards.append(s)
+        merged = mod.merge_shard_results(shards)
+        assert merged["meta"]["shards_missing"] == []
+        assert merged["meta"]["complete"] is True
+        assert "INCOMPLETE" not in mod.render_markdown(merged)
 
     def test_optimizer_error_and_infeasible_counts_sum_per_variant(self, mod):
         s0 = self._shard(mod, "baseline", [("2026-06-01", 1)])

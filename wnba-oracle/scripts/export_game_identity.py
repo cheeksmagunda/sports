@@ -33,10 +33,23 @@ import pandas as pd
 from corpus_backup_common import atomic_write_bytes, portable_database_url, require_verified_tls
 from sqlalchemy import create_engine, text
 
+# Per-PLAYER identity, not a per-team map. job1_enrichment IS the pool job2
+# optimizes over, so joining it per player reproduces production's actual pool
+# and carries the provider game_id that picker.stacking.resolve_game_keys
+# prefers over the team/opponent fallback.
+#
+# game_id matters more than team/opponent here: resolve_game_keys tries
+# `provider_game_id` FIRST and only falls back to reciprocal team/opponent.
+# job1_enrichment.opponent is known to be corrupted on some slates by
+# pool-card rollover (a re-capture after tip-off overwrites the row with the
+# team's NEXT matchup), so the fallback path is not trustworthy -- while
+# game_id, written from the Real Sports payload, is.
 QUERY = (
-    "select distinct slate_date, team, opponent from job1_enrichment "
-    "where opponent is not null and opponent != '' "
-    "order by slate_date, team"
+    "select slate_date, real_sports_player_id, team, opponent, "
+    "features_json->>'game_id' as game_id "
+    "from job1_enrichment "
+    "where real_sports_player_id is not null "
+    "order by slate_date, real_sports_player_id"
 )
 OUT = pathlib.Path(os.environ.get("GAME_IDENTITY_OUTPUT_DIR", "."))
 
@@ -54,7 +67,15 @@ def export_game_identity(engine, output_dir: pathlib.Path) -> int:
         connection.close()
     path = output_dir / "game_identity.csv"
     atomic_write_bytes(path, frame.to_csv(index=False).encode("utf-8"))
-    print(f"exported game identity: {len(frame)} rows -> {path}")
+    # Report game_id coverage explicitly: without it every slate silently falls
+    # back to the corruptible team/opponent path instead of the provider path
+    # production actually uses, so a low number here invalidates the benchmark.
+    with_game_id = int(frame["game_id"].notna().sum()) if "game_id" in frame.columns else 0
+    slates = frame["slate_date"].nunique() if "slate_date" in frame.columns else 0
+    print(
+        f"exported game identity: {len(frame)} player-rows over {slates} slates "
+        f"-> {path} ({with_game_id}/{len(frame)} carry a provider game_id)"
+    )
     return len(frame)
 
 
