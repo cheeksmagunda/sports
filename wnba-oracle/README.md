@@ -112,15 +112,28 @@ limits are documented in `../drive/2026-08-25-wnba-contextual-stacking.md`.
 ## Model research benchmark
 
 `scripts/build_model_research_benchmark.py` replays stored 2026 slates through
-the production optimizer under a deterministic variant grid: the validated
-production knobs, one registered-knob ablation at a time, and sampling-sigma
-temperature variants. It measures realized placement against the stored
-leaderboards and payout capture under the top-20 curve, then atomically writes
+the production optimizer under a deterministic variant grid: the compiled
+production policy (`EXPECTED_PROD_CONFIG` applied the same way
+`job2.build_model_policy` does, not a hand-maintained partial config), one
+registered-knob ablation at a time (including the `committed_order_objective`
+re-measurement challenger), and sampling-sigma temperature variants. Scoring
+uses the committed slot order (`wnba_oracle.eval.contest_score`), never a
+hindsight re-sort. It measures realized placement against the stored
+leaderboards (right-censored below the leaderboard's captured depth --
+`num_brawlers` is the true field size, so a score that never reaches the
+captured rows gets a lower bound, not a guessed exact rank) and payout
+capture under the top-20 curve, then atomically writes
 `benchmark_results.json` and a generated `MODEL_RESEARCH_BENCHMARK.md` into
-`--output-dir`. It requires `DATABASE_URL` in the process environment, or
-`--labels-csv`/`--leaderboards-csv` pointing at a verified corpus-backup
-snapshot for offline runs. It is read-only against production data, and its
-outputs are generated artifacts, not committed documentation:
+`--output-dir`.
+
+It requires `DATABASE_URL` in the process environment, or
+`--labels-csv`/`--leaderboards-csv`/`--game-identity-csv` pointing at a
+verified corpus-backup / prefetch snapshot for offline runs. Game identity
+(validated team -> opponent per slate, from `job1_enrichment`) is required to
+evaluate a slate at all; a slate whose teams lack a validated reciprocal
+mapping is dropped rather than assigned a fabricated opponent. It is
+read-only against production data, and its outputs are generated artifacts,
+not committed documentation:
 
 ```sh
 DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
@@ -128,13 +141,15 @@ DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
 ```
 
 For high-sample research runs, the manually dispatched
-`model-research-benchmark` GitHub Actions workflow restores and verifies the
-corpus snapshot from the backups branch, splits the slate set over sixteen
-parallel shards (`--shard-index`/`--shard-count`), runs the full grid at
-3500 samples per variant per slate by default, uploads each shard's results
-as artifacts, and then merges them into a single
-`model-research-benchmark-merged` artifact in a follow-up job. Merge
-downloaded shard files manually with
+`model-research-benchmark` GitHub Actions workflow runs a `prefetch` job that
+exports validated game identity once (`scripts/export_game_identity.py`, via
+the same read-only `BACKUP_DATABASE_URL` secret the corpus backup uses), then
+restores and verifies the corpus snapshot from the backups branch, splits the
+slate set over twenty parallel shards (`--shard-index`/`--shard-count`), runs
+the full grid at 3500 samples per variant per slate by default, uploads each
+shard's results as artifacts, and then merges them into a single
+`model-research-benchmark-merged` artifact in a follow-up job. No per-shard
+job needs database credentials. Merge downloaded shard files manually with
 `--merge-shards shard*/benchmark_results.json --output-dir merged/`.
 
 ## Canonical data
