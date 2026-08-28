@@ -23,13 +23,14 @@ import json
 import os
 import pathlib
 import sys
-import urllib.parse
 
 import pandas as pd
 from corpus_backup_common import (
     atomic_write_bytes,
     atomic_write_json,
     build_manifest,
+    portable_database_url,
+    require_verified_tls,
     validate_snapshot,
 )
 from sqlalchemy import create_engine, text
@@ -49,32 +50,6 @@ CORPUS_QUERIES = {
     ),
 }
 OUT = pathlib.Path(os.environ.get("CORPUS_BACKUP_DIR", "data/backups"))
-
-
-def _portable_database_url(url: str) -> str:
-    """Remove a machine-local TLS root path and use PGSSLROOTCERT instead."""
-
-    parsed = urllib.parse.urlsplit(url)
-    query = [
-        (name, value)
-        for name, value in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
-        if name.lower() != "sslrootcert"
-    ]
-    return urllib.parse.urlunsplit(
-        (parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query), parsed.fragment)
-    )
-
-
-def _require_verified_tls(url: str) -> None:
-    """Reject backup connections that do not authenticate the database server."""
-
-    parsed = urllib.parse.urlsplit(url)
-    query = {
-        name.lower(): value.lower()
-        for name, value in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
-    }
-    if query.get("sslmode") not in {"verify-ca", "verify-full"}:
-        raise RuntimeError("backup database URL must use sslmode=verify-ca or verify-full")
 
 
 def _csv_bytes(frame: pd.DataFrame) -> bytes:
@@ -176,12 +151,12 @@ def main() -> int:
         print("ERROR: set DATABASE_PUBLIC_URL or DATABASE_URL", file=sys.stderr)
         return 1
     try:
-        _require_verified_tls(url)
+        require_verified_tls(url)
     except RuntimeError as exc:
         print(f"ERROR: corpus backup configuration rejected: {exc}", file=sys.stderr)
         return 1
     engine = create_engine(
-        _portable_database_url(url).replace("postgresql://", "postgresql+psycopg://", 1),
+        portable_database_url(url).replace("postgresql://", "postgresql+psycopg://", 1),
         connect_args={"options": "-c default_transaction_read_only=on"},
     )
     try:

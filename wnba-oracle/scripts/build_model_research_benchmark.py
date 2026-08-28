@@ -1,0 +1,745 @@
+"""Model research benchmark: walk-forward variant sweep over stored slates.
+
+Replays every 2026 slate that has labels, leaderboard data, and validated
+game identity through the production optimizer, once per variant, and
+records honest realized metrics against the real leaderboard (placement,
+right-censored below the corpus's captured depth; gap to the winner; and
+payout capture under the top-20 curve -- see score_lineup, summarize_variant).
+Variants are:
+
+  baseline     -- the compiled production policy (EXPECTED_PROD_CONFIG applied
+                  over Settings, compiled the same way job2.build_model_policy
+                  does -- see production_env_overrides)
+  knob:*       -- one registered knob flipped away from production at a time,
+                  so each row is a marginal ablation, not a confounded bundle
+  temp:*       -- sampling-temperature variants: every player's log-space sigma
+                  is scaled by a deterministic factor, sweeping how much
+                  variance the copula sampler assumes
+
+Like scripts/backtest_walkforward.py, predictions for each slate come only
+from the production spec builder as of that slate, so results measure the live
+path. Configuration comes from the process environment (DATABASE_URL is
+required, or pass --labels-csv/--leaderboards-csv/--game-identity-csv
+pointing at a verified corpus-backup / prefetch snapshot for offline runs);
+no .env files are loaded. A slate whose teams lack validated reciprocal
+opponent identity is dropped rather than assigned a fabricated opponent.
+Output files are written atomically (temp file + os.replace) into
+--output-dir:
+
+  benchmark_results.json       -- per-variant per-slate rows plus summaries
+  MODEL_RESEARCH_BENCHMARK.md  -- rendered summary table
+
+Usage:
+  DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
+      scripts/build_model_research_benchmark.py --output-dir /tmp/bench \
+      [--temperature-variants 4] [--n-samples 80] [--max-slates N]
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import datetime as dt
+import json
+import os
+import sys
+import tempfile
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+SEED = 2026
+
+# One OptimizeConfig override per registered knob, flipped away from the
+# validated production value so each variant isolates one knob's effect.
+# committed_order_objective is D107's dormant re-measurement lever (see
+# OptimizeConfig's docstring): baseline runs it off, matching production;
+# this variant is the explicit re-measurement challenger.
+KNOB_ABLATIONS: dict[str, dict[str, Any]] = {
+    "knob:field_same_game_boost_off": {"field_same_game_boost": 1.0},
+    "knob:field_same_team_boost_off": {"field_same_team_boost": 1.0},
+    "knob:dynamic_team_cap_off": {"dynamic_team_cap": False},
+    "knob:duplication_aware_payout_on": {"duplication_aware_payout": True},
+    "knob:leverage_weight_0.2": {"leverage_weight": 0.2},
+    "knob:ceiling_weight_0.2": {"ceiling_weight": 0.2},
+    "knob:committed_order_objective_on": {"committed_order_objective": True},
+}
+
+
+def production_env_overrides() -> dict[str, str]:
+    """Translate EXPECTED_PROD_CONFIG -- the validated production knobs
+    ``Settings.config_drift`` checks live config against -- into the
+    environment variables ``Settings`` reads them from.
+
+    Settings field defaults are deliberately safe-off library values, not the
+    production config (see settings.py's ``config_drift`` docstring), so
+    compiling ``OptimizeConfig``/``ModelPolicy`` from a bare ``get_settings()``
+    silently reverts every knob to its library default instead of what job2
+    actually runs (e.g. ``optimizer_boost_sum_cap`` 9.0 -> 0.0). Applying
+    these as env vars before the first ``get_settings()`` call makes the
+    benchmark's baseline the same compiled policy job2 serves.
+    """
+    from wnba_oracle.common.settings import EXPECTED_PROD_CONFIG, Settings
+
+    out: dict[str, str] = {}
+    for name, value in EXPECTED_PROD_CONFIG.items():
+        alias = Settings.model_fields[name].alias
+        out[str(alias)] = "true" if value is True else "false" if value is False else str(value)
+    return out
+
+
+def temperature_values(n: int) -> list[float]:
+    """Deterministic sigma scale factors, geometrically spread over
+    [0.7, 1.5] around the production value 1.0. Returns [] for n <= 0."""
+    if n <= 0:
+        return []
+    if n == 1:
+        return [1.0]
+    lo, hi = 0.7, 1.5
+    ratio = (hi / lo) ** (1.0 / (n - 1))
+    return [round(lo * ratio**i, 4) for i in range(n)]
+
+
+def build_variant_grid(n_temperature_variants: int) -> list[dict[str, Any]]:
+    """The full deterministic variant grid: baseline first, then per-knob
+    ablations in registration order, then sigma-temperature variants."""
+    grid: list[dict[str, Any]] = [
+        {"name": "baseline", "overrides": {}, "sigma_scale": 1.0},
+    ]
+    for name, overrides in KNOB_ABLATIONS.items():
+        grid.append({"name": name, "overrides": dict(overrides), "sigma_scale": 1.0})
+    grid.extend(
+        {"name": f"temp:sigma_x{t}", "overrides": {}, "sigma_scale": t}
+        for t in temperature_values(n_temperature_variants)
+    )
+    return grid
+
+
+def select_shard(items: list[Any], index: int, count: int) -> list[Any]:
+    """Deterministic strided shard: element i goes to shard i % count.
+    Shards partition ``items`` exactly and each spans the full date range."""
+    if count < 1 or not 0 <= index < count:
+        raise ValueError("shard index must satisfy 0 <= index < count")
+    return [x for i, x in enumerate(items) if i % count == index]
+
+
+def scale_sigma(specs: list[Any], factor: float) -> list[Any]:
+    """Return copies of sampling specs with sigma scaled by ``factor``.
+    Specs must be dataclasses with a ``sigma`` field; input is not mutated."""
+    if factor == 1.0:
+        return list(specs)
+    return [dataclasses.replace(s, sigma=float(s.sigma) * factor) for s in specs]
+
+
+def score_lineup(
+    player_ids: Sequence[int],
+    slot_multipliers: Sequence[float],
+    boost_by: dict[int, float],
+    rs_by: dict[int, float],
+) -> float:
+    """Realized contest score for the lineup AS COMMITTED: ``player_ids[i]``
+    sits in the slot with base ``slot_multipliers[i]``, unaffected by realized
+    outcome. Delegates to the canonical eval helper (no re-sorting by realized
+    value) so an optimizer slot-assignment bug shows up here instead of being
+    hidden by hindsight scoring -- see ``wnba_oracle.eval.contest_score``."""
+    from wnba_oracle.eval.contest_score import committed_order_score
+
+    values = [rs_by.get(int(pid), 0.0) for pid in player_ids]
+    boosts = [boost_by.get(int(pid), 0.0) for pid in player_ids]
+    return committed_order_score(values, boosts, slot_multipliers)
+
+
+def placement_for_score(our_score: float, lb_scores: list[float]) -> int:
+    """1-based placement of ``our_score`` against a real leaderboard."""
+    return sum(1 for s in lb_scores if s > our_score) + 1
+
+
+def summarize_variant(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate per-slate rows into the summary metrics reported per variant.
+
+    Placement is right-censored below the leaderboard's captured depth (see
+    each row's ``censored`` flag): the corpus only captures the top ~20
+    leaderboard rows, so a score that doesn't reach that depth has an unknown
+    exact rank, only a lower bound (``placement_lower_bound``).
+    ``mean_placement`` is therefore not reportable, but top20/top5/top1 stay
+    exact even under censoring: a censored row is *guaranteed* to miss every
+    one of those thresholds (its lower bound already exceeds 20), so
+    ``placement_lower_bound`` is compared directly against each cutoff with
+    no need to special-case or drop censored rows.
+    ``beat_median`` is reported only over rows where the field's true median
+    rank fell within the captured depth -- for real field sizes that is rare,
+    so it may be entirely absent rather than silently computed from a
+    non-median row."""
+    n = len(rows)
+    if n == 0:
+        return {"n_slates": 0}
+    out: dict[str, Any] = {
+        "n_slates": n,
+        "n_censored": sum(1 for r in rows if r["censored"]),
+        "top20_pct": round(100.0 * sum(1 for r in rows if r["placement_lower_bound"] <= 20) / n, 1),
+        "top5_pct": round(100.0 * sum(1 for r in rows if r["placement_lower_bound"] <= 5) / n, 1),
+        "top1_pct": round(100.0 * sum(1 for r in rows if r["placement_lower_bound"] <= 1) / n, 1),
+        "mean_gap_vs_top1": round(sum(r["gap"] for r in rows) / n, 3),
+        "mean_payout_capture": round(sum(r["payout_capture"] for r in rows) / n, 4),
+    }
+    median_rows = [r for r in rows if "beat_median" in r]
+    if median_rows:
+        out["beat_median_pct"] = round(
+            100.0 * sum(r["beat_median"] for r in median_rows) / len(median_rows), 1
+        )
+        out["n_median_observed"] = len(median_rows)
+    return out
+
+
+def render_markdown(result: dict[str, Any]) -> str:
+    """Render the benchmark summary as the MODEL_RESEARCH_BENCHMARK.md text."""
+    meta = result["meta"]
+    lines = [
+        "# Model research benchmark",
+        "",
+        f"Generated {meta['generated_at']} by "
+        "`scripts/build_model_research_benchmark.py`. Walk-forward replay of "
+        f"{meta['n_slates']} stored 2026 slates through the production "
+        f"optimizer (seed {meta['seed']}, n_samples {meta['n_samples']}). "
+        "This file is a generated artifact; regenerate it rather than editing.",
+        "",
+        "Placement is exact only when our score beats the lowest leaderboard "
+        "row the corpus captured (top ~20 of the real field); below that it "
+        "is right-censored (counted as a top-20 miss, excluded from "
+        "top5/top1/beat median). `payout_capture` stays exact under the "
+        "top-20 curve, since a censored score pays 0 -- reported as realized "
+        "payout divided by the rank-1 payout.",
+        "",
+        "| variant | slates | censored | top 20 | top 5 | top 1 | beat median "
+        "| mean gap vs top 1 | payout capture |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for v in result["variants"]:
+        s = v["summary"]
+        if s.get("n_slates", 0) == 0:
+            lines.append(f"| {v['name']} | 0 | - | - | - | - | - | - | - |")
+            continue
+        beat_median = f"{s['beat_median_pct']}%" if "beat_median_pct" in s else "-"
+        lines.append(
+            f"| {v['name']} | {s['n_slates']} | {s['n_censored']} "
+            f"| {s['top20_pct']}% | {s['top5_pct']}% | {s['top1_pct']}% "
+            f"| {beat_median} | {s['mean_gap_vs_top1']} | {s['mean_payout_capture']} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def atomic_write_text(path: Path, content: str) -> None:
+    """Write ``content`` to ``path`` atomically via a same-directory temp
+    file and os.replace, so readers never observe a partial file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(content)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def load_labels_csv(path: Path) -> Any:
+    """Load a corpus-backup ``slate_labels.csv`` into the same frame shape
+    ``read_slate_labels`` returns. The file comes from the verified backups
+    branch (see .github/workflows/corpus-backup.yml)."""
+    import polars as pl
+
+    sl = pl.read_csv(
+        path,
+        schema_overrides={
+            "slate_date": pl.Utf8,
+            "platform_player_id": pl.Int64,
+            "display_name": pl.Utf8,
+            "team_key": pl.Utf8,
+            "card_boost": pl.Float64,
+            "drafts": pl.Float64,  # CSV serializes counts as floats
+            "real_score": pl.Float64,
+        },
+    )
+    return sl.with_columns(pl.col("drafts").cast(pl.Int64))
+
+
+def load_leaderboards_csv(path: Path) -> Any:
+    """Load a corpus-backup ``contest_leaderboards.csv`` into the same frame
+    shape ``read_leaderboards`` returns (``lineup`` renamed ``lineup_json``)."""
+    import polars as pl
+
+    lb = pl.read_csv(
+        path,
+        schema_overrides={"slate_date": pl.Utf8, "rank": pl.Int64, "score": pl.Float64},
+    )
+    if "lineup" in lb.columns and "lineup_json" not in lb.columns:
+        lb = lb.rename({"lineup": "lineup_json"})
+    return lb
+
+
+def drafts_by_slate(sl: Any) -> dict[str, dict[int, int]]:
+    """Measured draft counts per slate from the labels frame, matching the
+    shape of job2's ``_load_measured_drafts`` for one slate."""
+    out: dict[str, dict[int, int]] = {}
+    for r in sl.iter_rows(named=True):
+        d = r.get("drafts")
+        if d is None:
+            continue
+        sd = str(r["slate_date"])
+        pid = int(r["platform_player_id"])
+        cur = out.setdefault(sd, {})
+        cur[pid] = max(int(d), cur.get(pid, 0))
+    return out
+
+
+def load_game_identity_csv(path: Path) -> Any:
+    """Load the prefetched (slate_date, team, opponent) identity CSV, sourced
+    from ``job1_enrichment`` -- the same Real Sports platform vocabulary as
+    ``slate_labels.team_key``, so no cross-provider team crosswalk is needed
+    (see wnba-oracle/AGENTS.md: do not join the gamelog and label corpora
+    without an explicit identity map; this sidesteps that by staying inside
+    one corpus)."""
+    import polars as pl
+
+    return pl.read_csv(
+        path,
+        schema_overrides={"slate_date": pl.Utf8, "team": pl.Utf8, "opponent": pl.Utf8},
+    )
+
+
+def index_game_identity(identity: Any) -> dict[str, dict[str, str]]:
+    """(slate_date, team, opponent) rows -> {slate_date: {team: opponent}}."""
+    out: dict[str, dict[str, str]] = {}
+    for r in identity.iter_rows(named=True):
+        if not r["team"] or not r["opponent"]:
+            continue
+        out.setdefault(str(r["slate_date"]), {})[str(r["team"])] = str(r["opponent"])
+    return out
+
+
+def team_to_opp_for_slate(
+    identity_by_slate: dict[str, dict[str, str]],
+    slate_date: str,
+    teams: list[str],
+) -> dict[str, str] | None:
+    """Validated reciprocal team -> opponent mapping for every team on one
+    slate, or None if any team's opponent is missing or not reciprocal.
+
+    Real persisted identity only. A slate with unresolvable identity is
+    dropped by the caller rather than assigned a fabricated opponent, which
+    would invent games on 3+ team slates and corrupt same-game/same-team
+    stacking behavior (PR #26 review)."""
+    day = identity_by_slate.get(str(slate_date), {})
+    mapping: dict[str, str] = {}
+    for t in teams:
+        opp = day.get(t)
+        if not opp or day.get(opp) != t:
+            return None
+        mapping[t] = opp
+    return mapping
+
+
+def _precompute_slates(
+    max_slates: int | None,
+    labels_csv: Path | None = None,
+    leaderboards_csv: Path | None = None,
+    game_identity_csv: Path | None = None,
+    shard: tuple[int, int] | None = None,
+    policy: Any = None,
+) -> tuple[dict[str, dict[str, Any]], int]:
+    """Load labels, leaderboards, and validated game identity (database, or
+    offline corpus-backup / prefetch CSVs) and build the production sampling
+    and field specs once per eligible 2026 slate. ``shard=(index, count)``
+    keeps every count-th slate starting at index, so parallel shards
+    partition the slate set exactly.
+
+    Returns ``(precomputed, n_dropped_no_identity)``: a slate whose teams
+    lack validated reciprocal opponent identity is dropped, never assigned a
+    fabricated opponent."""
+    import polars as pl
+
+    from wnba_oracle.scheduler.job2 import _build_specs
+
+    if labels_csv is not None and leaderboards_csv is not None:
+        sl = load_labels_csv(labels_csv)
+        lb = load_leaderboards_csv(leaderboards_csv)
+        identity = load_game_identity_csv(game_identity_csv) if game_identity_csv else None
+        # Offline mode has no engine: serve measured drafts from the CSV so
+        # the D86 measured-ownership path matches the live path.
+        import wnba_oracle.scheduler.job2 as _job2
+
+        measured = drafts_by_slate(sl)
+        _job2._load_measured_drafts = lambda sd: measured.get(str(sd), {})
+    else:
+        from wnba_oracle.db.reads import read_game_identity, read_leaderboards, read_slate_labels
+
+        sl = read_slate_labels()
+        lb = read_leaderboards()
+        identity = read_game_identity()
+    identity_by_slate = index_game_identity(identity) if identity is not None else {}
+
+    slates_2026 = {d for d in sl["slate_date"].unique().to_list() if str(d).startswith("2026-")}
+    valid = sorted(slates_2026 & set(lb["slate_date"].unique().to_list()))
+    if shard is not None:
+        valid = select_shard(valid, shard[0], shard[1])
+    if max_slates is not None:
+        valid = valid[:max_slates]
+
+    precomputed: dict[str, dict[str, Any]] = {}
+    n_dropped_no_identity = 0
+    for sd in valid:
+        slate = sl.filter(pl.col("slate_date") == sd)
+        if slate.filter(pl.col("real_score").is_not_null()).height < 5:
+            continue
+        slate_lb = lb.filter(pl.col("slate_date") == sd)
+        lb_scores = slate_lb["score"].to_list()
+        if len(lb_scores) < 5:
+            continue
+        # num_brawlers is the true field size; captured rows are only the
+        # leaderboard's top slice. max() covers a slate spanning more than
+        # one contest without understating the field.
+        brawlers = (
+            slate_lb["num_brawlers"].drop_nulls() if "num_brawlers" in slate_lb.columns else None
+        )
+        field_size = (
+            int(brawlers.max()) if brawlers is not None and len(brawlers) else len(lb_scores)
+        )
+        field_size = max(field_size, len(lb_scores))
+        teams = slate["team_key"].unique().to_list()
+        team_to_opp = team_to_opp_for_slate(identity_by_slate, sd, teams)
+        if team_to_opp is None:
+            n_dropped_no_identity += 1
+            continue
+        boost_by: dict[int, float] = {}
+        rs_by: dict[int, float] = {}
+        enrichment = []
+        for r in slate.iter_rows(named=True):
+            pid = int(r["platform_player_id"])
+            boost_by[pid] = float(r["card_boost"])
+            rs_by[pid] = float(r["real_score"]) if r["real_score"] is not None else 0.0
+            enrichment.append(
+                {
+                    "real_sports_player_id": str(pid),
+                    "name": r["display_name"],
+                    "team": r["team_key"],
+                    "opponent": team_to_opp[r["team_key"]],
+                    "position": "F",
+                    "card_boost": boost_by[pid],
+                    "features_json": json.dumps({}),
+                }
+            )
+        samps, fields, _ = _build_specs(enrichment, slate_date=sd, policy=policy)
+        if len(samps) < 5:
+            continue
+        precomputed[sd] = {
+            "samps": samps,
+            "fields": fields,
+            "boost_by": boost_by,
+            "rs_by": rs_by,
+            "lb_scores": sorted(lb_scores, reverse=True),
+            "field_size": field_size,
+        }
+    return precomputed, n_dropped_no_identity
+
+
+def _run_variant(
+    variant: dict[str, Any],
+    precomputed: dict[str, dict[str, Any]],
+    n_samples: int,
+    baseline_cfg: Any,
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Replay every precomputed slate under one variant's configuration.
+
+    ``baseline_cfg`` is the compiled production OptimizeConfig (see
+    ``production_env_overrides``); each variant's override applies on top of
+    it via ``dataclasses.replace``, alongside the benchmark's own
+    compute-budget knobs (n_samples, n_field_lineups, top_n_filter, seed),
+    which are research parameters, not policy.
+
+    Returns ``(rows, n_optimizer_error, n_optimizer_infeasible)``. A slate
+    the optimizer raises on, or returns no feasible 5-player lineup for
+    (e.g. a 2-team slate under knob:dynamic_team_cap_off, which caps at
+    2*2=4 players -- optimize_lineup's own fallback for that case returns an
+    empty ``player_ids``, not an exception), is dropped and counted rather
+    than silently excluded: an uncounted drop biases top1/top5/top20 toward
+    whichever slates happened to survive, and letting the empty-lineup case
+    reach score_lineup would raise (0 values against 5 slot bases) and
+    silently discard the whole shard's in-memory results."""
+    from wnba_oracle.picker.optimize import optimize_lineup
+    from wnba_oracle.picker.payout import default_curve_for_regime
+
+    curve = default_curve_for_regime("top_20")
+    rows: list[dict[str, Any]] = []
+    n_optimizer_error = 0
+    n_optimizer_infeasible = 0
+    for sd in sorted(precomputed):
+        d = precomputed[sd]
+        cfg = dataclasses.replace(
+            baseline_cfg,
+            top_n_filter=min(20, len(d["samps"])),
+            n_samples=n_samples,
+            n_field_lineups=40,
+            seed=SEED,
+            **variant["overrides"],
+        )
+        samps = scale_sigma(d["samps"], variant["sigma_scale"])
+        try:
+            rec = optimize_lineup(samps, d["fields"], curve, cfg=cfg)
+        except Exception as exc:
+            n_optimizer_error += 1
+            print(f"optimizer error: {variant['name']} {sd} {type(exc).__name__}", file=sys.stderr)
+            continue
+        if not rec.player_ids:
+            n_optimizer_infeasible += 1
+            print(f"optimizer infeasible: {variant['name']} {sd}", file=sys.stderr)
+            continue
+        our = score_lineup(rec.player_ids, rec.slot_multipliers, d["boost_by"], d["rs_by"])
+        lb_scores = d["lb_scores"]
+        field_size = d["field_size"]
+        captured_depth = len(lb_scores)
+        # Below the lowest captured row, the real rank is unknown -- only a
+        # lower bound. A score tying the lowest captured row is still exact:
+        # nothing captured beats it, and nothing outside the top-N capture
+        # could either (it would have been captured). Not censored at all
+        # when the leaderboard captured the whole field (field_size <=
+        # captured_depth): nothing is missing then.
+        censored = field_size > captured_depth and our < lb_scores[-1]
+        if censored:
+            placement = None
+            placement_lower_bound = captured_depth + 1
+            payout = 0.0
+        else:
+            placement = placement_for_score(our, lb_scores)
+            placement_lower_bound = placement
+            payout = curve.payout_for_rank(placement, field_size)
+        top1_payout = curve.payout_for_rank(1, field_size)
+        row: dict[str, Any] = {
+            "slate_date": str(sd),
+            "our_score": round(our, 3),
+            "placement": placement,
+            "placement_lower_bound": placement_lower_bound,
+            "censored": censored,
+            "field_size": field_size,
+            "captured_depth": captured_depth,
+            "gap": round(lb_scores[0] - our, 3),
+            "payout": round(payout, 4),
+            "payout_capture": round(payout / top1_payout, 4) if top1_payout > 0 else 0.0,
+        }
+        # beat_median is only meaningful when the true field median rank was
+        # actually captured; for real field sizes (num_brawlers far exceeds
+        # the ~20-row capture) it almost never is, so the key is omitted
+        # rather than computed against a row that isn't the real median.
+        median_rank = (field_size + 1) // 2
+        if median_rank <= captured_depth:
+            median = lb_scores[median_rank - 1]
+            row["beat_median"] = 1 if our > median else 0
+        rows.append(row)
+    return rows, n_optimizer_error, n_optimizer_infeasible
+
+
+def merge_shard_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Combine per-shard benchmark_results.json payloads into one result:
+    per-variant slate rows are concatenated (deduplicated by slate_date,
+    sorted) and summaries recomputed over the union."""
+    if not results:
+        raise ValueError("no shard results to merge")
+    by_variant: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    total_slates: set[str] = set()
+    for res in results:
+        for v in res["variants"]:
+            if v["name"] not in by_variant:
+                by_variant[v["name"]] = {
+                    "name": v["name"],
+                    "overrides": v.get("overrides", {}),
+                    "sigma_scale": v.get("sigma_scale", 1.0),
+                    "n_optimizer_error": 0,
+                    "n_optimizer_infeasible": 0,
+                    "rows_by_slate": {},
+                }
+                order.append(v["name"])
+            entry = by_variant[v["name"]]
+            entry["n_optimizer_error"] += int(v.get("n_optimizer_error", 0))
+            entry["n_optimizer_infeasible"] += int(v.get("n_optimizer_infeasible", 0))
+            rows = entry["rows_by_slate"]
+            for row in v["slates"]:
+                rows[row["slate_date"]] = row
+                total_slates.add(row["slate_date"])
+    variants = []
+    for name in order:
+        entry = by_variant[name]
+        rows = [entry["rows_by_slate"][sd] for sd in sorted(entry["rows_by_slate"])]
+        variants.append(
+            {
+                "name": name,
+                "overrides": entry["overrides"],
+                "sigma_scale": entry["sigma_scale"],
+                "n_optimizer_error": entry["n_optimizer_error"],
+                "n_optimizer_infeasible": entry["n_optimizer_infeasible"],
+                "summary": summarize_variant(rows),
+                "slates": rows,
+            }
+        )
+    base_meta = dict(results[0]["meta"])
+    base_meta.update(
+        {
+            "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
+            "n_slates": len(total_slates),
+            "n_slates_dropped_no_identity": sum(
+                int(res["meta"].get("n_slates_dropped_no_identity", 0)) for res in results
+            ),
+            "merged_shards": len(results),
+            "shard_index": None,
+            "shard_count": None,
+        }
+    )
+    return {"meta": base_meta, "variants": variants}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--temperature-variants", type=int, default=4)
+    parser.add_argument("--n-samples", type=int, default=80)
+    parser.add_argument("--max-slates", type=int, default=None)
+    parser.add_argument("--labels-csv", type=Path, default=None)
+    parser.add_argument("--leaderboards-csv", type=Path, default=None)
+    parser.add_argument("--game-identity-csv", type=Path, default=None)
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument(
+        "--merge-shards",
+        nargs="+",
+        type=Path,
+        default=None,
+        help="Merge existing shard benchmark_results.json files instead of running.",
+    )
+    parser.add_argument(
+        "--variant",
+        action="append",
+        default=None,
+        help="Run only the named variant(s); repeatable. Default: full grid.",
+    )
+    args = parser.parse_args()
+
+    if args.merge_shards:
+        payloads = [json.loads(p.read_text(encoding="utf-8")) for p in args.merge_shards]
+        merged = merge_shard_results(payloads)
+        atomic_write_text(
+            args.output_dir / "benchmark_results.json", json.dumps(merged, indent=2) + "\n"
+        )
+        atomic_write_text(args.output_dir / "MODEL_RESEARCH_BENCHMARK.md", render_markdown(merged))
+        print(f"Merged {len(payloads)} shard files into {args.output_dir}")
+        return 0
+
+    offline = args.labels_csv is not None and args.leaderboards_csv is not None
+    if (args.labels_csv is None) != (args.leaderboards_csv is None):
+        print("--labels-csv and --leaderboards-csv must be given together", file=sys.stderr)
+        return 2
+    if not offline and not os.environ.get("DATABASE_URL"):
+        print(
+            "DATABASE_URL is required in the process environment "
+            "(or pass --labels-csv/--leaderboards-csv for offline mode)",
+            file=sys.stderr,
+        )
+        return 2
+    if offline and args.game_identity_csv is None:
+        print(
+            "WARNING: offline mode without --game-identity-csv; every slate "
+            "will be dropped as ineligible (real game identity unavailable) "
+            "rather than assigned a fabricated opponent.",
+            file=sys.stderr,
+        )
+
+    os.environ.setdefault(
+        "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
+        "94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd",
+    )
+    os.environ.setdefault("PAYOUT_REGIME", "top_20")
+    os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
+    os.environ.setdefault("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
+    for alias, value in production_env_overrides().items():
+        os.environ.setdefault(alias, value)
+
+    import structlog
+
+    structlog.configure(processors=[structlog.dev.ConsoleRenderer()])
+
+    from wnba_oracle.common.settings import get_settings
+    from wnba_oracle.scheduler.job2 import build_model_policy
+
+    policy = build_model_policy(get_settings())
+
+    print("Precomputing production specs per slate...")
+    precomputed, n_dropped_no_identity = _precompute_slates(
+        args.max_slates,
+        args.labels_csv,
+        args.leaderboards_csv,
+        args.game_identity_csv,
+        shard=(args.shard_index, args.shard_count),
+        policy=policy,
+    )
+    print(
+        f"{len(precomputed)} slates eligible "
+        f"({n_dropped_no_identity} dropped: no validated game identity)."
+    )
+    if not precomputed:
+        print("No eligible slates; nothing to benchmark.", file=sys.stderr)
+        return 1
+
+    grid = build_variant_grid(args.temperature_variants)
+    if args.variant:
+        wanted = set(args.variant)
+        unknown = wanted - {v["name"] for v in grid}
+        if unknown:
+            print(f"unknown variant name(s): {sorted(unknown)}", file=sys.stderr)
+            return 2
+        grid = [v for v in grid if v["name"] in wanted]
+    variants: list[dict[str, Any]] = []
+    for i, variant in enumerate(grid, 1):
+        print(f"[{i}/{len(grid)}] {variant['name']}")
+        rows, n_optimizer_error, n_optimizer_infeasible = _run_variant(
+            variant, precomputed, args.n_samples, policy.optimizer
+        )
+        variants.append(
+            {
+                "name": variant["name"],
+                "overrides": variant["overrides"],
+                "sigma_scale": variant["sigma_scale"],
+                "n_optimizer_error": n_optimizer_error,
+                "n_optimizer_infeasible": n_optimizer_infeasible,
+                "summary": summarize_variant(rows),
+                "slates": rows,
+            }
+        )
+
+    result = {
+        "meta": {
+            "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
+            "seed": SEED,
+            "n_samples": args.n_samples,
+            "n_slates": len(precomputed),
+            "n_slates_dropped_no_identity": n_dropped_no_identity,
+            "temperature_variants": args.temperature_variants,
+            "shard_index": args.shard_index,
+            "shard_count": args.shard_count,
+            "offline_csv": bool(offline),
+            "baseline_policy": dataclasses.asdict(policy),
+        },
+        "variants": variants,
+    }
+    out = args.output_dir
+    atomic_write_text(out / "benchmark_results.json", json.dumps(result, indent=2) + "\n")
+    atomic_write_text(out / "MODEL_RESEARCH_BENCHMARK.md", render_markdown(result))
+    print(f"Wrote {out / 'benchmark_results.json'}")
+    print(f"Wrote {out / 'MODEL_RESEARCH_BENCHMARK.md'}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -9,6 +9,7 @@ import json
 import os
 import pathlib
 import tempfile
+import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
@@ -43,6 +44,32 @@ CORPUS_COLUMNS = {
 
 class SnapshotValidationError(ValueError):
     """A backup manifest or payload failed local integrity validation."""
+
+
+def portable_database_url(url: str) -> str:
+    """Remove a machine-local TLS root path and use PGSSLROOTCERT instead."""
+
+    parsed = urllib.parse.urlsplit(url)
+    query = [
+        (name, value)
+        for name, value in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+        if name.lower() != "sslrootcert"
+    ]
+    return urllib.parse.urlunsplit(
+        (parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query), parsed.fragment)
+    )
+
+
+def require_verified_tls(url: str) -> None:
+    """Reject a database connection that does not authenticate the server."""
+
+    parsed = urllib.parse.urlsplit(url)
+    query = {
+        name.lower(): value.lower()
+        for name, value in urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    }
+    if query.get("sslmode") not in {"verify-ca", "verify-full"}:
+        raise RuntimeError("database URL must use sslmode=verify-ca or verify-full")
 
 
 def sha256_file(path: pathlib.Path) -> str:

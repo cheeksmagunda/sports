@@ -108,6 +108,33 @@ def read_leaderboards(engine: sa.Engine | None = None) -> pl.DataFrame:
     return pl.from_dicts([dict(r._mapping) for r in rows])
 
 
+def read_game_identity(engine: sa.Engine | None = None) -> pl.DataFrame:
+    """Historical (slate_date, team, opponent) triples from ``job1_enrichment``.
+
+    job1_enrichment is captured from the same Real Sports platform pool that
+    produces ``slate_labels.team_key`` (one row per (slate_date, player_id),
+    never pruned), so ``team`` here is directly comparable to team_key with
+    no cross-provider identity map needed. This is deliberately NOT sourced
+    from ``wnba_game_logs``: that corpus is nba_api-sourced with its own team
+    vocabulary, and AGENTS.md forbids joining the gamelog and label corpora
+    without an explicit WNBA-owned identity map. Used to build a validated,
+    reciprocal team -> opponent mapping per slate for offline evaluation
+    (see scripts/build_model_research_benchmark.py); never fabricate a
+    matchup when identity is unavailable.
+    """
+    eng = engine or get_engine()
+    q = text(
+        "SELECT DISTINCT slate_date, team, opponent FROM job1_enrichment "
+        "WHERE opponent IS NOT NULL AND opponent != '' "
+        "ORDER BY slate_date, team"
+    )
+    with eng.connect() as conn:
+        rows = conn.execute(q).fetchall()
+    if not rows:
+        return pl.DataFrame(schema={"slate_date": pl.Utf8, "team": pl.Utf8, "opponent": pl.Utf8})
+    return pl.from_dicts([dict(r._mapping) for r in rows])
+
+
 def read_game_logs(engine: sa.Engine | None = None) -> pl.DataFrame:
     """WNBA per-game box scores from stats.wnba.com via nba_api.
 
