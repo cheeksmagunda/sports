@@ -193,6 +193,38 @@ def summarize_variant(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def _coverage_note(meta: dict[str, Any]) -> str:
+    """The denominator, stated up front. A reader must be able to tell from the
+    report alone whether the run covered the corpus or a biased slice of it --
+    the numerator alone reads as full coverage even when most slates dropped."""
+    parts: list[str] = []
+    dropped = sum((meta.get("drop_reasons") or {}).values())
+    if dropped:
+        reasons = ", ".join(
+            f"{k}={v}" for k, v in sorted((meta.get("drop_reasons") or {}).items()) if v
+        )
+        parts.append(
+            f"**Coverage: {meta.get('n_slates', 0)} slates benchmarked, "
+            f"{dropped} dropped** ({reasons}). Dropped slates are excluded, "
+            "never reconstructed from inferred matchups."
+        )
+    methods = meta.get("game_key_method") or {}
+    if methods:
+        parts.append(
+            "Game identity resolved via "
+            + ", ".join(f"`{k}` on {v} slate(s)" for k, v in sorted(methods.items()))
+            + ". `provider_game_id` is the path production serves on; "
+            "`team_opponent_fallback` and `incomplete` mean the same-game and "
+            "same-team variants were measured on a degraded identity path."
+        )
+    if meta.get("shards_missing"):
+        parts.append(
+            f"**INCOMPLETE: shards {meta['shards_missing']} are missing from this "
+            "merge.** Treat every number below as a partial result."
+        )
+    return " ".join(parts)
+
+
 def render_markdown(result: dict[str, Any]) -> str:
     """Render the benchmark summary as the MODEL_RESEARCH_BENCHMARK.md text."""
     meta = result["meta"]
@@ -211,6 +243,8 @@ def render_markdown(result: dict[str, Any]) -> str:
         "top5/top1/beat median). `payout_capture` stays exact under the "
         "top-20 curve, since a censored score pays 0 -- reported as realized "
         "payout divided by the rank-1 payout.",
+        "",
+        _coverage_note(meta),
         "",
         "| variant | slates | censored | top 20 | top 5 | top 1 | beat median "
         "| mean gap vs top 1 | payout capture |",
@@ -298,50 +332,71 @@ def drafts_by_slate(sl: Any) -> dict[str, dict[int, int]]:
 
 
 def load_game_identity_csv(path: Path) -> Any:
-    """Load the prefetched (slate_date, team, opponent) identity CSV, sourced
-    from ``job1_enrichment`` -- the same Real Sports platform vocabulary as
-    ``slate_labels.team_key``, so no cross-provider team crosswalk is needed
-    (see wnba-oracle/AGENTS.md: do not join the gamelog and label corpora
-    without an explicit identity map; this sidesteps that by staying inside
-    one corpus)."""
+    """Load the prefetched PER-PLAYER identity CSV (slate_date,
+    real_sports_player_id, team, opponent, game_id), sourced from
+    ``job1_enrichment`` -- the same Real Sports platform corpus that produces
+    ``slate_labels``, so no cross-provider team crosswalk is needed (see
+    wnba-oracle/AGENTS.md: do not join the gamelog and label corpora without
+    an explicit identity map; this sidesteps that by staying inside one
+    corpus)."""
     import polars as pl
 
     return pl.read_csv(
         path,
-        schema_overrides={"slate_date": pl.Utf8, "team": pl.Utf8, "opponent": pl.Utf8},
+        schema_overrides={
+            "slate_date": pl.Utf8,
+            "real_sports_player_id": pl.Utf8,
+            "team": pl.Utf8,
+            "opponent": pl.Utf8,
+            "game_id": pl.Utf8,
+        },
     )
 
 
-def index_game_identity(identity: Any) -> dict[str, dict[str, str]]:
-    """(slate_date, team, opponent) rows -> {slate_date: {team: opponent}}."""
-    out: dict[str, dict[str, str]] = {}
+def index_game_identity(identity: Any) -> dict[str, dict[int, dict[str, str]]]:
+    """Per-player identity rows -> {slate_date: {player_id: {team, opponent, game_id}}}.
+
+    Keyed per player rather than per team on purpose. ``job1_enrichment`` IS
+    the pool job2 optimizes over, so this reproduces production's actual pool
+    and carries the provider ``game_id`` that
+    ``picker.stacking.resolve_game_keys`` prefers -- instead of rebuilding a
+    per-team map from ``slate_labels.team_key`` and validating reciprocity,
+    which only ever fed the FALLBACK path production takes when the provider
+    id is absent.
+
+    A duplicate (slate_date, player_id) keeps the first row and is reported by
+    the caller rather than silently overwritten, so a conflicting re-capture
+    can never be resolved by row order.
+    """
+    out: dict[str, dict[int, dict[str, str]]] = {}
     for r in identity.iter_rows(named=True):
-        if not r["team"] or not r["opponent"]:
+        raw_pid = r.get("real_sports_player_id")
+        if raw_pid is None or str(raw_pid).strip() == "":
             continue
-        out.setdefault(str(r["slate_date"]), {})[str(r["team"])] = str(r["opponent"])
+        try:
+            pid = int(str(raw_pid).strip())
+        except ValueError:
+            continue
+        day = out.setdefault(str(r["slate_date"]), {})
+        if pid in day:
+            continue
+        day[pid] = {
+            "team": str(r.get("team") or "").strip(),
+            "opponent": str(r.get("opponent") or "").strip(),
+            "game_id": str(r.get("game_id") or "").strip(),
+        }
     return out
 
 
-def team_to_opp_for_slate(
-    identity_by_slate: dict[str, dict[str, str]],
-    slate_date: str,
-    teams: list[str],
-) -> dict[str, str] | None:
-    """Validated reciprocal team -> opponent mapping for every team on one
-    slate, or None if any team's opponent is missing or not reciprocal.
-
-    Real persisted identity only. A slate with unresolvable identity is
-    dropped by the caller rather than assigned a fabricated opponent, which
-    would invent games on 3+ team slates and corrupt same-game/same-team
-    stacking behavior (PR #26 review)."""
-    day = identity_by_slate.get(str(slate_date), {})
-    mapping: dict[str, str] = {}
-    for t in teams:
-        opp = day.get(t)
-        if not opp or day.get(opp) != t:
-            return None
-        mapping[t] = opp
-    return mapping
+# slate_labels rows harvested from finisher lineups rather than from the
+# draftable pool. contest_stats.labels_from_leaderboard_entries writes
+# team_key='UNK' for these because the leaderboard payload carries no teamKey;
+# verified over the 2026 corpus, section=='leaderboard_lineup' and
+# team_key=='UNK' are the same 114 rows. They are NOT pool entries -- job2
+# optimizes over job1_enrichment, where team/opponent are NOT NULL -- so
+# treating 'UNK' as a real team that needs an opponent dropped 29 otherwise
+# healthy slates outright.
+SUPPLEMENTAL_LABEL_SECTION = "leaderboard_lineup"
 
 
 def _precompute_slates(
@@ -358,9 +413,19 @@ def _precompute_slates(
     keeps every count-th slate starting at index, so parallel shards
     partition the slate set exactly.
 
-    Returns ``(precomputed, n_dropped_no_identity)``: a slate whose teams
-    lack validated reciprocal opponent identity is dropped, never assigned a
-    fabricated opponent."""
+    The pool for each slate is the INTERSECTION of the label corpus and the
+    persisted ``job1_enrichment`` identity, joined per player. That is exactly
+    the pool job2 optimizes over, and it carries the provider ``game_id`` that
+    ``picker.stacking.resolve_game_keys`` prefers over the reciprocal
+    team/opponent fallback -- so the benchmark exercises the same game-identity
+    path production serves on, rather than being pinned to the fallback by a
+    blank ``features_json``. Identity is never fabricated: a player without a
+    persisted identity row is excluded from the pool, and a slate left with
+    too few players is dropped.
+
+    Returns ``(precomputed, drops)`` where ``drops`` counts each exclusion
+    reason, so a shrinking corpus is visible in the artifact instead of
+    silently biasing the variant ranking."""
     import polars as pl
 
     from wnba_oracle.scheduler.job2 import _build_specs
@@ -391,14 +456,22 @@ def _precompute_slates(
         valid = valid[:max_slates]
 
     precomputed: dict[str, dict[str, Any]] = {}
-    n_dropped_no_identity = 0
+    drops: dict[str, int] = {
+        "too_few_scored_labels": 0,
+        "too_few_leaderboard_rows": 0,
+        "no_identity_rows": 0,
+        "too_few_identified_players": 0,
+        "too_few_specs": 0,
+    }
     for sd in valid:
         slate = sl.filter(pl.col("slate_date") == sd)
         if slate.filter(pl.col("real_score").is_not_null()).height < 5:
+            drops["too_few_scored_labels"] += 1
             continue
         slate_lb = lb.filter(pl.col("slate_date") == sd)
         lb_scores = slate_lb["score"].to_list()
         if len(lb_scores) < 5:
+            drops["too_few_leaderboard_rows"] += 1
             continue
         # num_brawlers is the true field size; captured rows are only the
         # leaderboard's top slice. max() covers a slate spanning more than
@@ -410,32 +483,58 @@ def _precompute_slates(
             int(brawlers.max()) if brawlers is not None and len(brawlers) else len(lb_scores)
         )
         field_size = max(field_size, len(lb_scores))
-        teams = slate["team_key"].unique().to_list()
-        team_to_opp = team_to_opp_for_slate(identity_by_slate, sd, teams)
-        if team_to_opp is None:
-            n_dropped_no_identity += 1
+        day_identity = identity_by_slate.get(str(sd), {})
+        if not day_identity:
+            drops["no_identity_rows"] += 1
             continue
         boost_by: dict[int, float] = {}
         rs_by: dict[int, float] = {}
         enrichment = []
+        n_with_game_id = 0
         for r in slate.iter_rows(named=True):
+            # Supplemental finisher-lineup labels are not draftable pool
+            # entries and carry the 'UNK' team sentinel; production's pool
+            # never contains them. Excluding them here is a provenance filter,
+            # not a workaround for the sentinel string.
+            if str(r.get("section") or "") == SUPPLEMENTAL_LABEL_SECTION:
+                continue
             pid = int(r["platform_player_id"])
+            ident = day_identity.get(pid)
+            if ident is None or not ident["team"]:
+                # No persisted identity for this player on this slate. Excluded
+                # rather than invented; production could not have drafted a
+                # player absent from job1_enrichment either.
+                continue
             boost_by[pid] = float(r["card_boost"])
             rs_by[pid] = float(r["real_score"]) if r["real_score"] is not None else 0.0
+            features: dict[str, Any] = {}
+            if ident["game_id"]:
+                features["game_id"] = ident["game_id"]
+                n_with_game_id += 1
             enrichment.append(
                 {
                     "real_sports_player_id": str(pid),
                     "name": r["display_name"],
-                    "team": r["team_key"],
-                    "opponent": team_to_opp[r["team_key"]],
+                    "team": ident["team"],
+                    "opponent": ident["opponent"],
                     "position": "F",
                     "card_boost": boost_by[pid],
-                    "features_json": json.dumps({}),
+                    "features_json": json.dumps(features),
                 }
             )
+        if len(enrichment) < 5:
+            drops["too_few_identified_players"] += 1
+            continue
         samps, fields, _ = _build_specs(enrichment, slate_date=sd, policy=policy)
         if len(samps) < 5:
+            drops["too_few_specs"] += 1
             continue
+        # Record which identity path this slate will actually resolve on, so
+        # the artifact shows whether the stacking variants were measured on
+        # production's provider path or the corruptible fallback.
+        from wnba_oracle.picker.stacking import resolve_game_keys
+
+        _, game_key_method, n_games = resolve_game_keys(samps)
         precomputed[sd] = {
             "samps": samps,
             "fields": fields,
@@ -443,8 +542,12 @@ def _precompute_slates(
             "rs_by": rs_by,
             "lb_scores": sorted(lb_scores, reverse=True),
             "field_size": field_size,
+            "pool_size": len(enrichment),
+            "n_with_game_id": n_with_game_id,
+            "game_key_method": game_key_method,
+            "n_games": n_games,
         }
-    return precomputed, n_dropped_no_identity
+    return precomputed, drops
 
 
 def _run_variant(
@@ -585,17 +688,39 @@ def merge_shard_results(results: list[dict[str, Any]]) -> dict[str, Any]:
                 "slates": rows,
             }
         )
+    # Which shards actually contributed, and which are missing. Without this a
+    # merged artifact from a partial matrix is indistinguishable from a
+    # complete one -- silent truncation that reads as full coverage.
+    contributed = sorted(
+        {
+            int(res["meta"]["shard_index"])
+            for res in results
+            if res["meta"].get("shard_index") is not None
+        }
+    )
+    expected = max(
+        (int(res["meta"].get("shard_count") or 0) for res in results),
+        default=0,
+    )
+    missing = [i for i in range(expected) if i not in contributed] if expected else []
+
+    merged_drops: dict[str, int] = {}
+    for res in results:
+        for reason, n in (res["meta"].get("drop_reasons") or {}).items():
+            merged_drops[reason] = merged_drops.get(reason, 0) + int(n)
+
     base_meta = dict(results[0]["meta"])
     base_meta.update(
         {
             "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
             "n_slates": len(total_slates),
-            "n_slates_dropped_no_identity": sum(
-                int(res["meta"].get("n_slates_dropped_no_identity", 0)) for res in results
-            ),
+            "drop_reasons": merged_drops,
             "merged_shards": len(results),
+            "shards_contributed": contributed,
+            "shards_missing": missing,
+            "complete": not missing,
             "shard_index": None,
-            "shard_count": None,
+            "shard_count": expected or None,
         }
     )
     return {"meta": base_meta, "variants": variants}
@@ -624,6 +749,25 @@ def main() -> int:
         action="append",
         default=None,
         help="Run only the named variant(s); repeatable. Default: full grid.",
+    )
+    parser.add_argument(
+        "--report-coverage",
+        action="store_true",
+        help=(
+            "Pre-flight only: report how many slates are eligible and why the "
+            "rest were dropped, then exit without running the optimizer. "
+            "Costs under a second; run this before spending shard compute."
+        ),
+    )
+    parser.add_argument(
+        "--min-eligible-slates",
+        type=int,
+        default=0,
+        help=(
+            "With --report-coverage, exit non-zero if fewer slates are "
+            "eligible. Guards against certifying a corpus too small or too "
+            "biased to separate variants from noise."
+        ),
     )
     args = parser.parse_args()
 
@@ -676,7 +820,7 @@ def main() -> int:
     policy = build_model_policy(get_settings())
 
     print("Precomputing production specs per slate...")
-    precomputed, n_dropped_no_identity = _precompute_slates(
+    precomputed, drops = _precompute_slates(
         args.max_slates,
         args.labels_csv,
         args.leaderboards_csv,
@@ -684,13 +828,70 @@ def main() -> int:
         shard=(args.shard_index, args.shard_count),
         policy=policy,
     )
+    # Full accounting to stderr: every exclusion reason, not just one of them.
+    # A silently shrinking corpus biases variant ranking toward whichever
+    # slates happened to survive, so the denominator has to be legible.
+    by_method: dict[str, int] = {}
+    for d in precomputed.values():
+        by_method[d["game_key_method"]] = by_method.get(d["game_key_method"], 0) + 1
     print(
-        f"{len(precomputed)} slates eligible "
-        f"({n_dropped_no_identity} dropped: no validated game identity)."
+        f"eligible={len(precomputed)} dropped={sum(drops.values())} "
+        f"reasons={ {k: v for k, v in drops.items() if v} } "
+        f"game_key_method={by_method}",
+        file=sys.stderr,
     )
+
+    if args.report_coverage:
+        # Pre-flight gate: the whole eligibility cascade costs well under a
+        # second, versus ~86 CPU-hours for the sharded matrix. Running this
+        # first is what turns "we discovered 65% of the corpus was dropped
+        # from a failed CI run" into a cheap, loud, pre-dispatch check.
+        payload = {
+            "eligible": len(precomputed),
+            "dropped": sum(drops.values()),
+            "drop_reasons": drops,
+            "game_key_method": by_method,
+            "slates": sorted(precomputed),
+        }
+        print(json.dumps(payload, indent=2))
+        if args.min_eligible_slates and len(precomputed) < args.min_eligible_slates:
+            print(
+                f"FAIL: {len(precomputed)} eligible slates is below "
+                f"--min-eligible-slates {args.min_eligible_slates}. Refusing to "
+                "certify a benchmark whose corpus is too small or too biased to "
+                "separate variants from noise.",
+                file=sys.stderr,
+            )
+            return 1
+        return 0
+
     if not precomputed:
-        print("No eligible slates; nothing to benchmark.", file=sys.stderr)
-        return 1
+        # An empty shard is a correct partition outcome, not an error: with a
+        # small eligible set strided over many shards, some shards legitimately
+        # get zero slates. Exiting non-zero here failed the whole matrix job,
+        # which skipped `merge` and discarded every SUCCESSFUL shard's work.
+        # Write an empty-but-valid artifact so the upload step's
+        # if-no-files-found:error still guards genuine breakage.
+        print("No eligible slates in this shard; writing empty result.", file=sys.stderr)
+        empty = {
+            "meta": {
+                "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
+                "seed": SEED,
+                "n_samples": args.n_samples,
+                "n_slates": 0,
+                "drop_reasons": drops,
+                "temperature_variants": args.temperature_variants,
+                "shard_index": args.shard_index,
+                "shard_count": args.shard_count,
+                "offline_csv": bool(offline),
+            },
+            "variants": [],
+        }
+        atomic_write_text(
+            args.output_dir / "benchmark_results.json", json.dumps(empty, indent=2) + "\n"
+        )
+        atomic_write_text(args.output_dir / "MODEL_RESEARCH_BENCHMARK.md", render_markdown(empty))
+        return 0
 
     grid = build_variant_grid(args.temperature_variants)
     if args.variant:
@@ -724,7 +925,8 @@ def main() -> int:
             "seed": SEED,
             "n_samples": args.n_samples,
             "n_slates": len(precomputed),
-            "n_slates_dropped_no_identity": n_dropped_no_identity,
+            "drop_reasons": drops,
+            "game_key_method": by_method,
             "temperature_variants": args.temperature_variants,
             "shard_index": args.shard_index,
             "shard_count": args.shard_count,
