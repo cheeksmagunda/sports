@@ -452,19 +452,31 @@ def _run_variant(
     precomputed: dict[str, dict[str, Any]],
     n_samples: int,
     baseline_cfg: Any,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], int, int]:
     """Replay every precomputed slate under one variant's configuration.
 
     ``baseline_cfg`` is the compiled production OptimizeConfig (see
     ``production_env_overrides``); each variant's override applies on top of
     it via ``dataclasses.replace``, alongside the benchmark's own
     compute-budget knobs (n_samples, n_field_lineups, top_n_filter, seed),
-    which are research parameters, not policy."""
+    which are research parameters, not policy.
+
+    Returns ``(rows, n_optimizer_error, n_optimizer_infeasible)``. A slate
+    the optimizer raises on, or returns no feasible 5-player lineup for
+    (e.g. a 2-team slate under knob:dynamic_team_cap_off, which caps at
+    2*2=4 players -- optimize_lineup's own fallback for that case returns an
+    empty ``player_ids``, not an exception), is dropped and counted rather
+    than silently excluded: an uncounted drop biases top1/top5/top20 toward
+    whichever slates happened to survive, and letting the empty-lineup case
+    reach score_lineup would raise (0 values against 5 slot bases) and
+    silently discard the whole shard's in-memory results."""
     from wnba_oracle.picker.optimize import optimize_lineup
     from wnba_oracle.picker.payout import default_curve_for_regime
 
     curve = default_curve_for_regime("top_20")
     rows: list[dict[str, Any]] = []
+    n_optimizer_error = 0
+    n_optimizer_infeasible = 0
     for sd in sorted(precomputed):
         d = precomputed[sd]
         cfg = dataclasses.replace(
@@ -478,7 +490,13 @@ def _run_variant(
         samps = scale_sigma(d["samps"], variant["sigma_scale"])
         try:
             rec = optimize_lineup(samps, d["fields"], curve, cfg=cfg)
-        except Exception:
+        except Exception as exc:
+            n_optimizer_error += 1
+            print(f"optimizer error: {variant['name']} {sd} {type(exc).__name__}", file=sys.stderr)
+            continue
+        if not rec.player_ids:
+            n_optimizer_infeasible += 1
+            print(f"optimizer infeasible: {variant['name']} {sd}", file=sys.stderr)
             continue
         our = score_lineup(rec.player_ids, rec.slot_multipliers, d["boost_by"], d["rs_by"])
         lb_scores = d["lb_scores"]
@@ -521,7 +539,7 @@ def _run_variant(
             median = lb_scores[median_rank - 1]
             row["beat_median"] = 1 if our > median else 0
         rows.append(row)
-    return rows
+    return rows, n_optimizer_error, n_optimizer_infeasible
 
 
 def merge_shard_results(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -540,10 +558,15 @@ def merge_shard_results(results: list[dict[str, Any]]) -> dict[str, Any]:
                     "name": v["name"],
                     "overrides": v.get("overrides", {}),
                     "sigma_scale": v.get("sigma_scale", 1.0),
+                    "n_optimizer_error": 0,
+                    "n_optimizer_infeasible": 0,
                     "rows_by_slate": {},
                 }
                 order.append(v["name"])
-            rows = by_variant[v["name"]]["rows_by_slate"]
+            entry = by_variant[v["name"]]
+            entry["n_optimizer_error"] += int(v.get("n_optimizer_error", 0))
+            entry["n_optimizer_infeasible"] += int(v.get("n_optimizer_infeasible", 0))
+            rows = entry["rows_by_slate"]
             for row in v["slates"]:
                 rows[row["slate_date"]] = row
                 total_slates.add(row["slate_date"])
@@ -556,6 +579,8 @@ def merge_shard_results(results: list[dict[str, Any]]) -> dict[str, Any]:
                 "name": name,
                 "overrides": entry["overrides"],
                 "sigma_scale": entry["sigma_scale"],
+                "n_optimizer_error": entry["n_optimizer_error"],
+                "n_optimizer_infeasible": entry["n_optimizer_infeasible"],
                 "summary": summarize_variant(rows),
                 "slates": rows,
             }
@@ -678,12 +703,16 @@ def main() -> int:
     variants: list[dict[str, Any]] = []
     for i, variant in enumerate(grid, 1):
         print(f"[{i}/{len(grid)}] {variant['name']}")
-        rows = _run_variant(variant, precomputed, args.n_samples, policy.optimizer)
+        rows, n_optimizer_error, n_optimizer_infeasible = _run_variant(
+            variant, precomputed, args.n_samples, policy.optimizer
+        )
         variants.append(
             {
                 "name": variant["name"],
                 "overrides": variant["overrides"],
                 "sigma_scale": variant["sigma_scale"],
+                "n_optimizer_error": n_optimizer_error,
+                "n_optimizer_infeasible": n_optimizer_infeasible,
                 "summary": summarize_variant(rows),
                 "slates": rows,
             }

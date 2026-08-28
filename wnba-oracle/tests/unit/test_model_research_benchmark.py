@@ -341,6 +341,8 @@ class TestMergeShards:
                     "name": variant_name,
                     "overrides": {},
                     "sigma_scale": 1.0,
+                    "n_optimizer_error": 0,
+                    "n_optimizer_infeasible": 0,
                     "summary": mod.summarize_variant(rows),
                     "slates": rows,
                 }
@@ -374,6 +376,18 @@ class TestMergeShards:
         s1["meta"]["n_slates_dropped_no_identity"] = 3
         merged = mod.merge_shard_results([s0, s1])
         assert merged["meta"]["n_slates_dropped_no_identity"] == 5
+
+    def test_optimizer_error_and_infeasible_counts_sum_per_variant(self, mod):
+        s0 = self._shard(mod, "baseline", [("2026-06-01", 1)])
+        s0["variants"][0]["n_optimizer_error"] = 2
+        s0["variants"][0]["n_optimizer_infeasible"] = 1
+        s1 = self._shard(mod, "baseline", [("2026-06-02", 5)])
+        s1["variants"][0]["n_optimizer_error"] = 3
+        s1["variants"][0]["n_optimizer_infeasible"] = 4
+        merged = mod.merge_shard_results([s0, s1])
+        v = merged["variants"][0]
+        assert v["n_optimizer_error"] == 5
+        assert v["n_optimizer_infeasible"] == 5
 
     def test_empty_raises(self, mod):
         with pytest.raises(ValueError, match="no shard results"):
