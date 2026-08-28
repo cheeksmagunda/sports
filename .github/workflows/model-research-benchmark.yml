@@ -29,6 +29,13 @@ on:
         required: false
         type: number
         default: 4
+      min_eligible_slates:
+        description: >-
+          Abort before the shard matrix if fewer slates are eligible.
+          Catastrophic-regression guard, not a statistical-power guarantee.
+        required: false
+        type: number
+        default: 60
 
 permissions:
   contents: read
@@ -71,6 +78,52 @@ jobs:
           PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
           GAME_IDENTITY_OUTPUT_DIR: ${{ runner.temp }}/identity
         run: python export_game_identity.py
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          enable-cache: true
+          version: "0.11.13"
+
+      - name: Install workspace
+        run: uv sync --frozen --all-packages --all-extras
+
+      - name: Restore verified corpus snapshot from backups branch
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus
+        run: |
+          git fetch origin backups
+          mkdir -p "$SNAPSHOT_DIR"
+          git show origin/backups:wnba-oracle/data/backups/slate_labels.csv > "$SNAPSHOT_DIR/slate_labels.csv"
+          git show origin/backups:wnba-oracle/data/backups/contest_leaderboards.csv > "$SNAPSHOT_DIR/contest_leaderboards.csv"
+          git show origin/backups:wnba-oracle/data/backups/manifest.json > "$SNAPSHOT_DIR/manifest.json"
+          python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+
+      # The gate. The full eligibility cascade runs in well under a second,
+      # against ~86 CPU-hours for the matrix below. A previous dispatch spent
+      # that compute before anyone noticed the identity rule was accepting only
+      # 35 of 100 slates, so coverage is now proven BEFORE the fan-out, not
+      # discovered from a failed run.
+      #
+      # min_eligible_slates is a catastrophic-regression guard, NOT a
+      # statistical-power guarantee: a prior 50-slate measurement of
+      # committed_order_objective returned t=1.36, 95% CI [-0.459, +2.540],
+      # i.e. inconclusive. Read game_key_method in the output before trusting
+      # any same-game/same-team variant ranking.
+      - name: Gate on slate coverage before spending shard compute
+        working-directory: wnba-oracle
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus
+          IDENTITY_DIR: ${{ runner.temp }}/identity
+          MIN_ELIGIBLE: ${{ inputs.min_eligible_slates }}
+        run: >-
+          uv run --no-editable --package wnba-oracle python
+          scripts/build_model_research_benchmark.py
+          --output-dir "$RUNNER_TEMP/coverage"
+          --labels-csv "$SNAPSHOT_DIR/slate_labels.csv"
+          --leaderboards-csv "$SNAPSHOT_DIR/contest_leaderboards.csv"
+          --game-identity-csv "$IDENTITY_DIR/game_identity.csv"
+          --report-coverage
+          --min-eligible-slates "$MIN_ELIGIBLE"
 
       - name: Upload game identity without database credentials
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -160,6 +213,15 @@ jobs:
 
   merge:
     needs: benchmark
+    # Run over whatever shards succeeded. A single failed shard previously made
+    # `needs: benchmark` skip this job, discarding every successful shard's
+    # hours of compute. `!cancelled()` (not `always()`) is the documented idiom
+    # -- it still stops on an operator cancel -- and the skipped-guard avoids
+    # merging when the matrix never ran at all. `continue-on-error` on the
+    # matrix would be wrong here: it would launder genuine shard failures into
+    # apparent success. Instead the merged artifact records shards_missing, so
+    # a partial result is visibly partial.
+    if: ${{ !cancelled() && needs.benchmark.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
