@@ -67,11 +67,30 @@ class TestVariantGrid:
         assert len(grid) == 1 + len(mod.KNOB_ABLATIONS) + 2
 
     def test_each_ablation_flips_exactly_one_knob(self, mod):
+        from wnba_oracle.picker.optimize import OptimizeConfig
+
+        valid_fields = {f.name for f in dataclasses.fields(OptimizeConfig)}
         for overrides in mod.KNOB_ABLATIONS.values():
             assert len(overrides) == 1
             (key,) = overrides
-            assert key in mod.BASELINE_OVERRIDES
-            assert overrides[key] != mod.BASELINE_OVERRIDES[key]
+            assert key in valid_fields
+
+
+class TestProductionEnvOverrides:
+    def test_translates_every_expected_prod_config_key_to_its_alias(self, mod):
+        from wnba_oracle.common.settings import EXPECTED_PROD_CONFIG, Settings
+
+        out = mod.production_env_overrides()
+        assert len(out) == len(EXPECTED_PROD_CONFIG)
+        for name, value in EXPECTED_PROD_CONFIG.items():
+            alias = str(Settings.model_fields[name].alias)
+            assert alias in out
+            if value is True:
+                assert out[alias] == "true"
+            elif value is False:
+                assert out[alias] == "false"
+            else:
+                assert out[alias] == str(value)
 
 
 class TestScaleSigma:
@@ -89,15 +108,16 @@ class TestScaleSigma:
 
 
 class TestScoring:
-    def test_score_lineup_orders_by_realized_score(self, mod):
-        # Best realized score takes the 2.0x slot; boosts add to the slot.
+    def test_score_lineup_uses_committed_order_not_realized_score(self, mod):
+        # Player 2 is committed to the 2.0x slot even though player 1 realizes
+        # the higher score -- no hindsight re-sort by outcome.
         rs = {1: 10.0, 2: 5.0}
         boost = {1: 0.5, 2: 0.0}
-        got = mod.score_lineup([2, 1], boost, rs)
-        assert got == pytest.approx((2.0 + 0.5) * 10.0 + 1.8 * 5.0)
+        got = mod.score_lineup([2, 1], [2.0, 1.8], boost, rs)
+        assert got == pytest.approx(5.0 * 2.0 + 10.0 * (1.8 + 0.5))
 
     def test_score_lineup_missing_player_scores_zero(self, mod):
-        assert mod.score_lineup([99], {}, {}) == 0.0
+        assert mod.score_lineup([99], [2.0], {}, {}) == 0.0
 
     def test_placement_is_one_based(self, mod):
         lb = [50.0, 40.0, 30.0]
@@ -113,23 +133,70 @@ class TestSummarize:
 
     def test_metrics(self, mod):
         rows = [
-            {"placement": 1, "gap": 0.0, "beat_median": 1, "payout_capture": 1.0},
-            {"placement": 5, "gap": 2.0, "beat_median": 1, "payout_capture": 0.5},
-            {"placement": 30, "gap": 8.0, "beat_median": 0, "payout_capture": 0.0},
+            {
+                "placement": 1,
+                "placement_lower_bound": 1,
+                "censored": False,
+                "gap": 0.0,
+                "beat_median": 1,
+                "payout_capture": 1.0,
+            },
+            {
+                "placement": 5,
+                "placement_lower_bound": 5,
+                "censored": False,
+                "gap": 2.0,
+                "beat_median": 1,
+                "payout_capture": 0.5,
+            },
+            {
+                # Right-censored: score never reached the captured leaderboard
+                # depth, so the exact placement is unknown -- only a lower
+                # bound, and it never enters beat_median (median unobserved).
+                "placement": None,
+                "placement_lower_bound": 21,
+                "censored": True,
+                "gap": 8.0,
+                "payout_capture": 0.0,
+            },
         ]
         s = mod.summarize_variant(rows)
         assert s["n_slates"] == 3
-        assert s["beat_median_pct"] == pytest.approx(66.7)
+        assert s["n_censored"] == 1
+        assert s["top20_pct"] == pytest.approx(66.7)
         assert s["top5_pct"] == pytest.approx(66.7)
         assert s["top1_pct"] == pytest.approx(33.3)
-        assert s["mean_placement"] == pytest.approx(12.0)
         assert s["mean_gap_vs_top1"] == pytest.approx(3.333)
         assert s["mean_payout_capture"] == pytest.approx(0.5)
+        assert s["beat_median_pct"] == pytest.approx(100.0)
+        assert s["n_median_observed"] == 2
+
+    def test_beat_median_omitted_when_never_observed(self, mod):
+        rows = [
+            {
+                "placement": None,
+                "placement_lower_bound": 21,
+                "censored": True,
+                "gap": 8.0,
+                "payout_capture": 0.0,
+            }
+        ]
+        s = mod.summarize_variant(rows)
+        assert "beat_median_pct" not in s
 
 
 class TestRenderMarkdown:
     def _result(self, mod):
-        rows = [{"placement": 1, "gap": 0.0, "beat_median": 1, "payout_capture": 1.0}]
+        rows = [
+            {
+                "placement": 1,
+                "placement_lower_bound": 1,
+                "censored": False,
+                "gap": 0.0,
+                "beat_median": 1,
+                "payout_capture": 1.0,
+            }
+        ]
         return {
             "meta": {
                 "generated_at": "2026-08-26T00:00:00+00:00",
@@ -207,6 +274,38 @@ class TestCsvLoading:
         out = mod.drafts_by_slate(mod.load_labels_csv(p))
         assert out == {"2026-06-01": {10: 9}, "2026-06-02": {12: 3}}
 
+    def test_game_identity_csv_indexes_by_slate_and_team(self, mod, tmp_path):
+        p = tmp_path / "game_identity.csv"
+        p.write_text(
+            "slate_date,team,opponent\n2026-06-01,MIN,LVA\n2026-06-01,LVA,MIN\n2026-06-02,NYL,CHI\n"
+        )
+        identity = mod.load_game_identity_csv(p)
+        by_slate = mod.index_game_identity(identity)
+        assert by_slate == {
+            "2026-06-01": {"MIN": "LVA", "LVA": "MIN"},
+            "2026-06-02": {"NYL": "CHI"},
+        }
+
+
+class TestTeamToOppForSlate:
+    def test_returns_validated_reciprocal_mapping(self, mod):
+        by_slate = {"2026-06-01": {"MIN": "LVA", "LVA": "MIN"}}
+        got = mod.team_to_opp_for_slate(by_slate, "2026-06-01", ["MIN", "LVA"])
+        assert got == {"MIN": "LVA", "LVA": "MIN"}
+
+    def test_none_when_a_team_has_no_recorded_opponent(self, mod):
+        by_slate = {"2026-06-01": {"MIN": "LVA", "LVA": "MIN"}}
+        assert mod.team_to_opp_for_slate(by_slate, "2026-06-01", ["MIN", "LVA", "NYL"]) is None
+
+    def test_none_when_the_mapping_is_not_reciprocal(self, mod):
+        # NYL claims LVA as its opponent, but LVA's own row says MIN --
+        # unresolvable identity, never guessed.
+        by_slate = {"2026-06-01": {"MIN": "LVA", "LVA": "MIN", "NYL": "LVA"}}
+        assert mod.team_to_opp_for_slate(by_slate, "2026-06-01", ["NYL", "LVA"]) is None
+
+    def test_none_when_slate_is_unknown(self, mod):
+        assert mod.team_to_opp_for_slate({}, "2026-06-01", ["MIN", "LVA"]) is None
+
 
 class TestMergeShards:
     def _shard(self, mod, variant_name, slates):
@@ -215,7 +314,10 @@ class TestMergeShards:
                 "slate_date": sd,
                 "our_score": 10.0,
                 "placement": p,
+                "placement_lower_bound": p,
+                "censored": False,
                 "field_size": 20,
+                "captured_depth": 20,
                 "gap": 1.0,
                 "beat_median": 1,
                 "payout": 1.0,
@@ -229,6 +331,7 @@ class TestMergeShards:
                 "seed": 2026,
                 "n_samples": 3500,
                 "n_slates": len(rows),
+                "n_slates_dropped_no_identity": 0,
                 "temperature_variants": 4,
                 "shard_index": 0,
                 "shard_count": 2,
@@ -263,6 +366,14 @@ class TestMergeShards:
         s0 = self._shard(mod, "baseline", [("2026-06-01", 1)])
         merged = mod.merge_shard_results([s0, s0])
         assert merged["variants"][0]["summary"]["n_slates"] == 1
+
+    def test_dropped_no_identity_counts_sum_across_shards(self, mod):
+        s0 = self._shard(mod, "baseline", [("2026-06-01", 1)])
+        s0["meta"]["n_slates_dropped_no_identity"] = 2
+        s1 = self._shard(mod, "baseline", [("2026-06-02", 5)])
+        s1["meta"]["n_slates_dropped_no_identity"] = 3
+        merged = mod.merge_shard_results([s0, s1])
+        assert merged["meta"]["n_slates_dropped_no_identity"] == 5
 
     def test_empty_raises(self, mod):
         with pytest.raises(ValueError, match="no shard results"):

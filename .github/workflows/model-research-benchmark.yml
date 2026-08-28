@@ -1,16 +1,20 @@
 name: model-research-benchmark
 
-# Manually dispatched research run. Restores the verified corpus snapshot
-# from the backups branch (no database credentials needed), then replays
-# the full variant grid through the production optimizer across parallel
-# slate shards at high sample counts (default 3500 per variant per slate).
+# Manually dispatched research run. A prefetch job exports validated game
+# identity (job1_enrichment, read-only) once; the benchmark matrix then runs
+# entirely off that artifact plus the verified corpus snapshot from the
+# backups branch (no per-shard database credentials), replaying the full
+# variant grid through the production optimizer across parallel slate
+# shards at high sample counts (default 3500 per variant per slate).
 # Results are uploaded as workflow artifacts; nothing is committed.
 #
 # Sizing (measured 2026-08-26 on a 2-vCPU runner class): optimizer cost is
 # linear in n_samples at ~0.075 s per sample per slate-variant. The corpus
-# holds ~99 eligible slates and the default grid has 11 variants, so a
-# 3500-sample run is ~79 CPU-hours total. 16 shards keep each job near
-# 5 hours, inside the 350-minute timeout; 8 shards would exceed it.
+# holds ~99 eligible slates and the default grid has 12 variants (PR #26
+# review added the committed_order_objective challenger), so a 3500-sample
+# run is ~86 CPU-hours total. 20 shards keep each job near 4.3 hours, with
+# real margin inside the 350-minute timeout for uv sync/setup overhead;
+# 16 shards would leave almost none.
 
 on:
   workflow_dispatch:
@@ -34,13 +38,53 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prefetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Install export dependencies
+        run: >-
+          python -m pip install
+          "sqlalchemy==2.0.50"
+          "psycopg[binary]==3.3.4"
+          "pandas==2.3.3"
+
+      - name: Prepare TLS certificate
+        env:
+          PG_SSL_ROOT_CERT: ${{ secrets.PG_SSL_ROOT_CERT }}
+        run: |
+          umask 077
+          printf '%s' "$PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
+
+      - name: Export game identity
+        working-directory: wnba-oracle/scripts
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
+          GAME_IDENTITY_OUTPUT_DIR: ${{ runner.temp }}/identity
+        run: python export_game_identity.py
+
+      - name: Upload game identity without database credentials
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: model-research-benchmark-game-identity
+          path: ${{ runner.temp }}/identity/game_identity.csv
+          if-no-files-found: error
+          retention-days: 1
+
   benchmark:
+    needs: prefetch
     runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+        shard:
+          [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -70,10 +114,17 @@ jobs:
           git show origin/backups:wnba-oracle/data/backups/manifest.json > "$SNAPSHOT_DIR/manifest.json"
           python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
+      - name: Download prefetched game identity
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: model-research-benchmark-game-identity
+          path: ${{ runner.temp }}/identity
+
       - name: Run benchmark shard
         working-directory: wnba-oracle
         env:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus
+          IDENTITY_DIR: ${{ runner.temp }}/identity
           OUTPUT_DIR: ${{ runner.temp }}/bench
           N_SAMPLES: ${{ inputs.n_samples }}
           TEMPERATURE_VARIANTS: ${{ inputs.temperature_variants }}
@@ -84,10 +135,11 @@ jobs:
           --output-dir "$OUTPUT_DIR"
           --labels-csv "$SNAPSHOT_DIR/slate_labels.csv"
           --leaderboards-csv "$SNAPSHOT_DIR/contest_leaderboards.csv"
+          --game-identity-csv "$IDENTITY_DIR/game_identity.csv"
           --n-samples "$N_SAMPLES"
           --temperature-variants "$TEMPERATURE_VARIANTS"
           --shard-index "$SHARD_INDEX"
-          --shard-count 16
+          --shard-count 20
 
       - name: Upload shard results
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

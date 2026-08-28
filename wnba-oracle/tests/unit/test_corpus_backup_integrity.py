@@ -119,10 +119,9 @@ def test_backup_rejects_regression_against_previous_manifest(tmp_path) -> None:
 
 
 def test_backup_url_removes_only_the_machine_local_tls_root_path() -> None:
-    _load_common()
-    backup = _load_script("backup_corpus")
+    common = _load_common()
 
-    portable = backup._portable_database_url(
+    portable = common.portable_database_url(
         "postgresql://user:password@example.invalid:5432/database"
         "?sslmode=verify-ca&sslrootcert=%2Fold%2Fmachine%2Froot.crt&application_name=backup"
     )
@@ -133,15 +132,14 @@ def test_backup_url_removes_only_the_machine_local_tls_root_path() -> None:
 
 
 def test_backup_requires_database_server_identity_verification() -> None:
-    _load_common()
-    backup = _load_script("backup_corpus")
+    common = _load_common()
 
-    backup._require_verified_tls("postgresql://example.invalid/database?sslmode=verify-full")
-    backup._require_verified_tls("postgresql://example.invalid/database?sslmode=verify-ca")
+    common.require_verified_tls("postgresql://example.invalid/database?sslmode=verify-full")
+    common.require_verified_tls("postgresql://example.invalid/database?sslmode=verify-ca")
     with pytest.raises(RuntimeError, match="verify-ca or verify-full"):
-        backup._require_verified_tls("postgresql://example.invalid/database?sslmode=require")
+        common.require_verified_tls("postgresql://example.invalid/database?sslmode=require")
     with pytest.raises(RuntimeError, match="verify-ca or verify-full"):
-        backup._require_verified_tls("postgresql://example.invalid/database")
+        common.require_verified_tls("postgresql://example.invalid/database")
 
 
 def test_restore_entry_point_only_accepts_a_verified_snapshot(tmp_path) -> None:
@@ -240,3 +238,46 @@ def test_export_uses_one_read_only_snapshot_and_publishes_verified_manifest(
     connection.execution_options.assert_called_once_with(isolation_level="REPEATABLE READ")
     assert "SET TRANSACTION READ ONLY" in str(connection.execute.call_args.args[0])
     connection.close.assert_called_once_with()
+
+
+def test_game_identity_export_uses_one_read_only_snapshot(monkeypatch, tmp_path) -> None:
+    _load_common()
+    export = _load_script("export_game_identity")
+    connection = MagicMock()
+    connection.execution_options.return_value = connection
+    connection.begin.return_value.__enter__.return_value = connection
+    engine = MagicMock()
+    engine.connect.return_value = connection
+
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        {
+            "slate_date": ["2026-06-01", "2026-06-01"],
+            "team": ["MIN", "LVA"],
+            "opponent": ["LVA", "MIN"],
+        }
+    )
+
+    def read_sql(statement, observed_connection):
+        assert statement is not None
+        assert observed_connection is connection
+        return frame
+
+    monkeypatch.setattr(export.pd, "read_sql", read_sql)
+
+    rows = export.export_game_identity(engine, tmp_path)
+
+    assert rows == 2
+    assert (tmp_path / "game_identity.csv").is_file()
+    connection.execution_options.assert_called_once_with(isolation_level="REPEATABLE READ")
+    assert "SET TRANSACTION READ ONLY" in str(connection.execute.call_args.args[0])
+    connection.close.assert_called_once_with()
+
+
+def test_game_identity_export_rejects_unverified_tls() -> None:
+    _load_common()
+    export = _load_script("export_game_identity")
+
+    with pytest.raises(RuntimeError, match="verify-ca or verify-full"):
+        export.require_verified_tls("postgresql://example.invalid/database")
