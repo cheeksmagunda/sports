@@ -40,6 +40,19 @@ log = get_logger("oracle.dayclose")
 
 DEFAULT_WALK_WINDOW = 12  # cover yesterday + the prior day's residue
 
+# _auto_record_placement() is only ever invoked directly for "yesterday" --
+# once a slate_date stops being previous_slate_date() no future run revisits
+# it, even after slate_labels/contest_leaderboards recover on their own via
+# run_historical_backfill's overlapping UPSERT sweep (see
+# MODEL_PICK_POSTMORTEM_2026-08-28.md, 2026-08-28 slate: labels/leaderboard
+# were still empty at capture time and never got a second chance). 7 days
+# mirrors this pipeline's general cadence -- half of DEFAULT_WALK_WINDOW,
+# comfortably wider than the 1-2 day lag observed for a late-finalizing
+# platform contest, but narrow enough to stay a bounded nightly catch-up
+# rather than a full historical rescan of contest_placements gaps that
+# predate this auto-capture wiring entirely (those are out of scope here).
+PLACEMENT_CATCHUP_WINDOW_DAYS = 7
+
 
 def _auto_record_placement(slate_date: str) -> dict[str, Any]:
     """Score yesterday's frozen lineup against the captured leaderboard and
@@ -170,6 +183,111 @@ def _auto_record_placement(slate_date: str) -> dict[str, Any]:
             "entry_rank": result.get("entry_rank"),
             "leaderboard_entries": len(lb_scores),
         }
+
+
+def _find_slates_missing_placement(*, before_date: str, lookback_days: int) -> list[str]:
+    """Return slate_dates with a frozen_lineups row but zero contest_placements
+    rows, restricted to the window (before_date - lookback_days, before_date).
+
+    `before_date` is excluded from the window on purpose: it is "yesterday,"
+    already handled by the primary `_auto_record_placement(yesterday)` call
+    each run, so scanning for it here would just be redundant work.
+    """
+    from sqlalchemy import text
+
+    from wnba_oracle.db.engine import get_engine
+
+    settings = get_settings()
+    if not settings.database_url:
+        raise RuntimeError("DATABASE_URL not set")
+
+    before = dt.date.fromisoformat(before_date)
+    window_start = (before - dt.timedelta(days=lookback_days)).isoformat()
+
+    engine = get_engine()
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT DISTINCT fl.slate_date::text AS slate_date
+                FROM frozen_lineups fl
+                WHERE fl.slate_date >= :window_start AND fl.slate_date < :before_date
+                  AND NOT EXISTS (
+                      SELECT 1 FROM contest_placements cp
+                      WHERE cp.slate_date = fl.slate_date
+                  )
+                ORDER BY 1
+                """
+            ),
+            {"window_start": window_start, "before_date": before_date},
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def _catch_up_missing_placements(
+    yesterday: str, *, lookback_days: int = PLACEMENT_CATCHUP_WINDOW_DAYS
+) -> dict[str, Any]:
+    """Retry placement capture for any recent slate that has a frozen lineup
+    but never got a contest_placements row.
+
+    This closes the self-heal gap documented in
+    MODEL_PICK_POSTMORTEM_2026-08-28.md: `_auto_record_placement` is only
+    invoked for `yesterday` in the main flow above, so a slate whose
+    slate_labels/contest_leaderboards weren't populated yet on its own "day"
+    would otherwise never be revisited, even after that data shows up on a
+    later run.
+
+    The "zero contest_placements rows" filter in
+    `_find_slates_missing_placement` IS the idempotency guard: a date that
+    already has a placement row is never selected as a candidate again, so
+    re-running this sweep daily is a cheap no-op once a date is captured --
+    the same "UPSERT makes reprocessing free" shape as
+    `run_historical_backfill`, just expressed as an existence check instead
+    of a database UPSERT (contest_placements is append-only with no natural
+    unique key to upsert against).
+
+    Each candidate goes through the exact same `_auto_record_placement` path
+    used for yesterday, so a date that is still missing labels/leaderboard
+    data comes back degraded (nothing written) exactly as it does today --
+    this never fabricates a placement from incomplete data.
+    """
+    try:
+        candidates = _find_slates_missing_placement(
+            before_date=yesterday, lookback_days=lookback_days
+        )
+    except Exception as exc:
+        log.exception("placement_catchup_scan_failed", error_type=type(exc).__name__)
+        return {"status": "degraded", "reason": "scan_failed", "error_type": type(exc).__name__}
+
+    if not candidates:
+        return {"status": "success", "dates_checked": 0, "dates_recorded": []}
+
+    recorded: list[str] = []
+    still_missing: list[dict[str, Any]] = []
+    for slate_date in candidates:
+        try:
+            outcome = _auto_record_placement(slate_date)
+        except Exception as exc:
+            log.exception(
+                "placement_catchup_failed",
+                slate_date=slate_date,
+                error_type=type(exc).__name__,
+            )
+            still_missing.append({"slate_date": slate_date, "error_type": type(exc).__name__})
+            continue
+        if outcome.get("status") == "success":
+            recorded.append(slate_date)
+            log.info("placement_catchup_recorded", slate_date=slate_date)
+        else:
+            still_missing.append({"slate_date": slate_date, **outcome})
+
+    status = "success" if not still_missing else "degraded"
+    return {
+        "status": status,
+        "dates_checked": len(candidates),
+        "dates_recorded": recorded,
+        "dates_still_missing": still_missing,
+    }
 
 
 def _cleanup_append_only_tables(retention_days: int = 14) -> dict[str, Any]:
@@ -391,6 +509,22 @@ def run() -> JobResult:
         "placement_capture",
         lambda: _auto_record_placement(yesterday),
         required=True,
+        outcomes=outcomes,
+        required_failures=required_failures,
+        degradations=degradations,
+    )
+
+    # Catch-up sweep (see MODEL_PICK_POSTMORTEM_2026-08-28.md): revisit any
+    # slate within PLACEMENT_CATCHUP_WINDOW_DAYS that has a frozen lineup but
+    # never got a contest_placements row -- e.g. because slate_labels /
+    # contest_leaderboards weren't populated yet when that slate WAS
+    # "yesterday". Optional: a still-missing older date is a real gap worth
+    # surfacing as degraded, but must never fail the whole nightly run on its
+    # own (yesterday's own capture above already covers that bar).
+    _run_substep(
+        "placement_catchup",
+        lambda: _catch_up_missing_placements(yesterday),
+        required=False,
         outcomes=outcomes,
         required_failures=required_failures,
         degradations=degradations,

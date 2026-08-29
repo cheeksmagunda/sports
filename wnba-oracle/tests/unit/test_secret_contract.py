@@ -191,6 +191,36 @@ def test_auth_check_output_is_value_free(
     assert len(combined.splitlines()) <= 8
 
 
+def test_relative_command_path_resolves_against_original_cwd(
+    portable_portfolio: tuple[Path, dict[str, str]],
+) -> None:
+    """A relative command path (e.g. "scripts/auth-check") must resolve
+    against the directory the operator invoked with-secrets from, not
+    project_dir. with-secrets does os.chdir(project_dir) before exec'ing the
+    command; without resolving a relative path first, it silently starts
+    looking in the wrong directory once cwd has moved (see
+    MODEL_PICK_POSTMORTEM_2026-08-28.md's with-secrets methodology note)."""
+    root, env = portable_portfolio
+    probe = root / "scripts" / "relative_path_probe.py"
+    _write_executable(probe, "#!/usr/bin/env python3\nprint('relative-path-ok')\n")
+
+    result = subprocess.run(
+        [
+            str(root / "scripts" / "with-secrets"),
+            "wnba-oracle",
+            "--",
+            "scripts/relative_path_probe.py",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=root,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "relative-path-ok"
+
+
 def test_secret_loader_is_a_passthrough_when_optional_files_are_absent(
     tmp_path: Path,
 ) -> None:

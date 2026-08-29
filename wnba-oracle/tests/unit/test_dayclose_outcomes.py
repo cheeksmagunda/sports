@@ -18,6 +18,11 @@ def _success_steps() -> list[Any]:
         patch.object(job_dayclose, "run_historical_backfill", return_value=0),
         patch.object(job_dayclose, "_audit_label_coverage", return_value={"status": "success"}),
         patch.object(job_dayclose, "_auto_record_placement", return_value={"status": "success"}),
+        patch.object(
+            job_dayclose,
+            "_catch_up_missing_placements",
+            return_value={"status": "success", "dates_checked": 0, "dates_recorded": []},
+        ),
         patch.object(job_dayclose, "_backfill_shadow_results", return_value={"status": "success"}),
         patch.object(
             job_dayclose, "_refresh_current_game_logs", return_value={"status": "success"}
@@ -39,6 +44,7 @@ def test_all_required_and_optional_steps_complete_successfully() -> None:
         patches[5],
         patches[6],
         patches[7],
+        patches[8],
         patch.object(job_dayclose, "previous_slate_date", return_value=dt.date(2026, 8, 22)),
     ):
         result = job_dayclose.run()
@@ -50,6 +56,7 @@ def test_all_required_and_optional_steps_complete_successfully() -> None:
         "historical_backfill",
         "label_coverage",
         "placement_capture",
+        "placement_catchup",
         "shadow_results",
         "game_log_refresh",
         "retention_cleanup",
@@ -58,7 +65,7 @@ def test_all_required_and_optional_steps_complete_successfully() -> None:
 
 def test_required_game_log_failure_fails_dayclose() -> None:
     patches = _success_steps()
-    patches[6] = patch.object(
+    patches[7] = patch.object(
         job_dayclose, "_refresh_current_game_logs", side_effect=RuntimeError("unavailable")
     )
     with (
@@ -70,6 +77,7 @@ def test_required_game_log_failure_fails_dayclose() -> None:
         patches[5],
         patches[6],
         patches[7],
+        patches[8],
     ):
         result = job_dayclose.run()
 
@@ -128,6 +136,7 @@ def test_required_historical_backfill_nonzero_fails_dayclose() -> None:
         patches[5],
         patches[6],
         patches[7],
+        patches[8],
     ):
         result = job_dayclose.run()
 
@@ -154,6 +163,7 @@ def test_required_historical_backfill_exception_is_durable_failure() -> None:
         patches[5],
         patches[6],
         patches[7],
+        patches[8],
     ):
         result = job_dayclose.run()
 
@@ -168,7 +178,7 @@ def test_required_historical_backfill_exception_is_durable_failure() -> None:
 
 def test_optional_shadow_failure_is_persisted_as_degraded() -> None:
     patches = _success_steps()
-    patches[5] = patch.object(
+    patches[6] = patch.object(
         job_dayclose, "_backfill_shadow_results", side_effect=RuntimeError("unavailable")
     )
     with (
@@ -180,6 +190,7 @@ def test_optional_shadow_failure_is_persisted_as_degraded() -> None:
         patches[5],
         patches[6],
         patches[7],
+        patches[8],
     ):
         result = job_dayclose.run()
 
@@ -204,8 +215,49 @@ def test_missing_placement_data_is_degraded_not_green() -> None:
         patches[5],
         patches[6],
         patches[7],
+        patches[8],
     ):
         result = job_dayclose.run()
 
     assert result.status is JobStatus.DEGRADED
     assert result.details["degraded_substeps"] == ["placement_capture"]
+
+
+def test_placement_catchup_degraded_does_not_fail_dayclose() -> None:
+    """The catch-up sweep is optional: an old date that is still missing
+    labels/leaderboard data degrades day-close, but must never fail it --
+    yesterday's own capture (a separate, required substep) already carries
+    that bar.
+    """
+    patches = _success_steps()
+    patches[5] = patch.object(
+        job_dayclose,
+        "_catch_up_missing_placements",
+        return_value={
+            "status": "degraded",
+            "dates_checked": 1,
+            "dates_recorded": [],
+            "dates_still_missing": [
+                {
+                    "slate_date": "2026-08-20",
+                    "status": "degraded",
+                    "reason": "missing_labels_or_leaderboard",
+                }
+            ],
+        },
+    )
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+    ):
+        result = job_dayclose.run()
+
+    assert result.status is JobStatus.DEGRADED
+    assert result.details["degraded_substeps"] == ["placement_catchup"]
