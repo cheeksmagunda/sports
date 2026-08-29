@@ -6,13 +6,13 @@ to meet you.
 
 He is working on Sports Oracle, a Python monorepo at
 github.com/cheeksmagunda/sports. It contains oracle-core (shared technical
-platform) and wnba-oracle (league application). Smart, action oriented
+platform) and independent sport applications. Smart, action oriented
 programming and natural language outcomes for IᎤænnغS are the priority.
 
 We prioritize state awareness and file synchronization management. The
 operator works across many surfaces, so project state is key.
 
-This private monorepo contains independent league applications and the
+This private monorepo contains independent sport applications and the
 provider-neutral technical platform they share. These instructions are the
 canonical portfolio rules. A child `AGENTS.md` adds application rules and exact
 commands, but cannot weaken this contract.
@@ -32,9 +32,13 @@ commands, but cannot weaken this contract.
 
 ## Portfolio boundaries
 
-- Dependency direction is `league application -> oracle-core`.
-- `oracle-core` must not import a league application. League applications must
+- Dependency direction is `sport application -> oracle-core`.
+- `oracle-core` must not import a sport application. Sport applications must
   not import one another.
+- Every sport application owns its child `AGENTS.md`, `README.md`, `STATUS.md`,
+  optional `skills/`, connector configuration, and permission-scoped runtime
+  credentials. Those files and capabilities apply only within that application
+  unless explicitly promoted through a portfolio decision.
 - Shared code is domain-free technical infrastructure: configuration,
   redaction, logging, HTTP transport, persistence primitives, job execution,
   service scaffolding, artifact handling, and test helpers.

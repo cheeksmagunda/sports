@@ -1,9 +1,10 @@
 # Sports Oracle
 
-Sports Oracle is a private monorepo for independent five-player daily-draft
-applications and the provider-neutral technical platform they share. Each
-league owns its models, strategy, calendars, providers, schemas, and domain
-endpoints. `packages/oracle-core` owns reusable technical infrastructure only.
+Sports Oracle is a private monorepo for independent sports applications and the
+provider-neutral technical platform they share. Each sport owns its models,
+strategy, calendars, providers, schemas, domain endpoints, operations, and
+runtime permissions. `packages/oracle-core` owns reusable technical
+infrastructure only.
 
 ## Start in five minutes
 
@@ -21,8 +22,11 @@ make typecheck
 make check-boundaries
 ```
 
-Before changing a league application, read root `AGENTS.md`, then that
-application's `AGENTS.md`, `README.md`, and `STATUS.md`.
+Before changing an application, read root `AGENTS.md`, then that application's
+`AGENTS.md`, `README.md`, and `STATUS.md`. An application may also provide its
+own ignored secret files, connector configuration, skills, and narrowly scoped
+workflow credentials. Those application-owned surfaces must not be assumed by
+another sport or promoted into the shared core.
 
 ## Workspace
 
@@ -44,25 +48,15 @@ application, and applications cannot import one another.
 - `oracle-core`, the shared technical foundation
 - Future common infrastructure, once proven useful
 
-Meanwhile, Railway treats `sports` as the GitHub source for WNBA, then builds
-only the appropriate part:
-
-- Backend services use the monorepo root so they can import `oracle-core`, with
-  `wnba-oracle/Dockerfile`
-- Frontend uses `wnba-oracle/frontend`
-- Postgres and Redis stay as the same connected Railway services
-
-So `sports` is both the shared repository and the deployment source. WNBA
-remains a self-contained application inside it.
+Each sport may define its own deployment source, services, databases, frontend,
+workflow set, and rollback procedure. The repository may be the deployment
+source when an application needs to import `oracle-core`, but deployment
+configuration and production facts remain application-owned.
 
 Production source deploys are limited to `main` and wait for the applicable
-GitHub CI checks. The API serves frozen picks from PostgreSQL without requiring
-Redis; Redis is isolated to Job 2 coordination, and API database sessions are
-enforced read-only. The historical backfill service has no cron or source
-auto-deploy and can run only through its explicit exact-commit workflow after
-that commit passes backend CI. The corpus backup exports with database read
-authority in one job, then publishes the verified artifact from a separate job
-that has repository write authority but no database credential.
+application checks. Each application defines its own serving dependencies,
+scheduled jobs, data authority, backup boundaries, and rollback requirements in
+its child documentation.
 
 ## Local backend authentication
 
@@ -70,9 +64,10 @@ Normal commands run directly. They use exported environment values, deployment
 environment values, and native CLI credential stores without copying secrets:
 
 ```sh
-make test-wnba
-scripts/auth-check wnba-oracle --offline
-scripts/auth-check wnba-oracle --live
+APP=wnba-oracle
+make test-app APP="$APP"
+scripts/auth-check "$APP" --offline
+scripts/auth-check "$APP" --live
 ```
 
 Do not copy a working `gh` or Railway CLI session into SOPS or another token
@@ -81,21 +76,21 @@ the API requires one.
 
 SOPS and age are optional for operators who want encrypted local persistence
 for environment-backed values. The repository never needs a plaintext `.env`
-file. Optional root-common and WNBA-specific files are separated:
+file. Optional root-common and application-specific files are separated:
 
 ```text
 .secrets/common.sops.env
-wnba-oracle/.secrets/local.sops.env
+$APP/.secrets/local.sops.env
 ```
 
 If using them, create or edit them with SOPS, then enforce permissions:
 
 ```sh
-mkdir -p .secrets wnba-oracle/.secrets
-chmod 700 .secrets wnba-oracle/.secrets
+mkdir -p .secrets "$APP/.secrets"
+chmod 700 .secrets "$APP/.secrets"
 sops .secrets/common.sops.env
-sops wnba-oracle/.secrets/local.sops.env
-chmod 600 .secrets/common.sops.env wnba-oracle/.secrets/local.sops.env
+sops "$APP/.secrets/local.sops.env"
+chmod 600 .secrets/common.sops.env "$APP/.secrets/local.sops.env"
 ```
 
 The public age recipient is tracked in `.sops.yaml`. Set
@@ -106,8 +101,8 @@ Run a command with root-common and one application's optional encrypted values
 injected only into that child process:
 
 ```sh
-scripts/with-secrets wnba-oracle -- make test
-scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
+scripts/with-secrets "$APP" -- make test
+scripts/with-secrets "$APP" -- ../scripts/auth-check "$APP" --live
 ```
 
 Explicitly exported variables take precedence over encrypted application
@@ -121,7 +116,7 @@ Passwords and are entered through browser Autofill or user interaction.
 
 ```sh
 make test-core
-make test-wnba
+make test-app APP=wnba-oracle
 make test-integration  # requires PostgreSQL, Redis, and their URL variables
 make test-contract
 make security
@@ -131,13 +126,16 @@ make build
 make check-boundaries
 ```
 
-Backend CI calls these same targets, then builds the WNBA image and probes each
-runtime role plus API startup against PostgreSQL and Redis. Operational workflow
-schedules and production evidence are application state, so their current values
-belong in `wnba-oracle/STATUS.md`.
+Application CI calls the shared core checks and the selected application's
+checks, then builds and probes only that application's runtime roles. Operational
+workflow schedules and production evidence are application state, so their
+current values belong in that application's `STATUS.md`.
 
 Frontend CI audits the locked npm graph, runs lint, types, and tests, builds the
 exact production container, and verifies that its HTML API marker and browser
 security policy use the same configured HTTPS origin.
 
-See `wnba-oracle/AGENTS.md` for WNBA-specific commands and verification rules.
+See each application's `AGENTS.md` for sport-specific commands and verification
+rules.
+
+See `APPLICATION_GUIDE.md` when adding another sport application.

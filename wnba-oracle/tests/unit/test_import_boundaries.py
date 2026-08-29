@@ -23,13 +23,24 @@ def _load_boundary_checker() -> ModuleType:
     return module
 
 
+def _make_application(tmp_path: Path, *modules: str) -> Path:
+    package_dir = tmp_path / "wnba-oracle" / "src" / "wnba_oracle"
+    package_dir.mkdir(parents=True)
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    for module in modules:
+        module_dir = package_dir / module
+        module_dir.mkdir()
+        (module_dir / "__init__.py").write_text("", encoding="utf-8")
+    return package_dir
+
+
 def test_model_kernel_cannot_import_observational_assurance(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     checker = _load_boundary_checker()
-    model_dir = tmp_path / "modeling"
-    model_dir.mkdir()
+    package_dir = _make_application(tmp_path, "modeling", "assurance")
+    model_dir = package_dir / "modeling"
     (model_dir / "coupled.py").write_text(
         "from wnba_oracle.assurance import build_source_assurance\n",
         encoding="utf-8",
@@ -37,12 +48,9 @@ def test_model_kernel_cannot_import_observational_assurance(
 
     monkeypatch.setattr(checker, "WORKSPACE_ROOT", tmp_path)
     monkeypatch.setattr(checker, "CORE_SOURCE", tmp_path / "oracle-core")
-    monkeypatch.setattr(checker, "MODEL_KERNEL_DIRS", (model_dir,))
-    monkeypatch.setattr(checker, "ASSURANCE_DIR", tmp_path / "assurance")
-    monkeypatch.setattr(checker, "_applications", lambda: ())
 
     assert checker._violations() == [
-        "modeling/coupled.py:1: model kernel cannot import operational module "
+        "wnba-oracle/src/wnba_oracle/modeling/coupled.py:1: model kernel cannot import operational module "
         "'wnba_oracle.assurance'"
     ]
 
@@ -52,8 +60,8 @@ def test_assurance_cannot_import_model_or_runtime_modules(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     checker = _load_boundary_checker()
-    assurance_dir = tmp_path / "assurance"
-    assurance_dir.mkdir()
+    package_dir = _make_application(tmp_path, "assurance", "features", "scheduler")
+    assurance_dir = package_dir / "assurance"
     (assurance_dir / "coupled.py").write_text(
         "from wnba_oracle.features import serving_schema\nfrom wnba_oracle.scheduler import job2\n",
         encoding="utf-8",
@@ -61,14 +69,11 @@ def test_assurance_cannot_import_model_or_runtime_modules(
 
     monkeypatch.setattr(checker, "WORKSPACE_ROOT", tmp_path)
     monkeypatch.setattr(checker, "CORE_SOURCE", tmp_path / "oracle-core")
-    monkeypatch.setattr(checker, "MODEL_KERNEL_DIRS", ())
-    monkeypatch.setattr(checker, "ASSURANCE_DIR", assurance_dir)
-    monkeypatch.setattr(checker, "_applications", lambda: ())
 
     assert checker._violations() == [
-        "assurance/coupled.py:1: assurance boundary cannot import runtime or model module "
+        "wnba-oracle/src/wnba_oracle/assurance/coupled.py:1: assurance boundary cannot import runtime or model module "
         "'wnba_oracle.features'",
-        "assurance/coupled.py:2: assurance boundary cannot import runtime or model module "
+        "wnba-oracle/src/wnba_oracle/assurance/coupled.py:2: assurance boundary cannot import runtime or model module "
         "'wnba_oracle.scheduler'",
     ]
 
@@ -78,17 +83,9 @@ def test_relative_imports_cannot_bypass_assurance_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     checker = _load_boundary_checker()
-    package_dir = tmp_path / "wnba_oracle"
+    package_dir = _make_application(tmp_path, "assurance", "modeling")
     assurance_dir = package_dir / "assurance"
     model_dir = package_dir / "modeling"
-    assurance_dir.mkdir(parents=True)
-    model_dir.mkdir()
-    for init_path in (
-        package_dir / "__init__.py",
-        assurance_dir / "__init__.py",
-        model_dir / "__init__.py",
-    ):
-        init_path.write_text("", encoding="utf-8")
     (assurance_dir / "coupled.py").write_text(
         "from ..modeling import policy\n",
         encoding="utf-8",
@@ -100,13 +97,10 @@ def test_relative_imports_cannot_bypass_assurance_boundary(
 
     monkeypatch.setattr(checker, "WORKSPACE_ROOT", tmp_path)
     monkeypatch.setattr(checker, "CORE_SOURCE", tmp_path / "oracle-core")
-    monkeypatch.setattr(checker, "MODEL_KERNEL_DIRS", (model_dir,))
-    monkeypatch.setattr(checker, "ASSURANCE_DIR", assurance_dir)
-    monkeypatch.setattr(checker, "_applications", lambda: ())
 
     assert checker._violations() == [
-        "wnba_oracle/modeling/coupled.py:1: model kernel cannot import operational module "
+        "wnba-oracle/src/wnba_oracle/modeling/coupled.py:1: model kernel cannot import operational module "
         "'wnba_oracle.assurance'",
-        "wnba_oracle/assurance/coupled.py:1: assurance boundary cannot import runtime or model "
+        "wnba-oracle/src/wnba_oracle/assurance/coupled.py:1: assurance boundary cannot import runtime or model "
         "module 'wnba_oracle.modeling'",
     ]

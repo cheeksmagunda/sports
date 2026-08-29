@@ -10,23 +10,6 @@ from pathlib import Path
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 CORE_SOURCE = WORKSPACE_ROOT / "packages" / "oracle-core" / "src"
-WNBA_SOURCE = WORKSPACE_ROOT / "wnba-oracle" / "src" / "wnba_oracle"
-MODEL_KERNEL_DIRS = (
-    WNBA_SOURCE / "modeling",
-    WNBA_SOURCE / "picker",
-    WNBA_SOURCE / "predict",
-)
-ASSURANCE_DIR = WNBA_SOURCE / "assurance"
-MODEL_FORBIDDEN_PREFIXES = (
-    "wnba_oracle.assurance",
-    "wnba_oracle.api",
-    "wnba_oracle.common.clock",
-    "wnba_oracle.common.settings",
-    "wnba_oracle.db",
-    "wnba_oracle.ingest",
-    "wnba_oracle.scheduler",
-    "oracle_core",
-)
 MODEL_FORBIDDEN_MODULES = {
     "fastapi",
     "httpx",
@@ -37,27 +20,15 @@ MODEL_FORBIDDEN_MODULES = {
     "sqlalchemy",
     "subprocess",
 }
-ASSURANCE_FORBIDDEN_PREFIXES = (
-    "wnba_oracle.api",
-    "wnba_oracle.common.settings",
-    "wnba_oracle.db",
-    "wnba_oracle.eval",
-    "wnba_oracle.features",
-    "wnba_oracle.ingest",
-    "wnba_oracle.modeling",
-    "wnba_oracle.picker",
-    "wnba_oracle.predict",
-    "wnba_oracle.scheduler",
-    "wnba_oracle.train",
-    "oracle_core",
-)
-ASSURANCE_FORBIDDEN_MODULES = MODEL_FORBIDDEN_MODULES
+MODEL_KERNEL_NAMES = ("modeling", "picker", "predict")
+ASSURANCE_NAME = "assurance"
 
 
 @dataclass(frozen=True)
 class Application:
     name: str
     source: Path
+    package: str
     modules: frozenset[str]
 
 
@@ -75,9 +46,18 @@ def _applications() -> tuple[Application, ...]:
     applications: list[Application] = []
     for project in sorted(WORKSPACE_ROOT.glob("*-oracle")):
         source = project / "src"
+        packages = (
+            tuple(
+                path.name
+                for path in source.iterdir()
+                if path.is_dir() and (path / "__init__.py").is_file()
+            )
+            if source.is_dir()
+            else ()
+        )
         modules = _top_level_modules(source)
-        if modules:
-            applications.append(Application(project.name, source, modules))
+        if len(packages) == 1 and modules:
+            applications.append(Application(project.name, source, packages[0], modules))
     return tuple(applications)
 
 
@@ -119,7 +99,7 @@ def _violations() -> list[str]:
             if module.split(".", 1)[0] in application_modules:
                 relative = path.relative_to(WORKSPACE_ROOT)
                 violations.append(
-                    f"{relative}:{line}: oracle-core cannot import league module {module!r}"
+                    f"{relative}:{line}: oracle-core cannot import sport module {module!r}"
                 )
 
     for application in applications:
@@ -129,18 +109,76 @@ def _violations() -> list[str]:
                 if module.split(".", 1)[0] in forbidden:
                     relative = path.relative_to(WORKSPACE_ROOT)
                     violations.append(
-                        f"{relative}:{line}: {application.name} cannot import another league "
+                        f"{relative}:{line}: {application.name} cannot import another sport "
                         f"module {module!r}"
                     )
 
-    for source in MODEL_KERNEL_DIRS:
-        for path in sorted(source.rglob("*.py")):
+    for application in applications:
+        model_prefixes = tuple(
+            f"{application.package}.{name}"
+            for name in (
+                "common.clock",
+                "common.settings",
+                "db",
+                "ingest",
+                "scheduler",
+                "assurance",
+                "api",
+            )
+        ) + ("oracle_core",)
+        model_dirs = tuple(
+            application.source / application.package / name
+            for name in MODEL_KERNEL_NAMES
+            if (application.source / application.package / name).is_dir()
+        )
+        for source in model_dirs:
+            for path in sorted(source.rglob("*.py")):
+                for line, module in _imports(path):
+                    top_level = module.split(".", 1)[0]
+                    forbidden_prefix = next(
+                        (
+                            prefix
+                            for prefix in model_prefixes
+                            if module == prefix or module.startswith(f"{prefix}.")
+                        ),
+                        None,
+                    )
+                    if (
+                        forbidden_prefix is None
+                        and top_level not in MODEL_FORBIDDEN_MODULES
+                    ):
+                        continue
+                    relative = path.relative_to(WORKSPACE_ROOT)
+                    violations.append(
+                        f"{relative}:{line}: model kernel cannot import operational module {module!r}"
+                    )
+
+        assurance_dir = application.source / application.package / ASSURANCE_NAME
+        if not assurance_dir.is_dir():
+            continue
+        assurance_prefixes = tuple(
+            f"{application.package}.{name}"
+            for name in (
+                "api",
+                "common.settings",
+                "db",
+                "eval",
+                "features",
+                "ingest",
+                "modeling",
+                "picker",
+                "predict",
+                "scheduler",
+                "train",
+            )
+        ) + ("oracle_core",)
+        for path in sorted(assurance_dir.rglob("*.py")):
             for line, module in _imports(path):
                 top_level = module.split(".", 1)[0]
                 forbidden_prefix = next(
                     (
                         prefix
-                        for prefix in MODEL_FORBIDDEN_PREFIXES
+                        for prefix in assurance_prefixes
                         if module == prefix or module.startswith(f"{prefix}.")
                     ),
                     None,
@@ -152,30 +190,9 @@ def _violations() -> list[str]:
                     continue
                 relative = path.relative_to(WORKSPACE_ROOT)
                 violations.append(
-                    f"{relative}:{line}: model kernel cannot import operational module {module!r}"
+                    f"{relative}:{line}: assurance boundary cannot import runtime or model module "
+                    f"{module!r}"
                 )
-
-    for path in sorted(ASSURANCE_DIR.rglob("*.py")):
-        for line, module in _imports(path):
-            top_level = module.split(".", 1)[0]
-            forbidden_prefix = next(
-                (
-                    prefix
-                    for prefix in ASSURANCE_FORBIDDEN_PREFIXES
-                    if module == prefix or module.startswith(f"{prefix}.")
-                ),
-                None,
-            )
-            if (
-                forbidden_prefix is None
-                and top_level not in ASSURANCE_FORBIDDEN_MODULES
-            ):
-                continue
-            relative = path.relative_to(WORKSPACE_ROOT)
-            violations.append(
-                f"{relative}:{line}: assurance boundary cannot import runtime or model module "
-                f"{module!r}"
-            )
     return violations
 
 
