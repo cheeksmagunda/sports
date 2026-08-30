@@ -190,6 +190,56 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   cycles on the activated default-branch workflows have not all completed yet.
   Do not describe the nightly acceptance cycle as proven until their durable
   records and workflow results are verified.
+- 2026-08-30 afternoon session (#32, #35, #38, #39, dossier reconciliation):
+  reconciled three divergent worktrees onto main (14 commits), then continued
+  same-day per explicit operator authorization ahead of the 18:20 UTC freeze.
+  Summary, in commit order:
+  - #32 fix: job1 opponent derivation now prefers Real Sports game_id over the
+    corruptible Odds team_to_opp map (`job1.py`), plus a watchdog
+    `opponent_non_reciprocal` check and a written-not-run
+    `backfill_game_identity.py` for existing rows missing `game_id`.
+  - DRY consolidation: `feature_payload.parse_feature_mapping`,
+    `contest_score.committed_lineup_score`, shared postgres-URL
+    normalization -- four and six call sites respectively collapsed to one
+    implementation each.
+  - Sport application contract (`scripts/check_applications.py`) added and
+    wired into CI; `APPLICATION_GUIDE.md` documents the contract and the
+    oracle-core promotion gate.
+  - Dossier contract (oracle-core schema + wnba-oracle computation) merged
+    from the isolated worktree that built it; the `_realized_oracle` top-26
+    pruned brute force is now labeled `lower_bound`, not `exact` (it is not
+    proven optimal under the team cap) -- and exposed read-only at
+    `GET /dossier/{slate_date}` (#35 phase 3).
+  - Watchdog dead-man's-switch fix: a non-2xx ping response no longer logs
+    as delivered (`watchdog.py`).
+  - `optimizer_committed_order_objective` promoted true and
+    `optimizer_leverage_weight` promoted to 0.28 in `EXPECTED_PROD_CONFIG`
+    (both explicitly authorized), deployed live on cron-job2 same-day (a
+    manual Railway redeploy, since GitHub Actions' broken CI blocked the
+    normal auto-deploy -- see the CI note above), verified via clean
+    post-deploy watchdog runs.
+  - `player_slate_ownership` (#38/F6) wired end-to-end: `job2.py` records
+    projected ownership at freeze, `job_dayclose.py` records actual
+    ownership from `slate_labels.drafts` (a computation that already
+    existed for `contest_placements`'s JSONB blob, now also written to the
+    dedicated per-player table), and `backfill_player_slate_ownership.py`
+    backfills history (written, not run). A same-day live-capture attempt
+    (`live_ownership.py`) exists behind `LIVE_OWNERSHIP_CAPTURE_ENABLED`
+    (default off, left off this session) -- empirically confirmed
+    2026-08-30 that Real Sports' `/stats` endpoint returns `draftStats == []`
+    while a contest is pregame, so no pre-lock ownership signal is
+    available from that endpoint today regardless.
+  - F2 (immutable decision snapshot) and F5 (canonical player identity) are
+    design-only: `drive/2026-08-30-immutable-decision-snapshot-design.md`
+    and `drive/2026-08-30-canonical-player-identity-design.md`.
+  - Player analysis (2026-08-29, on request): Han Xu, Shay Ciezki, Sami
+    Whitcomb, and Rebekah Gardner (0.02-0.07% owned, near-max card_boost,
+    bench/low-L5-production, both games at 8.5-9.5pt spreads) is the
+    game-script blowout bench-minutes pattern -- the market, our model, and
+    the boost mechanic all correctly priced them as long shots; this was a
+    low-probability variance event, not an obvious missed signal. Zero
+    player overlap between our frozen lineup and the winning entry that day.
+  - Full offline suite green throughout (909 passed at last full run).
 
 ## Canonical Data
 
