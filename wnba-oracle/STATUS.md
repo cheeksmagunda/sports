@@ -223,7 +223,9 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
     ownership from `slate_labels.drafts` (a computation that already
     existed for `contest_placements`'s JSONB blob, now also written to the
     dedicated per-player table), and `backfill_player_slate_ownership.py`
-    backfills history (written, not run). A same-day live-capture attempt
+    backfills history -- **executed 2026-08-30: 6,417 rows across 219
+    historical slates**, the first real data this calibration table has ever
+    held. A same-day live-capture attempt
     (`live_ownership.py`) exists behind `LIVE_OWNERSHIP_CAPTURE_ENABLED`
     (default off, left off this session) -- empirically confirmed
     2026-08-30 that Real Sports' `/stats` endpoint returns `draftStats == []`
@@ -237,9 +239,83 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
     bench/low-L5-production, both games at 8.5-9.5pt spreads) is the
     game-script blowout bench-minutes pattern -- the market, our model, and
     the boost mechanic all correctly priced them as long shots; this was a
-    low-probability variance event, not an obvious missed signal. Zero
-    player overlap between our frozen lineup and the winning entry that day.
+    low-probability variance event, not an obvious missed signal. Two of the
+    five (Whitcomb, Harrison) WERE in our frozen lineup; the winning entry
+    shared zero players with ours.
   - Full offline suite green throughout (909 passed at last full run).
+
+### Findings opened 2026-08-30 (not yet resolved -- carry forward)
+
+- **The per-team cap is NOT our binding constraint.** The 2026-08-29 winning
+  entry was five Phoenix players (a single-team "fan stack"), which our
+  `max_per_team=2` cannot construct, and across the leaderboard corpus the
+  winning lineup exceeds our effective cap on **36/195 slates (18.5%)**.
+  That framing is a trap, though: computing `_realized_oracle` at cap 2 vs 3
+  vs 5 on the six most recent such slates shows the best lineup reachable
+  *under our own cap* beat the actual winning score on **6 of 6**
+  (2026-08-29: 72.0 achievable at cap=2 vs 55.2 winning; raising to cap=5
+  only moves the ceiling to 78.5). The gap is player *selection*, not the
+  cap. Do not raise `OPTIMIZER_MAX_PER_TEAM` on this evidence -- it would
+  add variance without addressing the actual miss.
+- **Measured ownership has never fired in production.** See the
+  `FIELD_MEASURED_OWNERSHIP_ENABLED` row above. D86's "single most
+  predictive ownership signal" has been dark since it shipped; every live
+  freeze used the softmax estimator, which re-derives the field from our own
+  projections and therefore systematically underprices leverage -- exactly
+  the failure D86 was written to fix. This is the highest-value open item
+  from #38: without a pre-lock ownership source the measured path cannot
+  activate, and `/stats` is empirically empty pregame (confirmed against
+  live contest 2117 on 2026-08-30).
+- **`discover_wnba_contest_id` can return the wrong sport.** It returns
+  `max(seen_ids)` from one browse, and the account now carries MLB, WNBA,
+  and soccer contests whose ids interleave (observed 2026-08-30:
+  2116=mlb, 2117=wnba, 2118=soccer -- the max was soccer). Day-close
+  tolerates this because it walks a *range* of ids rather than trusting
+  one, so this is latent rather than actively broken; `live_ownership.py`
+  works around it by validating every observed id. A proper fix belongs in
+  `ingest/realsports.py`.
+- **Dependency CVEs (`pip-audit`, 2026-08-30).** `starlette 0.52.1` (the
+  live API's ASGI layer) carries PYSEC-2026-161/248/249/2280/2281 with
+  fixes in 1.0.1-1.3.1; `pyarrow 21.0.0` carries PYSEC-2026-113 with a fix
+  in 23.0.1. Deliberately NOT patched on 2026-08-30 -- both are
+  major-version jumps needing their own compatibility pass, and the session
+  was inside the pre-freeze window. Treat as the next security task.
+- **A pre-lock ownership source is the blocking dependency for #38.** Since
+  `/stats` is empty pregame, the only known candidate is whatever XHR the
+  Real Sports app itself calls to render its in-app draft percentages.
+  Discover it by *observing* an authenticated browser session's network
+  traffic, not by probing guessed endpoints with the production session
+  (per `AGENTS.md`, session recovery requires an interactive operator
+  login, so burning the session is expensive).
+
+### Operational learnings (2026-08-30)
+
+- `railway variables --set ... --skip-deploys` does **not** apply the new
+  value to a cron service's next scheduled dispatch; the container is built
+  with its variables baked in. Setting a variable on `cron-job2` requires a
+  real redeploy afterwards, confirmed twice this session by a `config_drift`
+  watchdog event firing after a `--skip-deploys` set.
+- When GitHub Actions is failing and Railway services are gated on
+  `Wait for CI`, `railway redeploy --from-source -y` pulls and deploys the
+  latest commit directly, bypassing the stuck CI gate. Plain
+  `railway redeploy` (no flag) redeploys the *existing* build and will not
+  pick up a new commit.
+- The shell environment on the operator's machine exports a
+  `RAILWAY_API_TOKEN` scoped to a **different project** (`mlb-oracle`),
+  which silently overrides the correct per-directory CLI link and makes
+  both the Railway MCP tools and `railway` CLI fail with `Unauthorized`.
+  Workaround used: `env -u RAILWAY_API_TOKEN -u RAILWAY_PROJECT_ID
+  -u RAILWAY_ENVIRONMENT_ID railway ...`. Removing that global export would
+  remove the footgun.
+- `job1_enrichment.slate_date` is a native `DATE` column while
+  `slate_labels.slate_date` is `VARCHAR(16)`. A parameterized
+  `:x IS NULL OR col = :x` filter needs a matching explicit `CAST` per
+  table or Postgres raises `AmbiguousParameter` / `UndefinedFunction`.
+- Real Sports and public box scores disagree on at least one name this
+  session (`S. Ciezki` in `slate_labels` vs "Sara Ciezki" in a public
+  recap, first name "Shay" in the platform payload). Name-keyed joins
+  across those sources are unsafe; this is part of what #30's canonical
+  identity table is for.
 
 ## Canonical Data
 
@@ -345,6 +421,7 @@ and never loads the artifact, so it does not need the SHA.
 | OPTIMIZER_CONTEXTUAL_STACKING_ENABLED | true (code default) | contextual-stacking-v1 |
 | OPTIMIZER_CONTEXTUAL_STACK_EV_MARGIN | 0.010 (code default) | Balance indifference band in objective units |
 | OPTIMIZER_COMMITTED_ORDER_OBJECTIVE | true | 2026-08-30: promoted to true in EXPECTED_PROD_CONFIG and deployed live on cron-job2 (Railway env var set) ahead of the 2026-08-30 18:20 UTC freeze, per explicit operator authorization -- see decision above. Verified via a clean post-deploy watchdog run (no config_drift event) at 2026-08-30T15:05 UTC |
+| OPTIMIZER_LEVERAGE_WEIGHT | 0.28 | 2026-08-30: promoted from the library default 0.0 (leverage was fully OFF in production before this) per explicit operator authorization. Strongest single knob in the 101-slate sweep: +5.103 score / +0.1386 payout alone, +4.890 / +0.1980 paired with the committed-order objective. Verified live via a `job2.run(dry_run=True)` reporting `leverage_weight: 0.28` plus a clean `watchdog_clean` config-drift pass at 2026-08-30T17:25 UTC |
 | MINUTES_MODEL_ENABLED | true (code default) | D55 |
 | STARTER_SIGNAL_ENABLED | true (code default) | D71 |
 | AVAILABILITY_MODEL_ENABLED | true | D73 |
@@ -352,7 +429,7 @@ and never loads the artifact, so it does not need the SHA.
 | LINEUP_ANCHOR_FLOOR | 2 | D57/D58 |
 | LATE_REFREEZE_ENABLED | true | D75 |
 | PROP_SIGNAL_SCALE | 0.3 | D78 |
-| FIELD_MEASURED_OWNERSHIP_ENABLED | true (code default) | D86 |
+| FIELD_MEASURED_OWNERSHIP_ENABLED | true (code default) | D86. NOTE (2026-08-30): this flag is ON but has been **inert in production** -- see the measured-ownership finding below. `field.project_ownership`'s measured path only activates when a spec carries `measured_drafts`, which `job2._load_measured_drafts` reads from *today's* `slate_labels.drafts`; that row does not exist until day-close writes it the next morning, so every live freeze has silently used the estimator fallback |
 | SAMPLING_SCORE_OFFSET | 2.0 (code default) | D52 |
 | FIELD_SAME_GAME_BOOST | 3.0 | D88/D91 |
 | FIELD_SAME_TEAM_BOOST | 2.0 | D88/D91 |

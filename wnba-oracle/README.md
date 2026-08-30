@@ -34,6 +34,13 @@ make test-wnba
   and source-assurance metadata.
 - `GET /lineup/{date}/history`: return all freeze sequences for a slate.
 - `GET /slate/{date}`: return first-tip, lock, freeze, and pause metadata.
+- `GET /dossier/{date}`: return the finalized-slate dossier -- our committed
+  entry, the best observed field entry, and the theoretical ceiling, each with
+  explicit achievability, censoring, and gap-exactness metadata. 404 until the
+  slate has a frozen lineup, a captured leaderboard, and realized labels. Gaps
+  touching the theoretical ceiling are always `lower_bound`, never `exact`:
+  the ceiling comes from a top-26-pruned brute force that is not proven
+  optimal under the per-team cap.
 
 Exact production schedules are mutable and belong in `STATUS.md`.
 
