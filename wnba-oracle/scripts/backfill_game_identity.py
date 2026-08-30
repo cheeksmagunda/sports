@@ -53,10 +53,10 @@ from corpus_backup_common import portable_postgres_url, require_verified_tls
 from sqlalchemy import create_engine, text
 
 SELECT_ROWS = text(
-    "SELECT id, slate_date, features_json->>'game_id' AS game_id, "
+    "SELECT id, slate_date::text AS slate_date, features_json->>'game_id' AS game_id, "
     "features_json->>'game_start_utc' AS game_start_utc "
     "FROM job1_enrichment "
-    "WHERE (:slate_date IS NULL OR slate_date = :slate_date) "
+    "WHERE (CAST(:slate_date AS DATE) IS NULL OR slate_date = CAST(:slate_date AS DATE)) "
     "ORDER BY slate_date, id"
 )
 

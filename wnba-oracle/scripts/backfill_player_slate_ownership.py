@@ -41,7 +41,7 @@ from sqlalchemy import create_engine, text
 SELECT_LABELS = text(
     "SELECT slate_date, platform_player_id, drafts FROM slate_labels "
     "WHERE drafts IS NOT NULL AND drafts > 0 "
-    "AND (:slate_date IS NULL OR slate_date = :slate_date) "
+    "AND (CAST(:slate_date AS VARCHAR) IS NULL OR slate_date = CAST(:slate_date AS VARCHAR)) "
     "ORDER BY slate_date"
 )
 
