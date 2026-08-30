@@ -35,6 +35,12 @@ Triggers implemented (post-MVP, expand as the eval bundle grows):
   ``expected_payout = 0``. Optimizer either returned a degenerate
   solution or the payout curve was misconfigured. Operator should
   skip the contest.
+- ``opponent_non_reciprocal`` (warn, #32) — job1_enrichment has a
+  ``(team, opponent)`` edge that isn't mirrored back (A names B, B doesn't
+  name A). A post-tip re-capture can overwrite ``opponent`` with a team's
+  next fixture from the Odds API; downstream stacking already degrades
+  safely to ``incomplete`` rather than trusting it, but the corruption
+  should be caught same-day, not months later from a research scan.
 
 Other writers reuse persist_events for out-of-run triggers:
 ``job1_pool_degraded`` (critical, job1's D84 sanity gate) and
@@ -160,6 +166,7 @@ from wnba_oracle.scheduler.watchdog_checks import (  # noqa: E402
     _check_freeze,
     _check_label_coverage,
     _check_model_artifact,
+    _check_opponent_reciprocity,
     _check_pool,
     _slate_freeze_deadline,
 )
@@ -198,6 +205,7 @@ __all__ = [
     "_check_freeze",
     "_check_label_coverage",
     "_check_model_artifact",
+    "_check_opponent_reciprocity",
     "_check_pool",
     "_check_prediction_drift",
     "_pearson",
@@ -275,6 +283,7 @@ def run_watchdog(
     events.extend(_check_pool(slate_date))
     events.extend(_check_enrichment_freshness(slate_date, now_utc=now_utc))
     events.extend(_check_enrichment_source(slate_date))
+    events.extend(_check_opponent_reciprocity(slate_date))
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
     events.extend(_check_model_artifact(slate_date))
     events.extend(_check_feature_content(slate_date))

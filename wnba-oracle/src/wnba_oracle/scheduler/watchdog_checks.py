@@ -439,6 +439,54 @@ def _check_enrichment_source(slate_date: str) -> list[WatchdogEvent]:
     return []
 
 
+OPPONENT_RECIPROCITY_Q = text(
+    "SELECT DISTINCT team, opponent FROM job1_enrichment "
+    "WHERE slate_date = :sd AND team IS NOT NULL AND team <> '' "
+    "AND opponent IS NOT NULL AND opponent <> ''"
+)
+
+
+def _check_opponent_reciprocity(slate_date: str) -> list[WatchdogEvent]:
+    """#32: job1_enrichment.opponent can be silently overwritten with a
+    later matchup when a post-tip re-capture picks up a team's next
+    fixture from the Odds API. A healthy slate's (team, opponent) edges
+    are reciprocal: if team A's row names opponent B, B's row must name A
+    back. Flag any non-reciprocal edge so it is caught the day it happens
+    instead of months later from a research corpus scan (the #32 repro:
+    ``day[day[t]] == t`` for every team).
+
+    Warn, not error/critical: ``resolve_game_keys`` already prefers the
+    provider ``game_id`` over this map, and ``_fallback_metadata_is_complete``
+    requires reciprocity before trusting the fallback -- so a bad edge here
+    degrades same-game/same-team stacking to ``incomplete`` rather than
+    silently stacking on an invented matchup. It is a real data-integrity
+    gap worth surfacing, not a production incident by itself.
+    """
+    eng = get_engine()
+    with eng.connect() as conn:
+        rows = list(conn.execute(OPPONENT_RECIPROCITY_Q, {"sd": slate_date}))
+    team_to_opponents: dict[str, set[str]] = {}
+    for team, opponent in rows:
+        team_to_opponents.setdefault(str(team), set()).add(str(opponent))
+    bad_edges = [
+        {"team": team, "opponent": opponent}
+        for team, opponents in team_to_opponents.items()
+        for opponent in opponents
+        if team not in team_to_opponents.get(opponent, set())
+    ]
+    if not bad_edges:
+        return []
+    bad_edges.sort(key=lambda edge: (edge["team"], edge["opponent"]))
+    return [
+        WatchdogEvent(
+            slate_date=slate_date,
+            trigger="opponent_non_reciprocal",
+            severity=SEVERITY_WARN,
+            payload={"bad_edges": bad_edges[:10], "n_bad_edges": len(bad_edges)},
+        )
+    ]
+
+
 def _check_config_drift(slate_date: str, *, settings: object | None = None) -> list[WatchdogEvent]:
     """Warn when the live serving config has drifted from the validated prod
     values (e.g. an env wipe reverted a tuned knob to its safe-off default).

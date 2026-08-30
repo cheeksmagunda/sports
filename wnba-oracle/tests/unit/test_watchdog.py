@@ -378,6 +378,7 @@ def test_run_watchdog_aggregates_and_persists() -> None:
         patch.object(watchdog, "_check_feature_content", return_value=[]),
         patch.object(watchdog, "_check_config_drift", return_value=[]),
         patch.object(watchdog, "_check_enrichment_source", return_value=[]),
+        patch.object(watchdog, "_check_opponent_reciprocity", return_value=[]),
         patch.object(watchdog, "persist_events", return_value=2) as persist,
         patch.object(watchdog, "_ping_on_critical") as ping,
     ):
@@ -459,6 +460,42 @@ def test_feature_content_quiet_on_tiny_pool() -> None:
     eng = _engine_with_feature_counts(4, 0, 0)
     with patch.object(watchdog_checks, "get_engine", return_value=eng):
         assert watchdog._check_feature_content("2026-06-21") == []
+
+
+def _engine_with_team_opponent_rows(rows: list[tuple[str, str]]) -> MagicMock:
+    eng = MagicMock()
+    conn = MagicMock()
+    conn.execute.return_value = iter(rows)
+    eng.connect.return_value.__enter__.return_value = conn
+    return eng
+
+
+def test_opponent_reciprocity_clean_when_all_edges_mirror() -> None:
+    rows = [("LVA", "NYL"), ("NYL", "LVA"), ("CHI", "IND"), ("IND", "CHI")]
+    eng = _engine_with_team_opponent_rows(rows)
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
+        assert watchdog._check_opponent_reciprocity("2026-06-21") == []
+
+
+def test_opponent_reciprocity_warns_on_non_reciprocal_edge() -> None:
+    """#32 repro shape: LVA names NYL, but NYL's row names LVA's *next*
+    fixture (a later re-capture picked up the odds feed's next matchup)."""
+    rows = [("LVA", "NYL"), ("NYL", "CHI")]
+    eng = _engine_with_team_opponent_rows(rows)
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
+        events = watchdog._check_opponent_reciprocity("2026-06-21")
+    assert len(events) == 1
+    assert events[0].trigger == "opponent_non_reciprocal"
+    assert events[0].severity == watchdog.SEVERITY_WARN
+    assert events[0].payload["n_bad_edges"] == 2
+    assert {"team": "LVA", "opponent": "NYL"} in events[0].payload["bad_edges"]
+    assert {"team": "NYL", "opponent": "CHI"} in events[0].payload["bad_edges"]
+
+
+def test_opponent_reciprocity_quiet_on_empty_pool() -> None:
+    eng = _engine_with_team_opponent_rows([])
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
+        assert watchdog._check_opponent_reciprocity("2026-06-21") == []
 
 
 def test_settings_config_drift_detects_reverted_knob() -> None:
