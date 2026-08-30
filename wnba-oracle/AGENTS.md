@@ -103,6 +103,21 @@ scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
   boundaries.
 - Keep slate-calendar and timezone decisions local. Inject clocks in tests and
   cover UTC and WNBA slate-date boundaries.
+- `slate_date` is **not** the same type across tables: `job1_enrichment.slate_date`
+  is a native `DATE`, `slate_labels.slate_date` is `VARCHAR(16)`. A parameterized
+  `:x IS NULL OR col = :x` filter needs an explicit per-table `CAST` or Postgres
+  raises `AmbiguousParameter` / `UndefinedFunction`.
+- Player names are not a safe join key across sources. Real Sports, the public
+  box scores, and the `nba_api` catalog disagree on spellings and on which given
+  name a player uses. Resolve through `ingest/identity.py`; see #30 for the
+  canonical identity table this is still missing.
+- `field.project_ownership`'s measured path only activates when a spec carries
+  `measured_drafts`, which `job2._load_measured_drafts` reads from *today's*
+  `slate_labels.drafts`. That row does not exist until day-close writes it the
+  next morning, so despite `FIELD_MEASURED_OWNERSHIP_ENABLED` defaulting on,
+  D86's measured field has **never fired in a live freeze** -- every freeze has
+  silently used the estimator fallback. Do not describe measured ownership as
+  active without checking for a pre-lock source first. See #38.
 
 ## Configuration and secrets
 
@@ -156,6 +171,24 @@ handling. WNBA-specific:
 - Never repoint a live cron to the backfill role. Never mutate billing, delete a
   service or database, rotate a credential, or alter a schedule without the
   authority supplied by the task.
+- Setting a variable on a cron service does **not** reach its next scheduled
+  dispatch. `railway variables --set X=Y --skip-deploys` leaves the running
+  container built with the old value, and the next dispatch still uses it;
+  confirmed twice on 2026-08-30 by a `config_drift` watchdog event firing after
+  the set. Follow any cron variable change with a real redeploy, then verify
+  with a `watchdog_clean` line (not merely the absence of a new `config_drift`
+  event -- `persist_events` de-duplicates a repeat `(slate_date, trigger)` for
+  6 hours, so a stale event can mask a live one).
+- When GitHub Actions is failing, Railway source triggers gated on `Wait for CI`
+  will not deploy. `railway redeploy --from-source -y` pulls and deploys the
+  latest commit and bypasses the stuck gate. Plain `railway redeploy` redeploys
+  the *existing* build and will not pick up a new commit. See #40.
+- The operator shell may export a `RAILWAY_API_TOKEN` scoped to a different
+  project, which silently overrides the per-directory CLI link and makes both
+  the Railway MCP tools and the `railway` CLI fail `Unauthorized`. Prefix with
+  `env -u RAILWAY_API_TOKEN -u RAILWAY_PROJECT_ID -u RAILWAY_ENVIRONMENT_ID`.
+  The same shell pattern applies to `gh`: an invalid `GITHUB_TOKEN` shadows a
+  valid keyring login, so use `env -u GITHUB_TOKEN -u GH_TOKEN gh ...`.
 
 ## Incidents and recovery
 
