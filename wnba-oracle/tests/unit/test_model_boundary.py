@@ -116,6 +116,32 @@ def test_model_policy_setting_inventory_covers_current_settings_surface() -> Non
     assert optimizer.ceiling_tilt_slots is True
     assert optimizer.contextual_stacking_enabled is True
     assert optimizer.contextual_stack_ev_margin == 0.01
+    assert optimizer.committed_order_objective is False
+
+
+def _alternate_setting_value(name: str, value: object) -> object:
+    if isinstance(value, bool):
+        return not value
+    if name == "model_artifact_sha":
+        return "b" * 64
+    if name == "payout_regime":
+        return "top_1" if value != "top_1" else "top_20"
+    if isinstance(value, int):
+        return value + 1
+    if isinstance(value, float):
+        return value + 0.1
+    raise AssertionError(f"add a valid perturbation for {name}: {value!r}")
+
+
+@pytest.mark.parametrize("name", sorted(MODEL_POLICY_SETTING_FIELDS))
+def test_each_registered_model_setting_changes_policy_fingerprint(name: str) -> None:
+    baseline = Settings.model_construct()
+    incumbent = build_model_policy(baseline)
+    challenger = build_model_policy(
+        baseline.model_copy(update={name: _alternate_setting_value(name, getattr(baseline, name))})
+    )
+
+    assert challenger.sha256 != incumbent.sha256, f"{name} is declared but not wired"
 
 
 def test_model_policy_fingerprint_changes_with_model_setting() -> None:

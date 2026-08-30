@@ -343,6 +343,13 @@ class Settings(RuntimeConfig):
     optimizer_duplication_aware_payout: bool = Field(
         default=False, alias="OPTIMIZER_DUPLICATION_AWARE_PAYOUT"
     )
+    # Score candidates under the slot order committed before outcomes are
+    # known. The library default stays off so bare Settings() remains
+    # conservative, but production turns this on via EXPECTED_PROD_CONFIG so
+    # the served objective matches the lineup the user can actually commit.
+    optimizer_committed_order_objective: bool = Field(
+        default=False, alias="OPTIMIZER_COMMITTED_ORDER_OBJECTIVE"
+    )
     # D89 (Phase 4, ceiling/variance modeling). Environment-conditioned
     # sigma scaling for the per-player lognormal marginal in the copula
     # sampler. The synthesis recommends widening sigma -- not just nudging
@@ -457,6 +464,7 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     # without re-running the sweep.
     "starter_minutes_lift_enabled": True,
     "picker_floor_tilt_weight": 0.2,
+    "optimizer_committed_order_objective": True,
 }
 
 

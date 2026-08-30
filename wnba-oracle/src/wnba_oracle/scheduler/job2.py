@@ -90,6 +90,7 @@ MODEL_POLICY_SETTING_FIELDS = frozenset(
         "optimizer_boost_sum_cap",
         "optimizer_ceiling_tilt_slots",
         "optimizer_ceiling_weight",
+        "optimizer_committed_order_objective",
         "optimizer_contextual_stack_ev_margin",
         "optimizer_contextual_stacking_enabled",
         "optimizer_duplication_aware_payout",
@@ -260,6 +261,7 @@ def build_optimize_config(settings: Settings) -> OptimizeConfig:
         field_same_game_boost=settings.field_same_game_boost,
         field_same_team_boost=settings.field_same_team_boost,
         duplication_aware_payout=settings.optimizer_duplication_aware_payout,
+        committed_order_objective=settings.optimizer_committed_order_objective,
     )
 
 
@@ -623,6 +625,7 @@ def _freeze_recommendation(
     scoring_provenance: ScoringProvenance,
     source_assurance: dict,
 ) -> tuple[bool, str]:
+    policy = scoring_provenance.model_policy
     payout_curve_payload = {
         "regime": curve.regime,
         "cash_line_percentile": curve.cash_line_percentile,
@@ -631,12 +634,19 @@ def _freeze_recommendation(
             for percentile, payout in curve.percentile_to_payout.items()
         },
     }
-    serving_knobs_payload = {
+    # Keep the operator-facing knob summary aligned with the compiled policy
+    # that actually drove the freeze, so production-on flags are visible
+    # without requiring the caller to parse the full model_provenance payload.
+    serving_knobs_payload: dict[str, object] = {
         "n_samples": cfg.n_samples,
         "n_field_lineups": cfg.n_field_lineups,
         "top_n_filter": cfg.top_n_filter,
         "max_per_team": cfg.max_per_team,
+        "dynamic_team_cap": cfg.dynamic_team_cap,
         "min_anchors": cfg.min_anchors,
+        "skip_if_expected_payout_below": cfg.skip_if_expected_payout_below,
+        "caveat_if_expected_payout_below": cfg.caveat_if_expected_payout_below,
+        "score_offset": cfg.score_offset,
         "boost_sum_cap": cfg.boost_sum_cap,
         "max_single_boost": cfg.max_single_boost,
         "game_stack_bonus": cfg.game_stack_bonus,
@@ -645,9 +655,13 @@ def _freeze_recommendation(
         "leverage_weight": cfg.leverage_weight,
         "ceiling_weight": cfg.ceiling_weight,
         "duplication_weight": cfg.duplication_weight,
+        "ceiling_tilt_slots": cfg.ceiling_tilt_slots,
         "field_same_game_boost": cfg.field_same_game_boost,
         "field_same_team_boost": cfg.field_same_team_boost,
         "duplication_aware_payout": cfg.duplication_aware_payout,
+        "committed_order_objective": cfg.committed_order_objective,
+        "field_measured_ownership_enabled": policy.field_measured_ownership_enabled,
+        "mixture_variance_enabled": policy.mixture_variance_enabled,
         "never_skip": cfg.never_skip,
         "caveat_is_skip": cfg.caveat_is_skip,
     }

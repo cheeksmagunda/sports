@@ -54,9 +54,8 @@ SEED = 2026
 
 # One OptimizeConfig override per registered knob, flipped away from the
 # validated production value so each variant isolates one knob's effect.
-# committed_order_objective is D107's dormant re-measurement lever (see
-# OptimizeConfig's docstring): baseline runs it off, matching production;
-# this variant is the explicit re-measurement challenger.
+# committed_order_objective is on in the validated production config, so the
+# benchmark now measures the off-ablation explicitly.
 KNOB_ABLATIONS: dict[str, dict[str, Any]] = {
     "knob:field_same_game_boost_off": {"field_same_game_boost": 1.0},
     "knob:field_same_team_boost_off": {"field_same_team_boost": 1.0},
@@ -64,7 +63,7 @@ KNOB_ABLATIONS: dict[str, dict[str, Any]] = {
     "knob:duplication_aware_payout_on": {"duplication_aware_payout": True},
     "knob:leverage_weight_0.2": {"leverage_weight": 0.2},
     "knob:ceiling_weight_0.2": {"ceiling_weight": 0.2},
-    "knob:committed_order_objective_on": {"committed_order_objective": True},
+    "knob:committed_order_objective_off": {"committed_order_objective": False},
 }
 
 
@@ -114,6 +113,90 @@ def build_variant_grid(n_temperature_variants: int) -> list[dict[str, Any]]:
         {"name": f"temp:sigma_x{t}", "overrides": {}, "sigma_scale": t}
         for t in temperature_values(n_temperature_variants)
     )
+    return grid
+
+
+def _coerce_override_value(raw: str) -> Any:
+    """Coerce a local variant value to bool, int, float, or string."""
+    low = raw.lower()
+    if low in ("true", "false"):
+        return low == "true"
+    try:
+        return int(raw)
+    except ValueError:
+        try:
+            return float(raw)
+        except ValueError:
+            return raw
+
+
+def parse_extra_variant(spec: str) -> dict[str, Any]:
+    """Parse ``name:key=value,key=value`` for a local calibration point."""
+    name, separator, rest = spec.partition(":")
+    if not separator or not name.strip():
+        raise ValueError(f"--extra-variant expects name:key=value,...; got {spec!r}")
+    name = name.strip()
+    if not rest.strip():
+        raise ValueError(f"--extra-variant {name!r} carries no overrides")
+    overrides: dict[str, Any] = {}
+    seen: set[str] = set()
+    for pair in rest.split(","):
+        key, equals, value = pair.partition("=")
+        if not equals or not key.strip():
+            raise ValueError(f"--extra-variant {name!r} has a bad override pair: {pair!r}")
+        key = key.strip()
+        value = value.strip()
+        if not value:
+            raise ValueError(f"--extra-variant {name!r} has an empty value for {key!r}")
+        if key in seen:
+            raise ValueError(f"--extra-variant {name!r} repeats override key {key!r}")
+        seen.add(key)
+        overrides[key] = _coerce_override_value(value)
+    return {"name": name, "overrides": overrides, "sigma_scale": 1.0}
+
+
+def extend_grid_with_extras(
+    grid: list[dict[str, Any]], extra_specs: list[str]
+) -> list[dict[str, Any]]:
+    """Append uniquely named local calibration variants to the grid."""
+    known = {variant["name"] for variant in grid}
+    extras: list[dict[str, Any]] = []
+    for spec in extra_specs:
+        variant = parse_extra_variant(spec)
+        if variant["name"] in known:
+            raise ValueError(
+                f"--extra-variant name {variant['name']!r} collides with the registered grid"
+            )
+        known.add(variant["name"])
+        extras.append(variant)
+    return grid + extras
+
+
+def resolve_variant_grid(
+    *,
+    n_temperature_variants: int,
+    extra_specs: list[str] | None = None,
+    variant_names: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Build, validate, and optionally filter the registered plus local grid."""
+    from wnba_oracle.picker.optimize import OptimizeConfig
+
+    grid = build_variant_grid(n_temperature_variants)
+    if extra_specs:
+        grid = extend_grid_with_extras(grid, extra_specs)
+    valid_fields = {field.name for field in dataclasses.fields(OptimizeConfig)}
+    for variant in grid:
+        unknown = sorted(set(variant["overrides"]) - valid_fields)
+        if unknown:
+            raise ValueError(
+                f"variant {variant['name']!r} overrides unknown OptimizeConfig field(s): {unknown}"
+            )
+    if variant_names:
+        wanted = set(variant_names)
+        unknown = wanted - {variant["name"] for variant in grid}
+        if unknown:
+            raise ValueError(f"unknown variant name(s): {sorted(unknown)}")
+        grid = [variant for variant in grid if variant["name"] in wanted]
     return grid
 
 
@@ -751,6 +834,16 @@ def main() -> int:
         help="Run only the named variant(s); repeatable. Default: full grid.",
     )
     parser.add_argument(
+        "--extra-variant",
+        action="append",
+        default=None,
+        metavar="NAME:KEY=VALUE,...",
+        help=(
+            "Append a local multi-knob variant without expanding the registered grid. "
+            "Extras are added before --variant filtering."
+        ),
+    )
+    parser.add_argument(
         "--report-coverage",
         action="store_true",
         help=(
@@ -893,14 +986,15 @@ def main() -> int:
         atomic_write_text(args.output_dir / "MODEL_RESEARCH_BENCHMARK.md", render_markdown(empty))
         return 0
 
-    grid = build_variant_grid(args.temperature_variants)
-    if args.variant:
-        wanted = set(args.variant)
-        unknown = wanted - {v["name"] for v in grid}
-        if unknown:
-            print(f"unknown variant name(s): {sorted(unknown)}", file=sys.stderr)
-            return 2
-        grid = [v for v in grid if v["name"] in wanted]
+    try:
+        grid = resolve_variant_grid(
+            n_temperature_variants=args.temperature_variants,
+            extra_specs=args.extra_variant,
+            variant_names=args.variant,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     variants: list[dict[str, Any]] = []
     for i, variant in enumerate(grid, 1):
         print(f"[{i}/{len(grid)}] {variant['name']}")

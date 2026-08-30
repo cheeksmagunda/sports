@@ -62,6 +62,98 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   `benchmark_results.json` plus a generated `MODEL_RESEARCH_BENCHMARK.md` to
   its `--output-dir`. It is read-only against production data; see the
   Model research benchmark section in `README.md`.
+- Local calibration recovery on the fixed benchmark path was completed in an
+  isolated worktree (`~/.codex/worktrees/b88c/sports`) on top of `df5b3b3`
+  without changing production state. Checkpoint `5e02b89` contained six
+  WNBA-only files; its `db.reads` game-identity changes were already present
+  in inherited `df5b3b3`, so they required no new diff. The reapplied code
+  delta was the missing benchmark surface only: `OPTIMIZER_COMMITTED_ORDER_OBJECTIVE`
+  wiring plus local `--extra-variant` support and validation. Reproducibility
+  for the local measurements:
+  corpus identity: `/private/tmp/bench-corpus/slate_labels.csv`
+  `sha256=f1ea1e438852cdaa15d5d8aff6dc31489324c334605f896f56c2b8a0d512876b`,
+  `/private/tmp/bench-corpus/contest_leaderboards.csv`
+  `sha256=6da928411d352e33c4299d999947aca1f3c09cb83dd51f9789edbab167619cac`,
+  `/private/tmp/bench-corpus/game_identity.csv`
+  `sha256=d95ea6a8755223e4ad16a643c09e8fce5548435f472ee7f16da2640db59615a9`.
+  These `/private/tmp` files are ephemeral local inputs and outputs, not a
+  persistent store; rerun the commands below if they are absent. At the time
+  these commands ran, `committed_order_objective` still defaulted to `false`
+  in `EXPECTED_PROD_CONFIG`, so `baseline` below means committed-order-off.
+  Phase 1 command: `python wnba-oracle/scripts/build_model_research_benchmark.py
+  --output-dir /private/tmp/bench-sweep/shardN --labels-csv
+  /private/tmp/bench-corpus/slate_labels.csv --leaderboards-csv
+  /private/tmp/bench-corpus/contest_leaderboards.csv --game-identity-csv
+  /private/tmp/bench-corpus/game_identity.csv --n-samples 400
+  --temperature-variants 0 --shard-count 7 --shard-index N --variant baseline
+  --variant knob:field_same_game_boost_off --variant
+  knob:field_same_team_boost_off --variant knob:dynamic_team_cap_off --variant
+  knob:duplication_aware_payout_on --variant knob:leverage_weight_0.2 --variant
+  knob:ceiling_weight_0.2 --variant knob:committed_order_objective_on
+  --extra-variant sweep.lev0.1:leverage_weight=0.1 --extra-variant
+  sweep.lev0.35:leverage_weight=0.35 --extra-variant
+  sweep.ceil0.1:ceiling_weight=0.1 --extra-variant
+  sweep.ceil0.35:ceiling_weight=0.35 --extra-variant
+  bundle:leverage_weight=0.2,ceiling_weight=0.2,duplication_aware_payout=true,committed_order_objective=true`,
+  merged payload `sha256=8a348abae1f38f627aa22d41f529c59f536376a11b2fa7c749b7a4f55e0c25e3`.
+  Coverage was 101 eligible slates, 0 dropped, `n_samples=400`, optimizer
+  errors 0, optimizer infeasible 0 for the cited variants. Against baseline,
+  `knob:leverage_weight_0.2` improved paired mean score by +4.861 and paired
+  mean payout capture by +0.1683 over 101 shared slates, with wins/losses
+  65/17, sign-test `p<1e-6`, `t=5.585`. `knob:committed_order_objective_on`
+  improved paired mean score by +2.673 and paired mean payout capture by
+  +0.0891, with wins/losses 66/33, sign-test `p=0.001185`, `t=3.209`.
+  The all-on bundle improved baseline but underperformed leverage-only on
+  payout capture, so ceiling and duplication additions were not promoted from
+  Phase 1 alone.
+  Phase 2 command: `python wnba-oracle/scripts/build_model_research_benchmark.py
+  --output-dir /private/tmp/bench-sweep2/shardN --labels-csv
+  /private/tmp/bench-corpus/slate_labels.csv --leaderboards-csv
+  /private/tmp/bench-corpus/contest_leaderboards.csv --game-identity-csv
+  /private/tmp/bench-corpus/game_identity.csv --n-samples 400
+  --temperature-variants 0 --shard-count 7 --shard-index N --variant baseline
+  --extra-variant sweep.lev0.28:leverage_weight=0.28 --extra-variant
+  sweep.dup1:duplication_weight=1 --extra-variant sweep.dup5:duplication_weight=5
+  --extra-variant pair.lev.committed:leverage_weight=0.28,committed_order_objective=true
+  --extra-variant pair.lev.ceil:leverage_weight=0.28,ceiling_weight=0.2
+  --extra-variant pair.lev.dup:leverage_weight=0.28,duplication_weight=1
+  --extra-variant pair.lev.committed.dup:leverage_weight=0.28,committed_order_objective=true,duplication_weight=1`,
+  merged payload `sha256=41ce2da27d855ec8f6ac6f6c70ad05c1dde9d975edd23ef13566c7df6da87a3b`.
+  Coverage was again 101 eligible slates with `n_samples=400`; the leading
+  pair `pair.lev.committed` had optimizer errors 0 and optimizer infeasible 0.
+  Versus baseline it improved paired mean score by +4.890 (95% paired CI
+  +3.101 to +6.678) and paired mean payout capture by +0.1980 over 101 shared
+  slates, with wins/losses 71/29, sign-test `p=0.000032`, `t=5.358`.
+  `sweep.lev0.28` alone was +5.103 score (95% paired CI +3.369 to +6.837)
+  and +0.1386 payout, wins/losses 66/23, sign-test `p=0.000006`, `t=5.767`.
+  `pair.lev.ceil` was weaker than `pair.lev.committed`, and the duplication
+  variants were identical to their non-duplication counterparts on this
+  corpus, so there is no evidence here to enable duplication penalties.
+  Current-source confirmation rerun used the same corpus and `--n-samples 400`
+  with `--temperature-variants 0`, baseline, `sweep.lev0.28`,
+  `pair.lev.committed`, and `pair.lev.ceil` in one unsharded output. Its
+  observed artifact hash was
+  `sha256=b9ae24edeba78ccd972932b4e557f2786554209661fe444e2601f13f3c403c6e`;
+  it again produced 101 eligible slates, 0 drops, and zero optimizer errors
+  or infeasible results.
+  Decision from these measurements: the committed-order objective outperforms
+  the off baseline both alone (+2.673 score) and combined with
+  `leverage_weight=0.28` (+4.890 score, +0.1980 payout capture, the strongest
+  pair measured), so on 2026-08-30 `optimizer_committed_order_objective` was
+  promoted to `true` in `EXPECTED_PROD_CONFIG` (code state only -- see the
+  production-rollout note below). The benchmark script's registered
+  `knob:committed_order_objective_*` ablation was renamed from `_on` to `_off`
+  to match: now that `true` is the baseline, the forward-looking re-measurement
+  question is what turning it back off costs, not what turning it on gains.
+  That `_off` ablation has not itself been re-executed against the new
+  baseline; the promotion rests on the `_on`-vs-old-baseline measurement above,
+  which is what was actually run. `leverage_weight=0.28` remains the leading
+  follow-up candidate for any separately authorized production-config proposal.
+- The `optimizer_committed_order_objective=true` promotion above is a code-level
+  change to `EXPECTED_PROD_CONFIG`, not a live production change. As of this
+  writing production still serves `false` for this flag; flipping it live
+  requires a separate deploy decision (Job 2 freezes around 14:20 UTC).
+  Duplication remains the one deliberately non-promoted objective term.
 - The latest scheduled watchdog workflow on the production source commit was
   GitHub run `32605850803` and completed successfully. Its application status
   was `warn`, not `ok`: `WATCHDOG_HEARTBEAT_URL` is not configured, and today's
@@ -184,6 +276,7 @@ and never loads the artifact, so it does not need the SHA.
 | OPTIMIZER_GAME_STACK_BONUS | 0.010 | Legacy rollback objective; ignored while contextual policy is enabled |
 | OPTIMIZER_CONTEXTUAL_STACKING_ENABLED | true (code default) | contextual-stacking-v1 |
 | OPTIMIZER_CONTEXTUAL_STACK_EV_MARGIN | 0.010 (code default) | Balance indifference band in objective units |
+| OPTIMIZER_COMMITTED_ORDER_OBJECTIVE | false (code default; Railway env var not yet set) | 2026-08-30: promoted to true in EXPECTED_PROD_CONFIG (code), pending a separate deploy decision and the matching Railway env var -- see decision above. Setting EXPECTED_PROD_CONFIG without the env var will make the watchdog's config-drift check flag this once deployed |
 | MINUTES_MODEL_ENABLED | true (code default) | D55 |
 | STARTER_SIGNAL_ENABLED | true (code default) | D71 |
 | AVAILABILITY_MODEL_ENABLED | true | D73 |

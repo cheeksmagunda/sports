@@ -76,6 +76,61 @@ class TestVariantGrid:
             assert key in valid_fields
 
 
+class TestExtraVariants:
+    def test_parses_multi_knob_bundle_with_coercion(self, mod):
+        variant = mod.parse_extra_variant(
+            "bundle:leverage_weight=0.2,duplication_aware_payout=True,top_n_filter=20"
+        )
+        assert variant["name"] == "bundle"
+        assert variant["overrides"] == {
+            "leverage_weight": 0.2,
+            "duplication_aware_payout": True,
+            "top_n_filter": 20,
+        }
+
+    def test_coerces_scientific_notation_as_float(self, mod):
+        variant = mod.parse_extra_variant("bundle:leverage_weight=1e-3")
+        assert variant["overrides"] == {"leverage_weight": pytest.approx(0.001)}
+
+    def test_rejects_malformed_specs(self, mod):
+        with pytest.raises(ValueError, match="name:key=value"):
+            mod.parse_extra_variant("no_colon_here")
+        with pytest.raises(ValueError, match="bad override pair"):
+            mod.parse_extra_variant("x:leverage_weight")
+        with pytest.raises(ValueError, match="no overrides"):
+            mod.parse_extra_variant("x:")
+        with pytest.raises(ValueError, match="empty value"):
+            mod.parse_extra_variant("x:leverage_weight=")
+
+    def test_rejects_duplicate_keys_and_names(self, mod):
+        with pytest.raises(ValueError, match="repeats override key"):
+            mod.parse_extra_variant("x:leverage_weight=0.2,leverage_weight=0.3")
+        grid = mod.build_variant_grid(0)
+        with pytest.raises(ValueError, match="collides"):
+            mod.extend_grid_with_extras(grid, ["baseline:leverage_weight=0.1"])
+        with pytest.raises(ValueError, match="collides"):
+            mod.extend_grid_with_extras(grid, ["sweep:a=1", "sweep:a=2"])
+
+    def test_resolve_validates_and_filters_extras(self, mod):
+        out = mod.resolve_variant_grid(
+            n_temperature_variants=0,
+            extra_specs=["bundle:leverage_weight=0.2"],
+            variant_names=["bundle"],
+        )
+        assert [variant["name"] for variant in out] == ["bundle"]
+        with pytest.raises(ValueError, match="unknown OptimizeConfig"):
+            mod.resolve_variant_grid(
+                n_temperature_variants=0,
+                extra_specs=["bad:not_an_optimize_field=1"],
+            )
+        with pytest.raises(ValueError, match="unknown variant"):
+            mod.resolve_variant_grid(
+                n_temperature_variants=0,
+                extra_specs=["bundle:leverage_weight=0.2"],
+                variant_names=["missing"],
+            )
+
+
 class TestProductionEnvOverrides:
     def test_translates_every_expected_prod_config_key_to_its_alias(self, mod):
         from wnba_oracle.common.settings import EXPECTED_PROD_CONFIG, Settings

@@ -29,7 +29,9 @@ make test-wnba
   lock-aware freeze.
 - `oracle-cron --job dayclose`: ingest finalized contests and game logs, record
   placements, and perform application retention work.
-- `GET /lineup/{date}`: return the latest valid freeze for a slate.
+- `GET /lineup/{date}`: return the latest valid freeze for a slate, including
+  the stored lineup payload, serving knobs, stack decision, model provenance,
+  and source-assurance metadata.
 - `GET /lineup/{date}/history`: return all freeze sequences for a slate.
 - `GET /slate/{date}`: return first-tip, lock, freeze, and pause metadata.
 
@@ -116,7 +118,7 @@ the production optimizer under a deterministic variant grid: the compiled
 production policy (`EXPECTED_PROD_CONFIG` applied the same way
 `job2.build_model_policy` does, not a hand-maintained partial config), one
 registered-knob ablation at a time (including the `committed_order_objective`
-re-measurement challenger), and sampling-sigma temperature variants. Scoring
+off-ablation), and sampling-sigma temperature variants. Scoring
 uses the committed slot order (`wnba_oracle.eval.contest_score`), never a
 hindsight re-sort. It measures realized placement against the stored
 leaderboards (right-censored below the leaderboard's captured depth --
@@ -151,6 +153,13 @@ shard's results as artifacts, and then merges them into a single
 `model-research-benchmark-merged` artifact in a follow-up job. No per-shard
 job needs database credentials. Merge downloaded shard files manually with
 `--merge-shards shard*/benchmark_results.json --output-dir merged/`.
+
+For local calibration follow-up, add repeatable `--extra-variant
+NAME:KEY=VALUE,...` arguments for ad hoc bundles or weight points without
+expanding the registered grid. Extras are added before `--variant` filtering,
+so a named extra can be selected without running the full grid. Empty values,
+duplicate override keys, unknown `OptimizeConfig` fields, and unknown selected
+variant names are rejected.
 
 ## Canonical data
 

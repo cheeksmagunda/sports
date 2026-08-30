@@ -185,8 +185,23 @@ def test_freeze_payload_includes_per_player() -> None:
 
 def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
     curve = default_curve_for_regime("top_20")
-    cfg = OptimizeConfig(n_samples=250, n_field_lineups=125, min_anchors=2)
-    policy = ModelPolicy(artifact_sha="a" * 64, optimizer=cfg)
+    cfg = OptimizeConfig(
+        n_samples=250,
+        n_field_lineups=125,
+        min_anchors=2,
+        dynamic_team_cap=False,
+        skip_if_expected_payout_below=0.8,
+        caveat_if_expected_payout_below=1.25,
+        score_offset=3.5,
+        ceiling_tilt_slots=True,
+        committed_order_objective=True,
+    )
+    policy = ModelPolicy(
+        artifact_sha="a" * 64,
+        optimizer=cfg,
+        field_measured_ownership_enabled=False,
+        mixture_variance_enabled=False,
+    )
     provenance = ScoringProvenance.capture(
         model_policy=policy,
         enrichment=[],
@@ -215,8 +230,16 @@ def test_freeze_recommendation_records_curve_and_serving_knobs() -> None:
     assert call.kwargs["serving_knobs"]["n_samples"] == 250
     assert call.kwargs["serving_knobs"]["n_field_lineups"] == 125
     assert call.kwargs["serving_knobs"]["min_anchors"] == 2
+    assert call.kwargs["serving_knobs"]["dynamic_team_cap"] is False
+    assert call.kwargs["serving_knobs"]["skip_if_expected_payout_below"] == 0.8
+    assert call.kwargs["serving_knobs"]["caveat_if_expected_payout_below"] == 1.25
+    assert call.kwargs["serving_knobs"]["score_offset"] == 3.5
     assert call.kwargs["serving_knobs"]["contextual_stacking_enabled"] is False
     assert call.kwargs["serving_knobs"]["contextual_stack_ev_margin"] == 0.01
+    assert call.kwargs["serving_knobs"]["ceiling_tilt_slots"] is True
+    assert call.kwargs["serving_knobs"]["committed_order_objective"] is True
+    assert call.kwargs["serving_knobs"]["field_measured_ownership_enabled"] is False
+    assert call.kwargs["serving_knobs"]["mixture_variance_enabled"] is False
     assert call.kwargs["model_provenance"]["model_policy_sha256"] == policy.sha256
     assert call.kwargs["model_provenance"]["enrichment_rows"] == 0
     assert len(call.kwargs["model_provenance"]["optimizer_inputs_sha256"]) == 64
