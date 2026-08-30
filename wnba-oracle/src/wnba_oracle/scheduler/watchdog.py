@@ -212,6 +212,15 @@ def _ping_on_critical(events: list[WatchdogEvent]) -> None:
     GETs {WATCHDOG_PING_URL}/fail so an external monitor (healthchecks.io
     style) pages the operator. Never raises; paging must not break the
     pipeline it watches. No-op until the operator provisions the URL.
+
+    ``request_with_retry`` only raises on a transport-level failure (DNS,
+    connection refused, timeout) or an exhausted-retries non-2xx response;
+    a non-retryable non-2xx status (e.g. 404 from a stale/misconfigured
+    monitor URL, 401 from a rotated token) is returned normally, not
+    raised. Treating "no exception" as "delivered" logged a false
+    watchdog_ping_sent for those responses, which is exactly the silent
+    failure a dead-man's-switch exists to catch -- so the status code is
+    checked explicitly instead of trusting the absence of an exception.
     """
     from wnba_oracle.common.settings import get_settings
 
@@ -224,14 +233,21 @@ def _ping_on_critical(events: list[WatchdogEvent]) -> None:
         from oracle_core.http import HttpxSyncTransport, RetryPolicy, request_with_retry
 
         with HttpxSyncTransport() as transport:
-            request_with_retry(
+            response = request_with_retry(
                 transport,
                 "GET",
                 f"{url}/fail",
                 policy=RetryPolicy(max_attempts=2, base_delay=0.25, max_delay=1.0),
                 timeout=5.0,
             )
-        log.info("watchdog_ping_sent", url_suffix="/fail")
+        if 200 <= response.status_code < 300:
+            log.info("watchdog_ping_sent", url_suffix="/fail")
+        else:
+            log.warning(
+                "watchdog_ping_not_delivered",
+                url_suffix="/fail",
+                status_code=response.status_code,
+            )
     except Exception as exc:
         log.warning("watchdog_ping_failed", error_type=type(exc).__name__)
 

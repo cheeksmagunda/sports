@@ -189,9 +189,46 @@ def test_ping_fires_on_critical_when_url_set() -> None:
         patch("wnba_oracle.common.settings.get_settings", return_value=settings),
         patch("oracle_core.http.request_with_retry") as request,
     ):
+        request.return_value = SimpleNamespace(status_code=200)
         watchdog._ping_on_critical([_ev("critical")])
     request.assert_called_once()
     assert request.call_args.args[1:3] == ("GET", "https://hc.example/abc/fail")
+
+
+def test_ping_logs_delivered_only_on_2xx_response() -> None:
+    """A non-2xx response (e.g. a stale/misconfigured monitor URL) must not
+    be logged as delivered: request_with_retry only raises on transport
+    failures, so a 404/401/etc. response returns normally and would
+    silently masquerade as a successful page without an explicit check."""
+    from types import SimpleNamespace
+
+    settings = SimpleNamespace(watchdog_ping_url="https://hc.example/abc")
+    with (
+        patch("wnba_oracle.common.settings.get_settings", return_value=settings),
+        patch("oracle_core.http.request_with_retry") as request,
+        patch.object(watchdog, "log") as log,
+    ):
+        request.return_value = SimpleNamespace(status_code=404)
+        watchdog._ping_on_critical([_ev("critical")])
+    log.warning.assert_called_once_with(
+        "watchdog_ping_not_delivered", url_suffix="/fail", status_code=404
+    )
+    log.info.assert_not_called()
+
+
+def test_ping_logs_sent_on_2xx_response() -> None:
+    from types import SimpleNamespace
+
+    settings = SimpleNamespace(watchdog_ping_url="https://hc.example/abc")
+    with (
+        patch("wnba_oracle.common.settings.get_settings", return_value=settings),
+        patch("oracle_core.http.request_with_retry") as request,
+        patch.object(watchdog, "log") as log,
+    ):
+        request.return_value = SimpleNamespace(status_code=200)
+        watchdog._ping_on_critical([_ev("critical")])
+    log.info.assert_called_once_with("watchdog_ping_sent", url_suffix="/fail")
+    log.warning.assert_not_called()
 
 
 def test_ping_skipped_without_critical() -> None:
