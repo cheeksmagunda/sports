@@ -95,7 +95,7 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   sweep.ceil0.1:ceiling_weight=0.1 --extra-variant
   sweep.ceil0.35:ceiling_weight=0.35 --extra-variant
   bundle:leverage_weight=0.2,ceiling_weight=0.2,duplication_aware_payout=true,committed_order_objective=true`,
-  merged payload `sha256=8a348abae1f38f627aa22d41f529c59f536376a11b2fa7c749b7a4f55e0c25e3`.
+  observed phase-1 merge payload `sha256=8a348abae1f38f627aa22d41f529c59f536376a11b2fa7c749b7a4f55e0c25e3`.
   Coverage was 101 eligible slates, 0 dropped, `n_samples=400`, optimizer
   errors 0, optimizer infeasible 0 for the cited variants. Against baseline,
   `knob:leverage_weight_0.2` improved paired mean score by +4.861 and paired
@@ -118,7 +118,8 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   --extra-variant pair.lev.ceil:leverage_weight=0.28,ceiling_weight=0.2
   --extra-variant pair.lev.dup:leverage_weight=0.28,duplication_weight=1
   --extra-variant pair.lev.committed.dup:leverage_weight=0.28,committed_order_objective=true,duplication_weight=1`,
-  merged payload `sha256=41ce2da27d855ec8f6ac6f6c70ad05c1dde9d975edd23ef13566c7df6da87a3b`.
+  reconstructed phase-2 merge payload from all seven ephemeral shard JSONs
+  `sha256=41ce2da27d855ec8f6ac6f6c70ad05c1dde9d975edd23ef13566c7df6da87a3b`.
   Coverage was again 101 eligible slates with `n_samples=400`; the leading
   pair `pair.lev.committed` had optimizer errors 0 and optimizer infeasible 0.
   Versus baseline it improved paired mean score by +4.890 (95% paired CI
