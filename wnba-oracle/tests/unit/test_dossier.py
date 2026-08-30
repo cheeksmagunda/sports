@@ -111,6 +111,25 @@ class TestGapExactness:
             == Exactness.UNKNOWN
         )
 
+    def test_lower_bound_when_ceiling_pruning_involved_even_if_uncensored(self) -> None:
+        """_realized_oracle's top-26 prefix is not proven optimal under the
+        team cap, so a gap touching the ceiling can never be EXACT even when
+        both endpoints are otherwise uncensored."""
+        assert (
+            _gap_exactness(None, None, involves_pruned_ceiling=True)
+            == Exactness.LOWER_BOUND
+        )
+
+    def test_unknown_still_wins_over_pruning_when_both_apply(self) -> None:
+        assert (
+            _gap_exactness(
+                CensoringReason.UNKNOWN_PLACEMENT,
+                None,
+                involves_pruned_ceiling=True,
+            )
+            == Exactness.UNKNOWN
+        )
+
 
 class TestDossierEntry:
     """Test DossierEntry serialization."""
@@ -330,7 +349,7 @@ class TestBuildDossierUnit:
         mock_df = MagicMock()
         mock_df.is_empty.return_value = False
         mock_df.to_dicts.return_value = label_rows
-        mock_df.__len__ = MagicMock(return_value=10)
+        mock_df.__len__ = MagicMock(return_value=37)
         mock_read_labels.return_value = mock_df
 
         result = build_dossier("2026-08-30", engine=mock_engine.return_value)
@@ -368,3 +387,11 @@ class TestBuildDossierUnit:
         assert result.gap_field_to_ceiling.to_kind == EntryKind.THEORETICAL_CEILING
         assert result.gap_to_ceiling.from_kind == EntryKind.COMMITTED
         assert result.gap_to_ceiling.to_kind == EntryKind.THEORETICAL_CEILING
+
+        # The ceiling entry itself is uncensored here (37 labels), but its
+        # score comes from _realized_oracle's top-26-pruned brute force,
+        # which is not proven optimal under the team cap -- so any gap
+        # touching it must be labeled lower_bound, never exact.
+        assert result.entries[EntryKind.THEORETICAL_CEILING].censor_reason is None
+        assert result.gap_field_to_ceiling.exactness == Exactness.LOWER_BOUND
+        assert result.gap_to_ceiling.exactness == Exactness.LOWER_BOUND

@@ -259,6 +259,7 @@ def build_dossier(
         exactness=_gap_exactness(
             field.censor_reason,
             ceiling.censor_reason,
+            involves_pruned_ceiling=True,
         ),
         from_censor=field.censor_reason,
         to_censor=ceiling.censor_reason,
@@ -271,6 +272,7 @@ def build_dossier(
         exactness=_gap_exactness(
             committed.censor_reason,
             ceiling.censor_reason,
+            involves_pruned_ceiling=True,
         ),
         from_censor=committed.censor_reason,
         to_censor=ceiling.censor_reason,
@@ -292,16 +294,25 @@ def build_dossier(
 def _gap_exactness(
     from_censor: CensoringReason | None,
     to_censor: CensoringReason | None,
+    *,
+    involves_pruned_ceiling: bool = False,
 ) -> Exactness:
     """Determine gap exactness from endpoint censoring.
 
-    A gap is exact only if both endpoints are exact (uncensored). If either
-    endpoint is censored, the gap is at least a lower_bound (unless unknown).
+    A gap is exact only if both endpoints are exact (uncensored) AND neither
+    endpoint is the theoretical ceiling. ``_realized_oracle`` prunes the pool
+    to the top 26 candidates by an upper-bound heuristic before enumerating
+    every 5-player combination under the team cap; that prefix is not proven
+    to contain the cap-constrained optimum (a binding cap can force the true
+    best lineup to include a candidate ranked below 26), so the ceiling is at
+    best a lower bound on the true theoretical ceiling even when every label
+    is uncensored. If either endpoint is censored, the gap is at least a
+    lower_bound (unless unknown).
     """
-    if from_censor is None and to_censor is None:
-        return Exactness.EXACT
     if from_censor == CensoringReason.UNKNOWN_PLACEMENT or (
         to_censor == CensoringReason.UNKNOWN_PLACEMENT
     ):
         return Exactness.UNKNOWN
+    if from_censor is None and to_censor is None and not involves_pruned_ceiling:
+        return Exactness.EXACT
     return Exactness.LOWER_BOUND
