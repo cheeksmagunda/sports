@@ -14,6 +14,14 @@ from oracle_core.artifacts import (
     write_artifact,
 )
 from oracle_core.cache import JsonTtlCache
+from oracle_core.dossier import (
+    CensoringReason,
+    Dossier,
+    DossierEntry,
+    EntryKind,
+    Exactness,
+    Gap,
+)
 from oracle_core.config import (
     MissingRequiredEnvironmentError,
     RuntimeConfig,
@@ -89,6 +97,12 @@ from oracle_core.storage import (
 __all__ = [
     "ArtifactInfo",
     "AsyncHttpTransport",
+    "CensoringReason",
+    "Dossier",
+    "DossierEntry",
+    "EntryKind",
+    "Exactness",
+    "Gap",
     "HealthCheck",
     "HealthContributor",
     "HealthStatus",
