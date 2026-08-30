@@ -151,12 +151,37 @@ def _auto_record_placement(slate_date: str) -> dict[str, Any]:
                 field_size = int(nb)
 
         actual_own: dict[int, float] | None = None
-        total_drafts = sum(r["drafts"] or 0 for r in sl.iter_rows(named=True) if r.get("drafts"))
+        actual_drafts_by_pid = {
+            int(r["platform_player_id"]): int(r["drafts"])
+            for r in sl.iter_rows(named=True)
+            if r.get("drafts")
+        }
+        total_drafts = sum(actual_drafts_by_pid.values())
         if total_drafts > 0:
             actual_own = {
-                int(r["platform_player_id"]): float(r["drafts"] or 0) / total_drafts
-                for r in sl.iter_rows(named=True)
+                pid: drafts / total_drafts for pid, drafts in actual_drafts_by_pid.items()
             }
+            # D90/#38: also persist per-player rows into player_slate_ownership
+            # (not just the contest_placements JSONB blob above), so the
+            # calibration loop (placements_calibration.ownership_log_loss_by_decile)
+            # has real per-player history to compare against project_ownership's
+            # freeze-time projections. Best-effort: a write failure here must not
+            # block placement recording, which is the primary calibration signal.
+            try:
+                from wnba_oracle.scheduler.placements import record_actual_ownership
+
+                record_actual_ownership(
+                    conn,
+                    slate_date=slate_date,
+                    actual_ownership=actual_own,
+                    actual_drafts=actual_drafts_by_pid,
+                )
+            except Exception as exc:
+                log.warning(
+                    "actual_ownership_record_failed",
+                    slate_date=slate_date,
+                    error_type=type(exc).__name__,
+                )
 
         result = auto_record_from_dayclose(
             conn,

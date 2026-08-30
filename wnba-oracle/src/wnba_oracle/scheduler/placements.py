@@ -73,6 +73,8 @@ __all__ = [
     "compute_pit_value",
     "ownership_log_loss_by_decile",
     "pit_histogram",
+    "record_actual_ownership",
+    "record_projected_ownership",
 ]
 
 log = get_logger("oracle.placements")
@@ -159,6 +161,98 @@ PLACEMENTS_WINDOW_SELECT = text(
     LIMIT :n
     """
 )
+
+# player_slate_ownership (D90 migration) is keyed (slate_date, player_id) with
+# no natural append-only history -- a slate's projected value is written once
+# at freeze, the same row's actual value is written once at day-close. Upsert
+# rather than insert so day-close updates the freeze-time row instead of
+# colliding with its primary key.
+PROJECTED_OWNERSHIP_UPSERT = text(
+    """
+    INSERT INTO player_slate_ownership (
+        slate_date, player_id, projected_ownership, projected_drafts, updated_at
+    ) VALUES (
+        :slate_date, :player_id, :projected_ownership, :projected_drafts, now()
+    )
+    ON CONFLICT (slate_date, player_id) DO UPDATE SET
+        projected_ownership = EXCLUDED.projected_ownership,
+        projected_drafts = EXCLUDED.projected_drafts,
+        updated_at = now()
+    """
+)
+
+ACTUAL_OWNERSHIP_UPSERT = text(
+    """
+    INSERT INTO player_slate_ownership (
+        slate_date, player_id, actual_ownership, actual_drafts, updated_at
+    ) VALUES (
+        :slate_date, :player_id, :actual_ownership, :actual_drafts, now()
+    )
+    ON CONFLICT (slate_date, player_id) DO UPDATE SET
+        actual_ownership = EXCLUDED.actual_ownership,
+        actual_drafts = EXCLUDED.actual_drafts,
+        updated_at = now()
+    """
+)
+
+
+def record_projected_ownership(
+    conn: Connection,
+    *,
+    slate_date: str,
+    projected_ownership: dict[int, float],
+    projected_drafts: dict[int, int] | None = None,
+) -> int:
+    """Upsert the field model's projected ownership for slate_date, captured
+    at freeze time (D86's project_ownership output). Player rows not yet
+    present get inserted; a same-day re-freeze updates them in place -- the
+    calibration table records the latest freeze's projection, not a history
+    of every re-freeze, since contest_placements.freeze_model_sha already
+    carries the audit trail for which freeze produced the entered lineup.
+    """
+    drafts = projected_drafts or {}
+    n = 0
+    for player_id, ownership in projected_ownership.items():
+        conn.execute(
+            PROJECTED_OWNERSHIP_UPSERT,
+            {
+                "slate_date": slate_date,
+                "player_id": int(player_id),
+                "projected_ownership": float(ownership),
+                "projected_drafts": drafts.get(player_id),
+            },
+        )
+        n += 1
+    return n
+
+
+def record_actual_ownership(
+    conn: Connection,
+    *,
+    slate_date: str,
+    actual_ownership: dict[int, float],
+    actual_drafts: dict[int, int] | None = None,
+) -> int:
+    """Upsert realized ownership for slate_date once slate_labels.drafts is
+    known (day-close). Same normalization as the field model's
+    project_ownership (shares sum to 1 across labeled players), so
+    projected vs actual are directly comparable in placements_calibration's
+    ownership_log_loss_by_decile.
+    """
+    drafts = actual_drafts or {}
+    n = 0
+    for player_id, ownership in actual_ownership.items():
+        conn.execute(
+            ACTUAL_OWNERSHIP_UPSERT,
+            {
+                "slate_date": slate_date,
+                "player_id": int(player_id),
+                "actual_ownership": float(ownership),
+                "actual_drafts": drafts.get(player_id),
+            },
+        )
+        n += 1
+    return n
 
 
 def _as_obj(raw: Any) -> Any:

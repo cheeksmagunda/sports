@@ -788,6 +788,14 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # budget. Dry runs intentionally bypass this gate for diagnostics.
     lock_time = upcoming_tip or _load_slate_lock_time(sd)
     deadline = _freeze_deadline_utc(lock_time, settings)
+    if not dry_run and getattr(settings, "live_ownership_capture_enabled", False):
+        # #38/F6: best-effort, timeout-bounded, never raises. Runs before the
+        # pre-freeze-window return below so it fires on every dispatch near
+        # lock regardless of freeze outcome -- see live_ownership.py for why
+        # this is a no-op for hours before lock by design.
+        from wnba_oracle.scheduler.live_ownership import capture_live_ownership_safe
+
+        capture_live_ownership_safe(now_utc=now_utc, lock_time=lock_time)
     if not dry_run and deadline is not None and _in_pre_freeze_window(now_utc, deadline):
         log.info(
             "job2_pre_freeze_window",
@@ -947,8 +955,51 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         scoring_provenance=scoring_provenance,
         source_assurance=source_assurance,
     )
+    if frozen:
+        _record_projected_ownership_safe(sd, fields)
     _run_shadow_evaluation(settings, sd, model_sha, enrichment)
     return Job2Result(sd, model_sha, rec, frozen, status)
+
+
+def _record_projected_ownership_safe(slate_date: str, fields: list[FieldPlayerSpec]) -> None:
+    """D90/#38: persist the field model's projected ownership for the slate
+    just frozen, into player_slate_ownership (record_projected_ownership),
+    for the placement_calibration loop to eventually compare against
+    slate_labels-derived actual ownership at day-close.
+
+    Best-effort and strictly non-fatal: this runs after the freeze has
+    already succeeded, so a failure here must never surface as a job2
+    failure or affect the frozen lineup in any way.
+    """
+    if not fields:
+        return
+    try:
+        from wnba_oracle.db.engine import get_engine
+        from wnba_oracle.picker.field import project_ownership
+        from wnba_oracle.scheduler.placements import record_projected_ownership
+
+        ownership = project_ownership(fields)
+        projected = {f.player_id: float(o) for f, o in zip(fields, ownership, strict=True)}
+        projected_drafts = {
+            f.player_id: int(f.measured_drafts)
+            for f in fields
+            if f.measured_drafts is not None
+        }
+        eng = get_engine()
+        with eng.begin() as conn:
+            n = record_projected_ownership(
+                conn,
+                slate_date=slate_date,
+                projected_ownership=projected,
+                projected_drafts=projected_drafts or None,
+            )
+        log.info("projected_ownership_recorded", slate_date=slate_date, n_players=n)
+    except Exception as exc:
+        log.warning(
+            "projected_ownership_record_failed",
+            slate_date=slate_date,
+            error_type=type(exc).__name__,
+        )
 
 
 def main() -> int:

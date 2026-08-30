@@ -25,6 +25,8 @@ from wnba_oracle.scheduler.placements import (
     compute_pit_value,
     ownership_log_loss_by_decile,
     pit_histogram,
+    record_actual_ownership,
+    record_projected_ownership,
     render_summary_markdown,
 )
 
@@ -270,3 +272,54 @@ def test_auto_record_no_frozen_lineup_returns_none() -> None:
         field_size=8300,
     )
     assert out is None
+
+
+def _mock_upsert_conn() -> tuple[MagicMock, list[dict]]:
+    calls: list[dict] = []
+
+    def _execute(stmt: object, params: object = None) -> MagicMock:
+        calls.append(dict(params or {}))
+        return MagicMock()
+
+    conn = MagicMock()
+    conn.execute.side_effect = _execute
+    return conn, calls
+
+
+def test_record_projected_ownership_upserts_one_row_per_player() -> None:
+    conn, calls = _mock_upsert_conn()
+    n = record_projected_ownership(
+        conn,
+        slate_date="2026-08-30",
+        projected_ownership={101: 0.05, 102: 0.20},
+        projected_drafts={101: 4},
+    )
+    assert n == 2
+    by_pid = {c["player_id"]: c for c in calls}
+    assert by_pid[101]["projected_ownership"] == 0.05
+    assert by_pid[101]["projected_drafts"] == 4
+    assert by_pid[102]["projected_ownership"] == 0.20
+    assert by_pid[102]["projected_drafts"] is None  # not measured for this player
+    assert all(c["slate_date"] == "2026-08-30" for c in calls)
+
+
+def test_record_actual_ownership_upserts_one_row_per_player() -> None:
+    conn, calls = _mock_upsert_conn()
+    n = record_actual_ownership(
+        conn,
+        slate_date="2026-08-29",
+        actual_ownership={201: 0.0005, 202: 0.30},
+        actual_drafts={201: 2, 202: 1800},
+    )
+    assert n == 2
+    by_pid = {c["player_id"]: c for c in calls}
+    assert by_pid[201]["actual_ownership"] == 0.0005
+    assert by_pid[201]["actual_drafts"] == 2
+    assert by_pid[202]["actual_drafts"] == 1800
+
+
+def test_record_actual_ownership_handles_empty_input() -> None:
+    conn, calls = _mock_upsert_conn()
+    n = record_actual_ownership(conn, slate_date="2026-08-29", actual_ownership={})
+    assert n == 0
+    assert calls == []

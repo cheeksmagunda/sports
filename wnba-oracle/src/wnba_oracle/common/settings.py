@@ -216,6 +216,13 @@ class Settings(RuntimeConfig):
     # verified for it. Off by default (the 13:00 pipeline drafts the whole
     # slate before any tip); job1 writes features_json["game_start_utc"].
     pool_exclude_started_games: bool = Field(default=False, alias="POOL_EXCLUDE_STARTED_GAMES")
+    # #38/F6: attempt a same-day live Real Sports draftStats capture near
+    # lock on every job2 dispatch (see scheduler/live_ownership.py). Off by
+    # default -- it launches a headless browser inside job2's dispatch, so
+    # this is an explicit opt-in kill switch independent of a redeploy.
+    live_ownership_capture_enabled: bool = Field(
+        default=False, alias="LIVE_OWNERSHIP_CAPTURE_ENABLED"
+    )
     # D84 job1 pool sanity gate: a persisted pool below these floors is a
     # hard error (nonzero exit + critical watchdog event), not a quiet log
     # line. The 2026-06-08 morning fire persisted 1 row / 1 team and nothing
@@ -465,6 +472,13 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "starter_minutes_lift_enabled": True,
     "picker_floor_tilt_weight": 0.2,
     "optimizer_committed_order_objective": True,
+    # 2026-08-30: promoted from the library default 0.0 (fully off in prod
+    # until now) on the strength of the 101-slate confirmation sweep in
+    # STATUS.md -- the single strongest individual knob measured (+5.103
+    # score / +0.1386 payout alone), and the leading pair combined with
+    # committed_order_objective (+4.890 score / +0.1980 payout, sign-test
+    # p=0.000032).
+    "optimizer_leverage_weight": 0.28,
 }
 
 
