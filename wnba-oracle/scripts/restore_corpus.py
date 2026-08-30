@@ -17,6 +17,8 @@ from typing import Any
 
 from corpus_backup_common import SnapshotValidationError, validate_snapshot
 
+from wnba_oracle.common.db_utils import normalize_postgres_url
+
 CORPUS_TABLES = {"slate_labels", "contest_leaderboards"}
 INTEGER_COLUMNS = {
     "slate_labels": {"contest_id", "platform_player_id", "drafts"},
@@ -90,7 +92,7 @@ def apply_snapshot(snapshot_dir: pathlib.Path, database_url: str) -> dict[str, i
     from sqlalchemy import create_engine, text
 
     restored: dict[str, int] = {}
-    engine = create_engine(database_url.replace("postgresql://", "postgresql+psycopg://", 1))
+    engine = create_engine(normalize_postgres_url(database_url))
     try:
         with engine.begin() as connection:
             for table in sorted(CORPUS_TABLES):

@@ -26,9 +26,10 @@ guard the read boundary, not audit the whole payload.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
+
+from wnba_oracle.common.feature_payload import parse_feature_mapping
 
 
 @dataclass(frozen=True)
@@ -44,14 +45,7 @@ _ALLOWED_POSITIONS = {"G", "F", "C", "G-F", "F-G", "F-C", "C-F", ""}
 
 
 def _features_dict(raw: object) -> dict[str, Any]:
-    if isinstance(raw, dict):
-        return raw
-    if isinstance(raw, (bytes, str)) and raw:
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-    return {}
+    return parse_feature_mapping(raw)[0]
 
 
 def _flatten_enrichment(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

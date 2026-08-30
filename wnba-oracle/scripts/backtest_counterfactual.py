@@ -49,6 +49,7 @@ _SHA_FILE = Path(__file__).resolve().parents[1] / "models" / "picker_2a2fe836_17
 if _SHA_FILE.exists():
     os.environ["WNBA_ORACLE_MODEL_ARTIFACT_SHA"] = _SHA_FILE.read_text().strip()
 
+from wnba_oracle.eval.contest_score import committed_lineup_score  # noqa: E402
 from wnba_oracle.picker.optimize import (  # noqa: E402
     DEFAULT_SLOT_MULTIPLIERS,
     OptimizeConfig,
@@ -70,8 +71,7 @@ def dynamic_cap(n_games: float) -> int:
 
 
 def score_truth(pids, boost_by, rs_by) -> float:
-    members = sorted(((p, rs_by.get(int(p), 0.0)) for p in pids), key=lambda x: -x[1])
-    return sum((SLOTS[i] + boost_by.get(int(p), 0.0)) * rs for i, (p, rs) in enumerate(members))
+    return committed_lineup_score(pids, rs_by, boost_by)
 
 
 def realized_oracle(pool_rows, cap: int) -> float:

@@ -28,6 +28,8 @@ from typing import Any
 
 from sqlalchemy import create_engine, text
 
+from wnba_oracle.common.db_utils import normalize_postgres_url
+
 TRANSACTION_OPTIONS = (
     "-c default_transaction_read_only=on "
     "-c statement_timeout=60000 "
@@ -92,16 +94,6 @@ def _require_verified_tls(url: str) -> None:
     }
     if query.get("sslmode") not in {"verify-ca", "verify-full"}:
         raise ValueError("DATABASE_PUBLIC_URL must use sslmode=verify-ca or verify-full")
-
-
-def _sqlalchemy_url(url: str) -> str:
-    """Select the installed psycopg driver without exposing URL components."""
-
-    if url.startswith("postgres://"):
-        return "postgresql+psycopg://" + url[len("postgres://") :]
-    if url.startswith("postgresql://"):
-        return "postgresql+psycopg://" + url[len("postgresql://") :]
-    return url
 
 
 def _json_object(raw: Any) -> dict[str, Any] | None:
@@ -497,7 +489,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine = None
     try:
         engine = create_engine(
-            _sqlalchemy_url(url),
+            normalize_postgres_url(url),
             connect_args={
                 "connect_timeout": 20,
                 "options": TRANSACTION_OPTIONS,

@@ -30,7 +30,7 @@ import pathlib
 import sys
 
 import pandas as pd
-from corpus_backup_common import atomic_write_bytes, portable_database_url, require_verified_tls
+from corpus_backup_common import atomic_write_bytes, portable_postgres_url, require_verified_tls
 from sqlalchemy import create_engine, text
 
 # Per-PLAYER identity, not a per-team map. job1_enrichment IS the pool job2
@@ -90,7 +90,7 @@ def main() -> int:
         print(f"ERROR: game identity export configuration rejected: {exc}", file=sys.stderr)
         return 1
     engine = create_engine(
-        portable_database_url(url).replace("postgresql://", "postgresql+psycopg://", 1),
+        portable_postgres_url(url),
         connect_args={"options": "-c default_transaction_read_only=on"},
     )
     try:

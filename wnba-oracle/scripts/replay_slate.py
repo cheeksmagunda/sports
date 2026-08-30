@@ -21,6 +21,7 @@ import polars as pl
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from wnba_oracle.eval.contest_score import committed_lineup_score
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup
 from wnba_oracle.picker.payout import default_curve_for_regime
@@ -41,8 +42,7 @@ def prior_by_player(history: pd.DataFrame) -> dict[int, list[float]]:
 
 
 def score_truth(pids, boost_by, rs_by):
-    members = sorted(((p, rs_by.get(int(p), 0.0)) for p in pids), key=lambda x: -x[1])
-    return sum((SLOTS[i] + boost_by.get(int(p), 0.0)) * rs for i, (p, rs) in enumerate(members))
+    return committed_lineup_score(pids, rs_by, boost_by)
 
 
 def oracle(pool, cap):

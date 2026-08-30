@@ -37,8 +37,8 @@ import structlog
 
 structlog.configure(processors=[structlog.dev.ConsoleRenderer()])  # reduce noise
 
+from wnba_oracle.eval.contest_score import committed_lineup_score  # noqa: E402
 from wnba_oracle.picker.optimize import (  # noqa: E402
-    DEFAULT_SLOT_MULTIPLIERS,
     OptimizeConfig,
     optimize_lineup,
 )
@@ -56,14 +56,7 @@ CURVE = default_curve_for_regime("top_20")
 
 
 def _score_lineup(player_ids, boost_by_pid, rs_by_pid) -> float:
-    members = sorted(
-        ((pid, rs_by_pid.get(int(pid), 0.0)) for pid in player_ids),
-        key=lambda x: -x[1],
-    )
-    return sum(
-        (DEFAULT_SLOT_MULTIPLIERS[i] + boost_by_pid.get(int(p), 0.0)) * rs
-        for i, (p, rs) in enumerate(members)
-    )
+    return committed_lineup_score(player_ids, rs_by_pid, boost_by_pid)
 
 
 def main() -> int:

@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.db.engine import get_engine
+from wnba_oracle.eval.contest_score import committed_lineup_score
 from wnba_oracle.scheduler.watchdog import SEVERITY_WARN, WatchdogEvent
 
 log = get_logger("oracle.watchdog")
@@ -142,10 +143,11 @@ def compute_drift_metrics(
             all_pids_scored = all(pid in labels for pid in pids)
             if not all_pids_scored:
                 continue
-            picks = [(pid, labels[pid][1], labels[pid][0]) for pid in pids]
-            picks.sort(key=lambda x: x[2], reverse=True)
-            slots = [2.0, 1.8, 1.6, 1.4, 1.2]
-            our_score = sum(rs * (boost + slots[i]) for i, (_, boost, rs) in enumerate(picks))
+            our_score = committed_lineup_score(
+                pids,
+                {pid: labels[pid][0] for pid in pids},
+                {pid: labels[pid][1] for pid in pids},
+            )
 
             lb_rows = conn.execute(DRIFT_LB_Q, {"sd": sd}).fetchall()
             if not lb_rows:

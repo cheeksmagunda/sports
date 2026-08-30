@@ -47,11 +47,8 @@ os.environ.setdefault("CONTRARIAN_ENABLED", "true")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
 os.environ.setdefault("PAYOUT_REGIME", "top_20")
 
-from wnba_oracle.picker.optimize import (
-    DEFAULT_SLOT_MULTIPLIERS,
-    OptimizeConfig,
-    optimize_lineup,
-)
+from wnba_oracle.eval.contest_score import committed_lineup_score
+from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup
 from wnba_oracle.picker.payout import default_curve_for_regime
 from wnba_oracle.scheduler.job2 import _build_specs
 
@@ -60,18 +57,17 @@ def score_lineup_against_truth(
     player_ids: tuple[int, ...],
     boost_by_pid: dict[int, float],
     real_score_by_pid: dict[int, float],
-    slot_multipliers: tuple[float, ...] = tuple(DEFAULT_SLOT_MULTIPLIERS),
+    slot_multipliers: tuple[float, ...] | None = None,
 ) -> float:
-    """The lineup score the platform would award post-tip.
-    Rearranges by REALIZED real_score per the platform's auto-assignment."""
-    members = [(pid, real_score_by_pid.get(int(pid), 0.0)) for pid in player_ids]
-    # By rearrangement, highest realized value -> highest slot
-    members.sort(key=lambda x: -x[1])
-    total = 0.0
-    for slot_idx, (pid, rs) in enumerate(members):
-        boost = boost_by_pid.get(int(pid), 0.0)
-        total += (slot_multipliers[slot_idx] + boost) * rs
-    return total
+    """The lineup score the platform awards post-tip, in committed order."""
+    if slot_multipliers is None:
+        return committed_lineup_score(player_ids, real_score_by_pid, boost_by_pid)
+    return committed_lineup_score(
+        player_ids,
+        real_score_by_pid,
+        boost_by_pid,
+        slot_bases=slot_multipliers,
+    )
 
 
 def main() -> int:

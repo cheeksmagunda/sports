@@ -131,6 +131,18 @@ def test_backup_url_removes_only_the_machine_local_tls_root_path() -> None:
     assert "application_name=backup" in portable
 
 
+def test_portable_postgres_url_normalizes_both_driver_and_tls_path() -> None:
+    common = _load_common()
+
+    portable = common.portable_postgres_url(
+        "postgres://user:password@example.invalid:5432/database"
+        "?sslmode=verify-ca&sslrootcert=%2Fold%2Fmachine%2Froot.crt"
+    )
+
+    assert portable.startswith("postgresql+psycopg://user:password@")
+    assert "sslrootcert" not in portable
+
+
 def test_backup_requires_database_server_identity_verification() -> None:
     common = _load_common()
 

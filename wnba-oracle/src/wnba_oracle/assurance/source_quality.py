@@ -9,7 +9,6 @@ players to score or select.
 from __future__ import annotations
 
 import datetime as dt
-import json
 import math
 import re
 from collections.abc import Mapping, Sequence
@@ -20,6 +19,7 @@ from wnba_oracle.assurance.connectors import (
     DECISION_INPUT_CONNECTOR_CATALOG_SHA256,
     DECISION_INPUT_CONNECTOR_IDS,
 )
+from wnba_oracle.common.feature_payload import parse_feature_mapping
 
 SOURCE_ASSURANCE_SCHEMA_VERSION: Final = 2
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -59,20 +59,7 @@ def _safe_error_type(value: object) -> str:
 
 
 def _features(value: object) -> tuple[dict[str, Any], bool]:
-    if isinstance(value, Mapping):
-        return dict(value), False
-    if isinstance(value, bytes):
-        try:
-            value = value.decode("utf-8")
-        except UnicodeDecodeError:
-            return {}, True
-    if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-        except json.JSONDecodeError:
-            return {}, True
-        return (dict(decoded), False) if isinstance(decoded, Mapping) else ({}, True)
-    return {}, True
+    return parse_feature_mapping(value)
 
 
 def _finite_number(value: object) -> float | None:

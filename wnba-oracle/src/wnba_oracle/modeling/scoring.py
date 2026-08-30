@@ -9,8 +9,7 @@ import _effective_confirmed`` both keep working for existing tests.
 
 from __future__ import annotations
 
-import json as _json
-
+from wnba_oracle.common.feature_payload import parse_feature_mapping
 from wnba_oracle.features.injury_cascade import CascadeInput, redistribute_minutes
 
 
@@ -28,14 +27,7 @@ def _heuristic_real_score(card_boost: float) -> float:
 def _features_dict(features_json: object) -> dict:
     """Coerce the features_json column into a dict. psycopg returns JSONB
     as parsed dicts; older test fixtures pass strings."""
-    if not features_json:
-        return {}
-    if isinstance(features_json, str):
-        try:
-            return _json.loads(features_json)
-        except _json.JSONDecodeError:
-            return {}
-    return features_json if isinstance(features_json, dict) else {}
+    return parse_feature_mapping(features_json)[0]
 
 
 def _vegas_from_features(features_json: object) -> tuple[float, float]:

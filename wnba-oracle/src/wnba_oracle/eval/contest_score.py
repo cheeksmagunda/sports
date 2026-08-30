@@ -44,7 +44,7 @@ test rather than quietly skewing every backtest.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 # The platform fixes 5 descending slot bases; the entrant only chooses which
 # player occupies which slot. Verified across every top-20 entry in the
@@ -76,6 +76,18 @@ def committed_order_score(
     """
     _validate(values, boosts, slot_bases)
     return sum(float(v) * (float(sb) + float(b)) for v, b, sb in zip(values, boosts, slot_bases))
+
+
+def committed_lineup_score(
+    player_ids: Sequence[int],
+    value_by_player: Mapping[int, float],
+    boost_by_player: Mapping[int, float],
+    slot_bases: Sequence[float] = DEFAULT_SLOT_BASES,
+) -> float:
+    """Score a lineup mapping in the player order the entrant committed."""
+    values = [float(value_by_player.get(int(player_id), 0.0)) for player_id in player_ids]
+    boosts = [float(boost_by_player.get(int(player_id), 0.0)) for player_id in player_ids]
+    return committed_order_score(values, boosts, slot_bases)
 
 
 def hindsight_max_score(

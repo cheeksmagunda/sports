@@ -36,6 +36,7 @@ from scipy.stats import spearmanr
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
+from wnba_oracle.eval.contest_score import committed_lineup_score
 from wnba_oracle.predict.base import boost_prior, player_volatility
 from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
 
@@ -172,9 +173,7 @@ def run_placement(corpus: pd.DataFrame, lb: pl.DataFrame, slates: list[str]) -> 
         )
         rec = optimize_lineup(samps, fields, curve, cfg=cfg)
         rs_by = {int(r.player_id): float(r.real_score) for r in pool.itertuples()}
-        members = sorted(((p, rs_by.get(int(p), 0.0)) for p in rec.player_ids), key=lambda x: -x[1])
-        slots = [2.0, 1.8, 1.6, 1.4, 1.2]
-        our = sum((slots[i] + boost_by.get(int(p), 0.0)) * rs for i, (p, rs) in enumerate(members))
+        our = committed_lineup_score(rec.player_ids, rs_by, boost_by)
         lb_s = lb.filter(pl.col("slate_date") == sd).sort("rank")
         scores = sorted(lb_s["score"].to_list(), reverse=True)
         placement = sum(1 for s in scores if s >= our) + 1

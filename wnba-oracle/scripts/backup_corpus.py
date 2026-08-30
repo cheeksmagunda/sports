@@ -29,7 +29,7 @@ from corpus_backup_common import (
     atomic_write_bytes,
     atomic_write_json,
     build_manifest,
-    portable_database_url,
+    portable_postgres_url,
     require_verified_tls,
     validate_snapshot,
 )
@@ -156,7 +156,7 @@ def main() -> int:
         print(f"ERROR: corpus backup configuration rejected: {exc}", file=sys.stderr)
         return 1
     engine = create_engine(
-        portable_database_url(url).replace("postgresql://", "postgresql+psycopg://", 1),
+        portable_postgres_url(url),
         connect_args={"options": "-c default_transaction_read_only=on"},
     )
     try:

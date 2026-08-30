@@ -13,6 +13,8 @@ import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
+from wnba_oracle.common.db_utils import normalize_postgres_url
+
 SNAPSHOT_SCHEMA_VERSION = 1
 CORPUS_COLUMNS = {
     "slate_labels": (
@@ -58,6 +60,11 @@ def portable_database_url(url: str) -> str:
     return urllib.parse.urlunsplit(
         (parsed.scheme, parsed.netloc, parsed.path, urllib.parse.urlencode(query), parsed.fragment)
     )
+
+
+def portable_postgres_url(url: str) -> str:
+    """Remove local TLS paths and select the workspace PostgreSQL driver."""
+    return normalize_postgres_url(portable_database_url(url))
 
 
 def require_verified_tls(url: str) -> None:

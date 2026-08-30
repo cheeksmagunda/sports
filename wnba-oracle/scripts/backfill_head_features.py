@@ -27,6 +27,7 @@ import polars as pl
 import sqlalchemy as sa
 from sqlalchemy import text
 
+from wnba_oracle.common.db_utils import normalize_postgres_url
 from wnba_oracle.features.serving_features import (
     build_head_feature_lookup,
 )
@@ -64,14 +65,7 @@ def main() -> int:
     if not db_url:
         print("ERROR: DATABASE_PUBLIC_URL or DATABASE_URL must be set", file=sys.stderr)
         return 1
-    # Project uses psycopg v3 (per pyproject); coerce both schemes to the
-    # postgresql+psycopg:// driver SQLAlchemy needs.
-    if db_url.startswith("postgres://"):
-        db_url = "postgresql+psycopg://" + db_url[len("postgres://") :]
-    elif db_url.startswith("postgresql://"):
-        db_url = "postgresql+psycopg://" + db_url[len("postgresql://") :]
-
-    eng = sa.create_engine(db_url)
+    eng = sa.create_engine(normalize_postgres_url(db_url))
 
     # 1) Read wnba_game_logs from Postgres.
     with eng.connect() as conn:

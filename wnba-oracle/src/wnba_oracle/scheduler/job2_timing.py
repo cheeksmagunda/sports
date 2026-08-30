@@ -9,7 +9,8 @@ out of the late re-freeze. See job2.run for how the gates compose.
 from __future__ import annotations
 
 import datetime as dt
-import json
+
+from wnba_oracle.common.feature_payload import parse_feature_mapping
 
 
 def _game_start_utc(row: dict) -> dt.datetime | None:
@@ -19,13 +20,8 @@ def _game_start_utc(row: dict) -> dt.datetime | None:
     platform payload with no dateTime). Callers that scope the pool treat
     None as "cannot verify", not as "not started".
     """
-    feats = row.get("features_json") or {}
-    if isinstance(feats, str):
-        try:
-            feats = json.loads(feats)
-        except (TypeError, ValueError):
-            return None
-    raw = str((feats or {}).get("game_start_utc") or "").strip()
+    feats, _invalid = parse_feature_mapping(row.get("features_json"))
+    raw = str(feats.get("game_start_utc") or "").strip()
     if not raw:
         return None
     try:

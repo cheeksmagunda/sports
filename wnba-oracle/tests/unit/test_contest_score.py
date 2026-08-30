@@ -15,6 +15,7 @@ import pytest
 
 from wnba_oracle.eval.contest_score import (
     DEFAULT_SLOT_BASES,
+    committed_lineup_score,
     committed_order_score,
     ev_optimal_order,
     hindsight_max_score,
@@ -83,6 +84,14 @@ def test_hindsight_beats_committed_when_the_order_was_wrong() -> None:
     assert slot_order_headroom(values, boosts) == pytest.approx(hindsight - committed)
     # 9.0 moves from the 1.8x base to the 2.0x base; 1.0 moves the other way.
     assert hindsight - committed == pytest.approx(9.0 * 0.2 - 1.0 * 0.2)
+
+
+def test_committed_lineup_score_preserves_player_id_order() -> None:
+    values = {1: 2.0, 2: 2.0, 3: 2.0, 4: 2.0, 5: 10.0}
+    boosts = dict.fromkeys(values, 0.0)
+
+    assert committed_lineup_score([1, 2, 3, 4, 5], values, boosts) == pytest.approx(25.6)
+    assert committed_lineup_score([5, 1, 2, 3, 4], values, boosts) == pytest.approx(32.0)
 
 
 def test_hindsight_equals_committed_when_the_order_was_already_optimal() -> None:
