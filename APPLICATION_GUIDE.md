@@ -31,6 +31,46 @@ lifecycle mechanics, service scaffolding, artifact handling, and test fakes.
 It must remain free of sport names, league calendars, player or team models,
 provider payloads, scoring rules, strategies, and domain routes.
 
+## Application contract
+
+Before adding domain code, create the minimum application surface and verify it
+from the repository root:
+
+```sh
+make check-applications
+make check-boundaries
+make test-app APP=<sport>-oracle
+```
+
+Every application owns `AGENTS.md`, `README.md`, `STATUS.md`, `.env.example`,
+`Makefile`, `pyproject.toml`, `src/`, and `tests/`. Its package metadata must
+depend on `oracle-core`, and its Makefile must expose `test`, `lint`, and
+`typecheck` targets. Deployment files, migrations, providers, and frontend
+surfaces are added only when that sport actually needs them.
+
+Do not copy WNBA semantics into a new sport. Each sport must define its own
+calendar, identity map, feature schema, model policy, contest scoring, payout
+curve, provider adapters, and operational gates. If a sport has committed slot
+scoring, its achievable evaluator must remain distinct from any hindsight oracle
+used only for headroom analysis.
+
+## Promotion gate
+
+Keep a capability inside the sport application until at least two independent
+applications demonstrate the same provider-neutral need with the same stable
+interface. Promote it to `oracle-core` only when the extraction removes domain
+knowledge, has focused core tests, and leaves both applications depending on
+the same contract. Shared configuration, HTTP, storage, logging, artifacts,
+job lifecycle, and service scaffolding are candidates; models, features,
+scoring, calendars, schemas, provider payloads, strategies, and domain routes
+are not candidates merely because their code looks similar.
+
+Each application should maintain one canonical implementation of each behavior
+inside its own boundary. Scripts and watchdogs should call that implementation,
+not reproduce formulas or defaults. Configuration compilers and feature
+normalizers should have exhaustive wiring or train/serve contract tests so a
+new setting or feature cannot silently stop at one layer.
+
 ## Boundary checks
 
 The root boundary checker discovers `*-oracle/` applications and prevents

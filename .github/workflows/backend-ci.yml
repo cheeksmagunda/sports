@@ -5,23 +5,13 @@ on:
     branches: [main]
     paths:
       - "packages/oracle-core/**"
-      - "wnba-oracle/src/**"
-      - "wnba-oracle/tests/**"
-      - "wnba-oracle/scripts/**"
-      - "wnba-oracle/migrations/**"
-      - "wnba-oracle/pyproject.toml"
-      - "wnba-oracle/Makefile"
-      - "wnba-oracle/README.md"
-      - "wnba-oracle/STATUS.md"
-      - "wnba-oracle/alembic.ini"
-      - "wnba-oracle/Dockerfile"
-      - "wnba-oracle/railway.toml"
-      - "wnba-oracle/models/**"
-      - "wnba-oracle/data/**"
+      - "*-oracle/**"
       - ".dockerignore"
       - ".gitleaksignore"
       - ".gitleaks.toml"
       - "scripts/check_import_boundaries.py"
+      - "scripts/check_applications.py"
+      - "APPLICATION_GUIDE.md"
       - "Makefile"
       - "pyproject.toml"
       - "uv.lock"
@@ -30,23 +20,13 @@ on:
   pull_request:
     paths:
       - "packages/oracle-core/**"
-      - "wnba-oracle/src/**"
-      - "wnba-oracle/tests/**"
-      - "wnba-oracle/scripts/**"
-      - "wnba-oracle/migrations/**"
-      - "wnba-oracle/pyproject.toml"
-      - "wnba-oracle/Makefile"
-      - "wnba-oracle/README.md"
-      - "wnba-oracle/STATUS.md"
-      - "wnba-oracle/alembic.ini"
-      - "wnba-oracle/Dockerfile"
-      - "wnba-oracle/railway.toml"
-      - "wnba-oracle/models/**"
-      - "wnba-oracle/data/**"
+      - "*-oracle/**"
       - ".dockerignore"
       - ".gitleaksignore"
       - ".gitleaks.toml"
       - "scripts/check_import_boundaries.py"
+      - "scripts/check_applications.py"
+      - "APPLICATION_GUIDE.md"
       - "Makefile"
       - "pyproject.toml"
       - "uv.lock"
@@ -115,6 +95,9 @@ jobs:
       - name: Test oracle-core
         run: make test-core
 
+      - name: Test portfolio tooling
+        run: make test-portfolio
+
       - name: Test WNBA backend
         run: make test-wnba
 
@@ -126,6 +109,9 @@ jobs:
 
       - name: Enforce package import boundaries
         run: make check-boundaries
+
+      - name: Enforce sport application contracts
+        run: make check-applications
 
       - name: Build Python packages
         run: make build

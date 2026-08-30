@@ -1,14 +1,17 @@
-.PHONY: install test test-core test-app test-wnba test-integration test-contract security lint typecheck build check-boundaries
+.PHONY: install test test-core test-portfolio test-app test-wnba test-integration test-contract security lint typecheck build check-applications check-boundaries
 
 UV_RUN = uv run --no-editable
 
 install:
 	uv sync --all-packages --all-extras --no-editable
 
-test: test-core test-wnba
+test: test-core test-portfolio test-wnba
 
 test-core:
 	$(UV_RUN) --package oracle-core --extra dev python -m pytest packages/oracle-core/tests -q
+
+test-portfolio:
+	$(UV_RUN) --package oracle-core --extra dev python -m pytest scripts/tests -q
 
 test-app:
 	@test -n "$(APP)" || (echo "Usage: make test-app APP=<application>" >&2; exit 2)
@@ -58,3 +61,6 @@ build:
 
 check-boundaries:
 	python3 scripts/check_import_boundaries.py
+
+check-applications:
+	python3 scripts/check_applications.py
