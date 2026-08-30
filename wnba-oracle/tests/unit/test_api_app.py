@@ -49,6 +49,7 @@ def test_api_preserves_root_docs_cors_routes_and_openapi_contract() -> None:
         "/slate/{slate_date}",
         "/watchdog/today",
         "/watchdog/{slate_date}",
+        "/dossier/{slate_date}",
     }.issubset(schema["paths"])
     assert schema["paths"]["/"] == {
         "get": {
