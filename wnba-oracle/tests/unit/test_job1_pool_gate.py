@@ -128,3 +128,57 @@ def test_enrichment_row_preserves_provider_signal_shape() -> None:
     assert features["game_id"] == "4512"
     assert stats.props_matched == 1
     assert misses == ["A. Wilson (LVA) [unresolved]"]
+
+
+def test_enrichment_prefers_provider_game_identity_for_opponent() -> None:
+    pool = [
+        SimpleNamespace(
+            platform_id="123",
+            display_name="A. Wilson",
+            first_name="A'ja",
+            last_name="Wilson",
+            team="LVA",
+            injury_status="",
+            primary_ranking=1,
+            position="F",
+            multiplier_bonus=1.5,
+            game_start_utc="2026-06-08T23:00:00Z",
+            game_id="4512",
+        ),
+        SimpleNamespace(
+            platform_id="124",
+            display_name="B. Stewart",
+            first_name="Breanna",
+            last_name="Stewart",
+            team="NYL",
+            injury_status="",
+            primary_ranking=2,
+            position="F",
+            multiplier_bonus=1.2,
+            game_start_utc="2026-06-08T23:00:00Z",
+            game_id="4512",
+        ),
+    ]
+    context = job1._EnrichmentContext(
+        team_to_opp={"LVA": "CHI", "NYL": "LVA"},
+        team_to_vegas={"LVA": {"vegas_total": 164.5, "vegas_spread": -4.0, "is_home": 1.0}},
+        rotowire=job1._index_rotowire([]),
+        minutes={},
+        head_features={123: {"opp_pace": 0.0, "opp_dvp_guard": 0.0}},
+        resolver=SimpleNamespace(
+            resolve=lambda real_sports_id, **_kwargs: 123 if real_sports_id == "123" else None
+        ),
+        team_stats={"LVA": {"pace": 80.0}, "NYL": {"pace": 77.0}, "CHI": {"pace": 99.0}},
+        opponent_dvp={"NYL": 2.1, "CHI": 9.9},
+        props={},
+    )
+
+    rows, stats, misses = job1._build_enrichment_rows("2026-06-08", pool, context)
+
+    assert len(rows) == 2
+    assert rows[0]["opponent"] == "NYL"
+    features = json.loads(rows[0]["features_json"])
+    assert features["head_features"]["opp_pace"] == 77.0
+    assert features["head_features"]["opp_dvp_guard"] == 2.1
+    assert stats.head_features_matched == 1
+    assert misses == ["B. Stewart (NYL) [unresolved]"]

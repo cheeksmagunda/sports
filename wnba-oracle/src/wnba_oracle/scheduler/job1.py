@@ -140,6 +140,42 @@ def _device_name() -> str:
     return os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-prod-01")
 
 
+def _provider_team_to_opp(pool: list) -> dict[str, str]:
+    """Prefer the Real Sports pool's own game identity over later odds fixtures.
+
+    Each player row can carry a provider ``game_id``. When exactly two distinct
+    teams share that game, they define the authoritative slate matchup for this
+    capture. This prevents a later full Job 1 re-capture from overwriting
+    ``job1_enrichment.opponent`` with the team's next fixture from the odds
+    feed after the original slate has already tipped.
+    """
+
+    teams_by_game: dict[str, set[str]] = {}
+    for player in pool:
+        team = str(getattr(player, "team", "") or "").strip().upper()
+        game_id = str(getattr(player, "game_id", "") or "").strip()
+        if not team or not game_id:
+            continue
+        teams_by_game.setdefault(game_id, set()).add(team)
+
+    resolved: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for teams in teams_by_game.values():
+        if len(teams) != 2:
+            continue
+        left, right = sorted(teams)
+        for team, opponent in ((left, right), (right, left)):
+            previous = resolved.get(team)
+            if previous is not None and previous != opponent:
+                ambiguous.add(team)
+                continue
+            resolved[team] = opponent
+
+    for team in ambiguous:
+        resolved.pop(team, None)
+    return resolved
+
+
 def pool_sanity(rows: list[dict], *, min_pool: int, min_teams: int) -> list[str]:
     """D84: failure reasons for a degraded pool, empty when healthy.
 
@@ -169,8 +205,11 @@ def _build_enrichment_rows(
     rows: list[dict] = []
     stats = _MergeStats()
     head_feature_misses: list[str] = []
+    provider_team_to_opp = _provider_team_to_opp(pool)
 
     for player in pool:
+        team_key = player.team.upper()
+        opponent = provider_team_to_opp.get(team_key, context.team_to_opp.get(team_key, ""))
         vegas = context.team_to_vegas.get(player.team, {})
         rotowire_entry = context.rotowire.get(player.team, player.display_name)
         if rotowire_entry is not None:
@@ -239,9 +278,8 @@ def _build_enrichment_rows(
             )
         if head_feature is not None:
             head_feature = dict(head_feature)
-            team_abbreviation = player.team.upper()
-            opponent_abbreviation = context.team_to_opp.get(team_abbreviation, "").upper()
-            team_metrics = context.team_stats.get(team_abbreviation, {})
+            opponent_abbreviation = opponent.upper()
+            team_metrics = context.team_stats.get(team_key, {})
             opponent_metrics = context.team_stats.get(opponent_abbreviation, {})
             head_feature["team_pace"] = team_metrics.get("pace", head_feature.get("team_pace", 0.0))
             head_feature["opp_pace"] = opponent_metrics.get(
@@ -298,7 +336,7 @@ def _build_enrichment_rows(
                 "real_sports_player_id": player.platform_id,
                 "name": player.display_name,
                 "team": player.team,
-                "opponent": context.team_to_opp.get(player.team, ""),
+                "opponent": opponent,
                 "position": player.position,
                 "card_boost": float(player.multiplier_bonus),
                 "features_json": json.dumps(features),
