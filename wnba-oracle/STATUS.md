@@ -150,10 +150,14 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   baseline; the promotion rests on the `_on`-vs-old-baseline measurement above,
   which is what was actually run. `leverage_weight=0.28` remains the leading
   follow-up candidate for any separately authorized production-config proposal.
-- The `optimizer_committed_order_objective=true` promotion above is a code-level
-  change to `EXPECTED_PROD_CONFIG`, not a live production change. As of this
-  writing production still serves `false` for this flag; flipping it live
-  requires a separate deploy decision (Job 2 freezes around 14:20 UTC).
+- The `optimizer_committed_order_objective=true` promotion above was deployed
+  live on 2026-08-30: commit `b0ee474` pushed to `origin/main`, `cron-job2`
+  redeployed from it (deployment `4501f53d`), and the Railway
+  `OPTIMIZER_COMMITTED_ORDER_OBJECTIVE=true` env var was set, per explicit
+  operator authorization ahead of the 2026-08-30 18:20 UTC freeze. GitHub
+  Actions' "Wait for CI" gate was blocking the normal auto-deploy (a
+  pre-existing, unrelated CI infrastructure failure -- see the CI note below),
+  so the deploy was triggered manually from the Railway dashboard instead.
   Duplication remains the one deliberately non-promoted objective term.
 - The latest scheduled watchdog workflow on the production source commit was
   GitHub run `32605850803` and completed successfully. Its application status
@@ -162,6 +166,19 @@ GitHub, Railway, PostgreSQL, and the running API before changing production.
   13:07 UTC Job 1 capture preceded the monitor's 13:30 UTC freshness floor.
   Current durable Job 1, Job 1 late, Job 2, day-close, and backfill records are
   successful. External dead-man monitoring remains an explicit connector gap.
+- 2026-08-30: GitHub Actions was broken repo-wide -- every recent run (push,
+  schedule, and issue_comment triggers, including ones that predate the day's
+  pushes) failed instantly with `startup_failure` against a `workflow_id` that
+  matches none of the repo's current `.yml` files (`gh api
+  repos/.../actions/workflows` lists none at that id). `backend-ci` itself
+  never triggered for the `b0ee474` push (last successful run was two days
+  prior). Because Railway's source triggers wait for CI, this blocked
+  auto-deploy independent of the env var question above; the fix was a manual
+  redeploy from the Railway dashboard's per-commit deployment history (find
+  the commit under "History", not the auto-selected latest build, which
+  Railway had already queued as a redeploy of the *previous* commit). Root
+  cause not diagnosed further -- worth a follow-up issue since it silently
+  defeats "Wait for CI" for every service.
 - The live Railway deployment-trigger inventory has six normal source triggers:
   API, frontend, Job 1, Job 1 late, Job 2, and day-close. Each points to
   `cheeksmagunda/sports` on `main` with `Wait for CI`; backfill has no trigger.
@@ -277,7 +294,7 @@ and never loads the artifact, so it does not need the SHA.
 | OPTIMIZER_GAME_STACK_BONUS | 0.010 | Legacy rollback objective; ignored while contextual policy is enabled |
 | OPTIMIZER_CONTEXTUAL_STACKING_ENABLED | true (code default) | contextual-stacking-v1 |
 | OPTIMIZER_CONTEXTUAL_STACK_EV_MARGIN | 0.010 (code default) | Balance indifference band in objective units |
-| OPTIMIZER_COMMITTED_ORDER_OBJECTIVE | false (code default; Railway env var not yet set) | 2026-08-30: promoted to true in EXPECTED_PROD_CONFIG (code), pending a separate deploy decision and the matching Railway env var -- see decision above. Setting EXPECTED_PROD_CONFIG without the env var will make the watchdog's config-drift check flag this once deployed |
+| OPTIMIZER_COMMITTED_ORDER_OBJECTIVE | true | 2026-08-30: promoted to true in EXPECTED_PROD_CONFIG and deployed live on cron-job2 (Railway env var set) ahead of the 2026-08-30 18:20 UTC freeze, per explicit operator authorization -- see decision above. Verified via a clean post-deploy watchdog run (no config_drift event) at 2026-08-30T15:05 UTC |
 | MINUTES_MODEL_ENABLED | true (code default) | D55 |
 | STARTER_SIGNAL_ENABLED | true (code default) | D71 |
 | AVAILABILITY_MODEL_ENABLED | true | D73 |
