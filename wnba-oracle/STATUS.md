@@ -6,6 +6,37 @@ This file is a mutable operational snapshot. Verify service state, schedules,
 repository commits, environment configuration, and artifact identity against
 GitHub, Railway, PostgreSQL, and the running API before changing production.
 
+## Recovery acceptance refresh, 2026-08-31 18:55 UTC
+
+These are local recovery-branch results, not a production release:
+
+- Laptop: `make setup`, all 967 offline tests (50 core, 6 portfolio, 911 WNBA),
+  security, and package builds passed. Setup includes lock validation, frozen
+  sync, imports, lint, type checks, and both portfolio boundary checks.
+- Fresh local devcontainer: frozen feature resolution and post-create setup
+  passed. Repeated `make setup` was idempotent. The same 967 tests, security,
+  package builds, four integration tests, and empty/existing-schema migration
+  acceptance passed with development PostgreSQL and Redis reachable.
+- Both production Docker images built locally. API health, frontend HTML and
+  response headers, non-root runtime users, image healthchecks, all six cron
+  role probes, and rejection of a mismatched role passed. No real jobs ran.
+- Security retained eight existing dependency audit exceptions. A redacted
+  history scan found no leaks under the existing Gitleaks configuration.
+- Native GitHub and Railway authentication passed. Eleven checked launchd
+  overrides were absent. Provider runtime credentials were not configured in
+  the process; provider access and result quality are not certified here.
+- Local `main` equals fetched `origin/main` at `e03f642`; the recovery changes
+  remain on `chat/45-devops-recovery` in PR #46. GitHub check annotation
+  `99396612919` confirms jobs cannot start because of the account billing lock.
+  No merge or deployment bypass was attempted. Hosted Codespaces verification
+  is also outstanding: the local GitHub CLI lacks the `codespace` scope.
+- The unshipped freshness gate was withdrawn after review found that its
+  expected capture timestamps were absent from model-input rows. Its six pure
+  tests did not cover real publication. Existing scoring/freeze behavior is
+  preserved; a correctly integrated freshness gate and the draft-results
+  performance audit remain unfinished. No top-100 or model-edge claim follows
+  from setup, health checks, or passing tests.
+
 ## 2026-08-31 production and DevOps audit
 
 The following facts were verified read-only against the live repository,
@@ -44,12 +75,18 @@ GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
   the migration guard was not weakened. Full evidence is in PR #46.
   No hosted Codespace was created or modified. Hosted checks on PR #46 failed
   before running because of the account billing lock, so it remains draft.
-- The local import hang was caused by iCloud-evicted files inside `.venv`.
-  Reinstalling the locked dependencies restored normal commands. Git metadata
-  also contained evicted files. Refetching packed objects and removing only
-  redundant loose copies restored normal Git reads without losing commits.
-  Finder's Keep Downloaded setting is now enabled for the authoritative
-  checkout. Do not copy virtual environments between machines.
+- The local import hang recurred after reinstalling dependencies on iCloud
+  Desktop. Hidden/dataless source and environment files and duplicate Git
+  metadata made that location unreliable. The sole checkout now lives at
+  `/Users/hanslarson/Developer/sports`; Desktop has only a compatibility
+  symlink. Open the physical folder in the editor or agent. The locked local
+  environment is at `/Users/hanslarson/.cache/sports/venv`, linked by `.venv`.
+  The invalid iCloud `main 2` ref was quarantined outside Git; `git fetch origin`
+  and `git fsck --no-reflogs` then completed successfully. Dangling objects
+  were retained. The duplicate ref remains recoverable under
+  `/private/tmp/sports-filesystem-recovery.KFQmR0`. After the replacement passed
+  all offline tests, the old 1.3 GB generated environment was deleted; it is
+  reproducible from the lockfile, not a source backup.
 - The fresh repository history scan covered 351 commits and found no leaks
   under the existing Gitleaks exclusions. At the final read, API health was
   still OK; watchdog had rolled to slate date 2026-08-31 with no events yet.
@@ -74,7 +111,7 @@ and bounded SQL through the API engine with `transaction_read_only=on`.
 | P2 | Synthetic redaction probes preserved passwords inside PostgreSQL/Redis URLs and the `real-auth-info` header. This was a coverage gap, not evidence that a live secret was leaked. | Fixed locally with generic URL-userinfo and auth-info redaction plus regression coverage. Deploy only after CI and the normal rollback checks pass. |
 | P2 | The API enforces read-only transactions but connects as a database superuser. Existing `oracle_ro` is non-superuser and has SELECT, not INSERT, on `frozen_lineups`. | Separately authorize least-privilege runtime credential wiring and verify all serving routes, migration separation, and rollback. No credentials changed. |
 | P2 | `/dossier/{date}` is absent from live OpenAPI and returns the generic route-not-found 404. The route exists on `main`. | Verify the endpoint after the API source version is reconciled; do not confuse an absent route with an unfinalized slate. |
-| P1 | Local Job 2 previously allowed a lineup to publish when source capture, slate timing, minutes, injury status, or derived projections were incomplete. | Implemented locally with a fail-closed `freshness_gate_blocked` before freeze persistence. Verify on a complete slate and deploy only through green CI with rollback. |
+| P1 | The recovery branch's proposed freshness gate was not release-ready: it expected `captured_at` on model rows even though the loader reads those timestamps separately for assurance. Its six pure tests missed the publishing-path failure. | Removed the unshipped gate from recovery, preserving incumbent behavior. Follow-up must bind timestamps to the exact input snapshot, validate source-specific age/coverage rules, recheck at persistence, and test complete, missing, stale, late-lock, and idempotent paths end to end. Source assurance remains observational, not a freshness guarantee. |
 
 Draft evidence and limits:
 

@@ -19,7 +19,7 @@
 *.swo
 
 # Common build and test artifacts
-**/.venv/
+**/.venv
 **/__pycache__/
 **/.pytest_cache/
 **/.mypy_cache/

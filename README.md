@@ -57,10 +57,12 @@ Run `make setup` again after pulling dependency changes. Provider credentials,
 Railway access, and optional browser tooling are unnecessary for offline work.
 `make test` isolates the offline suite from inherited database and Redis URLs;
 `make test-integration` deliberately uses the configured development services.
-If a cloud-synced Desktop evicts `.venv` files and imports hang, restore the
-generated environment with `uv sync --frozen --all-packages --all-extras
---reinstall`. Keep the checkout downloaded locally; never copy a virtual
-environment between machines.
+Keep laptop checkouts outside cloud-synced Desktop and Documents folders, for
+example `~/Developer/sports`. Open the physical folder in your editor or agent,
+not a Desktop symlink, so filesystem permissions resolve to the checkout.
+iCloud can evict source, Git metadata, and virtual-environment files even after
+a dependency reinstall. Recreate generated environments with `uv sync --frozen
+--all-packages --all-extras --reinstall`; never copy them between machines.
 
 Before changing an application, read root `AGENTS.md`, then that application's
 `AGENTS.md`, `README.md`, and `STATUS.md`. An application may also provide its
