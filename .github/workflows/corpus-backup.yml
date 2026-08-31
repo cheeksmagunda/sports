@@ -60,12 +60,12 @@ jobs:
           CORPUS_PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
           DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
-        run: uv run --package wnba-oracle python wnba-oracle/scripts/backup_corpus.py
+        run: uv run --frozen --package wnba-oracle python wnba-oracle/scripts/backup_corpus.py
 
       - name: Verify snapshot manifest and hashes
         env:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
-        run: uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+        run: uv run --frozen --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Transfer verified snapshot without database credentials
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -98,7 +98,7 @@ jobs:
       - name: Reverify transferred snapshot before repository write
         env:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
-        run: uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+        run: uv run --frozen --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Commit snapshot to backups branch
         env:

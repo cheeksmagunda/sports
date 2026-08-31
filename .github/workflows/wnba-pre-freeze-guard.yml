@@ -57,7 +57,7 @@ jobs:
           MANUAL_RUN_START_UTC: ${{ inputs.run_start_utc }}
           MANUAL_SLATE_DATE: ${{ inputs.slate_date }}
         run: >-
-          uv run --package wnba-oracle python wnba-oracle/scripts/resolve_ops_window.py
+          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/resolve_ops_window.py
           --role job1
           --github-env "$GITHUB_ENV"
 
@@ -72,7 +72,7 @@ jobs:
           if [ "$INPUT_REPAIR" = "true" ]; then
             repair_args+=(--repair)
           fi
-          uv run --package wnba-oracle python wnba-oracle/scripts/pre_freeze_guard.py \
+          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/pre_freeze_guard.py \
             --slate-date "$INPUT_SLATE_DATE" \
             --run-start-utc "$INPUT_RUN_START_UTC" \
             --run-end-utc "$INPUT_RUN_END_UTC" \

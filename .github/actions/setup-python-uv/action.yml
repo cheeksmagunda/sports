@@ -33,4 +33,4 @@ runs:
     - name: Install frozen workspace
       if: inputs.sync == 'true'
       shell: bash
-      run: uv sync --frozen --all-packages --all-extras --no-editable
+      run: uv sync --frozen --all-packages --all-extras

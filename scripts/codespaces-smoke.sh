@@ -6,28 +6,13 @@ command -v uv >/dev/null
 command -v make >/dev/null
 
 echo "Checking workspace imports"
-uv run --package oracle-core python -c 'import oracle_core; assert oracle_core.Dossier'
-uv run --package wnba-oracle python -c 'import wnba_oracle'
+uv run --frozen --package wnba-oracle python -c 'import oracle_core, wnba_oracle; assert oracle_core.Dossier'
 
-if [ "${CODESPACES:-}" = "true" ] || [ "${REMOTE_CONTAINERS:-}" = "true" ]; then
+if [ "${SPORTS_DEVCONTAINER:-}" = "true" ]; then
     echo "Checking PostgreSQL and Redis services"
-    ready=0
-    i=0
-    while [ "$i" -lt 30 ]; do
-        if pg_isready -h db -U postgres -d sports_dev >/dev/null 2>&1 \
-            && redis-cli -h redis ping 2>/dev/null | grep -qx PONG; then
-            ready=1
-            break
-        fi
-        i=$((i + 1))
-        sleep 2
-    done
-    [ "$ready" -eq 1 ] || {
-        echo "developer services did not become ready" >&2
-        exit 1
-    }
+    uv run --frozen --package wnba-oracle python scripts/check_dev_services.py
 else
-    echo "Skipping container service checks outside Codespaces"
+    echo "Skipping service checks outside the project devcontainer"
 fi
 
 echo "Checking repository contracts"

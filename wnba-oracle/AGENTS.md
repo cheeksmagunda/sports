@@ -26,7 +26,7 @@ the frontend, import their final commit mechanically and verify tree identity.
 Run workspace commands from the monorepo root:
 
 ```sh
-uv sync --all-packages --all-extras
+make setup
 make test-core
 make test-wnba
 make test-contract
@@ -50,9 +50,12 @@ make migrate
 make determinism-check
 ```
 
-`make test` deliberately runs `uv run --package wnba-oracle --extra dev
-python -m pytest tests/ -q`. Do not replace it with bare `uv run pytest`, which
-can omit project dependencies in a workspace.
+`make test` clears inherited database and Redis URLs, then runs
+`uv run --frozen --package wnba-oracle --extra dev python -m pytest tests/ -q`.
+This keeps offline tests from touching developer or production services.
+Integration and provider-contract targets retain their explicit configuration.
+Do not replace these targets with bare `uv run pytest`, which can omit project
+dependencies in a workspace.
 
 Commands normally use the existing process environment and native CLI sessions.
 Run capability checks from the monorepo root:
@@ -67,7 +70,7 @@ into the child process:
 
 ```sh
 scripts/with-secrets wnba-oracle -- make dev
-scripts/with-secrets wnba-oracle -- ../scripts/auth-check wnba-oracle --live
+scripts/with-secrets wnba-oracle -- scripts/auth-check wnba-oracle --live
 ```
 
 ## Verification bar

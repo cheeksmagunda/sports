@@ -25,8 +25,7 @@ Copilot, or other vendor tooling. Those are optional editor capabilities.
 Inside a Codespace, use the same commands as locally:
 
 ```sh
-uv sync --frozen --all-packages --all-extras --no-editable
-make codespaces-smoke
+make setup
 make test
 ```
 
@@ -41,14 +40,25 @@ Railway CLI logins for those services. Runtime secrets come from the process
 environment. Docker is required only for the container and database acceptance
 path.
 
+Codespaces supplies the tools and services automatically. On a laptop,
+`make setup` validates and installs the lockfile; everyday commands use editable
+workspace packages so source changes are visible immediately. The Linux
+devcontainer keeps its virtual environment outside the source mount, separate
+from the laptop's `.venv`. Production images use non-editable installations.
+
 ```sh
 make setup
 make test
-make security
-make lint
-make typecheck
-make check-boundaries
 ```
+
+Run `make setup` again after pulling dependency changes. Provider credentials,
+Railway access, and optional browser tooling are unnecessary for offline work.
+`make test` isolates the offline suite from inherited database and Redis URLs;
+`make test-integration` deliberately uses the configured development services.
+If a cloud-synced Desktop evicts `.venv` files and imports hang, restore the
+generated environment with `uv sync --frozen --all-packages --all-extras
+--reinstall`. Keep the checkout downloaded locally; never copy a virtual
+environment between machines.
 
 Before changing an application, read root `AGENTS.md`, then that application's
 `AGENTS.md`, `README.md`, and `STATUS.md`. An application may also provide its
@@ -160,7 +170,7 @@ injected only into that child process:
 
 ```sh
 scripts/with-secrets "$APP" -- make test
-scripts/with-secrets "$APP" -- ../scripts/auth-check "$APP" --live
+scripts/with-secrets "$APP" -- scripts/auth-check "$APP" --live
 ```
 
 Explicitly exported variables take precedence over encrypted application

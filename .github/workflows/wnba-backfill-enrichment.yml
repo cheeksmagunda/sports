@@ -134,7 +134,7 @@ jobs:
 
       - name: Verify the new durable backfill outcome
         run: >-
-          uv run --package wnba-oracle python wnba-oracle/scripts/verify_durable_job.py
+          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/verify_durable_job.py
           --api-base "$WNBA_API_BASE"
           --role backfill
           --started-after "${{ steps.deploy.outputs.run_started_at }}"

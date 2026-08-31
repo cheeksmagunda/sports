@@ -25,6 +25,7 @@ wnba-oracle/**
 !wnba-oracle/migrations/**
 !wnba-oracle/scripts/
 !wnba-oracle/scripts/seed_storage_state.py
+!wnba-oracle/scripts/runtime_role_probe.py
 !wnba-oracle/data/
 !wnba-oracle/data/contest_payouts/
 !wnba-oracle/data/contest_payouts/.gitkeep

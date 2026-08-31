@@ -17,6 +17,9 @@ on:
       - "uv.lock"
       - ".github/dependabot.yml"
       - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".devcontainer/**"
+      - "scripts/**"
   pull_request:
     paths:
       - "packages/oracle-core/**"
@@ -32,6 +35,9 @@ on:
       - "uv.lock"
       - ".github/dependabot.yml"
       - ".github/workflows/**"
+      - ".github/actions/**"
+      - ".devcontainer/**"
+      - "scripts/**"
 
 permissions:
   contents: read
@@ -181,3 +187,24 @@ jobs:
           done
           docker logs "$container_id"
           exit 1
+
+  devcontainer-smoke:
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Build the Codespaces environment and run post-create setup
+        run: npx --yes --package @devcontainers/cli@0.88.0 devcontainer up --workspace-folder . --frozen-lockfile
+
+      - name: Verify portable services and migrations in the devcontainer
+        run: >-
+          npx --yes --package @devcontainers/cli@0.88.0 devcontainer exec
+          --workspace-folder . make test-core test-portfolio test-integration

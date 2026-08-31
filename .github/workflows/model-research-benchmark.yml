@@ -68,7 +68,7 @@ jobs:
           DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
           GAME_IDENTITY_OUTPUT_DIR: ${{ runner.temp }}/identity
-        run: uv run --package wnba-oracle python export_game_identity.py
+        run: uv run --frozen --package wnba-oracle python export_game_identity.py
 
       - name: Restore verified corpus snapshot from backups branch
         env:
@@ -79,7 +79,7 @@ jobs:
           git show origin/backups:wnba-oracle/data/backups/slate_labels.csv > "$SNAPSHOT_DIR/slate_labels.csv"
           git show origin/backups:wnba-oracle/data/backups/contest_leaderboards.csv > "$SNAPSHOT_DIR/contest_leaderboards.csv"
           git show origin/backups:wnba-oracle/data/backups/manifest.json > "$SNAPSHOT_DIR/manifest.json"
-          uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       # The gate. The full eligibility cascade runs in well under a second,
       # against ~86 CPU-hours for the matrix below. A previous dispatch spent
@@ -99,7 +99,7 @@ jobs:
           IDENTITY_DIR: ${{ runner.temp }}/identity
           MIN_ELIGIBLE: ${{ inputs.min_eligible_slates }}
         run: >-
-          uv run --no-editable --package wnba-oracle python
+          uv run --frozen --package wnba-oracle python
           scripts/build_model_research_benchmark.py
           --output-dir "$RUNNER_TEMP/coverage"
           --labels-csv "$SNAPSHOT_DIR/slate_labels.csv"
@@ -145,7 +145,7 @@ jobs:
           git show origin/backups:wnba-oracle/data/backups/slate_labels.csv > "$SNAPSHOT_DIR/slate_labels.csv"
           git show origin/backups:wnba-oracle/data/backups/contest_leaderboards.csv > "$SNAPSHOT_DIR/contest_leaderboards.csv"
           git show origin/backups:wnba-oracle/data/backups/manifest.json > "$SNAPSHOT_DIR/manifest.json"
-          uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Download prefetched game identity
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
@@ -163,7 +163,7 @@ jobs:
           TEMPERATURE_VARIANTS: ${{ inputs.temperature_variants }}
           SHARD_INDEX: ${{ matrix.shard }}
         run: >-
-          uv run --no-editable --package wnba-oracle python
+          uv run --frozen --package wnba-oracle python
           scripts/build_model_research_benchmark.py
           --output-dir "$OUTPUT_DIR"
           --labels-csv "$SNAPSHOT_DIR/slate_labels.csv"
@@ -216,7 +216,7 @@ jobs:
           SHARDS_DIR: ${{ runner.temp }}/shards
           OUTPUT_DIR: ${{ runner.temp }}/merged
         run: |
-          uv run --no-editable --package wnba-oracle python \
+          uv run --frozen --package wnba-oracle python \
             scripts/build_model_research_benchmark.py \
             --output-dir "$OUTPUT_DIR" \
             --merge-shards "$SHARDS_DIR"/*/benchmark_results.json

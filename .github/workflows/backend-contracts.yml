@@ -27,5 +27,5 @@ jobs:
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: >-
-          uv run --package wnba-oracle python -m pytest
+          uv run --frozen --package wnba-oracle python -m pytest
           wnba-oracle/tests -m contract -v

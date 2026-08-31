@@ -2,7 +2,9 @@
 
 Sports Oracle is a hobby application. This workflow saves time by keeping
 context, commands, and evidence in one place. It is not a corporate approval
-system.
+system. When an AI agent is doing the work, it creates or reuses the issue,
+handles the branch and PR, and runs the checks. The operator does not need to
+manage that bookkeeping.
 
 ## Before work
 
@@ -47,7 +49,7 @@ applicable:
 - rollback condition and whether the result is offline, shadow, or production.
 
 Promote code into `oracle-core` only when it is stable, provider-neutral, and
-used by more than one application. Keep sport models, features, schemas, and
+supported by tests and repeated use. Keep sport models, features, schemas, and
 provider behavior in the owning application.
 
 ## AI-assisted work
@@ -65,12 +67,8 @@ never belong in prompts, images, logs, source, or committed configuration.
 ## Fast path
 
 ```sh
-uv sync --frozen --all-packages --all-extras --no-editable
-make codespaces-smoke
+make setup
 make test
-make lint
-make typecheck
-make security
 ```
 
 Use `make build` before changing packaging or Docker behavior. Use the

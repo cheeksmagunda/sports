@@ -14,7 +14,7 @@ See root `README.md` for workspace setup, authentication, and optional encrypted
 file configuration. From the monorepo root:
 
 ```sh
-uv sync --all-packages --all-extras
+make setup
 scripts/auth-check wnba-oracle --offline
 make test-wnba
 ```

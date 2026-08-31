@@ -15,24 +15,46 @@ GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
 - The API reported `status=warn` from `/watchdog/today`. Current warnings were
   `schema_minutes_feed_sparse` and a `config_drift` event showing
   `OPTIMIZER_COMMITTED_ORDER_OBJECTIVE` actual `false` versus expected `true`.
-  The production configuration must be reconciled before describing the
-  committed-order promotion as active.
+  These are persisted events, not a live reading of every service's current
+  environment. Reconcile them with fresh job evidence before describing the
+  committed-order promotion as active. No model setting was changed here.
 - `/watchdog/jobs/today` reported successful current Job 1, Job 1 late, Job 2,
   and day-close records. Backfill had no current record.
 - Railway CLI reported API and frontend online, Postgres and Redis online, and
   all four cron services completed or scheduled.
 - The GitHub repository is currently public and `main` is not branch
-  protected. This is a governance risk for a production source repository and
-  requires an account-plan and operator decision before changing settings.
-- Recent GitHub Actions runs included failures for `backend-ci` and
-  `watchdog-monitor`; older startup failures had no retrievable job logs. The
-  repository now standardizes Python setup and locked execution through the
-  local `.github/actions/setup-python-uv` action. Recheck the next runs from the
-  committed source before treating CI-gated deploys as healthy.
+  protected. Repository visibility and protection settings were not changed.
+- GitHub check annotations `99300425385` and `99339964317` explicitly report
+  an account billing lock preventing jobs from starting. Root cause and
+  evidence are recorded in issue #40. Account billing must be restored before
+  CI, scheduled GitHub monitors, and CI-gated source deployments can resume.
+  Local passing checks do not replace this gate. No billing settings changed.
 - Local Apple Silicon builds succeeded for the backend and frontend images,
-  with runtime health checks and backend role probes added to both image
-  definitions. The backend image emitted a non-fatal Playwright host-library
-  warning during browser installation.
+  with image health checks and backend role probes. The backend build emitted
+  a non-fatal Playwright host-library warning during browser installation.
+- Recovery is tracked in issue #45. `make setup`, 48 core tests, 6 portfolio
+  tests, 909 WNBA tests, lint, types, boundaries, package builds, and the runtime
+  security audit passed locally. The audit retains existing vulnerability
+  exceptions; it is not a claim that every dependency is vulnerability-free.
+- A fresh local devcontainer built successfully and completed `make setup`
+  with PostgreSQL and Redis reachable. Its environment is separate from the
+  mounted macOS `.venv`. Full container acceptance is recorded with the PR.
+  No hosted Codespace was created or modified.
+- The local import hang was caused by iCloud-evicted files inside `.venv`.
+  Reinstalling the locked dependencies restored normal commands. Git metadata
+  also contained evicted files. Refetching packed objects and removing only
+  redundant loose copies restored normal Git reads without losing commits.
+  Finder's Keep Downloaded setting is now enabled for the authoritative
+  checkout. Do not copy virtual environments between machines.
+- The fresh repository history scan covered 351 commits and found no leaks
+  under the existing Gitleaks exclusions. At the final read, API health was
+  still OK; watchdog had rolled to slate date 2026-08-31 with no events yet.
+  That new-day empty event list does not resolve the previous day's warnings.
+- Only the authoritative checkout is registered as a worktree. Earlier stale
+  copies were moved to Trash, not securely erased. macOS privacy protection
+  prevented this follow-up from inspecting Trash, so a total trace-free wipe
+  is not certified. Native GitHub and Railway authentication passed, and the
+  checked stale launchd variables were absent. No credentials were rotated.
 
 ## Monorepo cutover
 
@@ -44,8 +66,7 @@ GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
 - The frontend builds from `wnba-oracle/frontend`; PostgreSQL and Redis remain
   the same managed Railway services.
 - The previous WNBA repository is an archive only. Do not deploy from it.
-- GitHub reports `main` as unprotected. Private-repository rulesets require an
-  account-plan decision. Railway `Wait for CI` is enabled on the API, four
+- GitHub reports `main` as unprotected. Railway `Wait for CI` is enabled on the API, four
   scheduled backend services, and frontend, so source pushes do not deploy
   until the applicable GitHub checks succeed. Backfill source auto-deploy is
   disabled entirely. Treat every push to `main` as a production-source change

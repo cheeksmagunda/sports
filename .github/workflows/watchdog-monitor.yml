@@ -37,7 +37,7 @@ jobs:
         id: probe
         continue-on-error: true
         run: >-
-          uv run --package wnba-oracle python wnba-oracle/scripts/watchdog_monitor.py
+          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/watchdog_monitor.py
           --report "$RUNNER_TEMP/watchdog-report.md"
 
       - name: Ensure an incident-safe report exists

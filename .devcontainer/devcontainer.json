@@ -5,17 +5,12 @@
 	"workspaceFolder": "/workspaces/sports",
 	"remoteUser": "vscode",
 	"updateRemoteUserUID": true,
-	"containerEnv": {
-		"DATABASE_URL": "postgresql://postgres:postgres@db:5432/sports_dev",
-		"REDIS_URL": "redis://redis:6379",
-		"PYTHONDONTWRITEBYTECODE": "1",
-		"PYTHONUNBUFFERED": "1"
-	},
 	"features": {
-		"ghcr.io/devcontainers/features/node:1": {
-			"version": "22"
+		"ghcr.io/devcontainers/features/node:1.7.1": {
+			"version": "22",
+			"installYarnUsingApt": false
 		},
-		"ghcr.io/devcontainers/features/github-cli:1": {}
+		"ghcr.io/devcontainers/features/github-cli:1.1.1": {}
 	},
 	"customizations": {
 		"vscode": {
@@ -28,6 +23,6 @@
 			]
 		}
 	},
-	"postCreateCommand": "uv sync --frozen --all-packages --all-extras --no-editable && make codespaces-smoke",
-	"forwardPorts": [5432, 6379]
+	"postCreateCommand": "make setup",
+	"forwardPorts": [8000, 5173]
 }
