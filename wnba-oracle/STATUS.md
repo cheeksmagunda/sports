@@ -6,7 +6,7 @@ This file is a mutable operational snapshot. Verify service state, schedules,
 repository commits, environment configuration, and artifact identity against
 GitHub, Railway, PostgreSQL, and the running API before changing production.
 
-## Recovery acceptance refresh, 2026-08-31 18:55 UTC
+## Recovery acceptance refresh, 2026-08-31
 
 These are local recovery-branch results, not a production release:
 
