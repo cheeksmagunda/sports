@@ -5,13 +5,26 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - ..:/workspaces/sports:cached
+    working_dir: /workspaces/sports
+    environment:
+      # Disposable development services only. Never inherit production URLs.
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sports_dev
+      POSTGRES_ADMIN_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+      SPORTS_DEVCONTAINER: "true"
+      # Keep Linux packages separate from a mounted macOS .venv.
+      UV_PROJECT_ENVIRONMENT: /home/vscode/.venvs/sports
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
     command: sleep infinity
     depends_on:
-      - db
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  db:
-    image: postgres:16-alpine
+  postgres:
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -19,10 +32,20 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sports_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
 volumes:
   pgdata:

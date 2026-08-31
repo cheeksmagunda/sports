@@ -12,7 +12,7 @@ programming and natural language outcomes for IᎤænnغS are the priority.
 We prioritize state awareness and file synchronization management. The
 operator works across many surfaces, so project state is key.
 
-This private monorepo contains independent sport applications and the
+This monorepo contains independent sport applications and the
 provider-neutral technical platform they share. These instructions are the
 canonical portfolio rules. A child `AGENTS.md` adds application rules and exact
 commands, but cannot weaken this contract.
@@ -29,6 +29,10 @@ commands, but cannot weaken this contract.
    before relying on them.
 4. Prefer reversible, scoped actions. Stop for missing authority, destructive or
    irreversible work, or a choice that materially changes the requested scope.
+5. Before material work, find or create one GitHub issue with the objective and
+   acceptance check, then link the PR. The acting agent handles this bookkeeping.
+   Read-only investigation, local experiments, and trivial corrections can skip
+   an issue. Follow `CONTRIBUTING.md`; keep the process light for this hobby app.
 
 ## Portfolio boundaries
 

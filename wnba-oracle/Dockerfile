@@ -90,6 +90,8 @@ USER oracle
 
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/health', timeout=4)"]
+
 # Default CMD is the API. Cron services override startCommand to:
 #   sh -c "python /app/wnba-oracle/scripts/seed_storage_state.py && oracle-cron --job jobN"
 # Always wrap with sh -c so ${PORT} expands. See mlb-oracle for the silent-cron

@@ -7,6 +7,7 @@ joins RotoWire lineup entries to Real Sports pool rows, plus the shared
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass
 
@@ -109,7 +110,11 @@ def is_out_status(status: str | None) -> bool:
     if not status:
         return False
     upper = status.strip().upper()
-    return any(tok in upper for tok in _OUT_STATUS_TOKENS)
+    # Provider labels may include punctuation ("OUT - Knee", "N/A"), but
+    # matching substrings makes ordinary labels such as "Questionable" and
+    # "Available" look like confirmed OUT statuses.
+    tokens = set(re.findall(r"[A-Z]+", upper))
+    return bool(tokens & _OUT_STATUS_TOKENS)
 
 
 def rotowire_patch(rw: LineupEntry) -> dict:

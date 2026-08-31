@@ -21,21 +21,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-        with:
-          enable-cache: true
-          version: "0.11.13"
-
-      - name: Install workspace
-        run: uv sync --frozen --all-packages --all-extras
+      - uses: ./.github/actions/setup-python-uv
 
       - name: Check live provider schemas
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: >-
-          uv run --package wnba-oracle python -m pytest
+          uv run --frozen --package wnba-oracle python -m pytest
           wnba-oracle/tests -m contract -v

@@ -130,7 +130,6 @@ def build_dossier(
             {"sd": slate_date},
         ).first()
 
-
     # Read label corpus for scoring our entry and computing ceiling
     labels_df = read_slate_labels(engine=eng)
     if labels_df.is_empty():
@@ -190,9 +189,7 @@ def build_dossier(
     # Build field winner entry
     if leaderboard_row:
         # Winner is exact only if rank 1 was captured
-        winner_censor = (
-            None if leaderboard_row.rank == 1 else CensoringReason.LEADERBOARD_DEPTH
-        )
+        winner_censor = None if leaderboard_row.rank == 1 else CensoringReason.LEADERBOARD_DEPTH
 
         work.field_entry = DossierEntry(
             kind=EntryKind.FIELD_BEST,
@@ -216,9 +213,7 @@ def build_dossier(
     if pool_rows:
         ceiling_score = _realized_oracle(pool_rows, cap=team_cap)
         if ceiling_score > -1.0:
-            ceiling_censor = CensoringReason.INCOMPLETE_LABELS if len(
-                labels_df
-            ) < 37 else None
+            ceiling_censor = CensoringReason.INCOMPLETE_LABELS if len(labels_df) < 37 else None
             work.ceiling_entry = DossierEntry(
                 kind=EntryKind.THEORETICAL_CEILING,
                 score=ceiling_score,

@@ -14,7 +14,7 @@ See root `README.md` for workspace setup, authentication, and optional encrypted
 file configuration. From the monorepo root:
 
 ```sh
-uv sync --all-packages --all-extras
+make setup
 scripts/auth-check wnba-oracle --offline
 make test-wnba
 ```
@@ -138,14 +138,15 @@ capture under the top-20 curve, then atomically writes
 It requires `DATABASE_URL` in the process environment, or
 `--labels-csv`/`--leaderboards-csv`/`--game-identity-csv` pointing at a
 verified corpus-backup / prefetch snapshot for offline runs. Game identity
-(validated team -> opponent per slate, from `job1_enrichment`) is required to
-evaluate a slate at all; a slate whose teams lack a validated reciprocal
-mapping is dropped rather than assigned a fabricated opponent. It is
+from `job1_enrichment` is required: provider game IDs are primary, with
+validated reciprocal team/opponent metadata as the fallback. Slates without
+either complete identity path are dropped. It is
 read-only against production data, and its outputs are generated artifacts,
-not committed documentation:
+not committed documentation. From this application directory, with an explicit
+read-only `DATABASE_URL` already in the process environment:
 
 ```sh
-DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
+uv run --frozen --package wnba-oracle python \
     scripts/build_model_research_benchmark.py --output-dir /tmp/bench
 ```
 

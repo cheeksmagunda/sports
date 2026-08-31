@@ -11,8 +11,6 @@ from __future__ import annotations
 import datetime as dt
 from unittest.mock import patch
 
-import pytest
-
 from wnba_oracle.scheduler import live_ownership as lo
 
 LOCK = dt.datetime(2026, 8, 30, 18, 0, tzinfo=dt.UTC)

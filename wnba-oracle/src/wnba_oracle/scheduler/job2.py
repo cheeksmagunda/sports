@@ -981,9 +981,7 @@ def _record_projected_ownership_safe(slate_date: str, fields: list[FieldPlayerSp
         ownership = project_ownership(fields)
         projected = {f.player_id: float(o) for f, o in zip(fields, ownership, strict=True)}
         projected_drafts = {
-            f.player_id: int(f.measured_drafts)
-            for f in fields
-            if f.measured_drafts is not None
+            f.player_id: int(f.measured_drafts) for f in fields if f.measured_drafts is not None
         }
         eng = get_engine()
         with eng.begin() as conn:

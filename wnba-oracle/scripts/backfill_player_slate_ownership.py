@@ -46,8 +46,7 @@ SELECT_LABELS = text(
 )
 
 SELECT_EXISTING = text(
-    "SELECT DISTINCT slate_date FROM player_slate_ownership "
-    "WHERE actual_ownership IS NOT NULL"
+    "SELECT DISTINCT slate_date FROM player_slate_ownership WHERE actual_ownership IS NOT NULL"
 )
 
 UPSERT = text(
@@ -82,9 +81,7 @@ def plan_backfill(
         total = sum(drafts_by_pid.values())
         if total <= 0:
             continue
-        plan[slate_date] = {
-            pid: (drafts / total, drafts) for pid, drafts in drafts_by_pid.items()
-        }
+        plan[slate_date] = {pid: (drafts / total, drafts) for pid, drafts in drafts_by_pid.items()}
     return plan
 
 

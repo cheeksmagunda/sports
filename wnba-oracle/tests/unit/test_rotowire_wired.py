@@ -48,6 +48,9 @@ def test_is_out_status_rejects_questionable_and_empty() -> None:
     assert not job1.is_out_status("DTD")
     assert not job1.is_out_status("Q")
     assert not job1.is_out_status("P")
+    assert not job1.is_out_status("Questionable")
+    assert not job1.is_out_status("Available")
+    assert not job1.is_out_status("Probable")
 
 
 def test_normalize_name_strips_suffixes_and_case() -> None:

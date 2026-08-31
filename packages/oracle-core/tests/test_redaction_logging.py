@@ -21,6 +21,13 @@ def test_redact_url_hides_query_and_userinfo_secrets() -> None:
     assert "ok=yes" in value
 
 
+def test_redact_text_hides_database_url_credentials() -> None:
+    value = redact_text("postgresql://demo:private-password@db.test/sports")
+
+    assert "private-password" not in value
+    assert "postgresql://demo:[REDACTED]@db.test/sports" in value
+
+
 def test_redact_value_handles_nested_mappings() -> None:
     value = redact_value({"token": "abc", "nested": [{"ok": "yes"}]})
 
@@ -37,6 +44,14 @@ def test_redaction_hides_headers_and_embedded_credentials() -> None:
     assert "private" not in message
     assert "password" not in message
     assert "hidden" not in message
+
+
+def test_redaction_hides_application_auth_info_header() -> None:
+    headers = redact_headers({"real-auth-info": "private-session", "Accept": "application/json"})
+    message = redact_text("real-auth-info: private-session")
+
+    assert headers["real-auth-info"] == "[REDACTED]"
+    assert "private-session" not in message
 
 
 def test_safe_exception_formatting_redacts_assignments() -> None:

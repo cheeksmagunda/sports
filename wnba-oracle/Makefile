@@ -1,13 +1,15 @@
 # WNBA Oracle developer targets. The parent workspace owns dependency locking.
 # Railway mutations go through documented HTTPS or CLI operations.
 
-.PHONY: help install test test-integration test-contract test-all lint typecheck dev migrate deploy determinism-check rotation-check-help fmt
+.PHONY: help setup install install-browser test test-integration test-contract test-all lint typecheck dev migrate deploy determinism-check rotation-check-help fmt
 
-UV_RUN = uv run --no-editable --package wnba-oracle
+UV_RUN = uv run --frozen --package wnba-oracle
 
 help:
 	@echo "wnba-oracle developer targets:"
-	@echo "  make install              - uv sync + playwright install"
+	@echo "  make setup                - locked workspace setup and smoke check"
+	@echo "  make install              - locked workspace dependencies"
+	@echo "  make install-browser      - optional Chromium for provider work"
 	@echo "  make test                 - default test suite (unit and offline acceptance)"
 	@echo "  make test-integration     - PostgreSQL, Redis, and migration acceptance"
 	@echo "  make test-contract        - external provider contract tests"
@@ -21,12 +23,17 @@ help:
 	@echo "  make determinism-check    - train twice, compare model content"
 	@echo "  make rotation-check-help  - print oracle-rotate-check usage"
 
+setup:
+	$(MAKE) -C .. setup
+
 install:
-	uv sync --no-editable --package wnba-oracle --extra dev
+	$(MAKE) -C .. install
+
+install-browser: install
 	$(UV_RUN) playwright install chromium
 
 test:
-	$(UV_RUN) --extra dev python -m pytest tests/ -q
+	env -u DATABASE_URL -u DATABASE_PUBLIC_URL -u REDIS_URL $(UV_RUN) --extra dev python -m pytest tests/ -q
 
 test-integration:
 	$(UV_RUN) --extra dev python scripts/check_migrations.py
@@ -46,7 +53,7 @@ typecheck:
 	$(UV_RUN) --extra dev python -m mypy src/
 
 fmt:
-	$(UV_RUN) --extra dev ruff format src/ tests/
+	$(UV_RUN) --extra dev ruff format src/ tests/ scripts/
 
 dev:
 	$(UV_RUN) uvicorn wnba_oracle.api.app:app --reload --host 0.0.0.0 --port 8000

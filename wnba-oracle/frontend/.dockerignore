@@ -4,3 +4,9 @@ playwright-report
 test-results
 *.tsbuildinfo
 .DS_Store
+.git
+.env
+.env.*
+.secrets
+*.key
+*.pem

@@ -1,9 +1,14 @@
-.PHONY: install test test-core test-portfolio test-app test-wnba test-integration test-contract security lint typecheck build check-applications check-boundaries
+.PHONY: setup install test test-core test-portfolio test-app test-wnba test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries
 
-UV_RUN = uv run --no-editable
+UV_RUN = uv run --frozen
+
+setup:
+	uv lock --check
+	uv sync --frozen --all-packages --all-extras
+	$(MAKE) codespaces-smoke
 
 install:
-	uv sync --all-packages --all-extras --no-editable
+	uv sync --frozen --all-packages --all-extras
 
 test: test-core test-portfolio test-wnba
 
@@ -15,7 +20,8 @@ test-portfolio:
 
 test-app:
 	@test -n "$(APP)" || (echo "Usage: make test-app APP=<application>" >&2; exit 2)
-	$(UV_RUN) --package $(APP) --extra dev python -m pytest $(APP)/tests -q
+	# Offline tests must not inherit a developer's live service connections.
+	env -u DATABASE_URL -u DATABASE_PUBLIC_URL -u REDIS_URL $(UV_RUN) --package $(APP) --extra dev python -m pytest $(APP)/tests -q
 
 test-wnba:
 	$(MAKE) test-app APP=wnba-oracle
@@ -28,6 +34,8 @@ test-integration:
 test-contract:
 	$(UV_RUN) --package wnba-oracle --extra dev python -m pytest wnba-oracle/tests -m contract -v
 
+# uv exports the complete locked runtime graph. Excluding workspace roots keeps
+# pip-audit from rebuilding local projects; --no-deps does not omit transitives.
 # Current audit exceptions cover Arrow's unexposed pre-buffer API and unused
 # Starlette request, form, static-file, and endpoint surfaces. Revisit them when
 # those runtime surfaces or dependencies change.
@@ -35,8 +43,9 @@ security:
 	@set -eu; \
 	  requirements=$$(mktemp -t sports-runtime-requirements.XXXXXX); \
 	  trap 'rm -f "$$requirements"' EXIT; \
-	  uv export --quiet --frozen --all-packages --no-dev --no-hashes --output-file "$$requirements"; \
+	  uv export --quiet --frozen --all-packages --no-dev --no-emit-workspace --no-hashes --output-file "$$requirements"; \
 	  $(UV_RUN) --package wnba-oracle --extra dev pip-audit --requirement "$$requirements" \
+	    --no-deps --disable-pip --strict --progress-spinner off --timeout 15 \
 	    --ignore-vuln GHSA-rgxp-2hwp-jwgg \
 	    --ignore-vuln GHSA-86qp-5c8j-p5mr \
 	    --ignore-vuln GHSA-jp82-jpqv-5vv3 \
@@ -46,6 +55,8 @@ security:
 	$(UV_RUN) --package wnba-oracle --extra dev bandit -q -r wnba-oracle/src --severity-level medium --confidence-level medium
 
 lint:
+	$(UV_RUN) --package oracle-core --extra dev ruff check scripts
+	$(UV_RUN) --package oracle-core --extra dev ruff format --check scripts
 	cd packages/oracle-core && $(UV_RUN) --package oracle-core --extra dev ruff check src tests
 	cd packages/oracle-core && $(UV_RUN) --package oracle-core --extra dev ruff format --check src tests
 	cd wnba-oracle && $(UV_RUN) --package wnba-oracle --extra dev ruff check src tests scripts
@@ -56,8 +67,11 @@ typecheck:
 	$(UV_RUN) --package wnba-oracle --extra dev python -m mypy --config-file wnba-oracle/pyproject.toml wnba-oracle/src
 
 build:
-	uv build --package oracle-core
-	uv build --package wnba-oracle
+	uv build --package oracle-core --out-dir dist
+	uv build --package wnba-oracle --out-dir dist
+
+codespaces-smoke:
+	sh scripts/codespaces-smoke.sh
 
 check-boundaries:
 	python3 scripts/check_import_boundaries.py
