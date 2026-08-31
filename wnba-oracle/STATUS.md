@@ -1,10 +1,38 @@
 # Status
 
-Last verified: 2026-08-22
+Last verified: 2026-08-31
 
 This file is a mutable operational snapshot. Verify service state, schedules,
 repository commits, environment configuration, and artifact identity against
 GitHub, Railway, PostgreSQL, and the running API before changing production.
+
+## 2026-08-31 production and DevOps audit
+
+The following facts were verified read-only against the live repository,
+GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
+
+- `https://api-production-7033.up.railway.app/health` returned `status=ok`.
+- The API reported `status=warn` from `/watchdog/today`. Current warnings were
+  `schema_minutes_feed_sparse` and a `config_drift` event showing
+  `OPTIMIZER_COMMITTED_ORDER_OBJECTIVE` actual `false` versus expected `true`.
+  The production configuration must be reconciled before describing the
+  committed-order promotion as active.
+- `/watchdog/jobs/today` reported successful current Job 1, Job 1 late, Job 2,
+  and day-close records. Backfill had no current record.
+- Railway CLI reported API and frontend online, Postgres and Redis online, and
+  all four cron services completed or scheduled.
+- The GitHub repository is currently public and `main` is not branch
+  protected. This is a governance risk for a production source repository and
+  requires an account-plan and operator decision before changing settings.
+- Recent GitHub Actions runs included failures for `backend-ci` and
+  `watchdog-monitor`; older startup failures had no retrievable job logs. The
+  repository now standardizes Python setup and locked execution through the
+  local `.github/actions/setup-python-uv` action. Recheck the next runs from the
+  committed source before treating CI-gated deploys as healthy.
+- Local Apple Silicon builds succeeded for the backend and frontend images,
+  with runtime health checks and backend role probes added to both image
+  definitions. The backend image emitted a non-fatal Playwright host-library
+  warning during browser installation.
 
 ## Monorepo cutover
 

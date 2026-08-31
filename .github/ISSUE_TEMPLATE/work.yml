@@ -1,0 +1,29 @@
+name: Work item
+description: Track a focused change, investigation, or decision
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: "Keep this short. Read-only exploration does not need an issue."
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What should be true when this is done?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance check
+      description: What test, command, observation, or decision proves completion?
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk and rollback
+      description: Note production, data, model, or workflow risk and how to undo it.
+    validations:
+      required: false

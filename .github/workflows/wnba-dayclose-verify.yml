@@ -42,13 +42,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-python-uv
+
       - name: Resolve run window
         env:
           MANUAL_RUN_END_UTC: ${{ inputs.run_end_utc }}
           MANUAL_RUN_START_UTC: ${{ inputs.run_start_utc }}
           MANUAL_SLATE_DATE: ${{ inputs.slate_date }}
         run: >-
-          python wnba-oracle/scripts/resolve_ops_window.py
+          uv run --package wnba-oracle python wnba-oracle/scripts/resolve_ops_window.py
           --role dayclose
           --github-env "$GITHUB_ENV"
 
@@ -56,7 +58,7 @@ jobs:
         id: verify
         continue-on-error: true
         run: >-
-          python wnba-oracle/scripts/dayclose_verify.py
+          uv run --package wnba-oracle python wnba-oracle/scripts/dayclose_verify.py
           --slate-date "$INPUT_SLATE_DATE"
           --run-start-utc "$INPUT_RUN_START_UTC"
           --run-end-utc "$INPUT_RUN_END_UTC"

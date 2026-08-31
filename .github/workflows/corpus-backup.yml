@@ -36,16 +36,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-
-      - name: Install backup dependencies
-        run: >-
-          python -m pip install
-          "sqlalchemy==2.0.50"
-          "psycopg[binary]==3.3.4"
-          "pandas==2.3.3"
+      - uses: ./.github/actions/setup-python-uv
 
       - name: Prepare TLS certificate
         env:
@@ -69,12 +60,12 @@ jobs:
           CORPUS_PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
           DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
-        run: python wnba-oracle/scripts/backup_corpus.py
+        run: uv run --package wnba-oracle python wnba-oracle/scripts/backup_corpus.py
 
       - name: Verify snapshot manifest and hashes
         env:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
-        run: python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+        run: uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Transfer verified snapshot without database credentials
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -107,7 +98,7 @@ jobs:
       - name: Reverify transferred snapshot before repository write
         env:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
-        run: python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+        run: uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Commit snapshot to backups branch
         env:

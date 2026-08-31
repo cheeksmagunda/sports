@@ -53,16 +53,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-
-      - name: Install export dependencies
-        run: >-
-          python -m pip install
-          "sqlalchemy==2.0.50"
-          "psycopg[binary]==3.3.4"
-          "pandas==2.3.3"
+      - uses: ./.github/actions/setup-python-uv
 
       - name: Prepare TLS certificate
         env:
@@ -77,15 +68,7 @@ jobs:
           DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
           GAME_IDENTITY_OUTPUT_DIR: ${{ runner.temp }}/identity
-        run: python export_game_identity.py
-
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-        with:
-          enable-cache: true
-          version: "0.11.13"
-
-      - name: Install workspace
-        run: uv sync --frozen --all-packages --all-extras
+        run: uv run --package wnba-oracle python export_game_identity.py
 
       - name: Restore verified corpus snapshot from backups branch
         env:
@@ -96,7 +79,7 @@ jobs:
           git show origin/backups:wnba-oracle/data/backups/slate_labels.csv > "$SNAPSHOT_DIR/slate_labels.csv"
           git show origin/backups:wnba-oracle/data/backups/contest_leaderboards.csv > "$SNAPSHOT_DIR/contest_leaderboards.csv"
           git show origin/backups:wnba-oracle/data/backups/manifest.json > "$SNAPSHOT_DIR/manifest.json"
-          python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+          uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       # The gate. The full eligibility cascade runs in well under a second,
       # against ~86 CPU-hours for the matrix below. A previous dispatch spent
@@ -151,17 +134,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-        with:
-          enable-cache: true
-          version: "0.11.13"
-
-      - name: Install workspace
-        run: uv sync --frozen --all-packages --all-extras
+      - uses: ./.github/actions/setup-python-uv
 
       - name: Restore verified corpus snapshot from backups branch
         env:
@@ -172,7 +145,7 @@ jobs:
           git show origin/backups:wnba-oracle/data/backups/slate_labels.csv > "$SNAPSHOT_DIR/slate_labels.csv"
           git show origin/backups:wnba-oracle/data/backups/contest_leaderboards.csv > "$SNAPSHOT_DIR/contest_leaderboards.csv"
           git show origin/backups:wnba-oracle/data/backups/manifest.json > "$SNAPSHOT_DIR/manifest.json"
-          python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+          uv run --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Download prefetched game identity
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
@@ -229,17 +202,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-        with:
-          enable-cache: true
-          version: "0.11.13"
-
-      - name: Install workspace
-        run: uv sync --frozen --all-packages --all-extras
+      - uses: ./.github/actions/setup-python-uv
 
       - name: Download shard artifacts
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0

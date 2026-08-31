@@ -1,6 +1,10 @@
-.PHONY: install test test-core test-portfolio test-app test-wnba test-integration test-contract security lint typecheck build check-applications check-boundaries
+.PHONY: setup install test test-core test-portfolio test-app test-wnba test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries
 
 UV_RUN = uv run --no-editable
+
+setup:
+	uv sync --frozen --all-packages --all-extras --no-editable
+	$(MAKE) codespaces-smoke
 
 install:
 	uv sync --all-packages --all-extras --no-editable
@@ -58,6 +62,9 @@ typecheck:
 build:
 	uv build --package oracle-core
 	uv build --package wnba-oracle
+
+codespaces-smoke:
+	sh scripts/codespaces-smoke.sh
 
 check-boundaries:
 	python3 scripts/check_import_boundaries.py

@@ -6,7 +6,6 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from oracle_core import (
     CensoringReason,
     Dossier,
@@ -15,6 +14,7 @@ from oracle_core import (
     Exactness,
     Gap,
 )
+
 from wnba_oracle.dossier import (
     _gap_exactness,
     _realized_oracle,
@@ -83,14 +83,8 @@ class TestGapExactness:
         assert _gap_exactness(None, None) == Exactness.EXACT
 
     def test_lower_bound_when_one_endpoint_censored(self) -> None:
-        assert (
-            _gap_exactness(CensoringReason.INCOMPLETE_LABELS, None)
-            == Exactness.LOWER_BOUND
-        )
-        assert (
-            _gap_exactness(None, CensoringReason.LEADERBOARD_DEPTH)
-            == Exactness.LOWER_BOUND
-        )
+        assert _gap_exactness(CensoringReason.INCOMPLETE_LABELS, None) == Exactness.LOWER_BOUND
+        assert _gap_exactness(None, CensoringReason.LEADERBOARD_DEPTH) == Exactness.LOWER_BOUND
 
     def test_lower_bound_when_both_censored(self) -> None:
         assert (
@@ -102,23 +96,14 @@ class TestGapExactness:
         )
 
     def test_unknown_when_unknown_placement_involved(self) -> None:
-        assert (
-            _gap_exactness(CensoringReason.UNKNOWN_PLACEMENT, None)
-            == Exactness.UNKNOWN
-        )
-        assert (
-            _gap_exactness(None, CensoringReason.UNKNOWN_PLACEMENT)
-            == Exactness.UNKNOWN
-        )
+        assert _gap_exactness(CensoringReason.UNKNOWN_PLACEMENT, None) == Exactness.UNKNOWN
+        assert _gap_exactness(None, CensoringReason.UNKNOWN_PLACEMENT) == Exactness.UNKNOWN
 
     def test_lower_bound_when_ceiling_pruning_involved_even_if_uncensored(self) -> None:
         """_realized_oracle's top-26 prefix is not proven optimal under the
         team cap, so a gap touching the ceiling can never be EXACT even when
         both endpoints are otherwise uncensored."""
-        assert (
-            _gap_exactness(None, None, involves_pruned_ceiling=True)
-            == Exactness.LOWER_BOUND
-        )
+        assert _gap_exactness(None, None, involves_pruned_ceiling=True) == Exactness.LOWER_BOUND
 
     def test_unknown_still_wins_over_pruning_when_both_apply(self) -> None:
         assert (
@@ -250,12 +235,8 @@ class TestBuildDossierUnit:
     @patch("wnba_oracle.dossier.read_slate_labels")
     def test_builds_dossier_with_complete_data(self, mock_read_labels, mock_engine) -> None:
         mock_conn = MagicMock()
-        mock_engine.return_value.connect.return_value.__enter__ = MagicMock(
-            return_value=mock_conn
-        )
-        mock_engine.return_value.connect.return_value.__exit__ = MagicMock(
-            return_value=None
-        )
+        mock_engine.return_value.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_engine.return_value.connect.return_value.__exit__ = MagicMock(return_value=None)
 
         lineup_row = MagicMock()
         lineup_row.lineup_json = json.dumps([100, 101, 102, 103, 104])
@@ -363,9 +344,7 @@ class TestBuildDossierUnit:
         # Verify entry kinds
         assert result.entries[EntryKind.COMMITTED].kind == EntryKind.COMMITTED
         assert result.entries[EntryKind.FIELD_BEST].kind == EntryKind.FIELD_BEST
-        assert result.entries[EntryKind.THEORETICAL_CEILING].kind == (
-            EntryKind.THEORETICAL_CEILING
-        )
+        assert result.entries[EntryKind.THEORETICAL_CEILING].kind == (EntryKind.THEORETICAL_CEILING)
 
         # Verify achievability
         assert result.entries[EntryKind.COMMITTED].achievable is True
@@ -375,10 +354,7 @@ class TestBuildDossierUnit:
         # Verify slot order basis
         assert result.entries[EntryKind.COMMITTED].slot_order_basis == "committed"
         assert result.entries[EntryKind.FIELD_BEST].slot_order_basis == "as_entered"
-        assert (
-            result.entries[EntryKind.THEORETICAL_CEILING].slot_order_basis
-            == "optimal_resort"
-        )
+        assert result.entries[EntryKind.THEORETICAL_CEILING].slot_order_basis == "optimal_resort"
 
         # Verify gaps exist and have correct structure
         assert result.gap_to_field.from_kind == EntryKind.COMMITTED

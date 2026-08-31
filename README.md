@@ -1,12 +1,40 @@
 # Sports Oracle
 
-Sports Oracle is a private monorepo for independent sports applications and the
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/cheeksmagunda/sports/codespaces/new?hide_repo_select=true&ref=main)
+
+Sports Oracle is a monorepo for independent sports applications and the
 provider-neutral technical platform they share. Each sport owns its models,
 strategy, calendars, providers, schemas, domain endpoints, operations, and
 runtime permissions. `packages/oracle-core` owns reusable technical
 infrastructure only.
 
-## Start in five minutes
+## Development surfaces
+
+The repository is designed to behave the same on a local checkout, in GitHub
+Codespaces, and in GitHub Actions. The lockfile and Makefile are the shared
+contract; credentials are supplied by the host surface and are never baked
+into the image or committed to the repository.
+
+### GitHub Codespaces
+
+Use the button above or choose **Code > Codespaces > Create codespace on main**.
+The devcontainer starts PostgreSQL and Redis, installs the locked workspace,
+and runs `make codespaces-smoke`. Required setup does not install Claude,
+Copilot, or other vendor tooling. Those are optional editor capabilities.
+
+Inside a Codespace, use the same commands as locally:
+
+```sh
+uv sync --frozen --all-packages --all-extras --no-editable
+make codespaces-smoke
+make test
+```
+
+GitHub CLI authentication is provided by the Codespaces session. Application
+secrets belong in Codespaces secrets or the process environment for the
+specific command that needs them. Do not create a plaintext `.env` file.
+
+## Start without setup decisions
 
 Requirements: Python 3.11 or 3.12, `uv`, and Git. Use existing native `gh` and
 Railway CLI logins for those services. Runtime secrets come from the process
@@ -14,7 +42,7 @@ environment. Docker is required only for the container and database acceptance
 path.
 
 ```sh
-uv sync --all-packages --all-extras
+make setup
 make test
 make security
 make lint
@@ -27,6 +55,36 @@ Before changing an application, read root `AGENTS.md`, then that application's
 own ignored secret files, connector configuration, skills, and narrowly scoped
 workflow credentials. Those application-owned surfaces must not be assumed by
 another sport or promoted into the shared core.
+
+## Lightweight contribution process
+
+This is a hobby project, so the process is intentionally small. Read-only
+exploration, local experiments, and one-line fixes do not need an issue. Create
+one issue before material work such as a feature, bug fix, refactor, dependency
+change, data or model change, deployment change, or credential/schedule work.
+The issue only needs a short objective, acceptance check, and risk or rollback
+note. Link the issue from the pull request.
+
+Use a short-lived branch or worktree, keep the change focused, and let the
+shared checks run before merging. Production changes require an issue, a green
+CI run, an explicit deployment decision, and a rollback path. An outage or
+security response may start immediately, but the issue should be opened as
+part of the response. Do not invent product behavior when the product intent
+is unclear; preserve existing read-only behavior and record the open decision.
+
+For data-science work, attach enough evidence to reproduce the result: data
+source and snapshot identity, time-aware train and test boundaries, leakage
+checks, a simple baseline, calibration or uncertainty measurements, random
+seed, artifact identity, and the result that justifies the change. A model
+change is not accepted because it looks plausible on one slate.
+
+AI-assisted work follows the same lightweight contract. The agent should state
+what it inspected, separate verified facts from inference, avoid hidden
+external mutations, run the smallest useful checks, and leave a concise
+handoff in the issue or pull request. Claude, Copilot, Codex, and local or
+cloud sessions are optional entry points, not separate sources of truth.
+
+See `CONTRIBUTING.md` for the lightweight process and data-science checklist.
 
 ## Workspace
 

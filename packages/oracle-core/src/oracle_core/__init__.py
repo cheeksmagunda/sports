@@ -14,14 +14,6 @@ from oracle_core.artifacts import (
     write_artifact,
 )
 from oracle_core.cache import JsonTtlCache
-from oracle_core.dossier import (
-    CensoringReason,
-    Dossier,
-    DossierEntry,
-    EntryKind,
-    Exactness,
-    Gap,
-)
 from oracle_core.config import (
     MissingRequiredEnvironmentError,
     RuntimeConfig,
@@ -29,6 +21,14 @@ from oracle_core.config import (
     clear_runtime_config_cache,
     get_runtime_config,
     validate_required_env,
+)
+from oracle_core.dossier import (
+    CensoringReason,
+    Dossier,
+    DossierEntry,
+    EntryKind,
+    Exactness,
+    Gap,
 )
 from oracle_core.http import (
     AsyncHttpTransport,

@@ -71,20 +71,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-        with:
-          enable-cache: true
-          version: "0.11.13"
-
-      - name: Verify workspace lock
-        run: uv lock --check
-
-      - name: Install workspace
-        run: uv sync --frozen --all-packages --all-extras
+      - uses: ./.github/actions/setup-python-uv
 
       # The Makefile owns the audit command and narrow reachability exceptions.
       # Revisit every ignore if the API begins exposing the affected Arrow or
@@ -150,17 +137,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-        with:
-          enable-cache: true
-          version: "0.11.13"
-
-      - name: Install backend workspace
-        run: uv sync --frozen --all-packages --all-extras
+      - uses: ./.github/actions/setup-python-uv
 
       - name: Test migrations, PostgreSQL, and Redis
         run: make test-integration

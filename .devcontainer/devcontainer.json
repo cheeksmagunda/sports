@@ -3,6 +3,8 @@
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "app",
 	"workspaceFolder": "/workspaces/sports",
+	"remoteUser": "vscode",
+	"updateRemoteUserUID": true,
 	"containerEnv": {
 		"DATABASE_URL": "postgresql://postgres:postgres@db:5432/sports_dev",
 		"REDIS_URL": "redis://redis:6379",
@@ -10,7 +12,9 @@
 		"PYTHONUNBUFFERED": "1"
 	},
 	"features": {
-		"ghcr.io/devcontainers/features/node:1": {},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "22"
+		},
 		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
 	"customizations": {
@@ -24,6 +28,6 @@
 			]
 		}
 	},
-	"postCreateCommand": "pip install uv && uv sync --all-packages --all-extras --no-editable && npm install -g @anthropic-ai/claude-code",
+	"postCreateCommand": "uv sync --frozen --all-packages --all-extras --no-editable && make codespaces-smoke",
 	"forwardPorts": [5432, 6379]
 }
