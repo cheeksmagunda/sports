@@ -1,6 +1,6 @@
 # Sports Oracle
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/cheeksmagunda/sports/codespaces/new?hide_repo_select=true&ref=main)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/cheeksmagunda/sports/tree/main?quickstart=1)
 
 Sports Oracle is a monorepo for independent sports applications and the
 provider-neutral technical platform they share. Each sport owns its models,
@@ -17,7 +17,9 @@ into the image or committed to the repository.
 
 ### GitHub Codespaces
 
-Use the button above or choose **Code > Codespaces > Create codespace on main**.
+Use the button above to create or resume a Codespace on `main`, or choose
+**Code > Codespaces > Create codespace on main**. The button uses GitHub's
+[documented resume link](https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/setting-up-your-repository/facilitating-quick-creation-and-resumption-of-codespaces).
 The devcontainer starts PostgreSQL and Redis, installs the locked workspace,
 and runs `make codespaces-smoke`. Required setup does not install Claude,
 Copilot, or other vendor tooling. Those are optional editor capabilities.

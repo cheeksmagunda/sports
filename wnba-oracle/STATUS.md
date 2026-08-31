@@ -38,8 +38,12 @@ GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
   exceptions; it is not a claim that every dependency is vulnerability-free.
 - A fresh local devcontainer built successfully and completed `make setup`
   with PostgreSQL and Redis reachable. Its environment is separate from the
-  mounted macOS `.venv`. Full container acceptance is recorded with the PR.
-  No hosted Codespace was created or modified.
+  mounted macOS `.venv`. All 963 offline tests, security, builds, and 4 local
+  integration tests passed, including empty-schema and retained-data migration
+  acceptance. The devcontainer uses the existing safe `postgres` hostname;
+  the migration guard was not weakened. Full evidence is in PR #46.
+  No hosted Codespace was created or modified. Hosted checks on PR #46 failed
+  before running because of the account billing lock, so it remains draft.
 - The local import hang was caused by iCloud-evicted files inside `.venv`.
   Reinstalling the locked dependencies restored normal commands. Git metadata
   also contained evicted files. Refetching packed objects and removing only
