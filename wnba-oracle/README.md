@@ -88,6 +88,13 @@ reports persisted aggregate evidence, not provider health; missing evidence is
 degraded or unknown and must not be interpreted as proof that an upstream
 service was available.
 
+Before a non-dry-run freeze, Job 2 applies a fail-closed freshness gate. It
+requires future slate lock timing, recent captured inputs, complete injury
+status coverage, sufficient recent-minutes and rate coverage, finite player
+projections, and valid projected ownership. Measured ownership is optional
+before lock because it is a post-contest calibration signal. A blocked freeze
+records `freshness_gate_blocked` with value-free reasons and counts.
+
 ## Contextual lineup balance
 
 The optimizer evaluates unrestricted, game-balanced, and team-balanced

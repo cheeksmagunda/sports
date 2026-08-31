@@ -74,6 +74,7 @@ and bounded SQL through the API engine with `transaction_read_only=on`.
 | P2 | Synthetic redaction probes preserved passwords inside PostgreSQL/Redis URLs and the `real-auth-info` header. This was a coverage gap, not evidence that a live secret was leaked. | Fixed locally with generic URL-userinfo and auth-info redaction plus regression coverage. Deploy only after CI and the normal rollback checks pass. |
 | P2 | The API enforces read-only transactions but connects as a database superuser. Existing `oracle_ro` is non-superuser and has SELECT, not INSERT, on `frozen_lineups`. | Separately authorize least-privilege runtime credential wiring and verify all serving routes, migration separation, and rollback. No credentials changed. |
 | P2 | `/dossier/{date}` is absent from live OpenAPI and returns the generic route-not-found 404. The route exists on `main`. | Verify the endpoint after the API source version is reconciled; do not confuse an absent route with an unfinalized slate. |
+| P1 | Local Job 2 previously allowed a lineup to publish when source capture, slate timing, minutes, injury status, or derived projections were incomplete. | Implemented locally with a fail-closed `freshness_gate_blocked` before freeze persistence. Verify on a complete slate and deploy only through green CI with rollback. |
 
 Draft evidence and limits:
 

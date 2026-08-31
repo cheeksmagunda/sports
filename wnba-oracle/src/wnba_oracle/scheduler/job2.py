@@ -139,6 +139,7 @@ class Job2Result:
             "specs_too_small",
             "freeze_not_persisted",
             "model_policy_invalid",
+            "freshness_gate_blocked",
         }
         return 1 if self.reason in failures else 0
 
@@ -731,6 +732,54 @@ def _run_shadow_evaluation(
         log.warning("shadow_run_wrapper_failed", reason=str(exc)[:160])
 
 
+def _freshness_gate(
+    slate_date: str,
+    enrichment: list[dict],
+    projection_by_pid: dict[int, dict],
+    fields: list[FieldPlayerSpec],
+    lock_time: dt.datetime | None,
+    now_utc: dt.datetime,
+) -> bool:
+    """Return whether the computed inputs are safe to publish."""
+    from wnba_oracle.scheduler.freshness import assess_publish_freshness
+
+    freshness = assess_publish_freshness(
+        enrichment,
+        projection_by_pid=projection_by_pid,
+        field_specs=fields,
+        lock_time=lock_time,
+        now_utc=now_utc,
+    )
+    if freshness.ready:
+        return True
+    log.error(
+        "job2_freshness_gate_blocked",
+        slate_date=slate_date,
+        reasons=list(freshness.reasons),
+        metrics=freshness.metrics,
+    )
+    try:
+        from wnba_oracle.scheduler.watchdog import (
+            SEVERITY_CRITICAL,
+            WatchdogEvent,
+            persist_events,
+        )
+
+        persist_events(
+            [
+                WatchdogEvent(
+                    slate_date=slate_date,
+                    trigger="freshness_gate_blocked",
+                    severity=SEVERITY_CRITICAL,
+                    payload={"reasons": list(freshness.reasons), "metrics": freshness.metrics},
+                )
+            ]
+        )
+    except Exception as exc:
+        log.warning("job2_freshness_gate_event_failed", error_type=type(exc).__name__)
+    return False
+
+
 def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     settings = get_settings()
     sd = slate_date or current_slate_date().isoformat()
@@ -849,6 +898,11 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     )
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
+
+    if not dry_run and not _freshness_gate(
+        sd, enrichment, projection_by_pid, fields, lock_time, now_utc
+    ):
+        return Job2Result(sd, model_sha, None, False, "freshness_gate_blocked")
 
     curve = load_curve_from_archive(sd) or default_curve_for_regime(policy.payout_regime)
     try:
