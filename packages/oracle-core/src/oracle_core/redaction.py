@@ -42,12 +42,12 @@ _HEADER_SECRET_RE = re.compile(
 
 _ASSIGNMENT_SECRET_RE = re.compile(
     r"((?:access[_-]?token|api[_-]?key|apikey|authorization|client[_-]?secret|"
-    r"credential|password|refresh[_-]?token|secret|token)\s*[:=]\s*)"
+    r"credential|password|refresh[_-]?token|secret|token|auth[_-]?info)\s*[:=]\s*)"
     r"(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)",
     re.IGNORECASE,
 )
 
-_URL_USERINFO_RE = re.compile(r"(https?://[^\s:/@]+:)[^\s/@]+(@)", re.IGNORECASE)
+_URL_USERINFO_RE = re.compile(r"((?:[a-z][a-z0-9+.-]*://[^\s:/@]+:))[^\s/@]+(@)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -59,9 +59,14 @@ class RedactionPolicy:
 
     def is_sensitive_key(self, key: object) -> bool:
         normalized = str(key).casefold().replace("-", "_")
-        return normalized in self.sensitive_keys or any(
-            token in normalized
-            for token in ("authorization", "cookie", "password", "secret", "token", "api_key")
+        return (
+            normalized in self.sensitive_keys
+            or normalized in {"auth_info", "auth_token"}
+            or normalized.endswith(("_auth_info", "_auth_token"))
+            or any(
+                token in normalized
+                for token in ("authorization", "cookie", "password", "secret", "token", "api_key")
+            )
         )
 
 

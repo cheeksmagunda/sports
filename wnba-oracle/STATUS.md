@@ -70,8 +70,8 @@ and bounded SQL through the API engine with `transaction_read_only=on`.
 | --- | --- | --- |
 | P1 | GitHub billing lock still prevents checks from starting (#40). API, ingestion, day-close, Job 2, and frontend run different commits, listed below. | Restore account access, obtain green CI, then authorize and verify sequential source deployments. No gate bypass in this audit. |
 | P1 | Job 1 timed out fetching both minutes seasons and team stats on August 28, 29, and 30. All three captured pools have zero `recent_minutes` rows. | Consolidate the duplicated game-log fetch/transform paths behind a tested as-of input contract. Require explicit freshness and fallback evidence before changing model inputs. |
-| P2 | `job1_rotowire.is_out_status("Questionable")` and `is_out_status("Available")` both return true because `NA` and `IL` are substring matches. | Test full provider labels and token boundaries before correcting the classifier. Recent pools contained only Active, GTD, OUT, and Out, so an effect on these three slates was not established. |
-| P2 | Synthetic redaction probes preserve passwords inside PostgreSQL/Redis URLs and the `real-auth-info` header. This is a coverage gap, not evidence that a live secret was leaked. | Add generic URL-userinfo redaction and application-owned sensitive-header coverage, including exception and nested-log tests. |
+| P2 | The pre-deployment branch classifier treated `Questionable` and `Available` as OUT because `NA` and `IL` were substring matches. | Fixed locally with token-boundary matching and regression coverage. Recent production pools contained only Active, GTD, OUT, and Out, so an effect on those three slates was not established. Deploy only after CI and the normal rollback checks pass. |
+| P2 | Synthetic redaction probes preserved passwords inside PostgreSQL/Redis URLs and the `real-auth-info` header. This was a coverage gap, not evidence that a live secret was leaked. | Fixed locally with generic URL-userinfo and auth-info redaction plus regression coverage. Deploy only after CI and the normal rollback checks pass. |
 | P2 | The API enforces read-only transactions but connects as a database superuser. Existing `oracle_ro` is non-superuser and has SELECT, not INSERT, on `frozen_lineups`. | Separately authorize least-privilege runtime credential wiring and verify all serving routes, migration separation, and rollback. No credentials changed. |
 | P2 | `/dossier/{date}` is absent from live OpenAPI and returns the generic route-not-found 404. The route exists on `main`. | Verify the endpoint after the API source version is reconciled; do not confuse an absent route with an unfinalized slate. |
 
@@ -125,11 +125,12 @@ corrected. The second workflow pass also found that the backup publisher had
 no independent Python/uv setup. It now uses the shared locked setup and scopes
 the repository write token to its final publish step. Two regression tests
 first reproduced the setup/credential-scoping gaps, then passed after repair.
-No backup was dispatched. Production behavior and frontend source were not
-changed.
+No backup was dispatched and no production deployment occurred. The branch
+now contains the two audited backend safety fixes without changing frontend
+source or model strategy.
 
-Final laptop verification after this follow-up: 48 core, 6 portfolio, and 911
-WNBA tests passed (965 total), plus lock check, frozen sync, lint, typecheck,
+Final laptop verification after this follow-up: 50 core, 6 portfolio, and 911
+WNBA tests passed (967 total), plus lock check, frozen sync, lint, typecheck,
 both boundary contracts, both package builds, and a redacted staged-diff scan.
 Seven live/integration tests were deselected from this offline run; the earlier
 clean-container integration acceptance above is separate evidence.
