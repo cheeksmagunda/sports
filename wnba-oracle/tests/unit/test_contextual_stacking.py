@@ -6,6 +6,7 @@ from dataclasses import replace
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.optimize import (
@@ -52,7 +53,7 @@ def _result(
     game: _Candidate | None,
     full: _Candidate | None,
 ) -> _ScanResult:
-    return _ScanResult(unrestricted, game, full, 3, 0, 0, 0)
+    return _ScanResult(unrestricted, game, full, 3, 0, 0, 0, 0)
 
 
 def _context(n_games: int = 2) -> _StackContext:
@@ -189,6 +190,39 @@ def test_two_game_flat_slate_prefers_both_games_and_all_teams() -> None:
     assert rec.stacking_decision.selected_game_count == 2
     assert rec.stacking_decision.selected_team_count == 4
     assert rec.stacking_decision.selected_max_players_per_game == 3
+
+
+def test_five_game_slate_requires_exactly_one_player_from_each_game() -> None:
+    sampling, field = _slate(5, players_per_team=2)
+    rec = optimize_lineup(
+        sampling,
+        field,
+        default_curve_for_regime("top_20"),
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=40,
+            n_field_lineups=6,
+            seed=7,
+            contextual_stacking_enabled=False,
+        ),
+    )
+
+    selected_games = {spec.game_id for spec in sampling if spec.player_id in set(rec.player_ids)}
+    assert len(rec.player_ids) == 5
+    assert selected_games == {"G0", "G1", "G2", "G3", "G4"}
+
+
+def test_five_provider_games_with_inconsistent_teams_fail_closed() -> None:
+    sampling, field = _slate(5, players_per_team=1)
+    sampling[0] = replace(sampling[0], team="BROKEN")
+
+    with pytest.raises(ValueError, match="five-game coverage metadata is inconsistent"):
+        optimize_lineup(
+            sampling,
+            field,
+            default_curve_for_regime("top_20"),
+            cfg=OptimizeConfig(n_samples=20, n_field_lineups=5),
+        )
 
 
 def test_one_game_slate_remains_feasible_and_prefers_both_teams() -> None:

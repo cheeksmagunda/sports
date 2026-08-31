@@ -354,6 +354,7 @@ class _ScanInputs:
     field_size_total: int
     field_lineup_counter: Counter[frozenset[int]] | None
     stack_preference: StackPreference | None
+    required_game_count: int | None
     unrestricted_indices: frozenset[int]
     balance_indices: frozenset[int]
 
@@ -375,6 +376,7 @@ class _ScanResult:
     n_skipped_team: int
     n_skipped_anchor: int
     n_skipped_boost: int
+    n_skipped_game_coverage: int
 
 
 def _candidate_pool_combinations(
@@ -404,6 +406,7 @@ def _scan_lineups(
     best_game_balanced: _Candidate | None = None
     best_fully_balanced: _Candidate | None = None
     n_evaluated = n_skipped_team = n_skipped_anchor = n_skipped_boost = 0
+    n_skipped_game_coverage = 0
     boost_cap_on = inputs.effective_boost_sum_cap > 0.0 or inputs.effective_max_single_boost > 0.0
     leverage_on = cfg.leverage_weight > 0.0
     ceiling_on = cfg.ceiling_weight > 0.0
@@ -428,6 +431,14 @@ def _scan_lineups(
             inputs.effective_max_single_boost,
         ):
             n_skipped_boost += 1
+            continue
+
+        shape = describe_lineup(combo, inputs.keep_teams, inputs.keep_game_keys)
+        if (
+            inputs.required_game_count is not None
+            and shape.game_count != inputs.required_game_count
+        ):
+            n_skipped_game_coverage += 1
             continue
 
         own_samples = lineup_score_samples(
@@ -464,7 +475,6 @@ def _scan_lineups(
                 cfg.duplication_weight * duplication_probability * float(inputs.field_size_total)
             )
         n_evaluated += 1
-        shape = describe_lineup(combo, inputs.keep_teams, inputs.keep_game_keys)
         candidate = _Candidate(
             objective=float(objective),
             indices=combo,
@@ -496,6 +506,7 @@ def _scan_lineups(
         n_skipped_team=n_skipped_team,
         n_skipped_anchor=n_skipped_anchor,
         n_skipped_boost=n_skipped_boost,
+        n_skipped_game_coverage=n_skipped_game_coverage,
     )
 
 
@@ -600,6 +611,23 @@ def _stack_context(sampling_specs: list[PlayerSamplingSpec]) -> _StackContext:
         slate_team_count=slate_team_count,
         preference=preference,
     )
+
+
+def _required_game_coverage(
+    sampling_specs: list[PlayerSamplingSpec],
+    stack_context: _StackContext,
+) -> int | None:
+    """Require one player per game when five reliable games fill five slots."""
+    provider_ids = {str(spec.game_id or "").strip() for spec in sampling_specs}
+    provider_ids.discard("")
+    provider_ids_complete = all(str(spec.game_id or "").strip() for spec in sampling_specs)
+    provider_claims_five_games = provider_ids_complete and len(provider_ids) == 5
+    validated_five_games = stack_context.slate_game_count == 5
+    if provider_claims_five_games and not validated_five_games:
+        raise ValueError(
+            "five-game coverage metadata is inconsistent; refusing to optimize an uncovered lineup"
+        )
+    return 5 if validated_five_games else None
 
 
 def _slate_limits(
@@ -848,6 +876,7 @@ def _run_constraint_scans(
         skipped_team_cap=result.n_skipped_team,
         skipped_anchor_floor=result.n_skipped_anchor,
         skipped_boost_cap=result.n_skipped_boost,
+        skipped_game_coverage=result.n_skipped_game_coverage,
         max_per_team=inputs.cfg.max_per_team,
         effective_max_per_team=constraints.max_per_team,
         effective_min_anchors=constraints.min_anchors,
@@ -1036,6 +1065,7 @@ def optimize_lineup(
         raise ValueError(f"pool too small ({n_all}) - need >= 5 players")
 
     stack_context = _stack_context(sampling_specs)
+    required_game_count = _required_game_coverage(sampling_specs, stack_context)
     n_games, max_per_team = _slate_limits(
         sampling_specs,
         cfg,
@@ -1047,7 +1077,7 @@ def optimize_lineup(
         cfg.top_n_filter,
         float(np.max(slot_multipliers)),
         stack_context,
-        cfg.contextual_stacking_enabled,
+        cfg.contextual_stacking_enabled or required_game_count is not None,
     )
     log.info("optimizer_stage1", n_all=n_all, n_filtered=len(pool.sampling))
 
@@ -1087,6 +1117,7 @@ def optimize_lineup(
         field_size_total=cfg.n_field_lineups + 1,
         field_lineup_counter=field_lineup_counter,
         stack_preference=(stack_context.preference if cfg.contextual_stacking_enabled else None),
+        required_game_count=required_game_count,
         unrestricted_indices=frozenset(
             index
             for index, player_id in enumerate(pool.player_ids)
