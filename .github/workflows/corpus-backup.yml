@@ -88,6 +88,9 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
 
       - name: Download verified snapshot
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
@@ -102,8 +105,10 @@ jobs:
 
       - name: Commit snapshot to backups branch
         env:
+          GH_TOKEN: ${{ github.token }}
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
         run: |
+          gh auth setup-git
           git config user.name "wnba-oracle-bot"
           git config user.email "noreply@github.com"
           if git ls-remote --exit-code --heads origin backups >/dev/null 2>&1; then

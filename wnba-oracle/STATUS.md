@@ -16,8 +16,8 @@ GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
   `schema_minutes_feed_sparse` and a `config_drift` event showing
   `OPTIMIZER_COMMITTED_ORDER_OBJECTIVE` actual `false` versus expected `true`.
   These are persisted events, not a live reading of every service's current
-  environment. Reconcile them with fresh job evidence before describing the
-  committed-order promotion as active. No model setting was changed here.
+  environment. The follow-up audit below verified the promoted settings in the
+  actual 2026-08-30 freeze. No model setting was changed here.
 - `/watchdog/jobs/today` reported successful current Job 1, Job 1 late, Job 2,
   and day-close records. Backfill had no current record.
 - Railway CLI reported API and frontend online, Postgres and Redis online, and
@@ -60,6 +60,80 @@ GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
   is not certified. Native GitHub and Railway authentication passed, and the
   checked stale launchd variables were absent. No credentials were rotated.
 
+### Follow-up production, DRY, and draft-readiness audit
+
+Verified 2026-08-31 at approximately 04:45 UTC, before the next morning capture.
+Production checks were read-only: public HTTP, filtered Railway metadata/logs,
+and bounded SQL through the API engine with `transaction_read_only=on`.
+
+| Priority | Verified finding | Next acceptance check |
+| --- | --- | --- |
+| P1 | GitHub billing lock still prevents checks from starting (#40). API, ingestion, day-close, Job 2, and frontend run different commits, listed below. | Restore account access, obtain green CI, then authorize and verify sequential source deployments. No gate bypass in this audit. |
+| P1 | Job 1 timed out fetching both minutes seasons and team stats on August 28, 29, and 30. All three captured pools have zero `recent_minutes` rows. | Consolidate the duplicated game-log fetch/transform paths behind a tested as-of input contract. Require explicit freshness and fallback evidence before changing model inputs. |
+| P2 | `job1_rotowire.is_out_status("Questionable")` and `is_out_status("Available")` both return true because `NA` and `IL` are substring matches. | Test full provider labels and token boundaries before correcting the classifier. Recent pools contained only Active, GTD, OUT, and Out, so an effect on these three slates was not established. |
+| P2 | Synthetic redaction probes preserve passwords inside PostgreSQL/Redis URLs and the `real-auth-info` header. This is a coverage gap, not evidence that a live secret was leaked. | Add generic URL-userinfo redaction and application-owned sensitive-header coverage, including exception and nested-log tests. |
+| P2 | The API enforces read-only transactions but connects as a database superuser. Existing `oracle_ro` is non-superuser and has SELECT, not INSERT, on `frozen_lineups`. | Separately authorize least-privilege runtime credential wiring and verify all serving routes, migration separation, and rollback. No credentials changed. |
+| P2 | `/dossier/{date}` is absent from live OpenAPI and returns the generic route-not-found 404. The route exists on `main`. | Verify the endpoint after the API source version is reconciled; do not confuse an absent route with an unfinalized slate. |
+
+Draft evidence and limits:
+
+- August 30 froze at 18:20:20 UTC with five picks, the pinned artifact SHA,
+  `committed_order_objective=true`, and `leverage_weight=0.28`. The 15:00
+  configuration warning predates that freeze; it is not evidence that the
+  served lineup used the old settings.
+- That freeze reports degraded source assurance: 120 pool/game-time rows,
+  117 head-feature rows, 38 prop rows, zero recent-minutes rows, and zero
+  confirmed-starter rows at decision time. The separate trained-head path
+  still had inputs; zero minutes coverage does not mean every predictor was
+  empty. It does mean minutes-dependent inputs cannot be called healthy.
+- All 96 persisted field specs have no measured draft counts. The estimator
+  fallback remains active, consistent with #38. `player_slate_ownership` has
+  96 projected rows for August 30; day-close is still on a commit predating
+  its new actual-ownership writer, so the completed backfill alone does not
+  establish ongoing calibration coverage.
+- The artifact is loaded and SHA-pinned, but the freeze reports a different
+  serving-feature source fingerprint from training. This source-byte mismatch
+  is not itself proof of numerical prediction drift. `model_registry` is
+  empty. A fresh train/serve parity and calibration study was not performed;
+  do not promote a model or claim a demonstrated win-rate improvement here.
+- Durable August 30 Job 1, Job 1 late, Job 2, and day-close records succeeded.
+  August 29 day-close was degraded at `placement_capture`. Recent success
+  records alone do not establish complete historical outcome coverage.
+- At the check, August 31 slate timing and lineup both returned their expected
+  data-not-yet-available 404. Job 1 is next due at 13:00 UTC (08:00 Chicago),
+  Job 2 at 14:00 UTC, with first freeze determined from captured lock time
+  minus 40 minutes. No draft time or player recommendation is known yet.
+- API health and frontend HTTP/security headers passed. The latest `backups`
+  branch commit is `869ffe04dd13cfadebe969dd8c4bc997ea24a3e9`, dated August 29
+  12:50 UTC. A fresh production backup or restore was not executed. The billing
+  lock also affects scheduled GitHub monitoring and backups, not Railway's
+  already-deployed cron schedules.
+- Live versions match the locked FastAPI 0.129.2, Starlette 0.52.1, and
+  PyArrow 21.0.0. Existing vulnerability exceptions remain tracked in #41;
+  passing the scoped security gate is not a vulnerability-free certification.
+
+DRY findings: URL normalization, feature JSON parsing, committed-order scoring,
+HTTP retries, and structured logging already delegate to shared implementations.
+Keep compatibility wrappers where they preserve an existing contract. Remaining
+semantic duplication is concentrated in the two WNBA game-log acquisition
+paths, source-specific player-name normalization (#30), and freeze-time
+arithmetic shared informally between API and scheduler. These stay WNBA-owned;
+no speculative abstractions were moved to `oracle-core`. The child formatter
+now covers the same script directory as lint, the benchmark command selects
+the frozen workspace package, and stale CI/authentication instructions were
+corrected. The second workflow pass also found that the backup publisher had
+no independent Python/uv setup. It now uses the shared locked setup and scopes
+the repository write token to its final publish step. Two regression tests
+first reproduced the setup/credential-scoping gaps, then passed after repair.
+No backup was dispatched. Production behavior and frontend source were not
+changed.
+
+Final laptop verification after this follow-up: 48 core, 6 portfolio, and 911
+WNBA tests passed (965 total), plus lock check, frozen sync, lint, typecheck,
+both boundary contracts, both package builds, and a redacted staged-diff scan.
+Seven live/integration tests were deselected from this offline run; the earlier
+clean-container integration acceptance above is separate evidence.
+
 ## Monorepo cutover
 
 - Completed 2026-08-21. Railway uses `cheeksmagunda/sports`, branch `main`, as
@@ -87,7 +161,15 @@ GitHub, Railway CLI, and production HTTP endpoints on 2026-08-31 UTC:
 - Canonical store: Railway Postgres
 - Serving state: PostgreSQL only
 - Freeze coordination: Redis, required by Job 2 but not by the API
-- Current production source commit: `c1facd04530ef41099d4db0c6aa184220ecf060d`
+- Production source versions are mixed, verified 2026-08-31:
+
+  | Services | Source commit |
+  | --- | --- |
+  | API, Job 1, Job 1 late, day-close | `2226541ac95783f9aacd999bbb0cdf584beaebd8` |
+  | Job 2 | `1ac4726b4749eaa6d1958cfdccbfebf2130aa8a2` |
+  | Frontend | `e03f642dd8edd9ea34cc2a1accca6b1b3f187e83` |
+  | Isolated manual backfill | `c1facd04530ef41099d4db0c6aa184220ecf060d` |
+
 - 2026-08-22 T-40 freeze completed at 22:22:40 UTC with an `enter`
   recommendation and expected payout 1.4332. The served order was Breanna
   Stewart, Sabrina Ionescu, Kennedy Burke, Makayla Timpson, and Noemie Brochant
@@ -385,10 +467,11 @@ Use Postgres, not local parquet.
 | `contest_placements` | Realized placement feedback |
 | `watchdog_events` | Operational alerts |
 
-Corpus size (read-only production query, 2026-08-22): 211 slates and 6,335 rows
-in `slate_labels` (2025-05-16 through 2026-08-21); 17,444 player-games in
-`wnba_game_logs` (2024-05-03 through 2026-08-21). The day-close cron extends
-both nightly. All reads go through
+Corpus size (read-only production query, 2026-08-31): 219 slates and 6,602 rows
+in `slate_labels`, latest slate 2026-08-29; 17,906 player-games in
+`wnba_game_logs`, latest game date 2026-08-29. Both were last ingested on
+2026-08-30. The database reports Alembic revision `20260820_0010`. The day-close
+cron extends both nightly. Application reads go through
 `src/wnba_oracle/db/reads.py`.
 
 ## Live services
@@ -498,8 +581,10 @@ and never loads the artifact, so it does not need the SHA.
 | PICKER_KNOB_CHALLENGER_JSON | pre-suite config (fade only) | 2026-07-10, measures the suite's marginal effect ex post |
 | POOL_EXCLUDE_STARTED_GAMES | unset (code default false) | D109; operator-directed late-entry scope, see below |
 
-All flags reverse via env with no redeploy: set `*_ENABLED=false` or unset
-numeric knobs to revert to code defaults.
+Settings are environment-backed, but changes to a deployed cron require an
+authorized redeploy before the next dispatch uses them. Verify the resulting
+freeze or fresh job evidence, not just the variable listing. Unsetting a knob
+restores its library default, which can differ from `EXPECTED_PROD_CONFIG`.
 
 ### Contextual stacking baseline, 2026-08-25
 

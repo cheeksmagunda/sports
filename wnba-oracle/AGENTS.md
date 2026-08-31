@@ -144,8 +144,6 @@ handling. WNBA-specific:
 - Provider requests must use bounded timeouts and retries, honor bounded
   `Retry-After`, and redact sensitive headers, query values, URLs, and exception
   text.
-- Real Sports derived storage state is a secret. Write
-  `scraper/storage_state.json` atomically with mode `0600`; never commit it.
 - Real Sports scripted login is known to be rejected. Session recovery requires
   the operator to sign in using an ordinary interactive browser and iCloud
   Autofill where applicable, then export the derived storage state without
@@ -183,15 +181,15 @@ handling. WNBA-specific:
   event -- `persist_events` de-duplicates a repeat `(slate_date, trigger)` for
   6 hours, so a stale event can mask a live one).
 - When GitHub Actions is failing, Railway source triggers gated on `Wait for CI`
-  will not deploy. `railway redeploy --from-source -y` pulls and deploys the
-  latest commit and bypasses the stuck gate. Plain `railway redeploy` redeploys
-  the *existing* build and will not pick up a new commit. See #40.
-- The operator shell may export a `RAILWAY_API_TOKEN` scoped to a different
-  project, which silently overrides the per-directory CLI link and makes both
-  the Railway MCP tools and the `railway` CLI fail `Unauthorized`. Prefix with
-  `env -u RAILWAY_API_TOKEN -u RAILWAY_PROJECT_ID -u RAILWAY_ENVIRONMENT_ID`.
-  The same shell pattern applies to `gh`: an invalid `GITHUB_TOKEN` shadows a
-  valid keyring login, so use `env -u GITHUB_TOKEN -u GH_TOKEN gh ...`.
+  will not deploy. Restore the gate before routine releases. A manual source
+  deployment bypasses that gate and requires explicit production authorization,
+  verification, and rollback; it is not a normal CI workaround. An image-reuse
+  redeploy does not pick up a new source commit. See #40.
+- Use native GitHub and Railway sessions without environment overrides for
+  normal commands. If authentication unexpectedly fails, inspect only the
+  presence and source of overriding token variables, never their values.
+  Remove a verified stale override at its source. Do not make token-clearing
+  shell prefixes a required workflow. Current recovery evidence is in STATUS.md.
 
 ## Incidents and recovery
 

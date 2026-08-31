@@ -53,7 +53,7 @@ typecheck:
 	$(UV_RUN) --extra dev python -m mypy src/
 
 fmt:
-	$(UV_RUN) --extra dev ruff format src/ tests/
+	$(UV_RUN) --extra dev ruff format src/ tests/ scripts/
 
 dev:
 	$(UV_RUN) uvicorn wnba_oracle.api.app:app --reload --host 0.0.0.0 --port 8000
