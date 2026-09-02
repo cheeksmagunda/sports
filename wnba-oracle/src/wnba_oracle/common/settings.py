@@ -432,7 +432,10 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "lineup_anchor_floor": 2,  # D57/D58
     "prop_signal_scale": 0.3,  # D78
     "optimizer_boost_sum_cap": 9.0,  # D70/R2
-    "optimizer_game_stack_bonus": 0.0,
+    # Provenance-only / legacy knob. The hard anti-stacking policy now enforces
+    # shape independent of this value; production keeps 0.010 as a tagged
+    # no-op for audit trails. See modeling/policy.py and picker/optimize.py.
+    "optimizer_game_stack_bonus": 0.010,
     "optimizer_contextual_stacking_enabled": False,
     "optimizer_contextual_stack_ev_margin": 0.0,
     "field_same_game_boost": 3.0,  # D88/D91
