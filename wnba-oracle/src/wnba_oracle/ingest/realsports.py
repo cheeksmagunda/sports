@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 import unicodedata as _ud
 from collections.abc import Awaitable, Callable
@@ -729,13 +730,30 @@ async def fetch_contest_meta(
     return r.json() or {}
 
 
-async def discover_wnba_contest_id() -> int | None:
+def _validated_wnba_contest_id(
+    seen_ids: list[int],
+    headers: RequestHeaders,
+    client: httpx.Client,
+) -> int | None:
+    """Return the newest observed contest that the stats endpoint confirms is WNBA."""
+    from wnba_oracle.ingest.contest_stats import ContestUnavailable, fetch_contest_stats
+
+    for contest_id in sorted(set(seen_ids), reverse=True):
+        try:
+            fetch_contest_stats(contest_id, headers, client)
+        except ContestUnavailable:
+            continue
+        return contest_id
+    return None
+
+
+async def discover_wnba_contest_id(headers: RequestHeaders | None = None) -> int | None:
     """Headless-browse realsports.io/?sport=wnba and capture the contest id
     from the /games/playerratingcontest/{id} URL the SPA hits.
 
-    Returns the int contest id, or None if no WNBA contest URL is observed.
-    Cheap to call (one Playwright session, ~5s); Job 1 calls it once per
-    fire to seed the day's contest id into Redis.
+    Returns the newest int contest id that the stats endpoint confirms is WNBA,
+    or None if no such contest is observed. The browse can surface contests from
+    other sports, even after selecting WNBA in the SPA.
     """
     if not STORAGE_STATE_PATH.exists():
         raise StorageStateMissing(f"{STORAGE_STATE_PATH} not found; cannot discover contest id.")
@@ -777,11 +795,12 @@ async def discover_wnba_contest_id() -> int | None:
             pass
         await browser.close()
 
-    # Need to distinguish WNBA contest from MLB. The discovered id list will
-    # include both if the user has both sports active. Caller validates with
-    # fetch_contest_meta and confirms info.contest.sport == "wnba".
     if not seen_ids:
         return None
-    # Return the maximum (most recent) id; both MLB and WNBA increment together.
-    # Caller validates sport.
-    return max(seen_ids)
+    if headers is None:
+        headers = await headers_or_capture(
+            os.environ.get("WNBA_DEVICE_UUID", "wnba-oracle-prod-01-device"),
+            os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-prod-01"),
+        )
+    with httpx.Client(timeout=20.0) as client:
+        return _validated_wnba_contest_id(seen_ids, headers, client)

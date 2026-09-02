@@ -72,6 +72,8 @@ def _load_model_artifact(sha: str) -> PickerArtifact | None:
             sha=sha[:12],
             training_rows=art.training_rows,
             low_data_mode=art.low_data_mode,
+            refit_full=getattr(art, "refit_full", False),
+            calibrators_consumed_at_serving=getattr(art, "calibrators_consumed_at_serving", False),
             n_heads=len(art.heads),
             has_eb_baseline=art.eb_baseline is not None,
             n_eb_players=len(art.eb_baseline.player_alpha) if art.eb_baseline else 0,

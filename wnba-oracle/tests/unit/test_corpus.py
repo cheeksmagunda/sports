@@ -127,3 +127,25 @@ def test_build_gamelog_corpus_is_causal_and_has_targets() -> None:
         assert t in corpus.columns
     # Earliest game (no history) is absent.
     assert corpus.filter(pl.col("game_date") == "2025-05-16").is_empty()
+
+
+def test_build_gamelog_corpus_dvp_is_point_in_time() -> None:
+    from unittest.mock import patch
+
+    from wnba_oracle.features.game_features import compute_opp_dvp_map
+
+    logs = _logs().with_columns(
+        pl.lit("LVA").alias("team"),
+        pl.lit("SEA").alias("opponent"),
+    )
+    with patch("wnba_oracle.ingest.minutes_features.fetch_wnba_team_stats", return_value={}):
+        corpus = build_gamelog_corpus(logs)
+
+    for row in corpus.sort("game_date").to_dicts():
+        prior = logs.filter(pl.col("game_date") < row["game_date"])
+        expected = compute_opp_dvp_map(prior).get("SEA", 0.0)
+        assert abs(row["opp_dvp_forward"] - expected) < 1e-9, row["game_date"]
+    # The last row must differ from the season-wide (leaky) value because the
+    # 2026 games score differently from the 2025 games they follow.
+    last = corpus.sort("game_date").row(-1, named=True)
+    assert abs(last["opp_dvp_forward"] - compute_opp_dvp_map(logs)["SEA"]) > 1e-6

@@ -186,16 +186,36 @@ def read_game_logs(engine: sa.Engine | None = None) -> pl.DataFrame:
     return pl.from_dicts([dict(r._mapping) for r in rows])
 
 
-def read_player_history(engine: sa.Engine | None = None) -> dict[int, float]:
-    """Per-player mean real_score from slate_labels (replaces job2._load_player_history)."""
-    eng = engine or get_engine()
-    q = text(
+def read_player_history(
+    engine: sa.Engine | None = None,
+    *,
+    as_of_slate_date: str | None = None,
+) -> dict[int, float]:
+    """Per-player mean real_score from slate_labels (replaces job2._load_player_history).
+
+    ``as_of_slate_date=None`` keeps the live-freeze semantics: every label
+    written so far, which at freeze time is strictly historical because
+    day-close writes today's labels the next morning. Pass the target slate
+    for any historical replay so the mean covers labels STRICTLY BEFORE that
+    slate (``slate_date < :sd``) and never includes the slate's own realized
+    scores.
+    """
+    sql = (
         "SELECT platform_player_id, AVG(real_score) AS mean_real_score "
-        "FROM slate_labels WHERE real_score IS NOT NULL "
-        "GROUP BY platform_player_id"
+        "FROM slate_labels WHERE real_score IS NOT NULL"
     )
+    params: dict[str, str] = {}
+    if as_of_slate_date is not None:
+        # slate_labels.slate_date is VARCHAR(16) ISO text, so the string
+        # comparison is lexicographically correct with no cast. Two statements
+        # rather than ":sd IS NULL OR ..." because Postgres cannot type that
+        # parameter (see AGENTS.md).
+        sql += " AND slate_date < :sd"
+        params["sd"] = str(as_of_slate_date)
+    sql += " GROUP BY platform_player_id"
+    eng = engine or get_engine()
     with eng.connect() as conn:
-        rows = conn.execute(q).fetchall()
+        rows = conn.execute(text(sql), params).fetchall()
     return {
         int(r._mapping["platform_player_id"]): float(r._mapping["mean_real_score"]) for r in rows
     }

@@ -40,19 +40,81 @@ JOB1_UPSERT = text(
 )
 
 JOB1_DELETE_SLATE = text("DELETE FROM job1_enrichment WHERE slate_date = :slate_date")
+JOB1_IDENTITY_READ = text(
+    """
+    SELECT player_id, opponent, features_json
+    FROM job1_enrichment
+    WHERE slate_date = :slate_date
+    """
+)
 
 
-def _replace_enrichment(conn, slate_date: str, rows: list[dict]) -> int:
+def _feature_mapping(raw: object) -> dict:
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
+
+
+def _preserve_tipped_identity(
+    rows: list[dict],
+    existing: list[tuple[object, object, object]],
+    *,
+    now_utc: dt.datetime,
+) -> list[dict]:
+    """Keep prior matchup identity after its authoritative game has started."""
+    existing_by_player = {
+        int(str(player_id)): (opponent, features) for player_id, opponent, features in existing
+    }
+    preserved: list[dict] = []
+    for row in rows:
+        updated = dict(row)
+        prior = existing_by_player.get(int(row["player_id"]))
+        if prior is None:
+            preserved.append(updated)
+            continue
+        old_opponent, old_features_raw = prior
+        old_features = _feature_mapping(old_features_raw)
+        game_start = parse_game_time(str(old_features.get("game_start_utc") or ""))
+        if game_start is None or game_start > now_utc:
+            preserved.append(updated)
+            continue
+        new_features = _feature_mapping(row.get("features_json"))
+        for key in ("game_id", "game_start_utc"):
+            if old_features.get(key):
+                new_features[key] = old_features[key]
+        updated["opponent"] = old_opponent
+        updated["features_json"] = json.dumps(new_features)
+        preserved.append(updated)
+    return preserved
+
+
+def _replace_enrichment(
+    conn,
+    slate_date: str,
+    rows: list[dict],
+    *,
+    now_utc: dt.datetime | None = None,
+) -> int:
     """Atomically promote one complete, validated slate capture.
 
     The transaction first removes the prior slate snapshot and then writes the
     new rows. Callers must run ``pool_sanity`` before invoking this helper, so a
     partial upstream response never mixes fresh timestamps with stale players.
     """
+    current_time = now_utc or dt.datetime.now(dt.UTC)
+    existing = conn.execute(JOB1_IDENTITY_READ, {"slate_date": slate_date}).fetchall()
+    rows_to_write = _preserve_tipped_identity(rows, existing, now_utc=current_time)
     conn.execute(JOB1_DELETE_SLATE, {"slate_date": slate_date})
-    for row in rows:
+    for row in rows_to_write:
         conn.execute(JOB1_UPSERT, row)
-    return len(rows)
+    return len(rows_to_write)
 
 
 SLATE_META_UPSERT = text(

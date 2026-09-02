@@ -21,6 +21,13 @@ Two metrics:
 Run:
   uv run python scripts/backtest_walkforward.py            # part 1 only
   uv run python scripts/backtest_walkforward.py --placement  # + part 2
+  uv run python scripts/backtest_walkforward.py --placement --leak-same-slate-ownership
+      # diagnostic only: reproduces the pre-fix same-slate drafts leak
+
+Point-in-time rules in PART 2: predictions and volatility use slates < N; the
+contrarian tilt's ownership uses each player's most recent PRIOR slate drafts,
+never slate N's own ``slate_labels.drafts`` (which day-close writes after the
+fact and no live freeze has ever seen; see AGENTS.md / #38).
 """
 
 from __future__ import annotations
@@ -107,8 +114,7 @@ def predictor_quality(corpus: pd.DataFrame, slates: list[str]) -> None:
     )
 
 
-def _load_drafts_by_slate() -> dict[str, dict[int, int]]:
-    sl = read_slate_labels()
+def _drafts_by_slate_from_frame(sl: pl.DataFrame) -> dict[str, dict[int, int]]:
     out: dict[str, dict[int, int]] = {}
     for r in sl.iter_rows(named=True):
         if r.get("drafts") is None:
@@ -117,9 +123,52 @@ def _load_drafts_by_slate() -> dict[str, dict[int, int]]:
     return out
 
 
-def run_placement(corpus: pd.DataFrame, lb: pl.DataFrame, slates: list[str]) -> None:
+def _load_drafts_by_slate() -> dict[str, dict[int, int]]:
+    return _drafts_by_slate_from_frame(read_slate_labels())
+
+
+def causal_drafts_for_slate(
+    slate_date: str,
+    drafts_by_slate: dict[str, dict[int, int]],
+    pool_pids: set[int] | None = None,
+) -> dict[int, int]:
+    """Point-in-time ownership proxy: each player's draft count from the most
+    recent slate STRICTLY BEFORE ``slate_date``.
+
+    ``slate_labels.drafts`` for slate N is realized field ownership and is
+    only written by day-close the morning after, so feeding N's own drafts
+    into the contrarian tilt (the pre-fix behaviour) leaks the field's
+    answer. Live freezes have never had that value either (AGENTS.md, #38).
+    Players with no prior draft observation are omitted, which
+    ``apply_contrarian_adjustment`` treats as zero penalty.
+    """
+    out: dict[int, int] = {}
+    for sd in sorted(drafts_by_slate, reverse=True):
+        if sd >= slate_date:
+            continue
+        for pid, n in drafts_by_slate[sd].items():
+            if pid in out:
+                continue
+            if pool_pids is not None and pid not in pool_pids:
+                continue
+            out[pid] = n
+    return out
+
+
+def run_placement(
+    corpus: pd.DataFrame,
+    lb: pl.DataFrame,
+    slates: list[str],
+    *,
+    leak_same_slate_ownership: bool = False,
+) -> None:
     """PART 2: end-to-end placement walk-forward. Isolates predictor and
-    sampling calibration; cap=dynamic and contrarian=0.2 held constant."""
+    sampling calibration; cap=dynamic and contrarian=0.2 held constant.
+
+    Ownership fed to the contrarian tilt is causal (most recent prior slate
+    per player) unless ``leak_same_slate_ownership`` is set, which reproduces
+    the pre-fix same-slate ``drafts`` read for diagnostic comparison only.
+    """
     import json as _json
 
     from wnba_oracle.picker.field import FieldPlayerSpec
@@ -136,12 +185,20 @@ def run_placement(corpus: pd.DataFrame, lb: pl.DataFrame, slates: list[str]) -> 
     print("PART 2: PLACEMENT (walk-forward, full optimizer; deltas are the signal)")
     print("=" * 74)
     drafts_by_slate = _load_drafts_by_slate()
+    if leak_same_slate_ownership:
+        print("  WARNING: ownership = same-slate realized drafts (LEAKY, diagnostic only)")
+    else:
+        print("  ownership = most recent prior-slate drafts per player (point-in-time)")
     curve = default_curve_for_regime("top_20")
     cc = ContrarianConfig(enabled=True, strength=0.2)
 
     def build_and_score(sd, pool, prior, preds, *, K, per_player_sigma):
         boost_by = {int(r.player_id): float(r.card_boost) for r in pool.itertuples()}
-        pop = slate_labels_to_popularity(drafts_by_slate.get(sd, {}))
+        if leak_same_slate_ownership:
+            drafts = drafts_by_slate.get(sd, {})
+        else:
+            drafts = causal_drafts_for_slate(sd, drafts_by_slate, set(boost_by))
+        pop = slate_labels_to_popularity(drafts)
         adj = apply_contrarian_adjustment(preds, pop, cc)
         vol = player_volatility(prior)
         samps, fields = [], []
@@ -227,7 +284,12 @@ def main() -> int:
     predictor_quality(corpus, slates)
 
     if "--placement" in sys.argv:
-        run_placement(corpus, lb, slates)
+        run_placement(
+            corpus,
+            lb,
+            slates,
+            leak_same_slate_ownership="--leak-same-slate-ownership" in sys.argv,
+        )
     return 0
 
 

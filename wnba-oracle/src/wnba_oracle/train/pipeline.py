@@ -80,6 +80,19 @@ def _sorted_quantiles(q: dict[float, np.ndarray], *, floor: float) -> dict[float
 
 @dataclass
 class PickerArtifact:
+    """Trained multi-task picker model artifact.
+
+    Note on calibrators:
+    The `calibrators` dict stores offline diagnostic PCHIPIsotonic calibrators
+    fitted on validation data. These calibrators are NOT consumed during serving
+    in `predict_real_score` (calibrators_consumed_at_serving=False).
+
+    Note on final refit:
+    `refit_full` indicates whether final quantile heads were refitted on all
+    eligible data (train + validation splits combined). Default production
+    behavior uses split-train models (refit_full=False).
+    """
+
     feature_module_sha: str
     config: dict
     heads: dict[tuple[str, Cohort], TrainedHead] = field(default_factory=dict)
@@ -89,6 +102,9 @@ class PickerArtifact:
     low_data_mode: bool = False
     cohort_means: dict[str, float] = field(default_factory=dict)
     feature_subset_per_head: dict[tuple[str, Cohort], tuple[str, ...]] = field(default_factory=dict)
+    refit_full: bool = False
+    calibrators_consumed_at_serving: bool = False
+    cohorts_trained: tuple[str, ...] = ()
 
     def predict_real_score(self, frame: pl.DataFrame) -> dict[str, np.ndarray] | None:
         """Recompose E[real_score] = E[minutes] x E[real_score_per_min] per row.
@@ -179,6 +195,12 @@ def artifact_content_equal(a: PickerArtifact, b: PickerArtifact) -> tuple[bool, 
             return False, "eb_baseline pace/league params differ"
     if a.cohort_means != b.cohort_means:
         return False, "artifact cohort_means differ"
+    if getattr(a, "refit_full", False) != getattr(b, "refit_full", False):
+        return False, "refit_full setting differs"
+    if getattr(a, "calibrators_consumed_at_serving", False) != getattr(
+        b, "calibrators_consumed_at_serving", False
+    ):
+        return False, "calibrators_consumed_at_serving setting differs"
     return True, "content-identical"
 
 
@@ -205,6 +227,7 @@ def train_picker(
     *,
     label_train: pl.DataFrame | None = None,
     target_real_score: str = "real_score",
+    refit_full: bool = False,
 ) -> PickerArtifact:
     """Train the multi-task ensemble.
 
@@ -214,6 +237,9 @@ def train_picker(
     (card_boost + real_score per player-slate). When omitted it defaults to
     the heads frame, preserving the single-corpus behaviour for callers that
     pass one frame.
+
+    ``refit_full`` when True performs a final refit of quantile heads on all
+    eligible data (combining train_df and valid_df).
     """
     cfg = _load_config()
     if label_train is None:
@@ -256,8 +282,10 @@ def train_picker(
     art = PickerArtifact(
         feature_module_sha=feature_module_sha(),
         config=cfg,
-        training_rows=len(train_df),
+        training_rows=len(train_df) + (len(valid_df) if refit_full else 0),
         low_data_mode=low_data,
+        refit_full=refit_full,
+        calibrators_consumed_at_serving=False,
     )
 
     cohorts: tuple[Cohort, ...] = ("G", "F", "C")
@@ -296,6 +324,18 @@ def train_picker(
                 monotone_constraints=monotone,
                 cfg=head_cfg,
             )
+            if refit_full and not cell_valid.is_empty():
+                cell_refit = pl.concat([cell_train, cell_valid])
+                head = train_quantile_head(
+                    name=head_name,
+                    cohort=cohort,
+                    target=target,
+                    feature_columns=feat_cols,
+                    train_df=cell_refit,
+                    valid_df=pl.DataFrame(),
+                    monotone_constraints=monotone,
+                    cfg=head_cfg,
+                )
             art.heads[(head_name, cohort)] = head
             art.feature_subset_per_head[(head_name, cohort)] = feat_cols
 
@@ -306,9 +346,11 @@ def train_picker(
                 X = calib_src.select(list(feat_cols)).to_pandas()
                 med = head.quantile_models[0.5]
                 pred = np.asarray(med.predict(X), dtype=float)
-                calib = PCHIPIsotonic()
+                calib = PCHIPIsotonic(serving_consumed=False)
                 calib.fit(pred, calib_src.get_column(target).to_numpy())
                 art.calibrators[(head_name, cohort)] = calib
+
+    art.cohorts_trained = tuple(sorted({c for (_, c) in art.heads}))
 
     # EB baseline on the contest-label frame's real_score column (if present).
     if target_real_score in label_train.columns:
@@ -380,11 +422,18 @@ def _write_training_manifest(
         "trained_at_unix": ts,
         "training_rows": int(art.training_rows),
         "low_data_mode": bool(art.low_data_mode),
+        "refit_full": bool(getattr(art, "refit_full", False)),
+        "calibrators_consumed_at_serving": bool(
+            getattr(art, "calibrators_consumed_at_serving", False)
+        ),
         "feature_module_sha": art.feature_module_sha,
-        "cohorts_trained": sorted({c for (_, c) in art.heads}),
+        "cohorts_trained": sorted(getattr(art, "cohorts_trained", ())),
         "heads_trained": sorted([f"{h}:{c}" for (h, c) in art.heads]),
         "n_calibrators": len(art.calibrators),
         "has_eb_baseline": art.eb_baseline is not None,
+        "cohort_feature_contract": {
+            f"{h}:{c}": list(cols) for (h, c), cols in art.feature_subset_per_head.items()
+        },
     }
     body = json.dumps(manifest, sort_keys=True, indent=2)
     atomic_write_bytes(path.with_suffix(".manifest.json"), f"{body}\n".encode())

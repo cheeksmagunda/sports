@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from wnba_oracle.ingest.realsports import _parse_pool
+from wnba_oracle.ingest.contest_stats import ContestUnavailable
+from wnba_oracle.ingest.realsports import _parse_pool, _validated_wnba_contest_id
 
 
 def test_parse_pool_basic() -> None:
@@ -90,3 +93,19 @@ def test_parse_pool_empty_display_name_falls_back_to_first_last() -> None:
     }
     out = _parse_pool(body)
     assert out[0].display_name == "Frieda Buhner"
+
+
+def test_contest_discovery_skips_newer_non_wnba_contests() -> None:
+    def fetch_stats(contest_id: int, *_args: object) -> list:
+        if contest_id in {2118, 2116}:
+            raise ContestUnavailable("wrong sport")
+        return []
+
+    with patch("wnba_oracle.ingest.contest_stats.fetch_contest_stats", side_effect=fetch_stats):
+        contest_id = _validated_wnba_contest_id(
+            [2118, 2117, 2116],
+            MagicMock(),
+            MagicMock(),
+        )
+
+    assert contest_id == 2117

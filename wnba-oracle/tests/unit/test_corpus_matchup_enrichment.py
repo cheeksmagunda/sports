@@ -137,3 +137,90 @@ def test_degrades_gracefully_on_nba_api_failure() -> None:
     # team_pace should be 0 (fallback), no crash
     assert "team_pace" in result.columns
     assert all(v == 0.0 for v in result["team_pace"].to_list())
+
+
+# -- point-in-time DvP -------------------------------------------------------
+
+
+def _dated_game_logs() -> pl.DataFrame:
+    """Two dates. On 05-01 LVA scores big against SEA; on 05-03 LVA scores
+    little against SEA. A causal 05-03 row may only see the 05-01 game."""
+    base = {
+        "reb": 0.0,
+        "oreb": 0.0,
+        "dreb": 0.0,
+        "ast": 0.0,
+        "stl": 0.0,
+        "blk": 0.0,
+        "tov": 0.0,
+        "fgm": 0.0,
+        "fga": 0.0,
+        "fg3m": 0.0,
+        "ftm": 0.0,
+        "fta": 0.0,
+        "min": 30.0,
+    }
+    return pl.DataFrame(
+        [
+            {"game_date": "2026-05-01", "team": "LVA", "opponent": "SEA", "pts": 40.0, **base},
+            {"game_date": "2026-05-03", "team": "LVA", "opponent": "SEA", "pts": 10.0, **base},
+        ]
+    )
+
+
+def _dated_corpus() -> pl.DataFrame:
+    return pl.DataFrame(
+        [
+            {"game_date": "2026-05-01", "team": "LVA", "opponent": "SEA", "player_id": 1},
+            {"game_date": "2026-05-03", "team": "LVA", "opponent": "SEA", "player_id": 1},
+            {"game_date": "2026-05-03", "team": "SEA", "opponent": "LVA", "player_id": 2},
+            {"game_date": "2026-05-03", "team": "LVA", "opponent": "sea", "player_id": 3},
+        ]
+    )
+
+
+def test_causal_dvp_uses_only_strictly_prior_games() -> None:
+    from wnba_oracle.features.game_features import compute_opp_dvp_map
+
+    logs = _dated_game_logs()
+    with patch("wnba_oracle.ingest.minutes_features.fetch_wnba_team_stats", return_value={}):
+        result = _enrich_corpus_matchup(_dated_corpus(), logs, causal_dvp=True)
+
+    by = {(r["game_date"], r["player_id"]): r for r in result.to_dicts()}
+    # First appearance of SEA as an opponent: no prior games -> 0.0, never the
+    # row's own game.
+    assert by[("2026-05-01", 1)]["opp_dvp_forward"] == 0.0
+    # 05-03 row sees only the 05-01 game (pts=40), not its own 10-pt game.
+    expected = compute_opp_dvp_map(logs.filter(pl.col("game_date") < "2026-05-03"))["SEA"]
+    assert abs(by[("2026-05-03", 1)]["opp_dvp_forward"] - expected) < 1e-9
+    season_wide = compute_opp_dvp_map(logs)["SEA"]
+    assert abs(by[("2026-05-03", 1)]["opp_dvp_forward"] - season_wide) > 1e-6
+    # Opponent with no prior games at all stays 0.0.
+    assert by[("2026-05-03", 2)]["opp_dvp_forward"] == 0.0
+    # Opponent matching is case-insensitive, like the legacy map lookup.
+    assert abs(by[("2026-05-03", 3)]["opp_dvp_forward"] - expected) < 1e-9
+    for col in ("opp_dvp_guard", "opp_dvp_center"):
+        assert by[("2026-05-03", 1)][col] == by[("2026-05-03", 1)]["opp_dvp_forward"]
+    assert len(result) == 4
+    assert "_dvp" not in result.columns and "_dvp_opp" not in result.columns
+
+
+def test_legacy_dvp_is_season_wide_when_causal_disabled() -> None:
+    from wnba_oracle.features.game_features import compute_opp_dvp_map
+
+    logs = _dated_game_logs()
+    with patch("wnba_oracle.ingest.minutes_features.fetch_wnba_team_stats", return_value={}):
+        result = _enrich_corpus_matchup(_dated_corpus(), logs, causal_dvp=False)
+
+    season_wide = compute_opp_dvp_map(logs)["SEA"]
+    row = result.filter(pl.col("player_id") == 1).sort("game_date").row(0, named=True)
+    assert abs(row["opp_dvp_forward"] - season_wide) < 1e-9
+
+
+def test_causal_dvp_without_game_date_keeps_zero_columns() -> None:
+    corpus = _make_corpus()
+    with patch("wnba_oracle.ingest.minutes_features.fetch_wnba_team_stats", return_value={}):
+        result = _enrich_corpus_matchup(corpus, _make_game_logs(), causal_dvp=True)
+
+    for col in ("opp_dvp_guard", "opp_dvp_forward", "opp_dvp_center"):
+        assert all(v == 0.0 for v in result[col].to_list())

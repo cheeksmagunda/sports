@@ -137,6 +137,12 @@ def main() -> int:
         default=None,
         help="metrics JSON destination; defaults to a unique temporary file",
     )
+    parser.add_argument(
+        "--refit-full",
+        action="store_true",
+        default=False,
+        help="refit final quantile heads on all eligible data (train + validation) after fold validation",
+    )
     args = parser.parse_args()
     if args.game_logs and args.heads_corpus:
         parser.error("--game-logs and --heads-corpus are mutually exclusive")
@@ -172,7 +178,9 @@ def main() -> int:
     else:
         label_train = None
 
-    art = train_picker(heads_train, heads_valid, label_train=label_train)
+    art = train_picker(
+        heads_train, heads_valid, label_train=label_train, refit_full=args.refit_full
+    )
     artifact_dir = Path(args.artifact_dir) if args.artifact_dir else None
     path = (
         write_artifact(art, commit=args.commit, directory=artifact_dir)
@@ -185,6 +193,8 @@ def main() -> int:
         "corpus_mode": args.corpus_mode,
         "training_rows": art.training_rows,
         "low_data_mode": art.low_data_mode,
+        "refit_full": getattr(art, "refit_full", False),
+        "calibrators_consumed_at_serving": getattr(art, "calibrators_consumed_at_serving", False),
         "heads": [{"name": k[0], "cohort": k[1]} for k in art.heads],
         "feature_module_sha": art.feature_module_sha,
         "artifact_path": str(path),
