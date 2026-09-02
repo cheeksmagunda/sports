@@ -5,9 +5,12 @@ pipeline reads from here to assemble per-cohort design matrices; the
 predict pipeline reads from here to ensure column ordering matches the
 pickled artifact.
 
-Cohorts: Guard (G), Forward (F), Center (C). Position strings from
-Real Sports may be hyphenated (e.g. "G-F"); `cohort_for_position`
-reduces to the primary single-letter cohort.
+Production contract: the canonical model is intentionally pooled-F until a
+trustworthy position source is available. The G/F/C labels are scaffolding
+only and are not shipped as real industry cohorts. Position strings from
+Real Sports may still be hyphenated (e.g. "G-F"); `cohort_for_position`
+reduces to a primary cohort for compatibility, but the artifact contract is
+pooled-F and the training corpus hardcodes "F" when no source exists.
 """
 
 from __future__ import annotations
@@ -121,7 +124,12 @@ COHORT_EXTRA_FEATURES: dict[Cohort, tuple[str, ...]] = {
 
 def cohort_for_position(position: str | None) -> Cohort:
     """Reduce a Real Sports position string ('G', 'F', 'C', 'G-F', 'F-C', ...)
-    to the primary cohort. Falls back to 'F' for unknown / blank.
+    to the primary cohort.
+
+    Production artifacts intentionally pool missing or untrusted source values to
+    "F" while a real position source is unavailable. This remains a backward-
+    compatible compatibility function for rows that do carry a valid position, not
+    a statement that G/C cohorts are live production models.
     """
     if not position:
         return "F"
