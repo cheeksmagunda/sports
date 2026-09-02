@@ -1,20 +1,13 @@
 """Model-validity audit (#53 umbrella): machine-readable characterization of
-four training/serving facts that are easy to misstate from memory:
+training/serving facts that are easy to misstate from memory.
+
+Two findings below remain live/unaddressed as of this PR:
 
 1. Pooled-F cohort truth -- despite G/F/C cohort scaffolding throughout
    features/spec.py and train/pipeline.py, every position value that reaches
    the trained heads (offline corpus AND live serve) is the literal string
    "F". G and C heads have never been trained or served with real data.
-2. Write-only calibrators -- ``train_picker`` fits a ``PCHIPIsotonic``
-   calibrator per (head, cohort) and stores it on the artifact, but no
-   predict/serve code path ever calls ``.transform()`` on it. Calibration
-   has zero effect on what a freeze actually serves.
-3. Final-refit limitation -- ``train/cli.py`` trains the shipped artifact
-   on the walk-forward (or fallback 80/20) TRAIN split only. It never
-   refits on train+valid after picking the fold, so the most recent
-   labeled rows (the held-out validation fold) are permanently excluded
-   from the production model.
-4. Train/serve feature parity -- MOSTLY holds: features/corpus.py (offline)
+2. Train/serve feature parity -- MOSTLY holds: features/corpus.py (offline)
    and features/serving_features.py (live) both call the same
    ``features.rolling.build_rolling_features``, so rolling stats and
    ``days_rest`` agree for a shared player/date. Auditing it surfaced a
@@ -26,6 +19,18 @@ four training/serving facts that are easy to misstate from memory:
    scope here: the culprit is features/corpus.py + features/game_features.py,
    outside train/, and a fix needs a full retrain per AGENTS.md's
    verification bar).
+
+Two more findings from the original audit pass -- write-only calibrators and
+the final-refit limitation -- were independently made explicit upstream in
+commit 0175764 ("fix(wnba): enforce causal research and runtime contracts",
+already on main before this PR) via ``PickerArtifact.calibrators_consumed_at_
+serving`` and an opt-in ``train/cli.py --refit-full`` flag, plus its own
+``test_calibrators_not_consumed_at_serving`` / ``test_train_picker_refit_full_
+flag`` tests. This file keeps two small, non-duplicated tests for those:
+a stronger "poison .transform()" proof that the current default serve path
+never touches a calibrator, and a CLI-level proof that the ``--refit-full``
+argparse flag actually reaches ``train_picker`` (the upstream tests exercise
+``train_picker`` directly, not the CLI wiring).
 
 These are characterization tests: they assert CURRENT behavior so a future
 change is a deliberate, visible decision (update this file + the model
@@ -91,7 +96,7 @@ def _multi_player_logs() -> pl.DataFrame:
 
 
 # --------------------------------------------------------------------------
-# 1. Pooled-F cohort truth
+# Pooled-F cohort truth
 # --------------------------------------------------------------------------
 
 
@@ -163,7 +168,10 @@ def test_serve_time_head_prediction_hardcodes_position_f_regardless_of_input() -
 
 
 # --------------------------------------------------------------------------
-# 2. Write-only calibrators
+# Write-only calibrators -- upstream already documents this via
+# ``calibrators_consumed_at_serving`` (test_artifact_serving.py::
+# test_calibrators_not_consumed_at_serving). This adds a stronger guarantee:
+# poison ``.transform()`` and prove a normal predict call never reaches it.
 # --------------------------------------------------------------------------
 
 
@@ -192,8 +200,9 @@ def test_predict_real_score_never_invokes_the_stored_calibrators(monkeypatch) ->
     recomposes E[real_score] straight from the raw quantile-head predictions
     (see train/pipeline.py::PickerArtifact.predict_real_score). It never
     reads ``self.calibrators``. Poisoning ``PCHIPIsotonic.transform`` to
-    raise proves a normal predict call never touches it -- the calibrators
-    are written to the artifact/manifest but are dead weight at serve time."""
+    raise proves a normal predict call never touches it -- consistent with
+    (and a stronger check than) the artifact's own
+    ``calibrators_consumed_at_serving=False`` field."""
     from wnba_oracle.train.calibrators import PCHIPIsotonic
 
     train_df, valid_df = _tiny_train_valid_frames()
@@ -214,20 +223,26 @@ def test_predict_real_score_never_invokes_the_stored_calibrators(monkeypatch) ->
 
 
 # --------------------------------------------------------------------------
-# 3. Final-refit limitation
+# Final-refit is now opt-in upstream (train/cli.py --refit-full plus
+# train_picker(refit_full=...), test_train_cli.py::
+# test_train_picker_refit_full_flag). That test exercises train_picker
+# directly; this proves the CLI's argparse flag actually reaches it, and
+# that the default (no flag) still ships a split-train-only artifact.
 # --------------------------------------------------------------------------
 
 
-def test_cli_ships_an_artifact_trained_only_on_the_split_train_fold(
+def test_cli_wires_refit_full_flag_through_to_train_picker(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """cli.main() picks a train/valid split (walk-forward, or the
     time-ordered 80/20 fallback used here with 5 dates -- fewer than
     WalkForwardSplitter needs to yield a fold) and calls
-    ``train_picker(heads_train, heads_valid, ...)``. There is no later step
-    that refits on heads_train + heads_valid once the split has served its
-    purpose; the artifact that reaches production is missing the freshest
-    labeled rows by construction."""
+    ``train_picker(heads_train, heads_valid, ..., refit_full=args.refit_full)``.
+    By default (no ``--refit-full``) the shipped artifact's training_rows
+    reflects the train fold only; passing ``--refit-full`` flips the kwarg
+    train_picker receives. train_picker's own refit-on-full-data behavior is
+    covered upstream (test_train_picker_refit_full_flag) -- this test is
+    scoped to proving the CLI wiring itself is correct."""
     dates = [f"2026-05-{d:02d}" for d in range(1, 6)]  # 5 unique dates
     heads_path = tmp_path / "heads.parquet"
     pl.DataFrame(
@@ -237,45 +252,65 @@ def test_cli_ships_an_artifact_trained_only_on_the_split_train_fold(
         }
     ).write_parquet(heads_path)
 
-    captured: dict[str, int] = {}
+    captured: dict[str, object] = {}
 
-    def _fake_train_picker(train_df, valid_df, *, label_train=None, target_real_score="real_score"):
+    def _fake_train_picker(
+        train_df,
+        valid_df,
+        *,
+        label_train=None,
+        target_real_score="real_score",
+        refit_full=False,
+    ):
         captured["train_rows"] = len(train_df)
         captured["valid_rows"] = len(valid_df)
-        return PickerArtifact(feature_module_sha="test", config={}, training_rows=len(train_df))
+        captured["refit_full"] = refit_full
+        return PickerArtifact(
+            feature_module_sha="test",
+            config={},
+            training_rows=len(train_df),
+            refit_full=refit_full,
+        )
 
     monkeypatch.setattr(train_cli, "train_picker", _fake_train_picker)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "oracle-train",
-            "--heads-corpus",
-            str(heads_path),
-            "--corpus-mode",
-            "gamelog",
-            "--artifact-dir",
-            str(tmp_path / "models"),
-            "--metrics-path",
-            str(tmp_path / "metrics.json"),
-        ],
-    )
 
-    rc = train_cli.main()
-    assert rc == 0
+    def _run(*extra_args: str) -> None:
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "oracle-train",
+                "--heads-corpus",
+                str(heads_path),
+                "--corpus-mode",
+                "gamelog",
+                "--artifact-dir",
+                str(tmp_path / "models"),
+                "--metrics-path",
+                str(tmp_path / f"metrics-{len(extra_args)}.json"),
+                *extra_args,
+            ],
+        )
+        rc = train_cli.main()
+        assert rc == 0
 
     total_rows = len(dates)
+
+    _run()  # default: no --refit-full
+    assert captured["refit_full"] is False
     assert captured["valid_rows"] > 0, "test fixture must exercise a non-empty valid fold"
     assert captured["train_rows"] + captured["valid_rows"] == total_rows
     assert captured["train_rows"] < total_rows, (
-        "the shipped artifact's training_rows must be strictly less than the "
-        "full labeled corpus -- the held-out fold is never refit into the "
-        "artifact that reaches production"
+        "by default the shipped artifact's training_rows must be strictly "
+        "less than the full labeled corpus -- refit-on-full-data is opt-in"
     )
+
+    _run("--refit-full")  # explicit opt-in
+    assert captured["refit_full"] is True
 
 
 # --------------------------------------------------------------------------
-# 4. Train/serve feature parity -- mostly holds, one discovered gap
+# Train/serve feature parity -- mostly holds, one discovered gap (#55)
 # --------------------------------------------------------------------------
 
 
