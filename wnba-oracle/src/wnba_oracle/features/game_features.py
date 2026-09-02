@@ -224,3 +224,82 @@ def compute_opp_dvp_map(game_logs: pl.DataFrame) -> dict[str, float]:
         .filter(pl.col("opponent").is_not_null() & (pl.col("opponent") != ""))
     )
     return {row["opponent"]: float(row["mean_allowed"]) for row in grouped.to_dicts()}
+
+
+def compute_team_pace_map(game_logs: pl.DataFrame) -> dict[str, float]:
+    """Per-team mean possessions per 40 minutes (WNBA pace), from game_logs.
+
+    Computes pace from box-score possession estimate: POSS ≈ FGA - OREB + TOV + 0.44*FTA.
+    Aggregates per (game_date, team) then computes pace = 40 * total_poss / (total_min / 5).
+    Returns mean pace per team over all games, with league-mean shrinkage toward early-
+    season fallback (3-game pseudo-count to stabilize estimates from sparse data).
+
+    Shared by the offline corpus enrichment (features/corpus.py) and the
+    live serve-time lookup (features/serving_features.py) so the two pace
+    computations can't drift apart. Called with filtered game_logs (e.g. games
+    strictly before a date) by the caller to achieve point-in-time causality.
+    """
+    if game_logs.is_empty():
+        return {}
+    needed = ["game_date", "team", "fga", "oreb", "tov", "fta", "min"]
+    if not all(c in game_logs.columns for c in needed):
+        return {}
+
+    # Compute possessions per player-game using box-score estimate.
+    # POSS ≈ FGA - OREB + TOV + 0.44*FTA (standard NBA/WNBA formula).
+    df = game_logs.with_columns(
+        (
+            pl.col("fga")
+            - pl.col("oreb").fill_null(0.0)
+            + pl.col("tov").fill_null(0.0)
+            + 0.44 * pl.col("fta").fill_null(0.0)
+        ).alias("_poss")
+    )
+
+    # Aggregate to (game_date, team) level: sum possessions and minutes.
+    # WNBA regulation game is 40 minutes (5 players on court).
+    game_level = (
+        df.group_by(["game_date", "team"])
+        .agg(
+            [
+                pl.col("_poss").sum().alias("_poss_sum"),
+                pl.col("min").sum().alias("_min_sum"),
+            ]
+        )
+        .filter(pl.col("_min_sum") > 0.0)
+        .with_columns((40.0 * pl.col("_poss_sum") / (pl.col("_min_sum") / 5.0)).alias("_game_pace"))
+    )
+
+    if game_level.is_empty():
+        return {}
+
+    # Compute team pace as mean over games, with league-mean shrinkage.
+    team_paces = (
+        game_level.group_by("team")
+        .agg(
+            [
+                pl.col("_game_pace").mean().alias("team_pace"),
+                pl.col("_game_pace").count().alias("n_games"),
+            ]
+        )
+        .filter(pl.col("team").is_not_null() & (pl.col("team") != ""))
+    )
+
+    if team_paces.is_empty():
+        return {}
+
+    league_mean_raw = team_paces.get_column("team_pace").mean()
+    league_mean = float(str(league_mean_raw)) if league_mean_raw is not None else 0.0
+    k = 3.0  # Pseudo-count for shrinkage (3 games equivalent)
+
+    result: dict[str, float] = {}
+    for row in team_paces.to_dicts():
+        team = str(row["team"]).upper()
+        pace_val = row["team_pace"]
+        pace = float(str(pace_val)) if pace_val is not None else 0.0
+        n_games = int(row["n_games"])
+        # Shrink toward league mean: pace_shrunk = (n_games * pace + k * league_mean) / (n_games + k)
+        shrunk_pace = (n_games * pace + k * league_mean) / (n_games + k)
+        result[team] = shrunk_pace
+
+    return result

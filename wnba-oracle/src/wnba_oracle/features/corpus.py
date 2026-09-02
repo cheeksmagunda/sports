@@ -37,6 +37,7 @@ from wnba_oracle.features.game_features import (
     add_targets,
     compute_opp_dvp_map,
     compute_season_game_number,
+    compute_team_pace_map,
     to_nba_api_schema,
 )
 from wnba_oracle.features.rolling import build_rolling_features
@@ -103,17 +104,16 @@ def build_gamelog_corpus(
     # small-data-safe choice anyway (research guardrail: do not over-split).
     corpus = corpus.with_columns(pl.lit("F").alias("position"))
 
-    # D77: inject team_pace / opp_pace / game_pace_implied and opp_dvp from
+    # D77/D108: inject team_pace / opp_pace / game_pace_implied and opp_dvp from
     # the corpus itself. These were zero-filled in earlier builds; populating
     # them here closes the train/serve mismatch introduced by D74.
     # Notes:
-    # - team_pace uses the current-season nba_api snapshot (season-stable,
-    #   acceptable approximation for historical rows). Degrades to 0 on error.
-    #   It is NOT point-in-time: nba_api exposes no as-of pace without one
-    #   network call per date, so this stays a known, documented leak.
+    # - team_pace is now point-in-time (computed from games strictly before
+    #   each row's date) when causal_pace is True. The legacy nba_api snapshot
+    #   behavior remains available for testing via causal_pace=False.
     # - opp_dvp is point-in-time when ``causal_dvp`` is set (games strictly
     #   before each row's date); otherwise the legacy season-wide map.
-    corpus = _enrich_corpus_matchup(corpus, game_logs, causal_dvp=causal_dvp)
+    corpus = _enrich_corpus_matchup(corpus, game_logs, causal_dvp=causal_dvp, causal_pace=True)
 
     if min_prior_games > 1:
         corpus = corpus.filter(pl.col("season_game_number") > min_prior_games)
@@ -134,44 +134,52 @@ def _enrich_corpus_matchup(
     game_logs: pl.DataFrame,
     *,
     causal_dvp: bool = False,
+    causal_pace: bool = False,
 ) -> pl.DataFrame:
     """Add team_pace / opp_pace / game_pace_implied / opp_dvp_* to corpus rows.
 
-    Uses nba_api for pace (current-season snapshot) and computes DvP as mean
-    real_score allowed per opponent from the game_logs. With ``causal_dvp`` the
-    DvP for a row is computed only from games dated strictly before that row's
-    ``game_date`` (requires ``game_date`` on both frames); otherwise it is the
-    season-wide map over every game in ``game_logs``. Both degrade gracefully
-    to 0 if the data source is unavailable.
+    With ``causal_pace=True``, computes team pace from game_logs STRICTLY BEFORE
+    each row's game_date (point-in-time, walk-forward safe). When False, uses the
+    legacy nba_api current-season snapshot (season-stable, not causal).
+
+    With ``causal_dvp=True``, computes DvP from games strictly before each row's
+    date; otherwise uses the season-wide map. Both degrade gracefully to 0 if the
+    data source is unavailable.
     """
-    # -- team pace from nba_api --
-    team_pace: dict[str, float] = {}
-    try:
-        from wnba_oracle.ingest.minutes_features import fetch_wnba_team_stats
-
-        ts = fetch_wnba_team_stats()
-        team_pace = {abbr: float(stats.get("pace", 0.0)) for abbr, stats in ts.items()}
-    except Exception as exc:
-        log.warning("corpus_team_pace_fetch_failed", error=str(exc))
-
     has_team = "team" in corpus.columns
     has_opp = "opponent" in corpus.columns
-    if team_pace and has_team and has_opp:
-        corpus = corpus.with_columns(
-            pl.col("team")
-            .map_elements(lambda t: team_pace.get(str(t).upper(), 0.0), return_dtype=pl.Float64)
-            .alias("team_pace"),
-            pl.col("opponent")
-            .map_elements(lambda o: team_pace.get(str(o).upper(), 0.0), return_dtype=pl.Float64)
-            .alias("opp_pace"),
-        ).with_columns(
-            ((pl.col("team_pace") + pl.col("opp_pace")) / 2.0).alias("game_pace_implied"),
-        )
-        log.info("corpus_team_pace_injected", n_teams=len(team_pace))
+
+    # -- team pace --
+    if causal_pace:
+        # Point-in-time pace from game_logs (games strictly before each row's date).
+        corpus = _apply_causal_pace(corpus, game_logs) if has_team and has_opp else corpus
     else:
-        for col in ("team_pace", "opp_pace", "game_pace_implied"):
-            if col not in corpus.columns:
-                corpus = corpus.with_columns(pl.lit(0.0).alias(col))
+        # Legacy: nba_api current-season snapshot (same as before).
+        team_pace: dict[str, float] = {}
+        try:
+            from wnba_oracle.ingest.minutes_features import fetch_wnba_team_stats
+
+            ts = fetch_wnba_team_stats()
+            team_pace = {abbr: float(stats.get("pace", 0.0)) for abbr, stats in ts.items()}
+        except Exception as exc:
+            log.warning("corpus_team_pace_fetch_failed", error=str(exc))
+
+        if team_pace and has_team and has_opp:
+            corpus = corpus.with_columns(
+                pl.col("team")
+                .map_elements(lambda t: team_pace.get(str(t).upper(), 0.0), return_dtype=pl.Float64)
+                .alias("team_pace"),
+                pl.col("opponent")
+                .map_elements(lambda o: team_pace.get(str(o).upper(), 0.0), return_dtype=pl.Float64)
+                .alias("opp_pace"),
+            ).with_columns(
+                ((pl.col("team_pace") + pl.col("opp_pace")) / 2.0).alias("game_pace_implied"),
+            )
+            log.info("corpus_team_pace_injected", n_teams=len(team_pace))
+        else:
+            for col in ("team_pace", "opp_pace", "game_pace_implied"):
+                if col not in corpus.columns:
+                    corpus = corpus.with_columns(pl.lit(0.0).alias(col))
 
     # -- opp_dvp from game_logs (mean real_score allowed per opponent) --
     for col in ("opp_dvp_guard", "opp_dvp_forward", "opp_dvp_center"):
@@ -203,6 +211,68 @@ def _enrich_corpus_matchup(
         )
 
     return corpus
+
+
+def _apply_causal_pace(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.DataFrame:
+    """Point-in-time pace: for each corpus date, the per-team pace is built
+    from ``game_logs`` rows with ``game_date`` strictly before that date, then
+    joined back on ``(game_date, team)`` and ``(game_date, opponent)``. Teams
+    with no prior games keep the league mean shrinkage fallback (0.0 if no prior
+    games exist at all), matching the serve-time miss value.
+    """
+
+    dates = sorted({d for d in corpus.get_column("game_date").to_list() if d})
+    lookup_rows: list[dict[str, object]] = []
+    n_dates_with_pace = 0
+    for d in dates:
+        prior = game_logs.filter(pl.col("game_date") < d)
+        try:
+            pace_map = compute_team_pace_map(prior) if not prior.is_empty() else {}
+        except Exception as exc:
+            log.warning("corpus_pace_failed", error=str(exc), as_of=d)
+            pace_map = {}
+        if pace_map:
+            n_dates_with_pace += 1
+        for team, pace in pace_map.items():
+            lookup_rows.append(
+                {"game_date": d, "_pace_team": str(team).upper(), "_pace": float(pace)}
+            )
+
+    log.info("corpus_pace_computed_causal", n_dates=len(dates), n_dates_with_pace=n_dates_with_pace)
+    if not lookup_rows:
+        # No prior games across any date: fill with 0.0.
+        for col in ("team_pace", "opp_pace", "game_pace_implied"):
+            if col not in corpus.columns:
+                corpus = corpus.with_columns(pl.lit(0.0).alias(col))
+        return corpus
+
+    lookup = pl.from_dicts(
+        lookup_rows,
+        schema={"game_date": pl.Utf8, "_pace_team": pl.Utf8, "_pace": pl.Float64},
+    )
+
+    # Join on team and opponent separately.
+    joined = (
+        corpus.with_columns(pl.col("team").cast(pl.Utf8).str.to_uppercase().alias("_pace_team"))
+        .join(lookup, on=["game_date", "_pace_team"], how="left")
+        .with_columns(pl.col("_pace").fill_null(0.0).alias("team_pace"))
+        .drop(["_pace_team", "_pace"])
+    )
+
+    joined = (
+        joined.with_columns(pl.col("opponent").cast(pl.Utf8).str.to_uppercase().alias("_pace_opp"))
+        .join(
+            lookup.rename({"_pace_team": "_pace_opp"}),
+            on=["game_date", "_pace_opp"],
+            how="left",
+        )
+        .with_columns(pl.col("_pace").fill_null(0.0).alias("opp_pace"))
+        .drop(["_pace_opp", "_pace"])
+    )
+
+    return joined.with_columns(
+        ((pl.col("team_pace") + pl.col("opp_pace")) / 2.0).alias("game_pace_implied")
+    )
 
 
 def _apply_causal_dvp(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.DataFrame:
