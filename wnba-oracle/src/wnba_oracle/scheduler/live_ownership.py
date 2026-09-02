@@ -55,11 +55,10 @@ async def _discover_and_capture() -> dict[str, object]:
     )
     from wnba_oracle.scheduler.job1 import _device_name, _device_uuid
 
-    contest_id = await discover_wnba_contest_id()
+    headers = await headers_or_capture(_device_uuid(), _device_name())
+    contest_id = await discover_wnba_contest_id(headers=headers)
     if contest_id is None:
         return {"status": "no_contest_id_observed"}
-
-    headers = await headers_or_capture(_device_uuid(), _device_name())
 
     import httpx
 

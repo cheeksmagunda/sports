@@ -47,6 +47,8 @@ JOB1_IDENTITY_READ = text(
     WHERE slate_date = :slate_date
     """
 )
+
+
 def _feature_mapping(raw: object) -> dict:
     if isinstance(raw, dict):
         return dict(raw)
