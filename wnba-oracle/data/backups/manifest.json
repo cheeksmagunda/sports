@@ -1,9 +1,9 @@
 {
-  "generated_at_utc": "2026-09-01T12:01:11+00:00",
+  "generated_at_utc": "2026-09-02T11:43:47+00:00",
   "schema_version": 1,
   "tables": {
     "contest_leaderboards": {
-      "bytes": 12792046,
+      "bytes": 12792031,
       "columns": [
         "contest_id",
         "slate_date",
@@ -20,7 +20,7 @@
       "max_slate": "2026-08-30",
       "min_slate": "2025-05-16",
       "rows": 4400,
-      "sha256": "365774e2aee1fc77130a761a1711af403076bdb5a732fa9f9c35f2f81bcf02fb",
+      "sha256": "fab4b7607e3681de0ac9ba77179d357628d9e2e3545856635d5989e27709ff69",
       "slates": 220
     },
     "slate_labels": {
@@ -41,7 +41,7 @@
       "max_slate": "2026-08-30",
       "min_slate": "2025-05-16",
       "rows": 6637,
-      "sha256": "0d560bb1ffb76b65747fab02e104dc7e08aaaeb4810837565cb164cb216bc1fa",
+      "sha256": "dddd5f8cdb24498be57afe93db026d16abba83bb91a578999bb54a0da4b7096f",
       "slates": 220
     }
   },
