@@ -17,7 +17,9 @@ def _load_module():
     return module
 
 
-def _fake_row(slate_date: str, *, score: float, payout: float, placement: int | None) -> dict[str, Any]:
+def _fake_row(
+    slate_date: str, *, score: float, payout: float, placement: int | None
+) -> dict[str, Any]:
     return {
         "slate_date": slate_date,
         "player_ids": [1, 2, 3, 4, 5],
@@ -67,7 +69,9 @@ def test_tournament_computes_real_paired_metrics(tmp_path: Path, monkeypatch) ->
     performs."""
     module = _load_module()
 
-    baseline_rows = [_fake_row(f"2026-06-0{i}", score=10.0, payout=1.0, placement=5) for i in range(1, 5)]
+    baseline_rows = [
+        _fake_row(f"2026-06-0{i}", score=10.0, payout=1.0, placement=5) for i in range(1, 5)
+    ]
     # Challenger beats baseline on every paired slate: a real sign test should
     # therefore report a small (significant) p-value, not a placeholder.
     challenger_rows = [

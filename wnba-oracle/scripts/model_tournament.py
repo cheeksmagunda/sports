@@ -187,7 +187,8 @@ def build_comparisons(variants: list[dict[str, Any]]) -> list[dict[str, Any]]:
             s["placement_delta"] for s in comparison["slates"] if s["placement_delta"] is not None
         ]
         comparison["committed_order_score"]["sign_test_p_value"] = sign_test_p_value(
-            comparison["committed_order_score"]["wins"], comparison["committed_order_score"]["losses"]
+            comparison["committed_order_score"]["wins"],
+            comparison["committed_order_score"]["losses"],
         )
         comparison["committed_order_score"]["bootstrap_ci_mean_delta"] = bootstrap_ci_mean(
             score_deltas
@@ -280,12 +281,8 @@ def render_report(result: dict[str, Any]) -> str:
             placement = c["placement"]
             score_ci = score.get("bootstrap_ci_mean_delta")
             payout_ci = payout.get("bootstrap_ci_mean_delta")
-            score_ci_str = (
-                f"[{score_ci['ci_low']}, {score_ci['ci_high']}]" if score_ci else "-"
-            )
-            payout_ci_str = (
-                f"[{payout_ci['ci_low']}, {payout_ci['ci_high']}]" if payout_ci else "-"
-            )
+            score_ci_str = f"[{score_ci['ci_low']}, {score_ci['ci_high']}]" if score_ci else "-"
+            payout_ci_str = f"[{payout_ci['ci_low']}, {payout_ci['ci_high']}]" if payout_ci else "-"
             lines.append(
                 f"| {c['challenger']} vs {c['baseline']} | {c['n_common_slates']} "
                 f"| {score['wins']}/{score['ties']}/{score['losses']} "
@@ -354,7 +351,9 @@ def main() -> int:
 
     variants: list[dict[str, Any]] = []
     for name, artifact_path in variant_specs:
-        print(f"[{len(variants) + 1}/{len(variant_specs)}] {name}: {artifact_path}", file=sys.stderr)
+        print(
+            f"[{len(variants) + 1}/{len(variant_specs)}] {name}: {artifact_path}", file=sys.stderr
+        )
         variants.append(
             run_variant(
                 name,
