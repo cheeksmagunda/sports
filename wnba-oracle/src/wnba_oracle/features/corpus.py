@@ -220,7 +220,6 @@ def _apply_causal_pace(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.Data
     with no prior games keep the league mean shrinkage fallback (0.0 if no prior
     games exist at all), matching the serve-time miss value.
     """
-    from wnba_oracle.features.game_features import compute_team_pace_map
 
     dates = sorted({d for d in corpus.get_column("game_date").to_list() if d})
     lookup_rows: list[dict[str, object]] = []
