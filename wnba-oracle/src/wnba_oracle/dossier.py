@@ -33,6 +33,30 @@ from wnba_oracle.eval.contest_score import (
 DEFAULT_SLOTS = tuple(DEFAULT_SLOT_BASES)
 
 
+def _extract_player_ids(lineup_data: object) -> list | None:
+    """Pull the five committed platform player IDs out of a frozen lineup.
+
+    ``frozen_lineups.lineup`` is a JSONB **object** written by job2's freeze
+    (``{"player_ids": [...], "slot_multipliers": [...], "per_player": [...],
+    ...}``); psycopg deserializes JSONB to a Python ``dict``. Earlier callers
+    assumed the column was a bare JSON array of IDs, so iterating the dict with
+    ``lineup_data[:5]`` raised ``TypeError`` and turned every live ``/dossier``
+    request into a 500. Accept the real dict shape, a legacy bare list, and a
+    JSON string of either. Returns None when no ID list can be recovered.
+    """
+    if isinstance(lineup_data, str):
+        try:
+            lineup_data = json.loads(lineup_data)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    if isinstance(lineup_data, dict):
+        player_ids = lineup_data.get("player_ids")
+        return list(player_ids) if isinstance(player_ids, list) else None
+    if isinstance(lineup_data, list):
+        return lineup_data
+    return None
+
+
 def _realized_oracle(pool_rows: list[dict[str, float]], cap: int) -> float:
     """Theoretical highest-value lineup under cap constraint.
 
@@ -111,10 +135,14 @@ def build_dossier(
     work = _DossierWork(slate_date=slate_date)
 
     with eng.connect() as conn:
-        # Fetch our committed entry (most recent freeze for this slate)
+        # Fetch our committed entry (most recent freeze for this slate).
+        # frozen_lineups has no lineup_json column; the committed lineup lives
+        # in the `lineup` JSONB object. Selecting a nonexistent column here was
+        # the root of the live /dossier 500 (UndefinedColumn before any row
+        # shape mattered).
         lineup_row = conn.execute(
             text(
-                "SELECT lineup, lineup_json FROM frozen_lineups "
+                "SELECT lineup FROM frozen_lineups "
                 "WHERE slate_date = :sd ORDER BY frozen_at DESC, id DESC LIMIT 1"
             ),
             {"sd": slate_date},
@@ -130,9 +158,19 @@ def build_dossier(
             {"sd": slate_date},
         ).first()
 
-    # Read label corpus for scoring our entry and computing ceiling
+    # Read label corpus for scoring our entry and computing ceiling.
+    # read_slate_labels returns every slate; scope to this slate before either
+    # the committed lookup or the ceiling enumeration so the theoretical
+    # ceiling is drawn only from players who actually played this slate (a
+    # cross-slate pool would enumerate an impossible lineup) and so the
+    # label-coverage censoring threshold counts this slate's rows, not the
+    # whole season's.
     labels_df = read_slate_labels(engine=eng)
     if labels_df.is_empty():
+        return None
+
+    slate_rows = [row for row in labels_df.to_dicts() if row["slate_date"] == slate_date]
+    if not slate_rows:
         return None
 
     labels_by_player = {
@@ -141,19 +179,14 @@ def build_dossier(
             "card_boost": row.get("card_boost", 0.0),
             "team_key": row["team_key"],
         }
-        for row in labels_df.to_dicts()
+        for row in slate_rows
     }
 
     # Build our committed entry
     if lineup_row:
-        lineup_data = lineup_row.lineup_json or lineup_row.lineup
-        if isinstance(lineup_data, str):
-            try:
-                lineup_list = json.loads(lineup_data)
-            except (json.JSONDecodeError, TypeError):
-                return None
-        else:
-            lineup_list = lineup_data
+        lineup_list = _extract_player_ids(lineup_row.lineup)
+        if lineup_list is None:
+            return None
 
         our_values = []
         our_boosts = []
@@ -199,21 +232,21 @@ def build_dossier(
             censor_reason=winner_censor,
         )
 
-    # Build theoretical ceiling entry
+    # Build theoretical ceiling entry (slate-scoped pool only)
     pool_rows = [
         {
             "real_score": row["real_score"],
             "card_boost": row.get("card_boost", 0.0),
             "team_key": row["team_key"],
         }
-        for row in labels_df.to_dicts()
+        for row in slate_rows
         if row.get("real_score") is not None
     ]
 
     if pool_rows:
         ceiling_score = _realized_oracle(pool_rows, cap=team_cap)
         if ceiling_score > -1.0:
-            ceiling_censor = CensoringReason.INCOMPLETE_LABELS if len(labels_df) < 37 else None
+            ceiling_censor = CensoringReason.INCOMPLETE_LABELS if len(slate_rows) < 37 else None
             work.ceiling_entry = DossierEntry(
                 kind=EntryKind.THEORETICAL_CEILING,
                 score=ceiling_score,
