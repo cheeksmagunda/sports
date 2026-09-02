@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from collections.abc import Mapping
 
 from sqlalchemy import text
 
@@ -48,28 +47,50 @@ JOB1_IDENTITY_READ = text(
     WHERE slate_date = :slate_date
     """
 )
-SLATE_META_TIP_READ = text("SELECT first_tip_utc FROM slate_meta WHERE slate_date = :slate_date")
-
-
-def _decode_features(raw: object) -> dict:
-    if raw is None:
-        return {}
-    if isinstance(raw, str):
-        decoded = json.loads(raw)
-        if not isinstance(decoded, dict):
-            raise ValueError("job1_enrichment features_json must decode to an object")
-        return decoded
-    if isinstance(raw, Mapping):
+def _feature_mapping(raw: object) -> dict:
+    if isinstance(raw, dict):
         return dict(raw)
-    raise ValueError("job1_enrichment features_json must be an object")
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+    return {}
 
 
-def _as_utc(value: object) -> dt.datetime | None:
-    if isinstance(value, dt.datetime):
-        if value.tzinfo is None:
-            return value.replace(tzinfo=dt.UTC)
-        return value.astimezone(dt.UTC)
-    return parse_game_time(str(value or ""))
+def _preserve_tipped_identity(
+    rows: list[dict],
+    existing: list[tuple[object, object, object]],
+    *,
+    now_utc: dt.datetime,
+) -> list[dict]:
+    """Keep prior matchup identity after its authoritative game has started."""
+    existing_by_player = {
+        int(str(player_id)): (opponent, features) for player_id, opponent, features in existing
+    }
+    preserved: list[dict] = []
+    for row in rows:
+        updated = dict(row)
+        prior = existing_by_player.get(int(row["player_id"]))
+        if prior is None:
+            preserved.append(updated)
+            continue
+        old_opponent, old_features_raw = prior
+        old_features = _feature_mapping(old_features_raw)
+        game_start = parse_game_time(str(old_features.get("game_start_utc") or ""))
+        if game_start is None or game_start > now_utc:
+            preserved.append(updated)
+            continue
+        new_features = _feature_mapping(row.get("features_json"))
+        for key in ("game_id", "game_start_utc"):
+            if old_features.get(key):
+                new_features[key] = old_features[key]
+        updated["opponent"] = old_opponent
+        updated["features_json"] = json.dumps(new_features)
+        preserved.append(updated)
+    return preserved
 
 
 def _replace_enrichment(
@@ -77,7 +98,7 @@ def _replace_enrichment(
     slate_date: str,
     rows: list[dict],
     *,
-    captured_at: dt.datetime | None = None,
+    now_utc: dt.datetime | None = None,
 ) -> int:
     """Atomically promote one complete, validated slate capture.
 
@@ -90,44 +111,13 @@ def _replace_enrichment(
     fixture, so retain the established identity while refreshing non-identity
     signals.
     """
-    capture_time = captured_at or dt.datetime.now(dt.UTC)
-    first_tip = _as_utc(
-        conn.execute(SLATE_META_TIP_READ, {"slate_date": slate_date}).scalar_one_or_none()
-    )
-    slate_has_tipped = first_tip is not None and first_tip <= capture_time
-    previous = {
-        int(player_id): (str(opponent or ""), _decode_features(features_json))
-        for player_id, opponent, features_json in conn.execute(
-            JOB1_IDENTITY_READ, {"slate_date": slate_date}
-        )
-    }
-    rows_to_persist: list[dict] = []
-    for row in rows:
-        prior = previous.get(int(row["player_id"]))
-        if prior is None:
-            rows_to_persist.append(row)
-            continue
-        prior_opponent, prior_features = prior
-        prior_start = parse_game_time(str(prior_features.get("game_start_utc") or ""))
-        player_has_tipped = prior_start is not None and prior_start <= capture_time
-        if not player_has_tipped and not slate_has_tipped:
-            rows_to_persist.append(row)
-            continue
-
-        updated = dict(row)
-        updated_features = _decode_features(updated["features_json"])
-        for key in ("game_id", "game_start_utc"):
-            if prior_features.get(key):
-                updated_features[key] = prior_features[key]
-        if prior_opponent:
-            updated["opponent"] = prior_opponent
-        updated["features_json"] = json.dumps(updated_features)
-        rows_to_persist.append(updated)
-
+    current_time = now_utc or dt.datetime.now(dt.UTC)
+    existing = conn.execute(JOB1_IDENTITY_READ, {"slate_date": slate_date}).fetchall()
+    rows_to_write = _preserve_tipped_identity(rows, existing, now_utc=current_time)
     conn.execute(JOB1_DELETE_SLATE, {"slate_date": slate_date})
-    for row in rows_to_persist:
+    for row in rows_to_write:
         conn.execute(JOB1_UPSERT, row)
-    return len(rows_to_persist)
+    return len(rows_to_write)
 
 
 SLATE_META_UPSERT = text(
@@ -139,12 +129,7 @@ SLATE_META_UPSERT = text(
         CAST(:payload_json AS JSONB), now()
     )
     ON CONFLICT (slate_date) DO UPDATE SET
-        first_tip_utc = CASE
-            WHEN slate_meta.first_tip_utc IS NOT NULL
-                AND slate_meta.first_tip_utc <= now()
-            THEN slate_meta.first_tip_utc
-            ELSE EXCLUDED.first_tip_utc
-        END,
+        first_tip_utc = EXCLUDED.first_tip_utc,
         contest_lock_utc = EXCLUDED.contest_lock_utc,
         source = EXCLUDED.source,
         payload_json = EXCLUDED.payload_json,

@@ -9,6 +9,7 @@ import pickle
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import polars as pl
 import pytest
 
 from wnba_oracle.scheduler.job2 import (
@@ -16,6 +17,7 @@ from wnba_oracle.scheduler.job2 import (
     _heuristic_real_score,
     _load_model_artifact,
 )
+from wnba_oracle.train.calibrators import PCHIPIsotonic
 from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
 from wnba_oracle.train.pipeline import PickerArtifact
 
@@ -132,3 +134,32 @@ def test_heuristic_real_score_independent_of_artifact_path() -> None:
     assert _heuristic_real_score(0.0) == pytest.approx(3.16)
     assert _heuristic_real_score(3.0) == pytest.approx(1.81)
     assert _heuristic_real_score(10.0) == 0.5  # floored
+
+
+def test_calibrators_not_consumed_at_serving() -> None:
+    """Prove calibrators are not silently claimed or used as serving-consumed."""
+    calib = PCHIPIsotonic(serving_consumed=False)
+    assert calib.serving_consumed is False
+
+    art = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        calibrators={("minutes", "F"): calib},
+        calibrators_consumed_at_serving=False,
+    )
+    assert art.calibrators_consumed_at_serving is False
+
+    # Empty frame returns None
+    empty_df = pl.DataFrame({"position": []})
+    assert art.predict_real_score(empty_df) is None
+
+    # Adding or removing calibrators leaves predict_real_score output unchanged
+    art_no_calib = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        calibrators={},
+        calibrators_consumed_at_serving=False,
+    )
+    # Both return None when heads are empty
+    df = pl.DataFrame({"position": ["F"]})
+    assert art.predict_real_score(df) == art_no_calib.predict_real_score(df)

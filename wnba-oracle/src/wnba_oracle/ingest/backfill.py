@@ -206,7 +206,7 @@ def run_live_collect(*, dry_run: bool = False) -> int:
         return 1
 
     headers = asyncio.run(headers_or_capture(device_uuid, device_name))
-    contest_id = asyncio.run(discover_wnba_contest_id())
+    contest_id = asyncio.run(discover_wnba_contest_id(headers=headers))
     if contest_id is None:
         log.warning("no_active_wnba_contest_id")
         return 0

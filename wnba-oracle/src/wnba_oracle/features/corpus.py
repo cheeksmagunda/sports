@@ -54,6 +54,7 @@ def build_gamelog_corpus(
     game_logs: pl.DataFrame,
     *,
     min_prior_games: int = 1,
+    causal_dvp: bool = True,
 ) -> pl.DataFrame:
     """One row per player-game with causal features + per-game targets.
 
@@ -62,6 +63,12 @@ def build_gamelog_corpus(
     only if the player has ``>= min_prior_games`` earlier games (so every row
     carries real rolling history); the inner join on the as-of feature frame
     enforces ``>= 1`` and ``min_prior_games`` tightens it further.
+
+    ``causal_dvp=True`` computes each row's ``opp_dvp_*`` from games STRICTLY
+    BEFORE that row's ``game_date``, which is what job1 sees at serve time
+    (``wnba_game_logs`` only holds already-played games when it runs).
+    ``False`` restores the pre-fix season-wide map that included the row's own
+    game and later games.
     """
     if game_logs.is_empty():
         return pl.DataFrame()
@@ -94,9 +101,11 @@ def build_gamelog_corpus(
     # Notes:
     # - team_pace uses the current-season nba_api snapshot (season-stable,
     #   acceptable approximation for historical rows). Degrades to 0 on error.
-    # - opp_dvp is season-wide (not rolling) -- a mild data-leak but the
-    #   per-game noise dwarfs the signal anyway. Rolling DvP deferred.
-    corpus = _enrich_corpus_matchup(corpus, game_logs)
+    #   It is NOT point-in-time: nba_api exposes no as-of pace without one
+    #   network call per date, so this stays a known, documented leak.
+    # - opp_dvp is point-in-time when ``causal_dvp`` is set (games strictly
+    #   before each row's date); otherwise the legacy season-wide map.
+    corpus = _enrich_corpus_matchup(corpus, game_logs, causal_dvp=causal_dvp)
 
     if min_prior_games > 1:
         corpus = corpus.filter(pl.col("season_game_number") > min_prior_games)
@@ -112,12 +121,20 @@ def build_gamelog_corpus(
     return corpus
 
 
-def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.DataFrame:
+def _enrich_corpus_matchup(
+    corpus: pl.DataFrame,
+    game_logs: pl.DataFrame,
+    *,
+    causal_dvp: bool = False,
+) -> pl.DataFrame:
     """Add team_pace / opp_pace / game_pace_implied / opp_dvp_* to corpus rows.
 
-    Uses nba_api for pace (current-season snapshot) and computes DvP as
-    season-wide mean real_score allowed per opponent from the game_logs. Both
-    degrade gracefully to 0 if the data source is unavailable.
+    Uses nba_api for pace (current-season snapshot) and computes DvP as mean
+    real_score allowed per opponent from the game_logs. With ``causal_dvp`` the
+    DvP for a row is computed only from games dated strictly before that row's
+    ``game_date`` (requires ``game_date`` on both frames); otherwise it is the
+    season-wide map over every game in ``game_logs``. Both degrade gracefully
+    to 0 if the data source is unavailable.
     """
     # -- team pace from nba_api --
     team_pace: dict[str, float] = {}
@@ -148,19 +165,26 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
             if col not in corpus.columns:
                 corpus = corpus.with_columns(pl.lit(0.0).alias(col))
 
-    # -- opp_dvp from game_logs (season-wide mean real_score allowed per opponent) --
-    dvp_map: dict[str, float] = {}
-    if game_logs is not None:
-        try:
-            dvp_map = compute_opp_dvp_map(game_logs)
-            log.info("corpus_dvp_computed", n_teams=len(dvp_map))
-        except Exception as exc:
-            log.warning("corpus_dvp_failed", error=str(exc))
-
+    # -- opp_dvp from game_logs (mean real_score allowed per opponent) --
     for col in ("opp_dvp_guard", "opp_dvp_forward", "opp_dvp_center"):
         if col not in corpus.columns:
             corpus = corpus.with_columns(pl.lit(0.0).alias(col))
-    if dvp_map and has_opp:
+    if game_logs is None or game_logs.is_empty() or not has_opp:
+        return corpus
+
+    if causal_dvp:
+        if "game_date" in corpus.columns and "game_date" in game_logs.columns:
+            return _apply_causal_dvp(corpus, game_logs)
+        log.warning("corpus_dvp_causal_unavailable", reason="game_date_missing")
+        return corpus
+
+    dvp_map: dict[str, float] = {}
+    try:
+        dvp_map = compute_opp_dvp_map(game_logs)
+        log.info("corpus_dvp_computed", n_teams=len(dvp_map))
+    except Exception as exc:
+        log.warning("corpus_dvp_failed", error=str(exc))
+    if dvp_map:
         dvp_expr = pl.col("opponent").map_elements(
             lambda o: dvp_map.get(str(o).upper(), 0.0), return_dtype=pl.Float64
         )
@@ -171,6 +195,45 @@ def _enrich_corpus_matchup(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.
         )
 
     return corpus
+
+
+def _apply_causal_dvp(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.DataFrame:
+    """Point-in-time DvP: for each corpus date, the per-opponent map is built
+    from ``game_logs`` rows with ``game_date`` strictly before that date, then
+    joined back on ``(game_date, opponent)``. Rows whose opponent has no prior
+    games keep 0.0, matching the serve-time miss value.
+    """
+    dates = sorted({d for d in corpus.get_column("game_date").to_list() if d})
+    lookup_rows: list[dict[str, object]] = []
+    n_dates_with_map = 0
+    for d in dates:
+        prior = game_logs.filter(pl.col("game_date") < d)
+        try:
+            dvp_map = compute_opp_dvp_map(prior) if not prior.is_empty() else {}
+        except Exception as exc:
+            log.warning("corpus_dvp_failed", error=str(exc), as_of=d)
+            dvp_map = {}
+        if dvp_map:
+            n_dates_with_map += 1
+        for opp, val in dvp_map.items():
+            lookup_rows.append({"game_date": d, "_dvp_opp": str(opp).upper(), "_dvp": float(val)})
+    log.info("corpus_dvp_computed_causal", n_dates=len(dates), n_dates_with_map=n_dates_with_map)
+    if not lookup_rows:
+        return corpus
+    lookup = pl.from_dicts(
+        lookup_rows,
+        schema={"game_date": pl.Utf8, "_dvp_opp": pl.Utf8, "_dvp": pl.Float64},
+    )
+    joined = (
+        corpus.with_columns(pl.col("opponent").cast(pl.Utf8).str.to_uppercase().alias("_dvp_opp"))
+        .join(lookup, on=["game_date", "_dvp_opp"], how="left")
+        .with_columns(pl.col("_dvp").fill_null(0.0))
+    )
+    return joined.with_columns(
+        pl.col("_dvp").alias("opp_dvp_guard"),
+        pl.col("_dvp").alias("opp_dvp_forward"),
+        pl.col("_dvp").alias("opp_dvp_center"),
+    ).drop(["_dvp_opp", "_dvp"])
 
 
 def build_label_corpus(label_df: pl.DataFrame) -> pl.DataFrame:

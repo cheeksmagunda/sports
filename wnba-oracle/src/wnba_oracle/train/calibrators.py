@@ -20,8 +20,15 @@ from scipy.interpolate import PchipInterpolator
 
 @dataclass
 class PCHIPIsotonic:
+    """Monotone CDF interpolator for offline calibration analysis.
+
+    Note: Calibrators are fitted for offline diagnostics/evaluation and are NOT
+    consumed during production serving (serving_consumed=False).
+    """
+
     x: np.ndarray | None = None
     y: np.ndarray | None = None
+    serving_consumed: bool = False
 
     def fit(self, x_raw: np.ndarray, y_true: np.ndarray, n_knots: int = 20) -> None:
         if x_raw.size == 0:

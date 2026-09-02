@@ -730,33 +730,30 @@ async def fetch_contest_meta(
     return r.json() or {}
 
 
-async def _select_wnba_contest_id(
-    contest_ids: list[int],
+def _validated_wnba_contest_id(
+    seen_ids: list[int],
     headers: RequestHeaders,
-    client: httpx.AsyncClient,
+    client: httpx.Client,
 ) -> int | None:
-    """Return the newest observed contest whose metadata confirms WNBA."""
-    for contest_id in sorted(set(contest_ids), reverse=True):
+    """Return the newest observed contest that the stats endpoint confirms is WNBA."""
+    from wnba_oracle.ingest.contest_stats import ContestUnavailable, fetch_contest_stats
+
+    for contest_id in sorted(set(seen_ids), reverse=True):
         try:
-            meta = await fetch_contest_meta(contest_id, headers, client)
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code in {403, 404}:
-                continue
-            raise
-        contest = meta.get("info", {}).get("contest", {})
-        if contest.get("sport") == SPORT:
-            return contest_id
+            fetch_contest_stats(contest_id, headers, client)
+        except ContestUnavailable:
+            continue
+        return contest_id
     return None
 
 
-async def discover_wnba_contest_id() -> int | None:
+async def discover_wnba_contest_id(headers: RequestHeaders | None = None) -> int | None:
     """Headless-browse realsports.io/?sport=wnba and capture the contest id
     from the /games/playerratingcontest/{id} URL the SPA hits.
 
-    Returns the newest contest id whose metadata confirms it is WNBA, or None
-    if no observed contest validates.
-    Cheap to call (one Playwright session, ~5s); Job 1 calls it once per
-    fire to seed the day's contest id into Redis.
+    Returns the newest int contest id that the stats endpoint confirms is WNBA,
+    or None if no such contest is observed. The browse can surface contests from
+    other sports, even after selecting WNBA in the SPA.
     """
     if not STORAGE_STATE_PATH.exists():
         raise StorageStateMissing(f"{STORAGE_STATE_PATH} not found; cannot discover contest id.")
@@ -800,9 +797,10 @@ async def discover_wnba_contest_id() -> int | None:
 
     if not seen_ids:
         return None
-    headers = await headers_or_capture(
-        os.environ.get("WNBA_DEVICE_UUID", "wnba-oracle-prod-01-device"),
-        os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-prod-01"),
-    )
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        return await _select_wnba_contest_id(seen_ids, headers, client)
+    if headers is None:
+        headers = await headers_or_capture(
+            os.environ.get("WNBA_DEVICE_UUID", "wnba-oracle-prod-01-device"),
+            os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-prod-01"),
+        )
+    with httpx.Client(timeout=20.0) as client:
+        return _validated_wnba_contest_id(seen_ids, headers, client)
