@@ -88,16 +88,17 @@ reports persisted aggregate evidence, not provider health; missing evidence is
 degraded or unknown and must not be interpreted as proof that an upstream
 service was available.
 
-## Contextual lineup balance
+## Diversification-first lineup policy
 
-The optimizer evaluates unrestricted, game-balanced, and team-balanced
-candidates in one deterministic scan over the same simulated outcomes. On a
-metadata-complete slate, it prefers the strongest balanced candidate when its
-objective is within `OPTIMIZER_CONTEXTUAL_STACK_EV_MARGIN` of the unrestricted
-winner. A larger modeled advantage may still justify concentration and is
-recorded as `contextual_ev_override`.
+The optimizer uses a hard diversification policy. It selects from feasible
+lineup shapes that cap same-game exposure and spread players across teams. On a
+metadata-complete slate it prefers the strongest balanced candidate; the
+selected shape is always one of the permitted diversification shapes. There is
+no additive bonus for stacking, and concentration beyond the allowed shapes is
+not selectable. Every freeze stores a versioned `stack_decision` with the
+selected composition, permitted alternatives, objective value, and reason.
 
-The soft targets are slate-aware:
+The permitted shapes are slate-aware:
 
 - One game: use the available matchup and prefer both teams.
 - Two games: use both games, cap the preferred game count at three, and prefer
@@ -106,17 +107,13 @@ The soft targets are slate-aware:
   four teams.
 
 Real Sports game IDs are the primary matchup identity. Reciprocal team and
-opponent metadata is a validated fallback. Incomplete identity disables the
-balance preference for that slate and records `metadata_incomplete`; it never
-fabricates a matchup. Every freeze stores a versioned `stack_decision` with the
-selected composition, balanced alternatives, objective sacrifice, threshold,
-and reason. Set `OPTIMIZER_CONTEXTUAL_STACKING_ENABLED=false` to restore the
-legacy fixed-bonus objective.
+opponent metadata is a validated fallback. Incomplete identity disables shape
+selection for that slate and records `metadata_incomplete`; it never fabricates
+a matchup.
 
 Use `scripts/analyze_stacking_decisions.py` for a read-only production summary.
 The report separates exact, censored, and unknown outcomes and does not infer a
-performance advantage from unresolved placements. The design and evidence
-limits are documented in `../drive/2026-08-25-wnba-contextual-stacking.md`.
+performance advantage from unresolved placements.
 
 ## Model research benchmark
 

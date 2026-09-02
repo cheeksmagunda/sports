@@ -83,7 +83,9 @@ def test_game_stack_bonus_on_does_not_override_hard_policy() -> None:
     """A positive legacy bonus must not re-enable concentrated lineups."""
     samps, fields = _flat_pair(n_games=4)
     curve = default_curve_for_regime("top_20")
-    cfg = OptimizeConfig(top_n_filter=24, n_samples=200, n_field_lineups=20, seed=11, max_per_team=2)
+    cfg = OptimizeConfig(
+        top_n_filter=24, n_samples=200, n_field_lineups=20, seed=11, max_per_team=2
+    )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     assert len(rec.player_ids) == 5
 
