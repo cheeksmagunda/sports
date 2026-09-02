@@ -1,7 +1,10 @@
 # Model + picker config. Packaged with the train pipeline.
 # Hyperparameters live here, not in code.
 
-# Cohort split. Single positional cohort per the Step 4 / Part 4 decision.
+# Cohort split: G/F/C are scaffolding only. The production model is
+# intentionally pooled-F pending a trustworthy position source. We do not ship
+# real G or C heads; this keeps the artifact contract explicit and avoids
+# silent cohort drift.
 cohorts:
   - G
   - F
