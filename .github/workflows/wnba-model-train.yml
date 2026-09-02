@@ -1,0 +1,65 @@
+name: wnba-model-train
+
+on:
+  workflow_dispatch:
+    inputs:
+      refit_full:
+        description: Refit the final model on all eligible data
+        required: false
+        type: boolean
+        default: true
+      commit:
+        description: Commit or ref to train from
+        required: false
+        type: string
+        default: main
+      artifact_name:
+        description: Artifact name for uploaded training outputs
+        required: false
+        type: string
+        default: wnba-model-artifact
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ inputs.commit }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Prepare TLS certificate
+        env:
+          PG_SSL_ROOT_CERT: ${{ secrets.PG_SSL_ROOT_CERT }}
+        run: |
+          umask 077
+          printf '%s' "$PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
+
+      - name: Train model
+        working-directory: wnba-oracle
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
+        run: |
+          SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+          uv run --frozen --package wnba-oracle oracle-train \
+            --refit-full \
+            --commit "$SHORT_SHA" \
+            --metrics-path "$RUNNER_TEMP/train_metrics.json"
+
+      - name: Upload training artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: |
+            wnba-oracle/models/*.pkl
+            wnba-oracle/models/*.sha256
+            ${{ runner.temp }}/train_metrics.json
+          if-no-files-found: error
+          retention-days: 30

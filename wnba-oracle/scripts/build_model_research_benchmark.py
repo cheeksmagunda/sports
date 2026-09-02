@@ -34,7 +34,7 @@ Output files are written atomically (temp file + os.replace) into
 
 Usage:
   DATABASE_URL=$DATABASE_PUBLIC_URL uv run python \
-      scripts/build_model_research_benchmark.py --output-dir /tmp/bench \
+      scripts/build_model_research_benchmark.py --output-dir ./bench \
       [--temperature-variants 4] [--n-samples 80] [--max-slates N]
 """
 
@@ -118,6 +118,12 @@ def build_variant_grid(n_temperature_variants: int) -> list[dict[str, Any]]:
         for t in temperature_values(n_temperature_variants)
     )
     return grid
+
+
+def artifact_override_variants(artifact_path: str | None, label: str) -> list[dict[str, Any]]:
+    if not artifact_path:
+        return []
+    return [{"name": label, "overrides": {"artifact_path": artifact_path}, "sigma_scale": 1.0}]
 
 
 def _coerce_override_value(raw: str) -> Any:
