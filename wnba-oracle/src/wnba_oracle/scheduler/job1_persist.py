@@ -107,6 +107,11 @@ def _replace_enrichment(
     The transaction first removes the prior slate snapshot and then writes the
     new rows. Callers must run ``pool_sanity`` before invoking this helper, so a
     partial upstream response never mixes fresh timestamps with stale players.
+
+    Once a player's stored game has tipped, its opponent and provider game
+    identity belong to that slate. A later pool can contain the player's next
+    fixture, so retain the established identity while refreshing non-identity
+    signals.
     """
     current_time = now_utc or dt.datetime.now(dt.UTC)
     existing = conn.execute(JOB1_IDENTITY_READ, {"slate_date": slate_date}).fetchall()

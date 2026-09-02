@@ -12,14 +12,9 @@ CAPTURE_WINDOW_BEFORE_LOCK) -- that's fine, it exists to move measured
 ownership from next-day to same-hour for the calibration loop and any late
 re-freeze, not to change today's own freeze decision.
 
-`ingest.realsports.discover_wnba_contest_id` returns only `max(seen_ids)`,
-which silently picks the wrong sport once more than two sports are active on
-the account at once (observed 2026-08-30: a max-id soccer contest sat above
-the real WNBA one). `_discover_and_capture` below tries every id observed
-during the same browse, highest first, and uses whichever one first
-validates as an available WNBA contest -- the existing single-shot discovery
-is left as-is elsewhere since day-close's own windowed backfill already
-tolerates it by scanning a range, not trusting one id.
+`ingest.realsports.discover_wnba_contest_id` validates the sport of every
+observed contest id before returning the newest WNBA contest. This module
+therefore needs only to capture that single validated contest.
 
 Every failure mode here (missing session, network, ambiguous discovery,
 timeout) must degrade to a no-op: this runs inside job2's dispatch and must
@@ -55,75 +50,29 @@ def should_attempt_capture(*, now_utc: dt.datetime, lock_time: dt.datetime | Non
 async def _discover_and_capture() -> dict[str, object]:
     from wnba_oracle.ingest.contest_stats import ContestUnavailable, fetch_contest_stats
     from wnba_oracle.ingest.realsports import (
-        DEFAULT_USER_AGENT,
-        STORAGE_STATE_PATH,
-        StorageStateMissing,
+        discover_wnba_contest_id,
         headers_or_capture,
     )
     from wnba_oracle.scheduler.job1 import _device_name, _device_uuid
 
-    if not STORAGE_STATE_PATH.exists():
-        raise StorageStateMissing(f"{STORAGE_STATE_PATH} not found")
-
-    from playwright.async_api import async_playwright
-
-    seen_ids: list[int] = []
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
-        ctx = await browser.new_context(
-            viewport={"width": 599, "height": 868},
-            storage_state=str(STORAGE_STATE_PATH),
-            user_agent=DEFAULT_USER_AGENT,
-        )
-
-        def on_req(req: object) -> None:
-            url = getattr(req, "url", "")
-            if "/games/playerratingcontest/" not in url:
-                return
-            try:
-                tail = url.split("/games/playerratingcontest/")[1]
-                cid = int(tail.split("?")[0].split("/")[0])
-                if cid not in seen_ids:
-                    seen_ids.append(cid)
-            except (ValueError, IndexError):
-                pass
-
-        page = await ctx.new_page()
-        page.on("request", on_req)
-        try:
-            await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=15000)
-            await page.evaluate("localStorage.setItem('selectedSport', 'wnba');")
-            await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=15000)
-            await page.wait_for_timeout(3000)
-            try:
-                await page.locator("text=/WNBA/i").first.click(timeout=3000)
-                await page.wait_for_timeout(2500)
-            except Exception:
-                pass
-        except Exception:
-            pass
-        await browser.close()
-
-    if not seen_ids:
-        return {"status": "no_contest_id_observed"}
-
     headers = await headers_or_capture(_device_uuid(), _device_name())
+    contest_id = await discover_wnba_contest_id(headers=headers)
+    if contest_id is None:
+        return {"status": "no_contest_id_observed"}
 
     import httpx
 
     with httpx.Client(timeout=20.0) as client:
-        for cid in sorted(seen_ids, reverse=True):
-            try:
-                labels = fetch_contest_stats(cid, headers, client)
-            except ContestUnavailable:
-                continue
-            if not labels:
-                return {"status": "pregame_empty", "contest_id": cid}
-            from wnba_oracle.ingest.backfill import persist_labels
+        try:
+            labels = fetch_contest_stats(contest_id, headers, client)
+        except ContestUnavailable:
+            return {"status": "no_wnba_contest_validated", "contest_id": contest_id}
+        if not labels:
+            return {"status": "pregame_empty", "contest_id": contest_id}
+        from wnba_oracle.ingest.backfill import persist_labels
 
-            n_persisted = persist_labels(labels)
-            return {"status": "captured", "contest_id": cid, "n_players": n_persisted}
-    return {"status": "no_wnba_contest_validated", "candidates": seen_ids}
+        n_persisted = persist_labels(labels)
+        return {"status": "captured", "contest_id": contest_id, "n_players": n_persisted}
 
 
 def capture_live_ownership_safe(*, now_utc: dt.datetime, lock_time: dt.datetime | None) -> None:

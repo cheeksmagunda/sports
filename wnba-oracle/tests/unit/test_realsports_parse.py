@@ -107,5 +107,5 @@ def test_contest_discovery_skips_newer_non_wnba_contests() -> None:
             MagicMock(),
             MagicMock(),
         )
-
+    assert contest_id == 2117
     assert contest_id == 2117

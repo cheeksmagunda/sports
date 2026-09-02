@@ -11,6 +11,9 @@ from __future__ import annotations
 import datetime as dt
 from unittest.mock import patch
 
+import pytest
+
+from wnba_oracle.ingest import contest_stats, realsports
 from wnba_oracle.scheduler import live_ownership as lo
 
 LOCK = dt.datetime(2026, 8, 30, 18, 0, tzinfo=dt.UTC)
@@ -80,3 +83,21 @@ def test_safe_wrapper_logs_successful_result() -> None:
     log.info.assert_called_once_with(
         "live_ownership_capture", status="captured", contest_id=2117, n_players=30
     )
+
+
+@pytest.mark.asyncio
+async def test_capture_uses_shared_validated_contest_discovery(monkeypatch) -> None:
+    expected_headers = object()
+
+    async def fake_headers(*_args: object) -> object:
+        return expected_headers
+
+    async def fake_discover(*, headers: object) -> int:
+        assert headers is expected_headers
+        return 2117
+
+    monkeypatch.setattr(realsports, "headers_or_capture", fake_headers)
+    monkeypatch.setattr(realsports, "discover_wnba_contest_id", fake_discover)
+    monkeypatch.setattr(contest_stats, "fetch_contest_stats", lambda *_args: [])
+
+    assert await lo._discover_and_capture() == {"status": "pregame_empty", "contest_id": 2117}
