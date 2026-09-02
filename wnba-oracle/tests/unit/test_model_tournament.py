@@ -3,7 +3,10 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+
+import numpy as np
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "model_tournament.py"
 
@@ -145,10 +148,46 @@ def test_tournament_computes_real_paired_metrics(tmp_path: Path, monkeypatch) ->
     top10 = payload["variants"][0]["summary"]["top_k_player_capture"]["10"]
     assert top10["hit_distribution"]["5"] == 4  # all 4 baseline rows hit 5/5
 
+    # Challenger genuinely diverges on every slate here, so no false-tie
+    # warning should fire.
+    assert payload["identical_predictions_warning"] is False
+
     report = (out / "TOURNAMENT_REPORT.md").read_text()
     assert "Model Tournament Report" in report
     assert "challenger_1 vs baseline" in report
     assert "boilerplate" not in report.lower()
+    assert "WARNING" not in report
+
+
+def test_identical_predictions_warning_flags_all_tied_slates() -> None:
+    module = _load_module()
+
+    tied_comparison = [
+        {
+            "challenger": "challenger_1",
+            "baseline": "baseline",
+            "slates": [
+                {"slate_date": "2026-06-01", "committed_order_score_delta": 0.0},
+                {"slate_date": "2026-06-02", "committed_order_score_delta": 0.0},
+            ],
+        }
+    ]
+    assert module.identical_predictions_warning(tied_comparison) is True
+
+    mixed_comparison = [
+        {
+            "challenger": "challenger_1",
+            "baseline": "baseline",
+            "slates": [
+                {"slate_date": "2026-06-01", "committed_order_score_delta": 0.0},
+                {"slate_date": "2026-06-02", "committed_order_score_delta": 2.5},
+            ],
+        }
+    ]
+    assert module.identical_predictions_warning(mixed_comparison) is False
+
+    assert module.identical_predictions_warning([]) is False
+    assert module.identical_predictions_warning([{"slates": []}]) is False
 
 
 def test_sign_test_and_bootstrap_are_real_statistics() -> None:
@@ -164,6 +203,176 @@ def test_sign_test_and_bootstrap_are_real_statistics() -> None:
     assert ci["mean"] == 3.0
     assert ci["ci_low"] < 3.0 < ci["ci_high"]
     assert module.bootstrap_ci_mean([]) is None
+
+
+_POOL_PLAYER_IDS = (10, 11, 12, 13, 14, 15)
+
+
+class _FakeArtifact:
+    """Minimal duck-typed stand-in for a trained ``PickerArtifact``.
+
+    ``model_tournament.py``'s offline CSV corpus (``_precompute_slates``)
+    builds ``enrichment`` rows with no ``head_features``, so
+    ``job2_model._predict_heads_for_pool`` always returns ``{}`` in this
+    harness regardless of which artifact is loaded (the D63/D69 head tier
+    only ever fires against live ``job1_enrichment`` feature rows). The next
+    tier down the prediction ladder, the EB baseline
+    (``modeling.artifact.eb_predict_one``), IS driven by
+    ``artifact.eb_baseline`` and is exactly as artifact-specific -- so this
+    fake carries a distinct ``eb_baseline`` per instance to prove the same
+    ``job2._load_model_artifact`` swap this harness performs actually
+    changes which model answers the per-player prediction, end to end
+    through ``precompute_pool_for_artifact`` and ``_run_variant``.
+    """
+
+    def __init__(self, prediction: float) -> None:
+        self.heads: dict[Any, Any] = {}
+        self.feature_module_sha = f"fake-{prediction}"
+        self.training_rows = 1
+        self.eb_baseline = SimpleNamespace(
+            cohort_means={"F": prediction},
+            player_alpha=dict.fromkeys(_POOL_PLAYER_IDS, 0.0),
+        )
+
+    def predict_real_score(self, frame: Any) -> dict[str, np.ndarray] | None:
+        return None
+
+
+def _write_divergence_csv_fixtures(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A single slate, 6 players split across two teams -- enough for
+    ``_build_specs`` to produce >=5 sampling specs and for the optimizer to
+    have a real choice to make."""
+    labels = tmp_path / "slate_labels.csv"
+    leaderboards = tmp_path / "contest_leaderboards.csv"
+    identity = tmp_path / "game_identity.csv"
+
+    label_rows = [
+        "1,2026-06-01,main,10,Player Ten,MIN,0.1,50.0,8.0,2026-06-02",
+        "1,2026-06-01,main,11,Player Eleven,MIN,0.1,50.0,9.0,2026-06-02",
+        "1,2026-06-01,main,12,Player Twelve,MIN,0.1,50.0,10.0,2026-06-02",
+        "1,2026-06-01,main,13,Player Thirteen,LVA,0.1,50.0,11.0,2026-06-02",
+        "1,2026-06-01,main,14,Player Fourteen,LVA,0.1,50.0,12.0,2026-06-02",
+        "1,2026-06-01,main,15,Player Fifteen,LVA,0.1,50.0,13.0,2026-06-02",
+    ]
+    labels.write_text(
+        "contest_id,slate_date,section,platform_player_id,display_name,"
+        "team_key,card_boost,drafts,real_score,ingested_at\n" + "\n".join(label_rows) + "\n"
+    )
+
+    lb_rows = [
+        f"1,2026-06-01,{100 + i},{i},{i},u{i},{60.0 - i},[],20,2026-06-02" for i in range(1, 6)
+    ]
+    leaderboards.write_text(
+        "contest_id,slate_date,entry_id,rank,paged_rank,user_id,score,"
+        "lineup,num_brawlers,ingested_at\n" + "\n".join(lb_rows) + "\n"
+    )
+
+    id_rows = [
+        "2026-06-01,10,MIN,LVA,g1",
+        "2026-06-01,11,MIN,LVA,g1",
+        "2026-06-01,12,MIN,LVA,g1",
+        "2026-06-01,13,LVA,MIN,g1",
+        "2026-06-01,14,LVA,MIN,g1",
+        "2026-06-01,15,LVA,MIN,g1",
+    ]
+    identity.write_text(
+        "slate_date,real_sports_player_id,team,opponent,game_id\n" + "\n".join(id_rows) + "\n"
+    )
+    return labels, leaderboards, identity
+
+
+def test_artifact_swap_produces_divergent_predictions(tmp_path: Path, monkeypatch) -> None:
+    """Regression test for the real artifact-swap mechanism.
+
+    Unlike ``test_tournament_computes_real_paired_metrics`` (which
+    monkeypatches ``run_variant`` itself and never touches the artifact
+    swap), this drives two genuinely different fake ``PickerArtifact``
+    objects through the REAL ``precompute_pool_for_artifact`` -> ``_build_specs``
+    -> ``job2_model._predict_heads_for_pool`` -> ``_run_variant`` path,
+    exactly as ``run_variant`` composes them (minus the disk load of the
+    .pkl, which is a separate, already-covered concern). If the
+    ``job2._load_model_artifact`` monkeypatch in ``precompute_pool_for_artifact``
+    were broken -- e.g. patched the wrong module reference, or leaked the
+    same artifact into both variants -- this test would see byte-identical
+    predicted scores across every paired slate and fail.
+    """
+    module = _load_module()
+    # Offline CSV mode: no DATABASE_URL at all (a set-but-unreachable URL
+    # still gets dialed by best-effort DB lookups like slate label names).
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("PAYOUT_REGIME", "top_20")
+    monkeypatch.setenv("OPTIMIZER_MAX_PER_TEAM", "2")
+    monkeypatch.setenv("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
+    for alias, value in module.benchmark.production_env_overrides().items():
+        monkeypatch.setenv(alias, value)
+
+    from wnba_oracle.common.settings import get_settings
+    from wnba_oracle.scheduler.job2 import build_model_policy
+
+    policy = build_model_policy(get_settings())
+
+    labels_csv, leaderboards_csv, game_identity_csv = _write_divergence_csv_fixtures(tmp_path)
+
+    baseline_art = _FakeArtifact(prediction=10.0)
+    challenger_art = _FakeArtifact(prediction=40.0)
+
+    kwargs = {
+        "max_slates": None,
+        "labels_csv": labels_csv,
+        "leaderboards_csv": leaderboards_csv,
+        "game_identity_csv": game_identity_csv,
+        "policy": policy,
+    }
+    baseline_pool, baseline_drops = module.precompute_pool_for_artifact(baseline_art, **kwargs)
+    challenger_pool, challenger_drops = module.precompute_pool_for_artifact(
+        challenger_art, **kwargs
+    )
+
+    assert baseline_pool, f"no eligible slates in baseline pool (drops={baseline_drops})"
+    assert challenger_pool, f"no eligible slates in challenger pool (drops={challenger_drops})"
+    assert set(baseline_pool) == set(challenger_pool)
+
+    # The swap must actually change which model answered the per-player
+    # prediction: the projected real_score for each player must differ
+    # between pools (this is what would silently converge if both variants
+    # fell through to the same heuristic).
+    for sd in baseline_pool:
+        base_rs = baseline_pool[sd]["rs_by"]
+        chal_rs = challenger_pool[sd]["rs_by"]
+        # rs_by carries the ACTUAL labeled real_score (ground truth), which
+        # is identical for both pools by construction -- the divergence we
+        # care about lives in the sampling specs (what each artifact
+        # predicted), not the labels.
+        assert base_rs == chal_rs
+        base_specs = {s.player_id: s.mu for s in baseline_pool[sd]["samps"]}
+        chal_specs = {s.player_id: s.mu for s in challenger_pool[sd]["samps"]}
+        assert set(base_specs) == set(chal_specs)
+        assert base_specs != chal_specs, (
+            "baseline and challenger artifacts produced byte-identical "
+            "sampling means -- the artifact swap did not take effect"
+        )
+
+    baseline_rows, _, _ = module.benchmark._run_variant(
+        {"name": "baseline", "overrides": {}, "sigma_scale": 1.0},
+        baseline_pool,
+        80,
+        policy.optimizer,
+    )
+    challenger_rows, _, _ = module.benchmark._run_variant(
+        {"name": "challenger_1", "overrides": {}, "sigma_scale": 1.0},
+        challenger_pool,
+        80,
+        policy.optimizer,
+    )
+    assert baseline_rows and challenger_rows
+    base_scores = {r["slate_date"]: r["committed_order_score"] for r in baseline_rows}
+    chal_scores = {r["slate_date"]: r["committed_order_score"] for r in challenger_rows}
+    assert set(base_scores) == set(chal_scores)
+    assert base_scores != chal_scores, (
+        "baseline and challenger produced byte-identical committed_order_score "
+        "across every paired slate -- indistinguishable from a broken "
+        "artifact swap silently converging on the same heuristic fallback"
+    )
 
 
 def test_missing_database_url_fails_closed_without_csvs(tmp_path: Path, monkeypatch) -> None:

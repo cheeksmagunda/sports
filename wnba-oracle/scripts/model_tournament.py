@@ -175,6 +175,27 @@ def bootstrap_ci_mean(
     }
 
 
+def identical_predictions_warning(comparisons: list[dict[str, Any]]) -> bool:
+    """True when a challenger's committed-order score is byte-identical to
+    baseline's on every paired slate.
+
+    A real challenger artifact can legitimately tie baseline occasionally,
+    but tying on EVERY slate is far more consistent with a broken
+    artifact-swap (e.g. both variants silently falling through to the same
+    heuristic prediction, see job2_model._predict_heads_for_pool) than with
+    a genuine no-difference result. This does not fail the tournament --
+    it flags the result for a human to check the artifact-loading path
+    rather than trust a "no difference" conclusion at face value.
+    """
+    for comparison in comparisons:
+        slates = comparison.get("slates") or []
+        if not slates:
+            continue
+        if all(s["committed_order_score_delta"] == 0.0 for s in slates):
+            return True
+    return False
+
+
 def build_comparisons(variants: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Paired baseline-vs-challenger comparisons with a sign test and
     bootstrap CI layered on top of ``build_model_research_benchmark``'s
@@ -217,6 +238,19 @@ def render_report(result: dict[str, Any]) -> str:
         + ".",
         "",
     ]
+    if result.get("identical_predictions_warning"):
+        lines.extend(
+            [
+                "**WARNING**: at least one challenger produced byte-identical "
+                "committed-order scores to baseline on every paired slate. "
+                "This can be a genuine tie, but is also the signature of a "
+                "broken artifact swap (both variants silently falling "
+                "through to the same heuristic prediction) -- verify the "
+                "artifact-loading path before trusting this as a real "
+                "no-difference result.",
+                "",
+            ]
+        )
     lines.append(
         "| variant | artifact | eligible slates | dropped | top 20 | top 5 | top 1 "
         "| mean gap vs top 1 | payout capture |"
@@ -368,6 +402,17 @@ def main() -> int:
         )
 
     comparisons = build_comparisons(variants)
+    identical_warning = identical_predictions_warning(comparisons)
+    if identical_warning:
+        print(
+            "WARNING: at least one challenger produced byte-identical "
+            "committed_order_score to baseline on every paired slate. This "
+            "can be a genuine tie, but is also the signature of a broken "
+            "artifact swap (both variants falling through to the same "
+            "heuristic prediction) -- verify the artifact-loading path "
+            "before trusting a no-difference conclusion.",
+            file=sys.stderr,
+        )
     result = {
         "meta": {
             "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
@@ -380,6 +425,7 @@ def main() -> int:
         },
         "variants": variants,
         "comparisons": comparisons,
+        "identical_predictions_warning": identical_warning,
     }
 
     benchmark.atomic_write_text(
