@@ -22,7 +22,11 @@ from datetime import date, datetime
 import polars as pl
 
 from wnba_oracle.common.logging import get_logger
-from wnba_oracle.features.game_features import compute_opp_dvp_map, to_nba_api_schema
+from wnba_oracle.features.game_features import (
+    compute_opp_dvp_map,
+    compute_team_pace_map,
+    to_nba_api_schema,
+)
 from wnba_oracle.features.rolling import build_rolling_features
 
 log = get_logger("oracle.features.serving")
@@ -229,3 +233,15 @@ def build_opp_dvp_lookup(game_logs: pl.DataFrame) -> dict[str, float]:
     on a constant (0) is effectively disabled; any signal helps.
     """
     return compute_opp_dvp_map(game_logs)
+
+
+def build_team_pace_lookup(game_logs: pl.DataFrame) -> dict[str, float]:
+    """Compute per-team possessions per 40 minutes (pace) from game_logs.
+
+    D108 (pace causality fix): uses game_logs as-of the serve date to compute
+    point-in-time team pace (only games strictly before the slate date).
+    When job1 calls this, game_logs only contains already-played games, so
+    the computation is causal by construction. Same shared function used by
+    the corpus so train/serve pace computations never drift apart.
+    """
+    return compute_team_pace_map(game_logs)

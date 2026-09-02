@@ -28,12 +28,12 @@ from wnba_oracle.db.engine import get_engine
 from wnba_oracle.features.serving_features import (
     build_head_feature_lookup,
     build_opp_dvp_lookup,
+    build_team_pace_lookup,
 )
 from wnba_oracle.features.serving_features import lookup as head_feature_lookup
 from wnba_oracle.ingest.identity import build_resolver
 from wnba_oracle.ingest.minutes_features import (
     build_minutes_features,
-    fetch_wnba_team_stats,
     lookup,
 )
 from wnba_oracle.ingest.odds import (
@@ -470,15 +470,39 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         log.warning("job1_resolver_failed", reason=str(exc)[:120])
         resolver = None
 
-    # D74 (R8 first-pass): WNBA team pace + defensive ratings from nba_api.
-    # Injected into head_features per player so the trained heads see non-zero
-    # values (they were trained with real team_pace from the corpus; serving
-    # with zero is a calibration leak). Degrades to {} on any nba_api failure.
+    # D74/D108: WNBA team pace from historical game_logs (point-in-time) +
+    # defensive ratings from nba_api. Injected into head_features per player
+    # so the trained heads see non-zero values (they were trained with real
+    # team_pace from the corpus; serving with zero is a calibration leak).
+    # Pace is now computed from game_logs as-of the serve date, making it
+    # causal: when job1 runs, game_logs contains only already-played games.
+    # Team pace from game_logs, pace fallback to 0.0 on compute failure;
+    # defensive ratings still from nba_api (out of scope for this fix).
     try:
-        team_stats = fetch_wnba_team_stats(season=str(year))
+        team_pace = build_team_pace_lookup(game_logs_for_dvp)
     except Exception as exc:
-        log.warning("job1_team_stats_failed", reason=str(exc)[:120])
-        team_stats = {}
+        log.warning("job1_team_pace_failed", reason=str(exc)[:120])
+        team_pace = {}
+
+    # For now, still fetch defensive ratings from nba_api (opp_off_rtg/def_rtg
+    # are not fixed in this task and remain out of scope; see the comment in
+    # corpus.py). This structure is ready for a later task to replace them
+    # with causal defensive ratings from game_logs.
+    try:
+        from wnba_oracle.ingest.minutes_features import fetch_wnba_team_stats
+
+        nba_api_stats = fetch_wnba_team_stats(season=str(year))
+        team_stats = {
+            abbr: {
+                "pace": team_pace.get(abbr, 0.0),
+                "off_rtg": nba_api_stats.get(abbr, {}).get("off_rtg", 0.0),
+                "def_rtg": nba_api_stats.get(abbr, {}).get("def_rtg", 0.0),
+            }
+            for abbr in set(list(team_pace.keys()) + list(nba_api_stats.keys()))
+        }
+    except Exception as exc:
+        log.warning("job1_team_stats_ratings_failed", reason=str(exc)[:120])
+        team_stats = {abbr: {"pace": v, "off_rtg": 0.0, "def_rtg": 0.0} for abbr, v in team_pace.items()}
 
     # D74: per-opponent defensive rating from historical game_logs.
     # Mean real_score allowed per opponent team across all recorded games.
