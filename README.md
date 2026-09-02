@@ -77,7 +77,7 @@ exploration, local experiments, and one-line fixes do not need an issue. Create
 one issue before material work such as a feature, bug fix, refactor, dependency
 change, data or model change, deployment change, or credential/schedule work.
 The issue only needs a short objective, acceptance check, and risk or rollback
-note. Link the issue from the pull request.
+note. Link branches, commits, and pull requests to that issue.
 
 Use a short-lived branch or worktree, keep the change focused, and let the
 shared checks run before merging. Production changes require an issue, a green

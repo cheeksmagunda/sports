@@ -189,7 +189,7 @@ handling. WNBA-specific:
   normal commands. If authentication unexpectedly fails, inspect only the
   presence and source of overriding token variables, never their values.
   Remove a verified stale override at its source. Do not make token-clearing
-  shell prefixes a required workflow. Current recovery evidence is in STATUS.md.
+  shell prefixes a required workflow. Track recovery work in the incident issue.
 
 ## Incidents and recovery
 
@@ -215,7 +215,9 @@ See root `../AGENTS.md` for portfolio-wide documentation principles. WNBA
 documentation structure:
 
 - `README.md` explains the stable application shape and local entry points.
-- `STATUS.md` contains mutable artifacts, commits, service identifiers,
-  schedules, incidents, measurements, and known production gaps.
+- `STATUS.md` contains only current operational state: active deployments,
+  source commits, artifact identity, schedules, incidents, and production risks.
+- GitHub Issues and PRs contain development progress, history, decisions, and
+  verification evidence.
 - `AGENTS.md` (this file) defines WNBA-specific commands, invariants, and
   recovery procedures.

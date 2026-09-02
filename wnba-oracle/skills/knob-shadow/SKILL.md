@@ -73,7 +73,7 @@ Do not set this on the API or day-close services; they ignore it.
 After job2 completes, check `model_shadow_runs`:
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
@@ -98,13 +98,13 @@ A `knob_` prefix on challenger_sha confirms a knob shadow row.
 After 5+ slates, the realized_value_delta column has meaningful signal:
 
 ```sh
-uv run --package wnba-oracle python scripts/analyze_strategy_gap.py --shadow-review
+uv run --frozen --package wnba-oracle python scripts/analyze_strategy_gap.py --shadow-review
 ```
 
 Or query directly:
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
 
@@ -140,8 +140,8 @@ If the challenger shows positive mean_delta over 5+ slates:
 3. Clear `PICKER_KNOB_CHALLENGER_JSON` on Railway (set to empty string).
 4. Open a PR with the change, run `make test lint typecheck`, merge.
 
-Rollback: set the previous value via the Railway env var within minutes.
-No redeploy needed; the next job2 run picks up the new env value.
+Rollback: restore the previous Railway value, redeploy cron-job2, and verify the
+running configuration before the next scheduled dispatch.
 
 ## Constraints
 

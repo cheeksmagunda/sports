@@ -30,6 +30,10 @@ immediately.
 4. Deploy only from `main` through the documented application workflow. Do not
    mutate production data, schedules, or credentials from a local experiment.
 
+Every material commit and PR must reference an issue. Branch names should carry
+the issue number (`chat/<issue>-<slug>`), commits should include `#<issue>`, and
+the PR should use a closing reference (`Closes #<issue>` or `Refs #<issue>`).
+
 The current operator may authorize a direct commit for recovery work. That
 exception does not change the normal issue and pull-request flow for future
 work.

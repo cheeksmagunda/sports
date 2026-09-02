@@ -2,7 +2,7 @@
 name: wnba-oracle-corpus-status
 description: >
   Audit the WNBA Oracle training corpus and model artifact. Verifies that
-  the backups branch is current, the model artifact SHA matches STATUS.md,
+  the backups branch is current, the live model artifact SHA matches STATUS.md,
   and the game-log corpus covers the expected date range. Use before a
   training run, before promoting a new model artifact, or after a production
   incident to verify corpus integrity.
@@ -27,7 +27,7 @@ WNBA-owned identity map (`ingest/identity.py`).
 ## Step 1: Check corpus coverage in Postgres
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
 
@@ -61,20 +61,20 @@ with engine.connect() as conn:
 
 ## Step 2: Verify model artifact identity
 
-Check the current `STATUS.md` artifact SHA against the loaded artifact:
+Compare two artifacts by trained-model content:
 
 ```sh
 # From wnba-oracle/
-uv run --package wnba-oracle python scripts/compare_artifacts.py
+uv run --frozen --package wnba-oracle python scripts/compare_artifacts.py \
+  models/<active-artifact>.pkl models/<candidate-artifact>.pkl
 ```
 
-This script reads the SHA from `STATUS.md` and compares it to the artifact
-loaded by job2. A mismatch means either:
-- A new artifact was trained but STATUS.md was not updated, or
-- The artifact file was replaced without a PR.
+The script compares the canonical model serialization and baseline parameters.
+Verify the active artifact SHA separately against the live deployment and the
+current `STATUS.md` snapshot.
 
-Correct path: update STATUS.md in a PR with the new artifact SHA and a
-commit-SHA link. Never rotate the artifact without a tracked STATUS.md change.
+Correct path: track the rotation in an issue and PR, then update `STATUS.md`
+with the new live artifact SHA after deployment verification.
 
 ## Step 3: Check the GitHub backups branch
 
@@ -102,7 +102,7 @@ Before training, snapshot the feature and label corpus from Postgres:
 
 ```sh
 # From wnba-oracle/
-uv run --package wnba-oracle python scripts/snapshot_training_inputs.py \
+uv run --frozen --package wnba-oracle python scripts/snapshot_training_inputs.py \
   --output runs/training-snapshot-$(date +%Y%m%d)/
 ```
 
@@ -115,7 +115,7 @@ Training uses the snapshotted corpus, not a live Postgres connection:
 
 ```sh
 # From wnba-oracle/ -- only run when no live contest is active
-uv run --package wnba-oracle python -m wnba_oracle.train.cli \
+uv run --frozen --package wnba-oracle python -m wnba_oracle.train.cli \
   --corpus runs/training-snapshot-<date>/ \
   --output models/
 ```
@@ -123,12 +123,13 @@ uv run --package wnba-oracle python -m wnba_oracle.train.cli \
 After training, verify the new artifact with:
 
 ```sh
-uv run --package wnba-oracle python scripts/validate_minutes_model.py \
+uv run --frozen --package wnba-oracle python scripts/validate_minutes_model.py \
   --artifact models/<new-artifact>.pkl
 ```
 
-If validation passes, update `STATUS.md` with the new artifact SHA and
-open a PR. The PR must include a `make test-contract` run from `wnba-oracle/`.
+If validation passes, open a linked PR. Update `STATUS.md` only when the new
+artifact becomes the verified live artifact. The PR must include a
+`make test-contract` run from `wnba-oracle/`.
 
 ## Constraints
 

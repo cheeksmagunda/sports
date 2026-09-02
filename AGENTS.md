@@ -30,9 +30,10 @@ commands, but cannot weaken this contract.
 4. Prefer reversible, scoped actions. Stop for missing authority, destructive or
    irreversible work, or a choice that materially changes the requested scope.
 5. Before material work, find or create one GitHub issue with the objective and
-   acceptance check, then link the PR. The acting agent handles this bookkeeping.
-   Read-only investigation, local experiments, and trivial corrections can skip
-   an issue. Follow `CONTRIBUTING.md`; keep the process light for this hobby app.
+   acceptance check. Link the branch, every commit, and the PR to that issue.
+   The acting agent handles this bookkeeping. Read-only investigation, local
+   experiments, and trivial corrections can skip an issue. Follow
+   `CONTRIBUTING.md`; keep the process light for this hobby app.
 
 ## Portfolio boundaries
 
@@ -120,11 +121,11 @@ commands, but cannot weaken this contract.
 
 - Root documentation owns portfolio purpose, boundaries, and technical
   conventions. Child documentation owns domain behavior and operations.
-- Mutable deployments, repository commits, service identifiers, schedules,
-  artifact identifiers, incidents, measurements, and production observations
-  belong in the child `STATUS.md`.
-- Decision rationale belongs in tests, code comments, or commits. Do not create
-  competing markdown ledgers.
+- Current deployments, active source commits, service identifiers, schedules,
+  artifact identifiers, incidents, and production risks belong in the child
+  `STATUS.md`. Development progress and history belong in GitHub Issues and PRs.
+- Decision rationale belongs in issues, PRs, tests, code comments, or commits.
+  Do not create competing markdown ledgers.
 - `AGENTS.md` is the only agent-instruction format in this repository. Do not
   add model-specific instruction files or compatibility shims.
 

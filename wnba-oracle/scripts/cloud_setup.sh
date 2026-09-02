@@ -14,12 +14,10 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 printf 'Installing workspace backend dependencies\n'
-uv sync --all-packages --all-extras
+uv sync --frozen --all-packages --all-extras
 
 printf 'Installing Playwright Chromium when the host supports it\n'
-uv run --package wnba-oracle playwright install chromium --with-deps 2>/dev/null \
-  || uv run --package wnba-oracle playwright install chromium 2>/dev/null \
-  || printf 'Playwright browser install skipped; interactive session recovery needs a browser host\n'
+uv run --frozen --package wnba-oracle playwright install chromium --with-deps
 
 "$portfolio_root/scripts/auth-check" wnba-oracle --offline
 

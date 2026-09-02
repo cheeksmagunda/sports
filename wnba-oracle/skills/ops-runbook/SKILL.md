@@ -30,7 +30,7 @@ Run from `wnba-oracle/`:
 
 ```sh
 # 1. Verify job1 ran and pool is non-empty
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
@@ -44,7 +44,7 @@ with engine.connect() as conn:
 "
 
 # 2. Verify freeze completed
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
@@ -71,7 +71,7 @@ curl -s https://<WNBA_API_BASE>/watchdog/today | python3 -m json.tool | head -40
 2. Check `job_runs` in Postgres for the last job2 entry:
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
 engine = get_engine()
@@ -89,12 +89,13 @@ with engine.connect() as conn:
    Do not flush Redis manually unless the TTL is confirmed stuck and the
    contest has not locked.
 
-4. Manual re-fire after diagnosing the cause (not before):
+4. Manual re-fire after diagnosing the cause (not before). This runs live work
+   and requires explicit production authorization:
 
 ```sh
-uv run --package wnba-oracle python scripts/manual_fire.py --job job2 --dry-run
-# After reviewing dry-run output:
-uv run --package wnba-oracle python scripts/manual_fire.py --job job2
+scripts/with-secrets wnba-oracle -- \
+  uv run --frozen --package wnba-oracle python scripts/manual_fire.py \
+  --date <YYYY-MM-DD>
 ```
 
 ## Procedure: pool is empty after job1
@@ -102,7 +103,7 @@ uv run --package wnba-oracle python scripts/manual_fire.py --job job2
 1. Check `slate_meta` to confirm job1 saw the slate:
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
@@ -121,12 +122,13 @@ with engine.connect() as conn:
    status:
 
 ```sh
-uv run --package wnba-oracle python scripts/probe_realsports.py --offline-check
+scripts/with-secrets wnba-oracle -- \
+  uv run --frozen --package wnba-oracle python scripts/probe_realsports.py \
+  --date <YYYY-MM-DD>
 ```
 
-3. If the session has expired, follow the session recovery procedure in
-   `wnba-oracle/STATUS.md` (Ops > Incident history). Session files require
-   mode 0600. Do not commit them.
+3. If the session has expired, use the incident issue and application provider
+   rules for recovery. Session files require mode 0600. Do not commit them.
 
 ## Procedure: API returns 404 for /lineup/{date}
 
@@ -146,11 +148,12 @@ railway variables set <KEY>=<VALUE> \
   --environment production
 ```
 
-Variable changes take effect on the next service restart or deploy. For
-cron services, the next scheduled run picks up the new value automatically.
+Variable changes take effect on the next service restart or deploy. For cron
+services, perform a real redeploy and verify the next run; setting a variable
+with `--skip-deploys` does not update the next scheduled dispatch.
 
-Rollback: set the previous value. No redeploy needed for pure-env-var
-knob changes (Settings reads from the process environment at startup).
+Rollback: restore the previous value, redeploy each affected service, and verify
+the running configuration.
 
 ## Procedure: promote a new model artifact
 
@@ -158,19 +161,19 @@ knob changes (Settings reads from the process environment at startup).
 2. Validate the new artifact:
 
 ```sh
-uv run --package wnba-oracle python scripts/validate_minutes_model.py \
+uv run --frozen --package wnba-oracle python scripts/validate_minutes_model.py \
   --artifact models/<artifact>.pkl
-uv run --package wnba-oracle python scripts/compare_artifacts.py \
+uv run --frozen --package wnba-oracle python scripts/compare_artifacts.py \
   --new models/<artifact>.pkl
 ```
 
-3. Upload the artifact to the Railway volume or object store (per the
-   mechanism in STATUS.md > Production > Model artifact).
-4. Update `STATUS.md`: new artifact filename, SHA, date, commit SHA.
-5. Open a PR. `make test-contract` must pass.
+3. Upload the artifact using the application deployment mechanism documented in
+   the tracking issue.
+4. Open a linked PR. `make test-contract` must pass.
 6. After merging, set `WNBA_ORACLE_MODEL_ARTIFACT_SHA=<new-sha>` on all
    Railway services that load the model (job2, api).
-7. Retain the previous deployment for rollback. Do not delete the old
+7. Update `STATUS.md` with the verified live artifact identity.
+8. Retain the previous deployment for rollback. Do not delete the old
    artifact until the new one has survived 3+ live slates.
 
 ## Procedure: pause picks

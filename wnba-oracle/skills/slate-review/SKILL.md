@@ -32,7 +32,7 @@ completed for the target slate date:
 
 ```sh
 # From wnba-oracle/
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
@@ -52,7 +52,7 @@ If slate_meta is empty or stale, job1 has not run yet. Do not proceed.
 ## Step 1: Load the frozen lineup (or the current pool if pre-freeze)
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 import json
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.db.engine import get_engine
@@ -97,7 +97,7 @@ stat leverage. This data is written to `frozen_lineups.payload_json` at
 freeze time by job2.
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 import json
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.db.engine import get_engine
@@ -135,7 +135,7 @@ If `WNBA_ORACLE_MODEL_CHALLENGER_SHA` or `PICKER_KNOB_CHALLENGER_JSON` was set
 during the last job2 run, a shadow row exists in `model_shadow_runs`. Review it:
 
 ```sh
-uv run --package wnba-oracle python -c "
+uv run --frozen --package wnba-oracle python -c "
 from wnba_oracle.common.clock import slate_date
 from wnba_oracle.db.engine import get_engine
 from sqlalchemy import text
@@ -184,13 +184,13 @@ post-game script to compare actual vs predicted:
 
 ```sh
 # From wnba-oracle/ (after dayclose)
-uv run --package wnba-oracle python scripts/replay_slate.py --date <YYYY-MM-DD>
+uv run --frozen --package wnba-oracle python scripts/replay_slate.py --date <YYYY-MM-DD>
 ```
 
 Check placement with:
 
 ```sh
-uv run --package wnba-oracle python scripts/loss_ledger.py --recent 5
+uv run --frozen --package wnba-oracle python scripts/loss_ledger.py --recent 5
 ```
 
 ## Authoritative data flow reminder
