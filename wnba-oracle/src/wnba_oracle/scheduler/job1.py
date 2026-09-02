@@ -479,7 +479,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     # Team pace from game_logs, pace fallback to 0.0 on compute failure;
     # defensive ratings still from nba_api (out of scope for this fix).
     try:
-        team_pace = build_team_pace_lookup(game_logs_for_dvp)
+        team_pace = (
+            build_team_pace_lookup(game_logs_for_dvp) if game_logs_for_dvp is not None else {}
+        )
     except Exception as exc:
         log.warning("job1_team_pace_failed", reason=str(exc)[:120])
         team_pace = {}

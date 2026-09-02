@@ -288,13 +288,15 @@ def compute_team_pace_map(game_logs: pl.DataFrame) -> dict[str, float]:
     if team_paces.is_empty():
         return {}
 
-    league_mean = float(team_paces.get_column("team_pace").mean())
+    league_mean_raw = team_paces.get_column("team_pace").mean()
+    league_mean = float(str(league_mean_raw)) if league_mean_raw is not None else 0.0
     k = 3.0  # Pseudo-count for shrinkage (3 games equivalent)
 
     result: dict[str, float] = {}
     for row in team_paces.to_dicts():
         team = str(row["team"]).upper()
-        pace = float(row["team_pace"])
+        pace_val = row["team_pace"]
+        pace = float(str(pace_val)) if pace_val is not None else 0.0
         n_games = int(row["n_games"])
         # Shrink toward league mean: pace_shrunk = (n_games * pace + k * league_mean) / (n_games + k)
         shrunk_pace = (n_games * pace + k * league_mean) / (n_games + k)
