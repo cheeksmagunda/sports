@@ -375,6 +375,150 @@ def test_artifact_swap_produces_divergent_predictions(tmp_path: Path, monkeypatc
     )
 
 
+def _write_game_logs_csv_fixture(tmp_path: Path) -> Path:
+    """A minimal ``wnba_game_logs`` export (see scripts/export_game_logs.py)
+    giving each of the six divergence-fixture players one game strictly
+    before the 2026-06-01 slate date, so ``build_rolling_features`` produces
+    a non-null ``mins_l5`` for every one of them (one prior game is enough --
+    the rolling window means over whatever history exists, see rolling.py).
+    Team/opponent match ``_write_divergence_csv_fixtures`` so the name+team
+    join key (``features.serving_features._key``) actually matches.
+    """
+    path = tmp_path / "game_logs.csv"
+    header = (
+        "game_date,player_id,player_name,first_initial,last_name,team,opponent,"
+        "home_away,game_id,min,season,pts,reb,oreb,dreb,ast,stl,blk,tov,fgm,fga,"
+        "fg3m,ftm,fta\n"
+    )
+    players = [
+        (9010, "Player Ten", "P", "Ten", "MIN", "LVA"),
+        (9011, "Player Eleven", "P", "Eleven", "MIN", "LVA"),
+        (9012, "Player Twelve", "P", "Twelve", "MIN", "LVA"),
+        (9013, "Player Thirteen", "P", "Thirteen", "LVA", "MIN"),
+        (9014, "Player Fourteen", "P", "Fourteen", "LVA", "MIN"),
+        (9015, "Player Fifteen", "P", "Fifteen", "LVA", "MIN"),
+    ]
+    rows = [
+        f"2026-05-25,{pid},{name},{initial},{last},{team},{opp},home,g0,"
+        f"20.0,2026,10.0,4.0,1.0,3.0,2.0,1.0,0.0,1.0,4.0,8.0,1.0,2.0,2.0"
+        for pid, name, initial, last, team, opp in players
+    ]
+    path.write_text(header + "\n".join(rows) + "\n")
+    return path
+
+
+def test_offline_head_features_drive_genuine_divergence(tmp_path: Path, monkeypatch) -> None:
+    """Regression test for #53's root cause fix.
+
+    Unlike ``test_artifact_swap_produces_divergent_predictions`` (which uses
+    ``_FakeArtifact.heads == {}`` on purpose and proves divergence through
+    the artifact-independent-in-name-only ``eb_baseline`` tier, per its own
+    docstring), this test proves the D69/Phase-2b HEADS tier itself --
+    ``job2_model._predict_heads_for_pool`` reading ``art.heads`` -- actually
+    fires through the offline benchmark path once ``--game-logs-csv`` is
+    given. Before the #53 fix, ``_precompute_slates`` never put
+    ``head_features`` into ``enrichment``, so ``_predict_heads_for_pool``
+    always returned ``{}`` regardless of what ``art.heads`` contained, and
+    two artifacts with genuinely different trained heads were
+    indistinguishable through this path. This test would fail on the
+    pre-fix code: ``captured`` would show ``n == 0`` for every call.
+    """
+    module = _load_module()
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("PAYOUT_REGIME", "top_20")
+    monkeypatch.setenv("OPTIMIZER_MAX_PER_TEAM", "2")
+    monkeypatch.setenv("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
+    for alias, value in module.benchmark.production_env_overrides().items():
+        monkeypatch.setenv(alias, value)
+
+    from wnba_oracle.common.settings import get_settings
+    from wnba_oracle.scheduler.job2 import build_model_policy
+
+    policy = build_model_policy(get_settings())
+
+    labels_csv, leaderboards_csv, game_identity_csv = _write_divergence_csv_fixtures(tmp_path)
+    game_logs_csv = _write_game_logs_csv_fixture(tmp_path)
+
+    import wnba_oracle.scheduler.job2 as job2_mod
+    from wnba_oracle.scheduler.job2_model import _predict_heads_for_pool as real_predict_heads
+
+    captured: list[dict[str, Any]] = []
+
+    def spy(art, enrichment):
+        out = real_predict_heads(art, enrichment)
+        captured.append({"weight": getattr(art, "_weight", None), "n": len(out)})
+        return out
+
+    monkeypatch.setattr(job2_mod, "_predict_heads_for_pool", spy)
+
+    class _HeadsArtifact:
+        """Duck-typed PickerArtifact with REAL (non-empty) heads, so
+        job2_model._predict_heads_for_pool does not early-return {} the way
+        test_artifact_swap_produces_divergent_predictions's ``_FakeArtifact``
+        does. ``predict_real_score`` reads the ``mins_l5`` column that only
+        ``head_features`` (built from the gamelog corpus) can populate --
+        proving the prediction is driven by that feature row, not a
+        static per-artifact constant.
+        """
+
+        def __init__(self, weight: float) -> None:
+            self.heads = {
+                ("minutes", "F"): SimpleNamespace(feature_columns=("mins_l5",)),
+                ("real_score_per_min", "F"): SimpleNamespace(feature_columns=("mins_l5",)),
+            }
+            self.feature_module_sha = f"heads-{weight}"
+            self.training_rows = 1
+            self.eb_baseline = None
+            self._weight = weight
+
+        def predict_real_score(self, frame: Any) -> dict[str, np.ndarray] | None:
+            mins = (
+                frame["mins_l5"].to_numpy()
+                if "mins_l5" in frame.columns
+                else np.zeros(frame.height)
+            )
+            p50 = mins * self._weight
+            return {"p10": p50 * 0.8, "p50": p50, "p90": p50 * 1.2}
+
+    baseline_art = _HeadsArtifact(weight=0.5)
+    challenger_art = _HeadsArtifact(weight=2.0)
+
+    kwargs = {
+        "max_slates": None,
+        "labels_csv": labels_csv,
+        "leaderboards_csv": leaderboards_csv,
+        "game_identity_csv": game_identity_csv,
+        "policy": policy,
+        "game_logs_csv": game_logs_csv,
+    }
+    baseline_pool, baseline_drops = module.precompute_pool_for_artifact(baseline_art, **kwargs)
+    challenger_pool, challenger_drops = module.precompute_pool_for_artifact(
+        challenger_art, **kwargs
+    )
+
+    assert baseline_pool, f"no eligible slates in baseline pool (drops={baseline_drops})"
+    assert challenger_pool, f"no eligible slates in challenger pool (drops={challenger_drops})"
+    assert set(baseline_pool) == set(challenger_pool)
+
+    # The heads tier must have actually run (non-empty predictions), not
+    # merely been reachable in principle.
+    assert captured, "job2_model._predict_heads_for_pool was never called"
+    assert any(c["n"] > 0 for c in captured), (
+        f"_predict_heads_for_pool always returned {{}} -- head_features never "
+        f"reached art.heads (captured={captured})"
+    )
+
+    for sd in baseline_pool:
+        base_specs = {s.player_id: s.mu for s in baseline_pool[sd]["samps"]}
+        chal_specs = {s.player_id: s.mu for s in challenger_pool[sd]["samps"]}
+        assert set(base_specs) == set(chal_specs)
+        assert base_specs != chal_specs, (
+            "baseline and challenger heads produced byte-identical sampling "
+            "means through the offline benchmark path -- the heads tier did "
+            "not genuinely fire on head_features"
+        )
+
+
 def test_missing_database_url_fails_closed_without_csvs(tmp_path: Path, monkeypatch) -> None:
     module = _load_module()
     monkeypatch.delenv("DATABASE_URL", raising=False)
