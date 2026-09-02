@@ -2,13 +2,13 @@
 
 We do not have direct access to opponent lineups before lock. Two paths:
 
-1. MEASURED (preferred, D86). Real Sports shows each player's live draft
-   count in-app pre-lock; job1 captures it into `slate_labels.drafts`. When a
-   spec carries `measured_drafts`, the field ownership marginal IS that count
-   (normalized). This is the single most predictive ownership signal and it is
-   observed, not modelled. Players missing a count (late pool entrants not yet
-   in slate_labels) are back-filled from the estimator below, rescaled onto the
-   measured magnitude so the two scales are comparable.
+1. MEASURED (D86). Real Sports captures draft counts into `slate_labels.drafts`
+   when available post-lock. When a spec carries `measured_drafts`, the field
+   ownership marginal IS that count (normalized). This is observed, not modelled.
+   Players missing a count (late pool entrants not yet in slate_labels) are
+   back-filled from the estimator below, rescaled onto the measured magnitude so
+   the two scales are comparable. Note: before lock, Real Sports returns empty
+   draftStats, so pre-lock freeze decisions rely on the estimator below.
 
 2. ESTIMATOR (fallback, pre-D86 behaviour). Approximate ownership probability
    per player via a softmax of public-visible value:

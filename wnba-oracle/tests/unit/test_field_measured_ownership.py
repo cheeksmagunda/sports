@@ -139,3 +139,23 @@ def test_measured_ownership_changes_field_composition() -> None:
     # every sampled lineup.
     appears = np.mean([0 in row for row in field])
     assert appears > 0.9
+
+
+def test_empty_measured_drafts_prelock_contract() -> None:
+    """Timing audit (#53 / #38): before contest lock, slate_labels.drafts is empty.
+
+    When measured_drafts={} (pre-lock reality), project_ownership must gracefully
+    and deterministically evaluate the public-value estimator fallback, with
+    sum == 1.0, non-negative finite probabilities, and zero NaNs.
+    """
+    specs = [
+        _spec(101, pred=2.5, boost=1.2, drafts=None),
+        _spec(102, pred=1.8, boost=0.8, drafts=None),
+        _spec(103, pred=3.2, boost=2.0, drafts=None),
+        _spec(104, pred=0.9, boost=0.5, drafts=None),
+        _spec(105, pred=2.1, boost=1.5, drafts=None),
+    ]
+    own = project_ownership(specs)
+    assert np.isclose(own.sum(), 1.0)
+    assert np.all(own > 0.0)
+    assert np.all(np.isfinite(own))

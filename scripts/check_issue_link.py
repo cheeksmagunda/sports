@@ -35,7 +35,7 @@ def validation_errors(branch: str, body: str, commit_messages: list[str]) -> lis
 
 def _commit_messages(base_ref: str) -> list[str]:
     result = subprocess.run(
-        ["git", "log", "--format=%B%x00", f"{base_ref}..HEAD"],
+        ["git", "log", "--no-merges", "--format=%B%x00", f"{base_ref}..HEAD"],
         check=True,
         capture_output=True,
         text=True,
