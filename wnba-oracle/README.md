@@ -132,6 +132,15 @@ capture under the top-20 curve, then atomically writes
 `benchmark_results.json` and a generated `MODEL_RESEARCH_BENCHMARK.md` into
 `--output-dir`.
 
+Each per-slate row also records the five committed player IDs and exact
+top-5/top-8/top-10 realized-player capture inside the same identified,
+draftable pool supplied to the optimizer. Top-k boundary ties expand the
+reference set rather than being broken arbitrarily. Variant summaries include
+the complete 0/5 through 5/5 hit distribution, and the artifact pairs each
+variant with baseline on common slate dates for committed-order score, payout,
+placement, and player-capture deltas. Placement deltas are omitted and counted
+as censored whenever either rank is below the captured leaderboard depth.
+
 It requires `DATABASE_URL` in the process environment, or
 `--labels-csv`/`--leaderboards-csv`/`--game-identity-csv` pointing at a
 verified corpus-backup / prefetch snapshot for offline runs. Game identity

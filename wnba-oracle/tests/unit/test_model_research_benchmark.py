@@ -181,6 +181,36 @@ class TestScoring:
         assert mod.placement_for_score(30.0, lb) == 3  # ties do not outrank us
         assert mod.placement_for_score(1.0, lb) == 4
 
+    def test_top_k_capture_uses_draftable_pool_and_expands_boundary_ties(self, mod):
+        scores = {
+            1: 30.0,
+            2: 29.0,
+            3: 28.0,
+            4: 27.0,
+            5: 26.0,
+            6: 26.0,
+            7: 20.0,
+            8: 19.0,
+            9: 18.0,
+            10: 17.0,
+        }
+        capture = mod.top_k_player_capture([1, 5, 6, 8, 10], scores)
+        assert capture["5"] == {
+            "hits": 3,
+            "requested_k": 5,
+            "available_players": 10,
+            "reference_size": 6,
+            "boundary_tie_expanded": True,
+        }
+        assert capture["8"]["hits"] == 4
+        assert capture["10"]["hits"] == 5
+
+    def test_top_k_capture_rejects_empty_pool_and_bad_threshold(self, mod):
+        with pytest.raises(ValueError, match="pool is empty"):
+            mod.top_k_player_capture([1], {})
+        with pytest.raises(ValueError, match="must be positive"):
+            mod.top_k_player_capture([1], {1: 1.0}, thresholds=[0])
+
 
 class TestSummarize:
     def test_empty_rows(self, mod):
@@ -195,6 +225,10 @@ class TestSummarize:
                 "gap": 0.0,
                 "beat_median": 1,
                 "payout_capture": 1.0,
+                "top_k_player_capture": {
+                    str(k): {"hits": 5, "boundary_tie_expanded": False}
+                    for k in mod.CAPTURE_THRESHOLDS
+                },
             },
             {
                 "placement": 5,
@@ -203,6 +237,10 @@ class TestSummarize:
                 "gap": 2.0,
                 "beat_median": 1,
                 "payout_capture": 0.5,
+                "top_k_player_capture": {
+                    str(k): {"hits": 3, "boundary_tie_expanded": k == 5}
+                    for k in mod.CAPTURE_THRESHOLDS
+                },
             },
             {
                 # Right-censored: score never reached the captured leaderboard
@@ -213,6 +251,10 @@ class TestSummarize:
                 "censored": True,
                 "gap": 8.0,
                 "payout_capture": 0.0,
+                "top_k_player_capture": {
+                    str(k): {"hits": 0, "boundary_tie_expanded": False}
+                    for k in mod.CAPTURE_THRESHOLDS
+                },
             },
         ]
         s = mod.summarize_variant(rows)
@@ -225,6 +267,18 @@ class TestSummarize:
         assert s["mean_payout_capture"] == pytest.approx(0.5)
         assert s["beat_median_pct"] == pytest.approx(100.0)
         assert s["n_median_observed"] == 2
+        top5 = s["top_k_player_capture"]["5"]
+        assert top5["mean_hits"] == pytest.approx(2.667)
+        assert top5["mean_lineup_capture_pct"] == pytest.approx(53.3)
+        assert top5["hit_distribution"] == {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 1,
+            "4": 0,
+            "5": 1,
+        }
+        assert top5["n_tie_expanded"] == 1
 
     def test_beat_median_omitted_when_never_observed(self, mod):
         rows = [
@@ -240,6 +294,69 @@ class TestSummarize:
         assert "beat_median_pct" not in s
 
 
+class TestPairedComparisons:
+    def _variant(self, name, rows):
+        return {"name": name, "slates": rows}
+
+    def _row(
+        self,
+        slate_date,
+        score,
+        payout,
+        placement,
+        hits,
+    ):
+        return {
+            "slate_date": slate_date,
+            "our_score": score,
+            "committed_order_score": score,
+            "payout": payout,
+            "placement": placement,
+            "top_k_player_capture": {str(k): {"hits": value} for k, value in zip((5, 8, 10), hits)},
+        }
+
+    def test_pairs_common_slates_and_preserves_censored_placement(self, mod):
+        variants = [
+            self._variant(
+                "baseline",
+                [
+                    self._row("2026-06-01", 100.0, 1.0, 3, (2, 3, 4)),
+                    self._row("2026-06-02", 90.0, 0.0, None, (1, 2, 3)),
+                    self._row("2026-06-03", 80.0, 0.0, 12, (0, 1, 2)),
+                ],
+            ),
+            self._variant(
+                "challenger",
+                [
+                    self._row("2026-06-01", 105.0, 2.0, 2, (3, 3, 5)),
+                    self._row("2026-06-02", 85.0, 0.0, 18, (0, 3, 3)),
+                    self._row("2026-06-04", 70.0, 0.0, None, (0, 0, 1)),
+                ],
+            ),
+        ]
+        comparison = mod.build_paired_comparisons(variants)[0]
+        assert comparison["n_common_slates"] == 2
+        assert comparison["n_baseline_only"] == 1
+        assert comparison["n_challenger_only"] == 1
+        assert comparison["committed_order_score"] == {
+            "wins": 1,
+            "ties": 0,
+            "losses": 1,
+            "mean_delta": 0.0,
+        }
+        assert comparison["payout"]["wins"] == 1
+        assert comparison["payout"]["ties"] == 1
+        assert comparison["placement"]["n_exact_pairs"] == 1
+        assert comparison["placement"]["n_censored_pairs"] == 1
+        assert comparison["placement"]["wins"] == 1
+        assert comparison["slates"][1]["placement_delta"] is None
+        assert comparison["slates"][1]["placement_censored"] is True
+        assert comparison["top_k_player_capture"]["5"]["mean_delta"] == 0.0
+
+    def test_returns_empty_without_baseline(self, mod):
+        assert mod.build_paired_comparisons([self._variant("only", [])]) == []
+
+
 class TestRenderMarkdown:
     def _result(self, mod):
         rows = [
@@ -249,8 +366,21 @@ class TestRenderMarkdown:
                 "censored": False,
                 "gap": 0.0,
                 "beat_median": 1,
+                "payout": 1.0,
                 "payout_capture": 1.0,
+                "top_k_player_capture": {
+                    str(k): {"hits": 5, "boundary_tie_expanded": False}
+                    for k in mod.CAPTURE_THRESHOLDS
+                },
             }
+        ]
+        variants = [
+            {
+                "name": "baseline",
+                "summary": mod.summarize_variant(rows),
+                "slates": [{"slate_date": "2026-06-01", "our_score": 10.0, **rows[0]}],
+            },
+            {"name": "temp:sigma_x1.5", "summary": {"n_slates": 0}, "slates": []},
         ]
         return {
             "meta": {
@@ -260,10 +390,8 @@ class TestRenderMarkdown:
                 "n_slates": 1,
                 "temperature_variants": 1,
             },
-            "variants": [
-                {"name": "baseline", "summary": mod.summarize_variant(rows)},
-                {"name": "temp:sigma_x1.5", "summary": {"n_slates": 0}},
-            ],
+            "variants": variants,
+            "paired_comparisons": mod.build_paired_comparisons(variants),
         }
 
     def test_contains_header_and_rows(self, mod):
@@ -272,6 +400,8 @@ class TestRenderMarkdown:
         assert "| baseline | 1 |" in text
         assert "| temp:sigma_x1.5 | 0 | - |" in text
         assert "generated artifact" in text
+        assert "top 5 distribution (0..5)" in text
+        assert "temp:sigma_x1.5 vs baseline" in text
 
 
 class TestSelectShard:
