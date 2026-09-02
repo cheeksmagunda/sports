@@ -24,7 +24,7 @@ jobs:
       pull-requests: write
       issues: write
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
       - uses: anthropics/claude-code-action@923714f19352008835430ae7d21fa14865c3d476
