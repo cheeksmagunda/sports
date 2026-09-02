@@ -138,7 +138,10 @@ def test_duplication_weight_avoids_full_chalk() -> None:
         n_samples=500,
         n_field_lineups=80,
         max_per_team=5,
-        duplication_weight=5.0,
+        # Ownership is normalized across the ten-player pool, so even extreme
+        # measured counts produce a bounded five-player product. Use a weight
+        # large enough for the documented penalty to dominate payout noise.
+        duplication_weight=50.0,
     )
     rec = optimize_lineup(samps, fields, curve, cfg=cfg)
     chalk_ids = {100, 101, 102, 103, 104}
