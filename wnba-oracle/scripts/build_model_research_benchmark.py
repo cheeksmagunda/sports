@@ -4,7 +4,10 @@ Replays every 2026 slate that has labels, leaderboard data, and validated
 game identity through the production optimizer, once per variant, and
 records honest realized metrics against the real leaderboard (placement,
 right-censored below the corpus's captured depth; gap to the winner; and
-payout capture under the top-20 curve -- see score_lineup, summarize_variant).
+payout capture under the top-20 curve), player capture against the realized
+top-5/top-8/top-10 pool, and paired slate comparisons against baseline. See
+score_lineup, top_k_player_capture, summarize_variant, and
+build_paired_comparisons.
 Variants are:
 
   baseline     -- the compiled production policy (EXPECTED_PROD_CONFIG applied
@@ -51,6 +54,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 SEED = 2026
+CAPTURE_THRESHOLDS: tuple[int, ...] = (5, 8, 10)
 
 # One OptimizeConfig override per registered knob, flipped away from the
 # validated production value so each variant isolates one knob's effect.
@@ -239,6 +243,40 @@ def placement_for_score(our_score: float, lb_scores: list[float]) -> int:
     return sum(1 for s in lb_scores if s > our_score) + 1
 
 
+def top_k_player_capture(
+    player_ids: Sequence[int],
+    rs_by: dict[int, float],
+    thresholds: Sequence[int] = CAPTURE_THRESHOLDS,
+) -> dict[str, dict[str, Any]]:
+    """Count selected players in each realized top-k set.
+
+    The reference pool is the same identified, draftable pool sent to the
+    optimizer. A tie at the kth score expands the reference set instead of
+    arbitrarily breaking the tie by player ID. ``hits`` still ranges from 0
+    through 5 because the evaluated lineup always has five players.
+    """
+    if not rs_by:
+        raise ValueError("realized-score pool is empty")
+    selected = {int(player_id) for player_id in player_ids}
+    scores = sorted((float(score) for score in rs_by.values()), reverse=True)
+    out: dict[str, dict[str, Any]] = {}
+    for raw_k in thresholds:
+        k = int(raw_k)
+        if k < 1:
+            raise ValueError(f"capture threshold must be positive, got {k}")
+        bounded_k = min(k, len(scores))
+        cutoff = scores[bounded_k - 1]
+        reference = {int(player_id) for player_id, score in rs_by.items() if float(score) >= cutoff}
+        out[str(k)] = {
+            "hits": len(selected & reference),
+            "requested_k": k,
+            "available_players": len(scores),
+            "reference_size": len(reference),
+            "boundary_tie_expanded": len(reference) > bounded_k,
+        }
+    return out
+
+
 def summarize_variant(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Aggregate per-slate rows into the summary metrics reported per variant.
 
@@ -273,7 +311,143 @@ def summarize_variant(rows: list[dict[str, Any]]) -> dict[str, Any]:
             100.0 * sum(r["beat_median"] for r in median_rows) / len(median_rows), 1
         )
         out["n_median_observed"] = len(median_rows)
+    capture_summary: dict[str, Any] = {}
+    for k in CAPTURE_THRESHOLDS:
+        capture_rows = [
+            r["top_k_player_capture"][str(k)]
+            for r in rows
+            if str(k) in r.get("top_k_player_capture", {})
+        ]
+        if not capture_rows:
+            continue
+        distribution = {str(hits): 0 for hits in range(6)}
+        for capture in capture_rows:
+            distribution[str(int(capture["hits"]))] += 1
+        mean_hits = sum(int(capture["hits"]) for capture in capture_rows) / len(capture_rows)
+        capture_summary[str(k)] = {
+            "n_observed": len(capture_rows),
+            "mean_hits": round(mean_hits, 3),
+            "mean_lineup_capture_pct": round(100.0 * mean_hits / 5.0, 1),
+            "hit_distribution": distribution,
+            "n_tie_expanded": sum(
+                1 for capture in capture_rows if capture["boundary_tie_expanded"]
+            ),
+        }
+    if capture_summary:
+        out["top_k_player_capture"] = capture_summary
     return out
+
+
+def _comparison_counts(deltas: list[float], *, lower_is_better: bool = False) -> dict[str, Any]:
+    """Summarize challenger-minus-baseline deltas."""
+    wins = sum(delta < 0 if lower_is_better else delta > 0 for delta in deltas)
+    losses = sum(delta > 0 if lower_is_better else delta < 0 for delta in deltas)
+    return {
+        "wins": wins,
+        "ties": len(deltas) - wins - losses,
+        "losses": losses,
+        "mean_delta": round(sum(deltas) / len(deltas), 4) if deltas else None,
+    }
+
+
+def build_paired_comparisons(
+    variants: list[dict[str, Any]],
+    baseline_name: str = "baseline",
+) -> list[dict[str, Any]]:
+    """Compare each variant with baseline on identical slate dates.
+
+    Score and payout pairs are exact. Placement deltas are emitted only when
+    both ranks are observed; a pair touching a right-censored rank is counted
+    but never assigned a guessed placement delta.
+    """
+    by_name = {variant["name"]: variant for variant in variants}
+    baseline = by_name.get(baseline_name)
+    if baseline is None:
+        return []
+    baseline_rows = {row["slate_date"]: row for row in baseline["slates"]}
+    comparisons: list[dict[str, Any]] = []
+    for variant in variants:
+        if variant["name"] == baseline_name:
+            continue
+        challenger_rows = {row["slate_date"]: row for row in variant["slates"]}
+        common = sorted(set(baseline_rows) & set(challenger_rows))
+        slate_pairs: list[dict[str, Any]] = []
+        score_deltas: list[float] = []
+        payout_deltas: list[float] = []
+        placement_deltas: list[float] = []
+        capture_deltas: dict[str, list[float]] = {str(k): [] for k in CAPTURE_THRESHOLDS}
+        for slate_date in common:
+            base = baseline_rows[slate_date]
+            challenger = challenger_rows[slate_date]
+            base_score = float(base.get("committed_order_score", base["our_score"]))
+            challenger_score = float(
+                challenger.get("committed_order_score", challenger["our_score"])
+            )
+            score_delta = round(challenger_score - base_score, 3)
+            payout_delta = round(
+                float(challenger["payout"]) - float(base["payout"]),
+                4,
+            )
+            score_deltas.append(score_delta)
+            payout_deltas.append(payout_delta)
+            base_placement = base.get("placement")
+            challenger_placement = challenger.get("placement")
+            placement_delta = None
+            if base_placement is not None and challenger_placement is not None:
+                placement_delta = int(challenger_placement) - int(base_placement)
+                placement_deltas.append(float(placement_delta))
+            per_k: dict[str, int] = {}
+            for k in CAPTURE_THRESHOLDS:
+                key = str(k)
+                base_capture = base.get("top_k_player_capture", {}).get(key)
+                challenger_capture = challenger.get("top_k_player_capture", {}).get(key)
+                if base_capture is None or challenger_capture is None:
+                    continue
+                delta = int(challenger_capture["hits"]) - int(base_capture["hits"])
+                per_k[key] = delta
+                capture_deltas[key].append(float(delta))
+            slate_pairs.append(
+                {
+                    "slate_date": slate_date,
+                    "baseline_committed_order_score": base_score,
+                    "challenger_committed_order_score": challenger_score,
+                    "committed_order_score_delta": score_delta,
+                    "baseline_payout": float(base["payout"]),
+                    "challenger_payout": float(challenger["payout"]),
+                    "payout_delta": payout_delta,
+                    "baseline_placement": base_placement,
+                    "challenger_placement": challenger_placement,
+                    "placement_delta": placement_delta,
+                    "placement_censored": placement_delta is None,
+                    "top_k_player_capture_delta": per_k,
+                }
+            )
+        placement_summary = _comparison_counts(placement_deltas, lower_is_better=True)
+        placement_summary.update(
+            {
+                "n_exact_pairs": len(placement_deltas),
+                "n_censored_pairs": len(common) - len(placement_deltas),
+            }
+        )
+        comparisons.append(
+            {
+                "baseline": baseline_name,
+                "challenger": variant["name"],
+                "n_common_slates": len(common),
+                "n_baseline_only": len(set(baseline_rows) - set(challenger_rows)),
+                "n_challenger_only": len(set(challenger_rows) - set(baseline_rows)),
+                "committed_order_score": _comparison_counts(score_deltas),
+                "payout": _comparison_counts(payout_deltas),
+                "placement": placement_summary,
+                "top_k_player_capture": {
+                    key: _comparison_counts(deltas)
+                    for key, deltas in capture_deltas.items()
+                    if deltas
+                },
+                "slates": slate_pairs,
+            }
+        )
+    return comparisons
 
 
 def _coverage_note(meta: dict[str, Any]) -> str:
@@ -344,6 +518,60 @@ def render_markdown(result: dict[str, Any]) -> str:
             f"| {s['top20_pct']}% | {s['top5_pct']}% | {s['top1_pct']}% "
             f"| {beat_median} | {s['mean_gap_vs_top1']} | {s['mean_payout_capture']} |"
         )
+    capture_variants = [
+        variant for variant in result["variants"] if variant["summary"].get("top_k_player_capture")
+    ]
+    if capture_variants:
+        lines.extend(
+            [
+                "",
+                "Player capture is measured against realized scores inside the "
+                "same identified draftable pool the optimizer received. Ties at "
+                "a top-k boundary expand the reference set rather than being "
+                "broken arbitrarily.",
+                "",
+                "| variant | top 5 mean hits | top 5 distribution (0..5) "
+                "| top 8 mean hits | top 10 mean hits |",
+                "|---|---|---|---|---|",
+            ]
+        )
+        for variant in capture_variants:
+            capture = variant["summary"]["top_k_player_capture"]
+            top5 = capture["5"]
+            distribution = "/".join(str(top5["hit_distribution"][str(hits)]) for hits in range(6))
+            lines.append(
+                f"| {variant['name']} | {top5['mean_hits']} "
+                f"| {distribution} | {capture['8']['mean_hits']} "
+                f"| {capture['10']['mean_hits']} |"
+            )
+    if result.get("paired_comparisons"):
+        lines.extend(
+            [
+                "",
+                "Paired comparisons use only common slate dates. Placement "
+                "win/tie/loss counts exclude any pair where either placement is "
+                "right-censored.",
+                "",
+                "| challenger vs baseline | paired slates | score W/T/L "
+                "| mean score delta | payout W/T/L | mean payout delta "
+                "| placement exact/censored | placement W/T/L |",
+                "|---|---|---|---|---|---|---|---|",
+            ]
+        )
+        for comparison in result["paired_comparisons"]:
+            score = comparison["committed_order_score"]
+            payout = comparison["payout"]
+            placement = comparison["placement"]
+            lines.append(
+                f"| {comparison['challenger']} vs {comparison['baseline']} "
+                f"| {comparison['n_common_slates']} "
+                f"| {score['wins']}/{score['ties']}/{score['losses']} "
+                f"| {score['mean_delta']} "
+                f"| {payout['wins']}/{payout['ties']}/{payout['losses']} "
+                f"| {payout['mean_delta']} "
+                f"| {placement['n_exact_pairs']}/{placement['n_censored_pairs']} "
+                f"| {placement['wins']}/{placement['ties']}/{placement['losses']} |"
+            )
     lines.append("")
     return "\n".join(lines)
 
@@ -706,6 +934,8 @@ def _run_variant(
         top1_payout = curve.payout_for_rank(1, field_size)
         row: dict[str, Any] = {
             "slate_date": str(sd),
+            "player_ids": [int(player_id) for player_id in rec.player_ids],
+            "committed_order_score": round(our, 3),
             "our_score": round(our, 3),
             "placement": placement,
             "placement_lower_bound": placement_lower_bound,
@@ -715,6 +945,7 @@ def _run_variant(
             "gap": round(lb_scores[0] - our, 3),
             "payout": round(payout, 4),
             "payout_capture": round(payout / top1_payout, 4) if top1_payout > 0 else 0.0,
+            "top_k_player_capture": top_k_player_capture(rec.player_ids, d["rs_by"]),
         }
         # beat_median is only meaningful when the true field median rank was
         # actually captured; for real field sizes (num_brawlers far exceeds
@@ -806,7 +1037,11 @@ def merge_shard_results(results: list[dict[str, Any]]) -> dict[str, Any]:
             "shard_count": expected or None,
         }
     )
-    return {"meta": base_meta, "variants": variants}
+    return {
+        "meta": base_meta,
+        "variants": variants,
+        "paired_comparisons": build_paired_comparisons(variants),
+    }
 
 
 def main() -> int:
@@ -979,6 +1214,7 @@ def main() -> int:
                 "offline_csv": bool(offline),
             },
             "variants": [],
+            "paired_comparisons": [],
         }
         atomic_write_text(
             args.output_dir / "benchmark_results.json", json.dumps(empty, indent=2) + "\n"
@@ -1028,6 +1264,7 @@ def main() -> int:
             "baseline_policy": dataclasses.asdict(policy),
         },
         "variants": variants,
+        "paired_comparisons": build_paired_comparisons(variants),
     }
     out = args.output_dir
     atomic_write_text(out / "benchmark_results.json", json.dumps(result, indent=2) + "\n")
