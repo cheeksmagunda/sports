@@ -337,28 +337,58 @@ def test_offline_corpus_and_live_serve_rolling_and_rest_features_agree() -> None
     assert serve_row["days_rest"] == pytest.approx(train_row["days_rest"])
 
 
+def test_train_serve_season_game_number_parity() -> None:
+    """build_gamelog_corpus and build_head_feature_lookup agree on season_game_number."""
+    rows: list[dict] = []
+    for season, dates in (
+        (2025, ["2025-05-01", "2025-05-04", "2025-05-07"]),
+        (2026, ["2026-06-02", "2026-06-05", "2026-06-08", "2026-06-11"]),
+    ):
+        for pid, name, team in ((11, "A. Alpha", "SEA"), (22, "B. Beta", "LVA")):
+            for i, d in enumerate(dates):
+                rows.append(
+                    {
+                        "game_date": d,
+                        "player_id": pid,
+                        "player_name": name,
+                        "team": team,
+                        "season": str(season),
+                        "min": 24.0 + i,
+                        "pts": 10.0 + i,
+                        "reb": 4.0,
+                        "oreb": 1.0,
+                        "dreb": 3.0,
+                        "ast": 2.0,
+                        "stl": 1.0,
+                        "blk": 0.0,
+                        "tov": 1.0,
+                        "fgm": 5.0,
+                        "fga": 11.0,
+                        "fg3m": 1.0,
+                        "ftm": 1.0,
+                        "fta": 2.0,
+                    }
+                )
+    logs = pl.from_dicts(rows)
+    corpus = build_gamelog_corpus(logs)
+
+    for player_id, slate_date, expected in ((11, "2025-05-07", 3), (22, "2026-06-11", 4)):
+        train_row = corpus.filter(
+            (pl.col("player_id") == player_id) & (pl.col("game_date") == slate_date)
+        ).row(0, named=True)
+        serve_row = build_head_feature_lookup(logs, slate_date=slate_date)[player_id]
+        assert train_row["season_game_number"] == expected
+        assert serve_row["season_game_number"] == expected
+        assert train_row["season_game_number"] == serve_row["season_game_number"]
+
+
 def test_offline_corpus_season_game_number_undercounts_the_true_serve_time_value() -> None:
-    """DISCOVERED BUG, tracked at
-    https://github.com/cheeksmagunda/sports/issues/55 (out of scope to fix
-    in this audit PR -- the culprit lives in features/corpus.py and
-    features/game_features.py, outside train/).
+    """Issue #55 fixed: training and serving now agree on season_game_number.
 
-    features/corpus.py::build_gamelog_corpus skips any calendar date whose
-    ``build_rolling_features(as_of_date=d)`` comes back empty (true for a
-    corpus's earliest date(s), since nobody yet has a prior game) --  that
-    date's games never join into the corpus frame at all. Because
-    ``add_schedule_features`` then computes ``season_game_number`` via
-    ``cum_count()`` over the SURVIVING corpus rows (not the full game log),
-    every player's training-time season_game_number is undercounted by the
-    number of that player's leading dates the corpus dropped.
-
-    features/serving_features.py::_schedule_for_player has no such gap: it
-    counts prior games directly off the full raw game_logs table.
-
-    This test locks the CURRENT (divergent) values so a silent fix does not
-    slip in unnoticed -- when issue #55 is resolved, this test should be
-    updated (not skipped) to assert the corrected, matching value on both
-    paths.
+    The corpus builder precomputes the true chronological count from the full
+    game-log frame before rolling-feature joins can drop early dates, so the
+    offline corpus and serve-time lookup should now match for the same
+    player/date row.
     """
     logs = _multi_player_logs()
     corpus = build_gamelog_corpus(logs)
@@ -371,11 +401,4 @@ def test_offline_corpus_season_game_number_undercounts_the_true_serve_time_value
     lookup = build_head_feature_lookup(logs, slate_date=target_date)
     serve_row = lookup[1]
 
-    # True chronological game number for player 1 at this date is 4
-    # (2026-05-02, 05-05, 05-08, 05-11); serve gets it right, train does not.
-    assert train_row["season_game_number"] == 3
-    assert serve_row["season_game_number"] == 4
-    assert train_row["season_game_number"] != serve_row["season_game_number"], (
-        "train/serve season_game_number parity gap (issue #55) appears to be "
-        "fixed -- update this test to assert equality instead of divergence"
-    )
+    assert train_row["season_game_number"] == serve_row["season_game_number"] == 4

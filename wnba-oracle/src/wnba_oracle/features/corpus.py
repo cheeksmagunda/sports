@@ -36,6 +36,7 @@ from wnba_oracle.features.game_features import (
     add_schedule_features,
     add_targets,
     compute_opp_dvp_map,
+    compute_season_game_number,
     to_nba_api_schema,
 )
 from wnba_oracle.features.rolling import build_rolling_features
@@ -89,6 +90,13 @@ def build_gamelog_corpus(
     corpus = pl.concat(frames, how="diagonal_relaxed")
     corpus = add_targets(corpus)
     corpus = add_schedule_features(corpus)
+    season_game_numbers = compute_season_game_number(game_logs)
+    if not season_game_numbers.is_empty():
+        corpus = corpus.drop("season_game_number").join(
+            season_game_numbers,
+            on=["player_id", "season", "game_date"],
+            how="left",
+        )
     # Position is not carried in game logs; pool into a single cohort ("F") for
     # now. Splitting G/F/C needs a position source (Real Sports pool / identity
     # resolver) and is deferred -- on ~13k rows a single pooled cohort is the
