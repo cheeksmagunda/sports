@@ -137,7 +137,7 @@ def test_static_cap_one_game_slate_relaxed_by_feasibility_guard() -> None:
     assert rec.stacking_decision.team_cap_reason == "feasibility_relaxed"
 
 
-def test_contextual_static_cap_relaxes_only_to_smallest_feasible_value() -> None:
+def test_static_cap_relaxes_to_feasible_value() -> None:
     samp, fields = _two_team_pool()
     rec = optimize_lineup(
         samp,

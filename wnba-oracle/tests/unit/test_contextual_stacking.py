@@ -66,7 +66,7 @@ def _context(n_games: int = 2) -> _StackContext:
     )
 
 
-def test_balance_wins_inside_objective_margin() -> None:
+def test_hard_policy_prefers_balanced_shape() -> None:
     unrestricted = _candidate(1.20, _shape(games=1, teams=2, max_game=5, max_team=3), 0)
     game = _candidate(1.195, _shape(games=2, teams=3, max_game=3, max_team=2), 5)
     full = _candidate(1.191, _shape(games=2, teams=4, max_game=3, max_team=2), 10)
@@ -77,7 +77,7 @@ def test_balance_wins_inside_objective_margin() -> None:
     )
 
     assert selected is full
-    assert decision.reason == "team_balance_within_margin"
+    assert decision.reason == "hard_balance_selected"
     assert np.isclose(decision.objective_sacrifice, 0.009)
 
 
@@ -91,9 +91,9 @@ def test_clear_objective_advantage_allows_contextual_stack() -> None:
         _result(unrestricted, game, full), cfg, _context()
     )
 
-    assert selected is unrestricted
-    assert decision.reason == "contextual_ev_override"
-    assert decision.objective_sacrifice == 0.0
+    assert selected is full
+    assert decision.reason == "hard_balance_selected"
+    assert decision.objective_sacrifice == pytest.approx(0.03)
 
 
 def test_dual_pool_enumeration_avoids_union_cross_product() -> None:
@@ -363,8 +363,8 @@ def test_top_n_filter_preserves_concentrated_ev_override_candidate() -> None:
     )
 
     assert rec.stacking_decision is not None
-    assert rec.stacking_decision.reason == "contextual_ev_override"
-    assert rec.stacking_decision.selected_game_count == 1
+    assert rec.stacking_decision.reason == "hard_balance_selected"
+    assert rec.stacking_decision.selected_game_count == 2
     assert rec.stacking_decision.best_game_balanced_objective is not None
     assert (
         rec.stacking_decision.best_unrestricted_objective

@@ -114,8 +114,8 @@ def test_model_policy_setting_inventory_covers_current_settings_surface() -> Non
     assert model_fields == MODEL_POLICY_SETTING_FIELDS
     optimizer = build_model_policy(Settings.model_construct()).optimizer
     assert optimizer.ceiling_tilt_slots is True
-    assert optimizer.contextual_stacking_enabled is True
-    assert optimizer.contextual_stack_ev_margin == 0.01
+    assert optimizer.contextual_stacking_enabled is False
+    assert optimizer.contextual_stack_ev_margin == 0.0
     assert optimizer.committed_order_objective is False
 
 
@@ -163,8 +163,8 @@ def test_model_policy_round_trips_through_persisted_payload() -> None:
 def test_historical_v1_policy_replay_preserves_payload_hash() -> None:
     v1_payload = json.loads(json.dumps(build_model_policy(_settings()).to_payload()))
     v1_payload["schema_version"] = 1
-    v1_payload["optimizer"].pop("contextual_stacking_enabled")
-    v1_payload["optimizer"].pop("contextual_stack_ev_margin")
+    v1_payload["optimizer"].pop("contextual_stacking_enabled", None)
+    v1_payload["optimizer"].pop("contextual_stack_ev_margin", None)
     canonical = json.dumps(
         v1_payload,
         sort_keys=True,

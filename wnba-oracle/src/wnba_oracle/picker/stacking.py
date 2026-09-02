@@ -221,3 +221,16 @@ def meets_full_preference(shape: LineupShape, preference: StackPreference) -> bo
         meets_game_preference(shape, preference)
         and shape.team_count >= preference.target_team_count
     )
+
+
+def hard_lineup_shape_for_games(n_games: int) -> StackPreference:
+    """Return the deterministic anti-stacking shape for a slate's game count."""
+    if n_games <= 1:
+        return StackPreference(min_games=1, max_players_per_game=5, target_team_count=2)
+    if n_games == 2:
+        return StackPreference(min_games=2, max_players_per_game=3, target_team_count=4)
+    if n_games == 3:
+        return StackPreference(min_games=3, max_players_per_game=2, target_team_count=5)
+    if n_games == 4:
+        return StackPreference(min_games=4, max_players_per_game=2, target_team_count=5)
+    return StackPreference(min_games=5, max_players_per_game=1, target_team_count=5)

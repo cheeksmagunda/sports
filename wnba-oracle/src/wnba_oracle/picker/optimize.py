@@ -48,6 +48,7 @@ from wnba_oracle.picker.stacking import (
     StackingDecision,
     StackPreference,
     describe_lineup,
+    hard_lineup_shape_for_games,
     meets_full_preference,
     meets_game_preference,
     preference_for_slate,
@@ -458,10 +459,6 @@ def _scan_lineups(
             clones = inputs.field_lineup_counter.get(frozenset(combo), 0)
             if clones > 0:
                 objective /= float(1 + clones)
-        if not cfg.contextual_stacking_enabled and cfg.game_stack_bonus > 0.0:
-            pairs = _game_stack_pairs(combo, inputs.keep_teams, inputs.keep_opponents)
-            if pairs > 0:
-                objective += cfg.game_stack_bonus * pairs
         if leverage_on:
             leverage = float(-inputs.keep_log_own[list(combo)].mean())
             objective += cfg.leverage_weight * leverage
@@ -899,26 +896,19 @@ def _select_contextual_candidate(
     preference = stack_context.preference
     selected = best
     reason = "no_feasible_lineup"
-    if best is not None and not cfg.contextual_stacking_enabled:
-        reason = "policy_disabled"
-    elif best is not None and preference is None:
+    if best is not None and preference is None:
         reason = "metadata_incomplete"
     elif best is not None and preference is not None:
         full = result.best_fully_balanced
         game = result.best_game_balanced
-        margin = cfg.contextual_stack_ev_margin
         if full is not None and full.indices == best.indices:
             reason = "best_projected_balanced"
-        elif full is not None and best.objective - full.objective <= margin + 1e-12:
+        elif full is not None:
             selected = full
-            reason = "team_balance_within_margin"
-        elif game is not None and game.indices == best.indices:
-            reason = "best_projected_game_balanced"
-        elif game is not None and best.objective - game.objective <= margin + 1e-12:
+            reason = "hard_balance_selected"
+        elif game is not None:
             selected = game
-            reason = "game_balance_within_margin"
-        elif game is not None or full is not None:
-            reason = "contextual_ev_override"
+            reason = "hard_balance_selected"
         else:
             reason = "balance_infeasible"
 
@@ -960,7 +950,7 @@ def _select_contextual_candidate(
         ),
         objective_sacrifice=float(max(0.0, best_objective - selected_objective)),
         override_margin=float(cfg.contextual_stack_ev_margin),
-        legacy_stack_bonus_ignored=(cfg.contextual_stacking_enabled and cfg.game_stack_bonus > 0.0),
+        legacy_stack_bonus_ignored=cfg.game_stack_bonus > 0.0,
     )
     log.info(
         "optimizer_stacking_decision",
@@ -1069,7 +1059,7 @@ def optimize_lineup(
     n_games, max_per_team = _slate_limits(
         sampling_specs,
         cfg,
-        (stack_context.slate_game_count if cfg.contextual_stacking_enabled else None),
+        stack_context.slate_game_count,
     )
     pool = _filter_pool(
         sampling_specs,
@@ -1077,7 +1067,7 @@ def optimize_lineup(
         cfg.top_n_filter,
         float(np.max(slot_multipliers)),
         stack_context,
-        cfg.contextual_stacking_enabled or required_game_count is not None,
+        True,
     )
     log.info("optimizer_stage1", n_all=n_all, n_filtered=len(pool.sampling))
 
@@ -1116,7 +1106,7 @@ def optimize_lineup(
         curve=curve,
         field_size_total=cfg.n_field_lineups + 1,
         field_lineup_counter=field_lineup_counter,
-        stack_preference=(stack_context.preference if cfg.contextual_stacking_enabled else None),
+        stack_preference=stack_context.preference,
         required_game_count=required_game_count,
         unrestricted_indices=frozenset(
             index
