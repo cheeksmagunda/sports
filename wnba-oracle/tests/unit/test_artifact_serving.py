@@ -103,6 +103,30 @@ def test_production_run_fails_closed_without_artifact_sha() -> None:
     load_enrichment.assert_not_called()
 
 
+def test_production_run_fails_closed_on_artifact_sha_mismatch() -> None:
+    """A pinned SHA whose artifact is missing/unloadable must fail closed in
+    production, not silently serve the heuristic. _load_model_artifact returns
+    None on mismatch; run() must turn that into model_artifact_invalid (exit 1)
+    and never touch enrichment or freeze."""
+    from wnba_oracle.scheduler import job2
+
+    settings = SimpleNamespace(
+        env="prod",
+        model_artifact_sha="a" * 64,
+        pool_exclude_started_games=False,
+    )
+    with (
+        patch.object(job2, "get_settings", return_value=settings),
+        patch.object(job2, "_load_model_artifact", return_value=None),
+        patch.object(job2, "_load_enrichment") as load_enrichment,
+    ):
+        result = job2.run("2026-06-21")
+
+    assert result.reason == "model_artifact_invalid"
+    assert result.exit_code == 1
+    load_enrichment.assert_not_called()
+
+
 def test_load_model_artifact_roundtrip(tmp_path, monkeypatch) -> None:
     """Drop a fake artifact + sidecar into a temp models/ and confirm
     _load_model_artifact finds it by SHA."""

@@ -16,6 +16,7 @@ from oracle_core import (
 )
 
 from wnba_oracle.dossier import (
+    _extract_player_ids,
     _gap_exactness,
     _realized_oracle,
     build_dossier,
@@ -239,8 +240,13 @@ class TestBuildDossierUnit:
         mock_engine.return_value.connect.return_value.__exit__ = MagicMock(return_value=None)
 
         lineup_row = MagicMock()
-        lineup_row.lineup_json = json.dumps([100, 101, 102, 103, 104])
-        lineup_row.lineup = [100, 101, 102, 103, 104]
+        # Real frozen_lineups.lineup JSONB shape: a dict, not a bare list.
+        lineup_row.lineup = {
+            "player_ids": [100, 101, 102, 103, 104],
+            "slot_multipliers": [2.0, 1.8, 1.6, 1.4, 1.2],
+            "lineup_score_p50": 150.0,
+            "per_player": [],
+        }
 
         leaderboard_row = MagicMock()
         leaderboard_row.rank = 1
@@ -326,11 +332,24 @@ class TestBuildDossierUnit:
                 "team_key": "J",
             },
         ]
+        # Pad to a full slate (>=37 rows) so the ceiling is uncensored. The
+        # coverage threshold counts THIS slate's rows now that the pool is
+        # slate-scoped, so we need enough same-slate labels, not a mocked len().
+        label_rows += [
+            {
+                "platform_player_id": 300 + i,
+                "slate_date": "2026-08-30",
+                "real_score": 10.0 + i,
+                "card_boost": 0.0,
+                "team_key": f"T{i % 6}",
+            }
+            for i in range(27)
+        ]
 
         mock_df = MagicMock()
         mock_df.is_empty.return_value = False
         mock_df.to_dicts.return_value = label_rows
-        mock_df.__len__ = MagicMock(return_value=37)
+        mock_df.__len__ = MagicMock(return_value=len(label_rows))
         mock_read_labels.return_value = mock_df
 
         result = build_dossier("2026-08-30", engine=mock_engine.return_value)
@@ -371,3 +390,192 @@ class TestBuildDossierUnit:
         assert result.entries[EntryKind.THEORETICAL_CEILING].censor_reason is None
         assert result.gap_field_to_ceiling.exactness == Exactness.LOWER_BOUND
         assert result.gap_to_ceiling.exactness == Exactness.LOWER_BOUND
+
+
+class TestExtractPlayerIds:
+    """The live /dossier 500 regression: frozen_lineups.lineup is a JSONB
+    object ({"player_ids": [...]}) that psycopg returns as a dict, not the
+    bare list the reader used to assume."""
+
+    def test_extracts_from_stored_dict_payload(self) -> None:
+        payload = {
+            "player_ids": [100, 101, 102, 103, 104],
+            "slot_multipliers": [2.0, 1.8, 1.6, 1.4, 1.2],
+            "per_player": [{"player_id": 100}],
+        }
+        assert _extract_player_ids(payload) == [100, 101, 102, 103, 104]
+
+    def test_extracts_from_json_string_of_dict(self) -> None:
+        payload = json.dumps({"player_ids": [1, 2, 3, 4, 5]})
+        assert _extract_player_ids(payload) == [1, 2, 3, 4, 5]
+
+    def test_accepts_legacy_bare_list(self) -> None:
+        assert _extract_player_ids([9, 8, 7, 6, 5]) == [9, 8, 7, 6, 5]
+
+    def test_accepts_json_string_of_list(self) -> None:
+        assert _extract_player_ids(json.dumps([9, 8, 7])) == [9, 8, 7]
+
+    def test_dict_without_player_ids_returns_none(self) -> None:
+        assert _extract_player_ids({"slot_multipliers": [1.0]}) is None
+
+    def test_invalid_json_returns_none(self) -> None:
+        assert _extract_player_ids("{not json") is None
+
+    def test_unexpected_type_returns_none(self) -> None:
+        assert _extract_player_ids(12345) is None
+
+
+def _mock_engine_with_rows(mock_engine, lineup_row, leaderboard_row) -> MagicMock:
+    mock_conn = MagicMock()
+    mock_engine.return_value.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.return_value.connect.return_value.__exit__ = MagicMock(return_value=None)
+    mock_conn.execute.side_effect = [
+        MagicMock(first=MagicMock(return_value=lineup_row)),
+        MagicMock(first=MagicMock(return_value=leaderboard_row)),
+    ]
+    return mock_conn
+
+
+def _labels_df(rows: list[dict]) -> MagicMock:
+    df = MagicMock()
+    df.is_empty.return_value = False
+    df.to_dicts.return_value = rows
+    df.__len__ = MagicMock(return_value=len(rows))
+    return df
+
+
+class TestBuildDossierShapeAndScoping:
+    """Regression coverage for the two live defects: the committed lineup is a
+    dict payload, and the theoretical ceiling must be scoped to one slate."""
+
+    @patch("wnba_oracle.dossier.get_api_engine")
+    @patch("wnba_oracle.dossier.read_slate_labels")
+    def test_build_dossier_reads_committed_from_dict_payload(
+        self, mock_read_labels, mock_engine
+    ) -> None:
+        lineup_row = MagicMock()
+        lineup_row.lineup = {
+            "player_ids": [100, 101, 102, 103, 104],
+            "slot_multipliers": [2.0, 1.8, 1.6, 1.4, 1.2],
+            "per_player": [],
+        }
+        leaderboard_row = MagicMock()
+        leaderboard_row.rank = 1
+        leaderboard_row.score = 120.0
+
+        _mock_engine_with_rows(mock_engine, lineup_row, leaderboard_row)
+
+        rows = [
+            {
+                "platform_player_id": 100 + i,
+                "slate_date": "2026-08-30",
+                "real_score": 40.0 - i,
+                "card_boost": 0.0,
+                "team_key": f"T{i % 6}",
+            }
+            for i in range(40)
+        ]
+        mock_read_labels.return_value = _labels_df(rows)
+
+        result = build_dossier("2026-08-30", engine=mock_engine.return_value)
+
+        assert result is not None
+        committed = result.entries[EntryKind.COMMITTED]
+        # All five committed players have labels this slate -> achievable, exact.
+        assert committed.achievable is True
+        assert committed.censor_reason is None
+        assert committed.score > 0
+
+    @patch("wnba_oracle.dossier.get_api_engine")
+    @patch("wnba_oracle.dossier.read_slate_labels")
+    def test_ceiling_ignores_other_slates(self, mock_read_labels, mock_engine) -> None:
+        """A monster score on a different slate must not leak into this slate's
+        theoretical ceiling."""
+        lineup_row = MagicMock()
+        lineup_row.lineup = {"player_ids": [1, 2, 3, 4, 5]}
+        leaderboard_row = MagicMock()
+        leaderboard_row.rank = 1
+        leaderboard_row.score = 50.0
+
+        _mock_engine_with_rows(mock_engine, lineup_row, leaderboard_row)
+
+        target = [
+            {
+                "platform_player_id": i,
+                "slate_date": "2026-08-30",
+                "real_score": 10.0,
+                "card_boost": 0.0,
+                "team_key": f"T{i % 6}",
+            }
+            for i in range(1, 41)
+        ]
+        # Same player ids on a different slate with enormous scores.
+        other = [
+            {
+                "platform_player_id": i,
+                "slate_date": "2026-08-29",
+                "real_score": 9999.0,
+                "card_boost": 0.0,
+                "team_key": f"T{i % 6}",
+            }
+            for i in range(1, 41)
+        ]
+        mock_read_labels.return_value = _labels_df(target + other)
+
+        result = build_dossier("2026-08-30", engine=mock_engine.return_value)
+
+        assert result is not None
+        ceiling = result.entries[EntryKind.THEORETICAL_CEILING]
+        # Five players at 10.0 with default slot bases (2.0..1.2) sum to 80.0.
+        # A cross-slate leak would drive this into the tens of thousands.
+        assert ceiling.score < 100.0
+
+    @patch("wnba_oracle.dossier.get_api_engine")
+    @patch("wnba_oracle.dossier.read_slate_labels")
+    def test_returns_none_when_slate_has_no_labels(self, mock_read_labels, mock_engine) -> None:
+        lineup_row = MagicMock()
+        lineup_row.lineup = {"player_ids": [1, 2, 3, 4, 5]}
+        _mock_engine_with_rows(mock_engine, lineup_row, None)
+
+        # Labels exist, but only for a different slate.
+        other = [
+            {
+                "platform_player_id": i,
+                "slate_date": "2026-08-29",
+                "real_score": 10.0,
+                "card_boost": 0.0,
+                "team_key": "A",
+            }
+            for i in range(1, 6)
+        ]
+        mock_read_labels.return_value = _labels_df(other)
+
+        assert build_dossier("2026-08-30", engine=mock_engine.return_value) is None
+
+    @patch("wnba_oracle.dossier.get_api_engine")
+    @patch("wnba_oracle.dossier.read_slate_labels")
+    def test_ceiling_censored_when_slate_coverage_thin(self, mock_read_labels, mock_engine) -> None:
+        lineup_row = MagicMock()
+        lineup_row.lineup = {"player_ids": [1, 2, 3, 4, 5]}
+        leaderboard_row = MagicMock()
+        leaderboard_row.rank = 1
+        leaderboard_row.score = 50.0
+        _mock_engine_with_rows(mock_engine, lineup_row, leaderboard_row)
+
+        # Only 6 slate rows (< 37 threshold) -> ceiling censored.
+        rows = [
+            {
+                "platform_player_id": i,
+                "slate_date": "2026-08-30",
+                "real_score": 10.0,
+                "card_boost": 0.0,
+                "team_key": f"T{i}",
+            }
+            for i in range(1, 7)
+        ]
+        mock_read_labels.return_value = _labels_df(rows)
+
+        result = build_dossier("2026-08-30", engine=mock_engine.return_value)
+        assert result is not None
+        ceiling = result.entries[EntryKind.THEORETICAL_CEILING]
+        assert ceiling.censor_reason == CensoringReason.INCOMPLETE_LABELS
