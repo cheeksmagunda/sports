@@ -41,6 +41,10 @@ def test_paused_does_not_skip_dayclose() -> None:
         patch("sys.argv", ["oracle-cron", "--job", "dayclose"]),
         patch("wnba_oracle.scheduler.cron.get_settings", return_value=PAUSED),
         patch(
+            "wnba_oracle.scheduler.job_runtime._with_realsports_access",
+            side_effect=lambda _context, operation: operation(),
+        ),
+        patch(
             "wnba_oracle.scheduler.job_dayclose.run", return_value=JobResult.success()
         ) as dayclose_run,
     ):
