@@ -63,6 +63,9 @@ models/artifacts/
 !models/picker_bf3c8996_1780752059.sha256
 !models/picker_e2ced9ec_1780873338.pkl
 !models/picker_e2ced9ec_1780873338.sha256
+!models/picker_95264ce9_1788339935.pkl
+!models/picker_95264ce9_1788339935.sha256
+!models/picker_95264ce9_1788339935.manifest.json
 *.parquet
 !tests/fixtures/**/*.parquet
 
