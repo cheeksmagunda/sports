@@ -145,9 +145,8 @@ def _provider_team_to_opp(pool: list) -> dict[str, str]:
 
     Each player row can carry a provider ``game_id``. When exactly two distinct
     teams share that game, they define the authoritative slate matchup for this
-    capture. This prevents a later full Job 1 re-capture from overwriting
-    ``job1_enrichment.opponent`` with the team's next fixture from the odds
-    feed after the original slate has already tipped.
+    capture. The persistence layer separately retains a tipped game's identity
+    when a later full Job 1 re-capture presents the team's next fixture.
     """
 
     teams_by_game: dict[str, set[str]] = {}

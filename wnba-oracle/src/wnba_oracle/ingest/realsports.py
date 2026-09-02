@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 import unicodedata as _ud
 from collections.abc import Awaitable, Callable
@@ -729,11 +730,31 @@ async def fetch_contest_meta(
     return r.json() or {}
 
 
+async def _select_wnba_contest_id(
+    contest_ids: list[int],
+    headers: RequestHeaders,
+    client: httpx.AsyncClient,
+) -> int | None:
+    """Return the newest observed contest whose metadata confirms WNBA."""
+    for contest_id in sorted(set(contest_ids), reverse=True):
+        try:
+            meta = await fetch_contest_meta(contest_id, headers, client)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in {403, 404}:
+                continue
+            raise
+        contest = meta.get("info", {}).get("contest", {})
+        if contest.get("sport") == SPORT:
+            return contest_id
+    return None
+
+
 async def discover_wnba_contest_id() -> int | None:
     """Headless-browse realsports.io/?sport=wnba and capture the contest id
     from the /games/playerratingcontest/{id} URL the SPA hits.
 
-    Returns the int contest id, or None if no WNBA contest URL is observed.
+    Returns the newest contest id whose metadata confirms it is WNBA, or None
+    if no observed contest validates.
     Cheap to call (one Playwright session, ~5s); Job 1 calls it once per
     fire to seed the day's contest id into Redis.
     """
@@ -777,11 +798,11 @@ async def discover_wnba_contest_id() -> int | None:
             pass
         await browser.close()
 
-    # Need to distinguish WNBA contest from MLB. The discovered id list will
-    # include both if the user has both sports active. Caller validates with
-    # fetch_contest_meta and confirms info.contest.sport == "wnba".
     if not seen_ids:
         return None
-    # Return the maximum (most recent) id; both MLB and WNBA increment together.
-    # Caller validates sport.
-    return max(seen_ids)
+    headers = await headers_or_capture(
+        os.environ.get("WNBA_DEVICE_UUID", "wnba-oracle-prod-01-device"),
+        os.environ.get("WNBA_DEVICE_NAME", "wnba-oracle-prod-01"),
+    )
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        return await _select_wnba_contest_id(seen_ids, headers, client)

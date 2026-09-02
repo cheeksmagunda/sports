@@ -8,6 +8,7 @@ Railway cron run shows failed. The 2026-06-08 morning capture
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -69,6 +70,9 @@ def test_main_exits_zero_on_healthy_pool() -> None:
 
 def test_valid_capture_replaces_the_whole_slate_atomically() -> None:
     conn = MagicMock()
+    tip = MagicMock()
+    tip.scalar_one_or_none.return_value = None
+    conn.execute.side_effect = [tip, [], MagicMock(), MagicMock(), MagicMock()]
     rows = [
         {"slate_date": "2026-06-08", "player_id": 1},
         {"slate_date": "2026-06-08", "player_id": 2},
@@ -77,11 +81,126 @@ def test_valid_capture_replaces_the_whole_slate_atomically() -> None:
     persisted = job1._replace_enrichment(conn, "2026-06-08", rows)
 
     assert persisted == 2
-    assert conn.execute.call_count == 3
-    first = conn.execute.call_args_list[0]
-    assert str(first.args[0]) == str(job1.JOB1_DELETE_SLATE)
-    assert first.args[1] == {"slate_date": "2026-06-08"}
-    assert [call.args[1] for call in conn.execute.call_args_list[1:]] == rows
+    assert conn.execute.call_count == 5
+    delete = conn.execute.call_args_list[2]
+    assert str(delete.args[0]) == str(job1.JOB1_DELETE_SLATE)
+    assert delete.args[1] == {"slate_date": "2026-06-08"}
+    assert [call.args[1] for call in conn.execute.call_args_list[3:]] == rows
+
+
+def test_post_tip_capture_preserves_existing_game_identity() -> None:
+    conn = MagicMock()
+    tip = MagicMock()
+    tip.scalar_one_or_none.return_value = None
+    conn.execute.side_effect = [
+        tip,
+        [
+            (
+                1,
+                "NYL",
+                {"game_id": "4512", "game_start_utc": "2026-06-08T23:00:00Z"},
+            )
+        ],
+        MagicMock(),
+        MagicMock(),
+    ]
+    rows = [
+        {
+            "slate_date": "2026-06-08",
+            "player_id": 1,
+            "opponent": "CHI",
+            "features_json": json.dumps(
+                {"game_id": "5678", "game_start_utc": "2026-06-11T23:00:00Z"}
+            ),
+        }
+    ]
+
+    job1._replace_enrichment(
+        conn,
+        "2026-06-08",
+        rows,
+        captured_at=dt.datetime(2026, 6, 9, tzinfo=dt.UTC),
+    )
+
+    persisted = conn.execute.call_args_list[-1].args[1]
+    assert persisted["opponent"] == "NYL"
+    assert json.loads(persisted["features_json"]) == {
+        "game_id": "4512",
+        "game_start_utc": "2026-06-08T23:00:00Z",
+    }
+
+
+def test_pre_tip_capture_refreshes_game_identity() -> None:
+    conn = MagicMock()
+    tip = MagicMock()
+    tip.scalar_one_or_none.return_value = None
+    conn.execute.side_effect = [
+        tip,
+        [
+            (
+                1,
+                "NYL",
+                {"game_id": "4512", "game_start_utc": "2026-06-08T23:00:00Z"},
+            )
+        ],
+        MagicMock(),
+        MagicMock(),
+    ]
+    rows = [
+        {
+            "slate_date": "2026-06-08",
+            "player_id": 1,
+            "opponent": "CHI",
+            "features_json": json.dumps(
+                {"game_id": "5678", "game_start_utc": "2026-06-11T23:00:00Z"}
+            ),
+        }
+    ]
+
+    job1._replace_enrichment(
+        conn,
+        "2026-06-08",
+        rows,
+        captured_at=dt.datetime(2026, 6, 8, 22, tzinfo=dt.UTC),
+    )
+
+    persisted = conn.execute.call_args_list[-1].args[1]
+    assert persisted["opponent"] == "CHI"
+    assert json.loads(persisted["features_json"]) == {
+        "game_id": "5678",
+        "game_start_utc": "2026-06-11T23:00:00Z",
+    }
+
+
+def test_post_tip_capture_uses_slate_tip_when_player_start_is_missing() -> None:
+    conn = MagicMock()
+    tip = MagicMock()
+    tip.scalar_one_or_none.return_value = dt.datetime(2026, 6, 8, 23, tzinfo=dt.UTC)
+    conn.execute.side_effect = [
+        tip,
+        [(1, "NYL", {"game_id": "4512"})],
+        MagicMock(),
+        MagicMock(),
+    ]
+    rows = [
+        {
+            "slate_date": "2026-06-08",
+            "player_id": 1,
+            "opponent": "CHI",
+            "features_json": json.dumps({"game_id": "5678"}),
+        }
+    ]
+
+    job1._replace_enrichment(
+        conn,
+        "2026-06-08",
+        rows,
+        captured_at=dt.datetime(2026, 6, 9, tzinfo=dt.UTC),
+    )
+
+    persisted = conn.execute.call_args_list[-1].args[1]
+    assert persisted["opponent"] == "NYL"
+    assert json.loads(persisted["features_json"]) == {"game_id": "4512"}
 
 
 def test_enrichment_row_preserves_provider_signal_shape() -> None:

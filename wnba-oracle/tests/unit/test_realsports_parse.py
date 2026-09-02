@@ -2,9 +2,25 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 
-from wnba_oracle.ingest.realsports import _parse_pool
+from wnba_oracle.ingest import realsports
+from wnba_oracle.ingest.realsports import RequestHeaders, _parse_pool
+
+
+def _headers() -> RequestHeaders:
+    return RequestHeaders(
+        real_request_token="token",
+        real_version="31",
+        real_device_type="desktop_web",
+        real_device_uuid="uuid",
+        real_device_id="device-id",
+        real_device_name="device-name",
+        real_auth_info="auth",
+        user_agent="user-agent",
+        captured_at=0.0,
+    )
 
 
 def test_parse_pool_basic() -> None:
@@ -90,3 +106,35 @@ def test_parse_pool_empty_display_name_falls_back_to_first_last() -> None:
     }
     out = _parse_pool(body)
     assert out[0].display_name == "Frieda Buhner"
+
+
+@pytest.mark.asyncio
+async def test_contest_discovery_selects_newest_validated_wnba_id() -> None:
+    requested_ids: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        contest_id = int(request.url.path.rsplit("/", maxsplit=1)[-1])
+        requested_ids.append(contest_id)
+        sport = {2118: "soccer", 2117: "wnba", 2116: "mlb"}[contest_id]
+        return httpx.Response(200, json={"info": {"contest": {"sport": sport}}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        contest_id = await realsports._select_wnba_contest_id(
+            [2116, 2118, 2117], _headers(), client
+        )
+
+    assert contest_id == 2117
+    assert requested_ids == [2118, 2117]
+
+
+@pytest.mark.asyncio
+async def test_contest_discovery_returns_none_when_no_candidate_is_wnba() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        contest_id = int(request.url.path.rsplit("/", maxsplit=1)[-1])
+        sport = {2118: "soccer", 2116: "mlb"}[contest_id]
+        return httpx.Response(200, json={"info": {"contest": {"sport": sport}}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        contest_id = await realsports._select_wnba_contest_id([2116, 2118], _headers(), client)
+
+    assert contest_id is None
