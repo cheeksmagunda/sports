@@ -12,6 +12,7 @@ The public package includes:
 - PostgreSQL transaction, Redis key-value, lease, and JSON cache primitives;
 - registered job execution with roles, lifecycle events, clocks, and leases;
 - generic FastAPI root and health behavior;
+- dossier entry and gap schema for contest analysis;
 - atomic artifact persistence, integrity checks, and deterministic test fakes.
 
 Applications retain ownership of their settings extensions, database schema,

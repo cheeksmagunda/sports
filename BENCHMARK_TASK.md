@@ -14,13 +14,15 @@ days) and accepted only 35/100 slates. The fix plus a new
 `--report-coverage`/`--min-eligible-slates` preflight gate recovers coverage
 to 78/100. **No sweep has run against the fixed code yet.**
 
-See `wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md` (once written) for the
-real-money motivation: a live "Draft"-format entry built from the system's
-2026-08-28 picks scored 29.92, placing 6384th of 6800. If that postmortem
-implicates `starter_unknown_fade` (relaxed 1.0 → 0.75 in #24) or the
-leverage/ceiling weighting, this benchmark sweep is the evidence-gated way to
-validate any proposed revert — do not ship a knob change off one slate's
-result alone.
+See `wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md` for the real-money
+motivation: a live "Draft"-format entry built from the system's 2026-08-28
+picks scored 29.92, placing 6384th of 6800. That postmortem clears
+`starter_unknown_fade` (relaxed 1.0 → 0.75 in #24; confirmed not a
+contributing factor) and instead flags `committed_order_objective` as the
+one open, evidence-worthy lead — already a knob in this benchmark's grid
+(`knob:committed_order_objective_off`). This benchmark sweep is the
+evidence-gated way to validate any proposed change there — do not ship a
+knob change off one slate's result alone.
 
 ## What Was Completed
 - ✅ Benchmark script implemented, sharded across 20 parallel workflow jobs
@@ -40,7 +42,7 @@ result alone.
    - Verify all shards complete successfully
 
 2. **Merge shard results**
-   - Consolidate results from 16 shards
+   - Consolidate results from 20 shards
    - Ensure no data loss or corruption in merge
    - Validate merged dataset integrity
 
@@ -78,7 +80,7 @@ result alone.
 2. Dispatch `model-research-benchmark.yml` via `workflow_dispatch` (defaults: `n_samples=3500`, `temperature_variants=4`, `min_eligible_slates=60`)
 3. Monitor shard completion (`gh run watch` / `gh run view`)
 4. Download shard artifacts and run `--merge-shards shard*/benchmark_results.json --output-dir merged/`
-5. Read the generated `MODEL_RESEARCH_BENCHMARK.md`; cross-reference against `MODEL_PICK_POSTMORTEM_2026-08-28.md` if it exists
+5. Read the generated `MODEL_RESEARCH_BENCHMARK.md`; cross-reference against `MODEL_PICK_POSTMORTEM_2026-08-28.md`
 6. Open a PR for any evidence-gated knob change; do not promote a knob off a single-slate result
 
 ## References

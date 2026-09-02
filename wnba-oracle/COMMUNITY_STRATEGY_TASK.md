@@ -39,28 +39,28 @@ Read these before writing anything:
   platform's `/entries` endpoint: each of the 5 picks' `playerId`,
   `multiplier`, `multiplierBonus` (= card_boost), `value` (= realized
   raw score), `displayName`, team). Read via
-  `wnba_oracle/src/wnba_oracle/db/reads.py::read_leaderboards`.
-- **`wnba_oracle/src/wnba_oracle/picker/popularity.py`**: an existing
+  `wnba-oracle/src/wnba_oracle/db/reads.py::read_leaderboards`.
+- **`wnba-oracle/src/wnba_oracle/picker/popularity.py`**: an existing
   draft-popularity/ownership estimator + "contrarian adjustment" (ported
   from a prior NBA project, citing a -0.457 correlation between draft
   popularity and realized boost). Prefers *measured* draft counts
   (`slate_labels.drafts`, captured pre-lock) over the heuristic when
   available.
-- **`wnba_oracle/src/wnba_oracle/picker/field.py`**: ownership/field
+- **`wnba-oracle/src/wnba_oracle/picker/field.py`**: ownership/field
   modeling with an explicit documented finding (D86) that estimating the
   competitive field from our *own* projections creates a feedback loop —
   the model ships chalk it likes, the real field also owns that chalk
   heavily, and the lineup finishes mid-pack. This is the same failure mode
   this task is chasing at the lineup-construction level, already solved once
   at the ownership level — check whether the same lesson generalizes.
-- **`wnba_oracle/src/wnba_oracle/picker/optimize.py`**: `leverage_weight`,
+- **`wnba-oracle/src/wnba_oracle/picker/optimize.py`**: `leverage_weight`,
   `ceiling_weight`, `duplication_weight` are real, wired-in objective terms
   (not aspirational) — `leverage = mean(-log(ownership))` over the 5 picks,
   rewarded when `leverage_weight > 0`. Confirm their actual production
-  values (`Settings` in `wnba_oracle/src/wnba_oracle/common/settings.py`,
+  values (`Settings` in `wnba-oracle/src/wnba_oracle/common/settings.py`,
   and/or `model_provenance.serving_knobs` on a recent `frozen_lineups` row)
   before assuming they're on, off, or at what strength.
-- **`wnba_oracle/src/wnba_oracle/ingest/contest_stats.py`**:
+- **`wnba-oracle/src/wnba_oracle/ingest/contest_stats.py`**:
   `fetch_contest_stats` pulls three community-aggregate sections per contest
   — `highestBoostedValuePlayers`, `popularPlayers`, `mostCommon3xPlayers` —
   directly from the platform. Check whether these are persisted anywhere

@@ -126,8 +126,11 @@ commands, but cannot weaken this contract.
   `STATUS.md`. Development progress and history belong in GitHub Issues and PRs.
 - Decision rationale belongs in issues, PRs, tests, code comments, or commits.
   Do not create competing markdown ledgers.
-- `AGENTS.md` is the only agent-instruction format in this repository. Do not
-  add model-specific instruction files or compatibility shims.
+- `AGENTS.md` is the only agent-instruction format in this repository. Each
+  `CLAUDE.md` is a plain symlink to its sibling `AGENTS.md`, present only
+  because Claude Code does not read `AGENTS.md` natively. Do not add any
+  other model-specific instruction file or a shim that carries separate
+  content.
 
 ## Context synchronization
 
