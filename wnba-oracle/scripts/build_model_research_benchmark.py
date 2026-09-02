@@ -670,6 +670,141 @@ def load_game_identity_csv(path: Path) -> Any:
     )
 
 
+def load_game_logs_csv(path: Path) -> Any:
+    """Load the prefetched full ``wnba_game_logs`` export (see
+    ``scripts/export_game_logs.py``) into the same shape ``db.reads.read_game_logs``
+    returns: one row per player-game, stored (lowercase) schema.
+
+    This is the corpus ``features.serving_features.build_head_feature_lookup``
+    and ``features.game_features.compute_team_pace_map`` /
+    ``compute_opp_dvp_map`` build causal features from -- the ONLY input that
+    lets ``job2_model._predict_heads_for_pool`` actually exercise
+    ``art.heads`` (#53). Every consumer applies its own as-of-date causality
+    filter on top of this frame; loading it here does not itself introduce
+    leakage.
+    """
+    import polars as pl
+
+    return pl.read_csv(
+        path,
+        schema_overrides={
+            "game_date": pl.Utf8,
+            "player_id": pl.Int64,
+            "player_name": pl.Utf8,
+            "first_initial": pl.Utf8,
+            "last_name": pl.Utf8,
+            "team": pl.Utf8,
+            "opponent": pl.Utf8,
+            "home_away": pl.Utf8,
+            "game_id": pl.Utf8,
+            "min": pl.Float64,
+            "season": pl.Utf8,
+            "pts": pl.Float64,
+            "reb": pl.Float64,
+            "oreb": pl.Float64,
+            "dreb": pl.Float64,
+            "ast": pl.Float64,
+            "stl": pl.Float64,
+            "blk": pl.Float64,
+            "tov": pl.Float64,
+            "fgm": pl.Float64,
+            "fga": pl.Float64,
+            "fg3m": pl.Float64,
+            "ftm": pl.Float64,
+            "fta": pl.Float64,
+        },
+    )
+
+
+def _build_slate_head_context(
+    sd: Any,
+    game_logs: Any,
+    head_resolver: Any,
+) -> tuple[dict, dict[str, float], dict[str, float]]:
+    """#53: causal (head_feats, opp_dvp, team_pace) for one slate.
+
+    Filters ``game_logs`` to games strictly before ``sd`` BEFORE computing
+    anything: ``compute_team_pace_map``/``compute_opp_dvp_map`` do not filter
+    internally (same contract job1.py relies on with its naturally
+    past-only live game_logs). ``build_head_feature_lookup`` filters
+    internally on ``as_of_date=sd``, so passing it the pre-filtered frame is
+    still correct, just redundant-safe. Any build failure degrades to empty
+    dicts (matches job1.py's own degrade-to-{} contract) rather than
+    propagating and dropping the whole slate.
+    """
+    import polars as pl
+
+    from wnba_oracle.features.serving_features import (
+        build_head_feature_lookup,
+        build_opp_dvp_lookup,
+        build_team_pace_lookup,
+    )
+
+    if head_resolver is None or game_logs is None:
+        return {}, {}, {}
+    try:
+        causal_logs = game_logs.filter(pl.col("game_date") < str(sd))
+        head_feats = build_head_feature_lookup(causal_logs, slate_date=str(sd))
+        opp_dvp = build_opp_dvp_lookup(causal_logs)
+        team_pace = build_team_pace_lookup(causal_logs)
+    except Exception as exc:  # pragma: no cover - defensive, matches job1.py
+        print(f"head_features: build failed for {sd} ({exc}); skipping", file=sys.stderr)
+        return {}, {}, {}
+    return head_feats, opp_dvp, team_pace
+
+
+def _head_feature_for_player(
+    *,
+    pid: int,
+    display_name: str,
+    team: str,
+    opponent: str,
+    head_feats: dict,
+    opp_dvp: dict[str, float],
+    team_pace: dict[str, float],
+    head_resolver: Any,
+) -> dict[str, float] | None:
+    """One player's enrichment ``head_features`` row, mirroring job1.py's
+    resolver-first-then-name-fallback lookup and pace/DvP injection
+    (#53)."""
+    from wnba_oracle.features.serving_features import lookup as head_feature_lookup
+
+    if not head_feats:
+        return None
+    head_feature = None
+    if head_resolver is not None:
+        try:
+            resolved_pid = head_resolver.resolve(str(pid), display_name=display_name, team=team)
+        except Exception:
+            resolved_pid = None
+        if resolved_pid is not None:
+            head_feature = head_feats.get(resolved_pid)
+    if head_feature is None:
+        head_feature = head_feature_lookup(head_feats, display_name=display_name, team=team)
+    if head_feature is None:
+        return None
+    head_feature = dict(head_feature)
+    opponent_abbr = str(opponent or "").upper()
+    head_feature["team_pace"] = team_pace.get(team, 0.0)
+    head_feature["opp_pace"] = team_pace.get(opponent_abbr, 0.0)
+    # off_rtg/def_rtg require a live nba_api pull, same gap job1.py has today
+    # (see its comment on team_stats) -- zero-filled here rather than
+    # fabricated.
+    head_feature.setdefault("team_off_rtg", 0.0)
+    head_feature.setdefault("team_def_rtg", 0.0)
+    head_feature.setdefault("opp_off_rtg", 0.0)
+    head_feature.setdefault("opp_def_rtg", 0.0)
+    if head_feature["team_pace"] and head_feature["opp_pace"]:
+        head_feature["game_pace_implied"] = (
+            head_feature["team_pace"] + head_feature["opp_pace"]
+        ) / 2.0
+    defensive_value = opp_dvp.get(opponent_abbr, 0.0)
+    head_feature["opp_dvp_guard"] = defensive_value
+    head_feature["opp_dvp_forward"] = defensive_value
+    head_feature["opp_dvp_center"] = defensive_value
+    return head_feature
+
+
 def index_game_identity(identity: Any) -> dict[str, dict[int, dict[str, str]]]:
     """Per-player identity rows -> {slate_date: {player_id: {team, opponent, game_id}}}.
 
@@ -723,6 +858,7 @@ def _precompute_slates(
     game_identity_csv: Path | None = None,
     shard: tuple[int, int] | None = None,
     policy: Any = None,
+    game_logs_csv: Path | None = None,
 ) -> tuple[dict[str, dict[str, Any]], int]:
     """Load labels, leaderboards, and validated game identity (database, or
     offline corpus-backup / prefetch CSVs) and build the production sampling
@@ -751,6 +887,7 @@ def _precompute_slates(
         sl = load_labels_csv(labels_csv)
         lb = load_leaderboards_csv(leaderboards_csv)
         identity = load_game_identity_csv(game_identity_csv) if game_identity_csv else None
+        game_logs = load_game_logs_csv(game_logs_csv) if game_logs_csv else None
         # Offline mode has no engine: serve measured drafts from the CSV so
         # the D86 measured-ownership path matches the live path.
         import wnba_oracle.scheduler.job2 as _job2
@@ -758,12 +895,38 @@ def _precompute_slates(
         measured = drafts_by_slate(sl)
         _job2._load_measured_drafts = lambda sd: measured.get(str(sd), {})
     else:
-        from wnba_oracle.db.reads import read_game_identity, read_leaderboards, read_slate_labels
+        from wnba_oracle.db.reads import (
+            read_game_identity,
+            read_game_logs,
+            read_leaderboards,
+            read_slate_labels,
+        )
 
         sl = read_slate_labels()
         lb = read_leaderboards()
         identity = read_game_identity()
+        game_logs = read_game_logs()
     identity_by_slate = index_game_identity(identity) if identity is not None else {}
+
+    # #53: build head_features per slate from the gamelog corpus so
+    # job2_model._predict_heads_for_pool can actually exercise art.heads,
+    # exactly like job1.py does at live serve time. Every lookup below is
+    # rebuilt per slate off game_logs FILTERED to games strictly before that
+    # slate's date -- game_logs (this full-history export or the live table)
+    # spans dates on both sides of any one slate, unlike job1's live call
+    # where read_game_logs() naturally only contains already-played games.
+    # The Resolver only reads the nba_api static player catalog + a local
+    # overrides file (see ingest/identity.py), so it is DB-free and safe to
+    # build once, offline, and reuse across every slate.
+    head_resolver = None
+    if game_logs is not None and not game_logs.is_empty():
+        try:
+            from wnba_oracle.ingest.identity import build_resolver
+
+            head_resolver = build_resolver()
+        except Exception as exc:  # pragma: no cover - defensive, matches job1.py
+            print(f"head_features: resolver build failed ({exc}); skipping", file=sys.stderr)
+            head_resolver = None
 
     slates_2026 = {d for d in sl["slate_date"].unique().to_list() if str(d).startswith("2026-")}
     valid = sorted(slates_2026 & set(lb["slate_date"].unique().to_list()))
@@ -804,10 +967,14 @@ def _precompute_slates(
         if not day_identity:
             drops["no_identity_rows"] += 1
             continue
+        # #53: causal head_features for this slate (see _build_slate_head_context).
+        head_feats, opp_dvp, team_pace = _build_slate_head_context(sd, game_logs, head_resolver)
+
         boost_by: dict[int, float] = {}
         rs_by: dict[int, float] = {}
         enrichment = []
         n_with_game_id = 0
+        n_with_head_features = 0
         for r in slate.iter_rows(named=True):
             # Supplemental finisher-lineup labels are not draftable pool
             # entries and carry the 'UNK' team sentinel; production's pool
@@ -828,6 +995,19 @@ def _precompute_slates(
             if ident["game_id"]:
                 features["game_id"] = ident["game_id"]
                 n_with_game_id += 1
+            head_feature = _head_feature_for_player(
+                pid=pid,
+                display_name=str(r["display_name"]),
+                team=ident["team"],
+                opponent=ident["opponent"],
+                head_feats=head_feats,
+                opp_dvp=opp_dvp,
+                team_pace=team_pace,
+                head_resolver=head_resolver,
+            )
+            if head_feature is not None:
+                features["head_features"] = head_feature
+                n_with_head_features += 1
             enrichment.append(
                 {
                     "real_sports_player_id": str(pid),
@@ -861,6 +1041,7 @@ def _precompute_slates(
             "field_size": field_size,
             "pool_size": len(enrichment),
             "n_with_game_id": n_with_game_id,
+            "n_with_head_features": n_with_head_features,
             "game_key_method": game_key_method,
             "n_games": n_games,
         }
@@ -1059,6 +1240,17 @@ def main() -> int:
     parser.add_argument("--labels-csv", type=Path, default=None)
     parser.add_argument("--leaderboards-csv", type=Path, default=None)
     parser.add_argument("--game-identity-csv", type=Path, default=None)
+    parser.add_argument(
+        "--game-logs-csv",
+        type=Path,
+        default=None,
+        help=(
+            "Offline wnba_game_logs export (scripts/export_game_logs.py). Without "
+            "this, offline runs never populate head_features and every "
+            "prediction falls through to the artifact-independent eb_baseline "
+            "tier (#53)."
+        ),
+    )
     parser.add_argument("--shard-index", type=int, default=0)
     parser.add_argument("--shard-count", type=int, default=1)
     parser.add_argument(
@@ -1133,6 +1325,15 @@ def main() -> int:
             "rather than assigned a fabricated opponent.",
             file=sys.stderr,
         )
+    if offline and args.game_logs_csv is None:
+        print(
+            "WARNING: offline mode without --game-logs-csv; head_features will "
+            "never be populated, so job2_model._predict_heads_for_pool always "
+            "returns {} and every variant falls through to the "
+            "artifact-independent eb_baseline tier -- the harness will be "
+            "structurally incapable of distinguishing artifacts (#53).",
+            file=sys.stderr,
+        )
 
     os.environ.setdefault(
         "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
@@ -1161,6 +1362,7 @@ def main() -> int:
         args.game_identity_csv,
         shard=(args.shard_index, args.shard_count),
         policy=policy,
+        game_logs_csv=args.game_logs_csv,
     )
     # Full accounting to stderr: every exclusion reason, not just one of them.
     # A silently shrinking corpus biases variant ranking toward whichever

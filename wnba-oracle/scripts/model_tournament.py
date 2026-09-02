@@ -71,6 +71,7 @@ def precompute_pool_for_artifact(
     leaderboards_csv: Path | None,
     game_identity_csv: Path | None,
     policy: Any,
+    game_logs_csv: Path | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, int]]:
     """Build the per-slate optimizer inputs for one artifact.
 
@@ -91,6 +92,7 @@ def precompute_pool_for_artifact(
             leaderboards_csv,
             game_identity_csv,
             policy=policy,
+            game_logs_csv=game_logs_csv,
         )
     finally:
         job2_mod._load_model_artifact = original
@@ -106,6 +108,7 @@ def run_variant(
     leaderboards_csv: Path | None,
     game_identity_csv: Path | None,
     policy: Any,
+    game_logs_csv: Path | None = None,
 ) -> dict[str, Any]:
     """Load one artifact and replay the full eligible slate pool under it."""
     art = load_variant_artifact(artifact_path)
@@ -116,6 +119,7 @@ def run_variant(
         leaderboards_csv=leaderboards_csv,
         game_identity_csv=game_identity_csv,
         policy=policy,
+        game_logs_csv=game_logs_csv,
     )
     rows, n_optimizer_error, n_optimizer_infeasible = benchmark._run_variant(
         {"name": name, "overrides": {}, "sigma_scale": 1.0},
@@ -341,6 +345,14 @@ def main() -> int:
     parser.add_argument("--labels-csv")
     parser.add_argument("--leaderboards-csv")
     parser.add_argument("--game-identity-csv")
+    parser.add_argument(
+        "--game-logs-csv",
+        help=(
+            "Offline wnba_game_logs export (scripts/export_game_logs.py). Without "
+            "this, offline runs never populate head_features and every variant "
+            "falls through to the artifact-independent eb_baseline tier (#53)."
+        ),
+    )
     parser.add_argument("--n-samples", type=int)
     parser.add_argument("--max-slates", type=int)
     parser.add_argument("--baseline-artifact", required=True)
@@ -353,6 +365,7 @@ def main() -> int:
     labels_csv = Path(args.labels_csv) if args.labels_csv else None
     leaderboards_csv = Path(args.leaderboards_csv) if args.leaderboards_csv else None
     game_identity_csv = Path(args.game_identity_csv) if args.game_identity_csv else None
+    game_logs_csv = Path(args.game_logs_csv) if args.game_logs_csv else None
     offline = labels_csv is not None and leaderboards_csv is not None
     if (labels_csv is None) != (leaderboards_csv is None):
         print("--labels-csv and --leaderboards-csv must be given together", file=sys.stderr)
@@ -364,6 +377,15 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    if offline and game_logs_csv is None:
+        print(
+            "WARNING: offline mode without --game-logs-csv; head_features will "
+            "never be populated, so job2_model._predict_heads_for_pool always "
+            "returns {} and every variant falls through to the "
+            "artifact-independent eb_baseline tier -- baseline and challenger "
+            "will be structurally incapable of diverging (#53).",
+            file=sys.stderr,
+        )
 
     os.environ.setdefault("PAYOUT_REGIME", "top_20")
     os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
@@ -398,6 +420,7 @@ def main() -> int:
                 leaderboards_csv=leaderboards_csv,
                 game_identity_csv=game_identity_csv,
                 policy=policy,
+                game_logs_csv=game_logs_csv,
             )
         )
 
