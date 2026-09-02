@@ -178,6 +178,28 @@ def add_schedule_features(
     return out.drop(["_gd", "_days_rest_raw"])
 
 
+def compute_season_game_number(
+    game_logs: pl.DataFrame,
+    *,
+    date_col: str = "game_date",
+    season_col: str = "season",
+    player_col: str = "player_id",
+) -> pl.DataFrame:
+    """Return the true chronological season game number for each game-log row."""
+    if game_logs.is_empty():
+        return pl.DataFrame()
+
+    out = (
+        game_logs.select([player_col, season_col, date_col])
+        .unique()
+        .sort([player_col, season_col, date_col])
+    )
+    out = out.with_columns(
+        pl.col(date_col).cum_count().over([player_col, season_col]).alias("season_game_number")
+    )
+    return out.with_columns(pl.col("season_game_number").cast(pl.Int64))
+
+
 def compute_opp_dvp_map(game_logs: pl.DataFrame) -> dict[str, float]:
     """Per-opponent mean real_score allowed (season-wide), from game_logs.
 
