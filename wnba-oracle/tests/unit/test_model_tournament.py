@@ -4,13 +4,13 @@ import importlib.util
 import json
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "model_tournament.py"
 
 
 def _load_module():
     spec = importlib.util.spec_from_file_location("model_tournament", SCRIPT)
-    assert spec and spec.loader
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

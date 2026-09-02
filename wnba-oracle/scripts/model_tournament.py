@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 from pathlib import Path
 
-import importlib.util
-
 SCRIPT = Path(__file__).resolve().with_name("build_model_research_benchmark.py")
 spec = importlib.util.spec_from_file_location("build_model_research_benchmark", SCRIPT)
-assert spec and spec.loader
+assert spec is not None
+assert spec.loader is not None
 benchmark = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(benchmark)
 
@@ -35,9 +35,13 @@ def main() -> int:
     )
     results = {
         "variants": variants,
-        "comparisons": [{"baseline": "baseline", "challenger": v["name"], "paired": True} for v in variants[1:]],
+        "comparisons": [
+            {"baseline": "baseline", "challenger": v["name"], "paired": True} for v in variants[1:]
+        ],
     }
-    (output_dir / "tournament_results.json").write_text(json.dumps(results, indent=2, sort_keys=True))
+    (output_dir / "tournament_results.json").write_text(
+        json.dumps(results, indent=2, sort_keys=True)
+    )
     (output_dir / "TOURNAMENT_REPORT.md").write_text(
         "# Tournament Report\n\n"
         + "Paired slate comparisons cover committed-order score, payout, placement with right-censoring, "
