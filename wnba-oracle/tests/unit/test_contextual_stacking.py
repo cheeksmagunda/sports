@@ -270,6 +270,30 @@ def test_large_flat_slate_limits_preferred_game_concentration_to_two() -> None:
     assert rec.stacking_decision.selected_max_players_per_game == 2
 
 
+def test_hard_policy_remains_active_when_legacy_toggle_is_disabled() -> None:
+    sampling, field = _slate(3)
+    rec = optimize_lineup(
+        sampling,
+        field,
+        default_curve_for_regime("top_20"),
+        cfg=OptimizeConfig(
+            top_n_filter=18,
+            n_samples=40,
+            n_field_lineups=6,
+            seed=5,
+            contextual_stacking_enabled=False,
+        ),
+    )
+
+    assert rec.stacking_decision is not None
+    assert rec.stacking_decision.enabled is False
+    assert rec.stacking_decision.selected_game_count is not None
+    assert rec.stacking_decision.selected_game_count >= 2
+    assert rec.stacking_decision.selected_max_players_per_game is not None
+    assert rec.stacking_decision.selected_max_players_per_game <= 2
+    assert rec.stacking_decision.selected_team_count >= 4
+
+
 def test_contextual_decision_is_stable_under_input_reordering() -> None:
     sampling, field = _slate(2)
     cfg = OptimizeConfig(
