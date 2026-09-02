@@ -234,7 +234,9 @@ def _apply_causal_pace(corpus: pl.DataFrame, game_logs: pl.DataFrame) -> pl.Data
         if pace_map:
             n_dates_with_pace += 1
         for team, pace in pace_map.items():
-            lookup_rows.append({"game_date": d, "_pace_team": str(team).upper(), "_pace": float(pace)})
+            lookup_rows.append(
+                {"game_date": d, "_pace_team": str(team).upper(), "_pace": float(pace)}
+            )
 
     log.info("corpus_pace_computed_causal", n_dates=len(dates), n_dates_with_pace=n_dates_with_pace)
     if not lookup_rows:

@@ -502,7 +502,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         }
     except Exception as exc:
         log.warning("job1_team_stats_ratings_failed", reason=str(exc)[:120])
-        team_stats = {abbr: {"pace": v, "off_rtg": 0.0, "def_rtg": 0.0} for abbr, v in team_pace.items()}
+        team_stats = {
+            abbr: {"pace": v, "off_rtg": 0.0, "def_rtg": 0.0} for abbr, v in team_pace.items()
+        }
 
     # D74: per-opponent defensive rating from historical game_logs.
     # Mean real_score allowed per opponent team across all recorded games.

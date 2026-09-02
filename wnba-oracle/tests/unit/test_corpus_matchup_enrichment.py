@@ -257,9 +257,25 @@ def _dated_game_logs_for_pace() -> pl.DataFrame:
             # Early game: SEA (same opponent in same game)
             {"game_date": "2026-05-01", "team": "SEA", "opponent": "LVA", "min": 200.0, **base},
             # Later game: LVA low FGA, low TOV -> lower possessions
-            {"game_date": "2026-05-03", "team": "LVA", "opponent": "SEA", "min": 200.0, "fga": 8.0, "tov": 0.0, **{k: v for k, v in base.items() if k not in ("fga", "tov")}},
+            {
+                "game_date": "2026-05-03",
+                "team": "LVA",
+                "opponent": "SEA",
+                "min": 200.0,
+                "fga": 8.0,
+                "tov": 0.0,
+                **{k: v for k, v in base.items() if k not in ("fga", "tov")},
+            },
             # Later game: SEA
-            {"game_date": "2026-05-03", "team": "SEA", "opponent": "LVA", "min": 200.0, "fga": 8.0, "tov": 0.0, **{k: v for k, v in base.items() if k not in ("fga", "tov")}},
+            {
+                "game_date": "2026-05-03",
+                "team": "SEA",
+                "opponent": "LVA",
+                "min": 200.0,
+                "fga": 8.0,
+                "tov": 0.0,
+                **{k: v for k, v in base.items() if k not in ("fga", "tov")},
+            },
         ]
     )
 
@@ -366,7 +382,12 @@ def test_causal_pace_handles_case_insensitivity() -> None:
     )
     corpus = pl.DataFrame(
         [
-            {"game_date": "2026-05-03", "team": "LVA", "opponent": "SEA", "player_id": 1},  # uppercase
+            {
+                "game_date": "2026-05-03",
+                "team": "LVA",
+                "opponent": "SEA",
+                "player_id": 1,
+            },  # uppercase
         ]
     )
 

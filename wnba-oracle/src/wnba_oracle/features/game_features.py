@@ -253,8 +253,7 @@ def compute_team_pace_map(game_logs: pl.DataFrame) -> dict[str, float]:
             - pl.col("oreb").fill_null(0.0)
             + pl.col("tov").fill_null(0.0)
             + 0.44 * pl.col("fta").fill_null(0.0)
-        )
-        .alias("_poss")
+        ).alias("_poss")
     )
 
     # Aggregate to (game_date, team) level: sum possessions and minutes.
@@ -268,9 +267,7 @@ def compute_team_pace_map(game_logs: pl.DataFrame) -> dict[str, float]:
             ]
         )
         .filter(pl.col("_min_sum") > 0.0)
-        .with_columns(
-            (40.0 * pl.col("_poss_sum") / (pl.col("_min_sum") / 5.0)).alias("_game_pace")
-        )
+        .with_columns((40.0 * pl.col("_poss_sum") / (pl.col("_min_sum") / 5.0)).alias("_game_pace"))
     )
 
     if game_level.is_empty():
