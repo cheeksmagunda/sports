@@ -85,8 +85,11 @@ mutation, implement the code path with a safe default and record the
 leftover in `wnba-oracle/STATUS.md`. Do not invent credentials. Do not
 delete services, databases, or billing objects.
 
-SKILL.md is the only extra agent-instruction exception. Do not add
-CLAUDE.md, .cursorrules, copilot-instructions, or other model shims.
+SKILL.md is the only extra agent-instruction exception. `CLAUDE.md` files
+are plain symlinks to their sibling `AGENTS.md`, present only because
+Claude Code does not read `AGENTS.md` natively; that is not a separate
+shim. Do not add `.cursorrules`, `copilot-instructions`, or any other
+model-specific file that carries content of its own.
 
 ## Hard constraints
 
