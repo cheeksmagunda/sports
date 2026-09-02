@@ -259,14 +259,12 @@ class OptimizeConfig:
     # near-equal EV. Historical top-20 lineups often stack 2+ from one game;
     # this offsets the independent-pick assumption.
     game_stack_bonus: float = 0.0
-    # Contextual stacking is a soft, projections-first balance policy. The
-    # optimizer keeps unrestricted and balanced winners from the same scan.
-    # It selects the balanced candidate when its objective is within
-    # contextual_stack_ev_margin of the unrestricted winner. Concentration is
-    # still allowed when its advantage is larger, or when balance is
-    # infeasible. The legacy fixed game-stack bonus is ignored while this is
-    # enabled because correlation is already represented in the joint samples
-    # and field simulation. False restores the previous objective exactly.
+    # Hard diversification is always applied when matchup metadata is complete.
+    # The optimizer keeps unrestricted and permitted-shape winners from the same
+    # scan and selects the permitted-shape candidate when feasible. This setting
+    # is retained for decision provenance only; it does not disable the policy.
+    # The legacy fixed game-stack bonus is no longer part of the objective;
+    # correlation is represented in the joint samples and field simulation.
     contextual_stacking_enabled: bool = False
     contextual_stack_ev_margin: float = 0.01
     # D87 (Phase 1 / objective shaping). Explicit additive terms on top of

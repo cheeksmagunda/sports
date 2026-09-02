@@ -90,26 +90,31 @@ service was available.
 
 ## Diversification-first lineup policy
 
-The optimizer uses a hard diversification policy. It selects from feasible
-lineup shapes that cap same-game exposure and spread players across teams. On a
-metadata-complete slate it prefers the strongest balanced candidate; the
-selected shape is always one of the permitted diversification shapes. There is
-no additive bonus for stacking, and concentration beyond the allowed shapes is
-not selectable. Every freeze stores a versioned `stack_decision` with the
-selected composition, permitted alternatives, objective value, and reason.
+The optimizer uses a hard diversification policy when matchup metadata is
+complete. It selects the strongest feasible candidate that meets the permitted
+game and team shape, with no additive bonus for stacking. The
+`OPTIMIZER_CONTEXTUAL_STACKING_ENABLED` setting is retained for decision
+provenance only; it does not disable hard shape selection. Every freeze stores a
+versioned `stack_decision` with the selected composition, permitted
+alternatives, objective value, and reason.
 
 The permitted shapes are slate-aware:
 
 - One game: use the available matchup and prefer both teams.
-- Two games: use both games, cap the preferred game count at three, and prefer
-  all four teams when feasible.
-- Three or more games: cap the preferred game count at two and prefer at least
-  four teams.
+- Two games: use both games, cap any game at three players, and prefer all four
+  teams when feasible.
+- Three or more games: cap any game at two players and prefer at least four
+  teams.
+- Five validated games: require one player from each game because the five
+  lineup slots can cover the full slate.
 
 Real Sports game IDs are the primary matchup identity. Reciprocal team and
 opponent metadata is a validated fallback. Incomplete identity disables shape
 selection for that slate and records `metadata_incomplete`; it never fabricates
-a matchup.
+a matchup. If complete metadata cannot produce a permitted candidate, the
+optimizer keeps the best otherwise-feasible lineup and records
+`balance_infeasible`. These explicit fallbacks prevent an empty recommendation
+without presenting a missing identity or infeasible shape as validated.
 
 Use `scripts/analyze_stacking_decisions.py` for a read-only production summary.
 The report separates exact, censored, and unknown outcomes and does not infer a

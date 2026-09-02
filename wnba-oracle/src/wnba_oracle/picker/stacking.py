@@ -31,7 +31,7 @@ class _StackPlayer(Protocol):
 
 @dataclass(frozen=True)
 class StackPreference:
-    """Preferred, soft lineup shape for a metadata-complete slate."""
+    """Permitted lineup shape for a metadata-complete slate."""
 
     min_games: int
     max_players_per_game: int
@@ -164,7 +164,7 @@ def resolve_game_keys(
 
 
 def preference_for_slate(n_games: int, n_teams: int) -> StackPreference:
-    """Return the soft balance target for one-, two-, and larger-game slates."""
+    """Return the permitted balance shape for one-, two-, and larger-game slates."""
     if n_games <= 1:
         return StackPreference(
             min_games=1,
@@ -206,7 +206,7 @@ def describe_lineup(
 
 
 def meets_game_preference(shape: LineupShape, preference: StackPreference) -> bool:
-    """Whether a lineup meets the game-level part of the soft target."""
+    """Whether a lineup meets the game-level part of the permitted shape."""
     return (
         shape.game_count is not None
         and shape.max_players_per_game is not None
@@ -216,21 +216,8 @@ def meets_game_preference(shape: LineupShape, preference: StackPreference) -> bo
 
 
 def meets_full_preference(shape: LineupShape, preference: StackPreference) -> bool:
-    """Whether a lineup also reaches the desired distinct-team coverage."""
+    """Whether a lineup also reaches the permitted distinct-team coverage."""
     return (
         meets_game_preference(shape, preference)
         and shape.team_count >= preference.target_team_count
     )
-
-
-def hard_lineup_shape_for_games(n_games: int) -> StackPreference:
-    """Return the deterministic anti-stacking shape for a slate's game count."""
-    if n_games <= 1:
-        return StackPreference(min_games=1, max_players_per_game=5, target_team_count=2)
-    if n_games == 2:
-        return StackPreference(min_games=2, max_players_per_game=3, target_team_count=4)
-    if n_games == 3:
-        return StackPreference(min_games=3, max_players_per_game=2, target_team_count=5)
-    if n_games == 4:
-        return StackPreference(min_games=4, max_players_per_game=2, target_team_count=5)
-    return StackPreference(min_games=5, max_players_per_game=1, target_team_count=5)
