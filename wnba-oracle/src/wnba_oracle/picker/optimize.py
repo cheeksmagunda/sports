@@ -48,7 +48,6 @@ from wnba_oracle.picker.stacking import (
     StackingDecision,
     StackPreference,
     describe_lineup,
-    hard_lineup_shape_for_games,
     meets_full_preference,
     meets_game_preference,
     preference_for_slate,
