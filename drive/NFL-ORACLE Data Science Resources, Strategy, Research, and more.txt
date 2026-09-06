@@ -2852,3 +2852,22 @@ Remains paused (no contest entry; observation/shadow only).
 - Creating new Codespaces
 - Unpausing Slice 4
 
+
+Dated note: 2026-09-06 01:02 CDT
+### Slice note - data/strategy/feature/service scaffolds (branch codex/nfl-data-schemas-scaffold)
+
+Append-only. No secret values. No contest entry.
+
+- Landed observation-only packages under `nfl_oracle`: `data`, `strategy`,
+  `features`, `calendar`, `identity`, `service`.
+- Strategy follows this playbook: pre-lock clock gates, LIVE_FEATURE_BLACKLIST,
+  five-card structural legality with explicit unknowns (#91), shadow decision
+  snapshots defaulting to `ready_pending_contract`, CLI `nfl-strategy-schema`.
+- Read-only research FastAPI routes via `oracle_core.service` (schemas + catalog).
+- Verification on box: 34 pytest passed; ruff + mypy clean for nfl-oracle/src.
+- Codespace `orange-system-4jx77wj6jvg6cq4gq` still reports 5 unpushed commits on
+  `chat/89-nfl-real-corpus`; SSH/cp from this box hung — recover separately.
+- Local box has no `storage_state.json` / NFL_* env; live Real ingest waits on
+  Codespace or SOPS `scripts/with-secrets` operator secrets.
+- Still deferred: Corpus C, verified provider slot/boost/lock contract, contest
+  submission, Railway deploy source.

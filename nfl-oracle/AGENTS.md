@@ -58,3 +58,10 @@ session currently lives in that SOPS file. NFL does not import WNBA code.
 - Persist redacted JSON with sha256 + provenance; resume by season cursor
 - Primary Real label field: `playerBoxScores[].value`
 - Corpus C (contests) and five-man policy are out of scope for the first scaffold
+
+## Scaffold modules (observation only)
+
+Own packages under `nfl_oracle`: `data`, `strategy`, `features`, `calendar`,
+`identity`, `service`. Do not import `wnba_oracle`. No contest submission in
+these scaffolds. Prefer strategy playbook + STATUS for contracts; Drive doc is
+source of truth when available.
