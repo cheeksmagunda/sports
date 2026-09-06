@@ -77,6 +77,8 @@ def evaluate_walk_forward(
         "Walk-forward by season on Corpus G anchors only (shadow / observation).",
         "No contest submission or live entry code paths are exercised.",
         "Unseen positions fall back to the global prior from the train window.",
+        "player_mean falls back to position then global; "
+        "identity continuity across anchors is unaudited.",
     ]
     if len(seasons) < 2:
         notes.append("Fewer than two seasons present; no OOS fold can be formed.")
