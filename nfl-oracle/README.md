@@ -122,6 +122,9 @@ Offline baselines (no network, no contest entry):
 
 - `global_mean`: historical mean Real value from earlier seasons
 - `position_mean` / `position_median`: per-position priors with global fallback
+- optional `player_mean` / `feature_ridge`: player priors or leakage-safe ridge on
+  live_ok prior features (stdlib only; not in the default method set)
+
 Walk-forward evaluation is season-based: train on seasons strictly earlier than
 the held-out season, then score MAE / RMSE / bias on the held-out anchors.
 
