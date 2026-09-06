@@ -15,6 +15,7 @@ BaselineKind = Literal[
     "position_mean",
     "position_median",
     "player_mean",
+    "feature_ridge",
 ]
 
 

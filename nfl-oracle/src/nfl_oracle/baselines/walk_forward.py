@@ -8,6 +8,7 @@ from typing import Any
 
 from nfl_oracle.baselines.metrics import RegressionMetrics, regression_metrics
 from nfl_oracle.baselines.priors import BaselineKind, HistoricalPriorBaseline
+from nfl_oracle.baselines.value_model import FeatureDrivenValueModel
 from nfl_oracle.labels.schema import ValueLabel
 
 DEFAULT_BASELINES: tuple[BaselineKind, ...] = (
@@ -79,6 +80,8 @@ def evaluate_walk_forward(
         "Unseen positions fall back to the global prior from the train window.",
         "player_mean falls back to position then global; "
         "identity continuity across anchors is unaudited.",
+        "feature_ridge is optional: ridge on live_ok prior features only; "
+        "never uses same-slate finals or label value as inputs.",
     ]
     if len(seasons) < 2:
         notes.append("Fewer than two seasons present; no OOS fold can be formed.")
@@ -97,8 +100,21 @@ def evaluate_walk_forward(
         if not test_rows:
             continue
         for kind in baselines:
-            model = HistoricalPriorBaseline(kind=kind).fit(train_rows)
-            preds = model.predict(test_rows)
+            n_train: int
+            n_positions: int
+            global_prior: float
+            if kind == "feature_ridge":
+                ridge = FeatureDrivenValueModel().fit(train_rows)
+                preds = ridge.predict(test_rows)
+                n_train = ridge.n_train
+                n_positions = ridge.n_positions
+                global_prior = ridge.global_prior
+            else:
+                prior = HistoricalPriorBaseline(kind=kind).fit(train_rows)
+                preds = prior.predict(test_rows)
+                n_train = prior.n_train
+                n_positions = prior.n_positions
+                global_prior = prior.global_prior
             actuals = [row.value for row in test_rows]
             metrics = regression_metrics(actuals, preds)
             folds.append(
@@ -107,9 +123,9 @@ def evaluate_walk_forward(
                     train_seasons=train_seasons,
                     kind=kind,
                     metrics=metrics,
-                    n_train=model.n_train,
-                    n_positions=model.n_positions,
-                    global_prior=model.global_prior,
+                    n_train=n_train,
+                    n_positions=n_positions,
+                    global_prior=global_prior,
                 )
             )
             pooled_pairs[kind][0].extend(actuals)
