@@ -30,3 +30,8 @@
 **/playwright-report/
 **/test-results/
 **/*.log
+
+# NFL research dumps that may contain identity / raw provider payloads
+drive/corpus_g_coverage_samples/
+**/storage_state.json
+**/request_token_cache.json

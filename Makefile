@@ -1,4 +1,4 @@
-.PHONY: setup install test test-core test-portfolio test-app test-wnba test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries
+.PHONY: setup install test test-core test-portfolio test-app test-wnba test-nfl test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries
 
 UV_RUN = uv run --frozen
 
@@ -10,7 +10,7 @@ setup:
 install:
 	uv sync --frozen --all-packages --all-extras
 
-test: test-core test-portfolio test-wnba
+test: test-core test-portfolio test-wnba test-nfl
 
 test-core:
 	$(UV_RUN) --package oracle-core --extra dev python -m pytest packages/oracle-core/tests -q
@@ -25,6 +25,9 @@ test-app:
 
 test-wnba:
 	$(MAKE) test-app APP=wnba-oracle
+
+test-nfl:
+	$(MAKE) test-app APP=nfl-oracle
 
 test-integration:
 	$(UV_RUN) --package wnba-oracle --extra dev python wnba-oracle/scripts/check_migrations.py
@@ -61,14 +64,18 @@ lint:
 	cd packages/oracle-core && $(UV_RUN) --package oracle-core --extra dev ruff format --check src tests
 	cd wnba-oracle && $(UV_RUN) --package wnba-oracle --extra dev ruff check src tests scripts
 	cd wnba-oracle && $(UV_RUN) --package wnba-oracle --extra dev ruff format --check src tests scripts
+	cd nfl-oracle && $(UV_RUN) --package nfl-oracle --extra dev ruff check src tests scripts
+	cd nfl-oracle && $(UV_RUN) --package nfl-oracle --extra dev ruff format --check src tests scripts
 
 typecheck:
 	$(UV_RUN) --package oracle-core --extra dev python -m mypy --config-file packages/oracle-core/pyproject.toml packages/oracle-core/src
 	$(UV_RUN) --package wnba-oracle --extra dev python -m mypy --config-file wnba-oracle/pyproject.toml wnba-oracle/src
+	$(UV_RUN) --package nfl-oracle --extra dev python -m mypy --config-file nfl-oracle/pyproject.toml nfl-oracle/src
 
 build:
 	uv build --package oracle-core --out-dir dist
 	uv build --package wnba-oracle --out-dir dist
+	uv build --package nfl-oracle --out-dir dist
 
 codespaces-smoke:
 	sh scripts/codespaces-smoke.sh
