@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from nfl_oracle.strategy.dry_run import (
@@ -58,6 +59,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip calling stub.submit() (still labels dry_run / contest_entry=false).",
     )
     parser.add_argument(
+        "--include-schedule-slate",
+        action="store_true",
+        help="Attach offline schedule week slate (games/opponents; observation only).",
+    )
+    parser.add_argument(
+        "--schedule-week",
+        type=int,
+        default=None,
+        help="Schedule week when --include-schedule-slate (default: 1).",
+    )
+    parser.add_argument(
+        "--schedule-date",
+        type=str,
+        default=None,
+        help="ISO date YYYY-MM-DD for schedule slate resolution.",
+    )
+    parser.add_argument(
+        "--project-root",
+        type=Path,
+        default=None,
+        help="Optional data root for offline schedules.csv lookup.",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit full JSON payload (default).",
@@ -73,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     root = args.root if args.root is not None else default_value_label_fixture_root()
+    day = date.fromisoformat(args.schedule_date) if args.schedule_date else None
     try:
         payload = build_offline_contest_dry_run(
             corpus_root=root,
@@ -81,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
             alpha=args.alpha,
             top_k_orderings=max(1, args.top_k),
             prove_submit_denied=not args.skip_submit_proof,
+            include_schedule_slate=args.include_schedule_slate,
+            schedule_week=args.schedule_week,
+            schedule_date=day,
+            project_root=args.project_root,
         )
     except ValueError as exc:
         print(f"nfl-contest-dry-run error: {exc}", file=sys.stderr)

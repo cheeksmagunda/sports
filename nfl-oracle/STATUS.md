@@ -1,7 +1,7 @@
 # Status
 
-Last verified: 2026-09-06 ~02:15 CT (walk-forward eval report path;
-160 pytest; local branch only; no push)
+Last verified: 2026-09-06 ~02:20 CT (week/slate resolution helpers;
+168 pytest; local branch only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -60,6 +60,15 @@ treating any row as production truth.
   ([sample MD](artifacts/walk_forward_fixture_sample.md))
 - Metrics: pooled MAE / RMSE / bias on held-out season anchors
 - Still out of scope: contest submission, live entry
+
+
+## Week / slate resolution (2026-09-06 CT)
+
+- `nfl_oracle.calendar.slate` — resolve games + opponents from date or season+week
+  (dense offline schedules; exact gameday or week span; no invented weeks)
+- Research: `GET /research/schedule/slate?season=&week=` or `?date=YYYY-MM-DD` (+ optional `team`)
+- Dry-run optional: `include_schedule_slate` / `--include-schedule-slate` attaches schedule slate
+- Contest entry unchanged (`contest_entry=false`; submit hard-deny intact)
 
 ## Coverage gaps
 
