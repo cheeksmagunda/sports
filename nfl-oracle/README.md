@@ -163,8 +163,9 @@ make check-boundaries
 - `nfl_oracle.features` — FeatureSpec registry (`nfl_oracle.features.schema`)
 - `make strategy-schema` / `uv run --package nfl-oracle nfl-strategy-schema --schema-only`
 - Research HTTP scaffold: `nfl_oracle.service.create_app` / `nfl-research-serve`
-  (`make research-serve`; schemas, catalog, coverage summary, shadow preview,
-  provider posture; no entry)
+  (`make research-serve`; schemas incl. scoring, catalog, coverage summary,
+  shadow preview + rank-orderings, entry gates, live-ok features, status;
+  contest entry always false)
 - Strategy helpers: 120 five-card orderings + readiness→posture mapping
 - Railway: **no** in-repo `railway.toml`/`Dockerfile`; staging project names only
   in STATUS (do not deploy from this package)

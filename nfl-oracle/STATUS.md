@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:20 CT (research service routes + strategy enumerate/posture + data summary; GitHub write still 403; no push attempted)
+Last verified: 2026-09-06 ~01:25 CT (contest algebra + entry gates + shadow rank routes; 66 pytest; GitHub write still 403; no push; submit still hard-denied)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -120,15 +120,22 @@ Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Rai
 Runnable offline research HTTP (observation only; no contest entry; no deploy):
 
 - CLI: `nfl-research-serve` / `make -C nfl-oracle research-serve` (needs `--extra serve` / uvicorn)
-- Routes: schemas (labels/strategy/features), catalog, provider status + posture,
-  `POST /research/shadow/preview`, `GET /research/coverage/summary`,
-  `GET /research/features/live-ok`, `GET /research/status`, `/health` (auth degraded OK)
-- Strategy: `ordered_five_card_actions` (120 orderings) + `best_shadow_ordering`;
-  `posture_from_readiness` maps provider stub → Posture
+- Routes: schemas (labels/strategy/features/**scoring**), catalog, provider status + posture,
+  `POST /research/shadow/preview` (contest algebra + optional best ordering),
+  `POST /research/shadow/rank-orderings` (top-k of 120),
+  `GET /research/gates/entry` (always `contest_entry=false` + package hard-deny),
+  `GET /research/coverage/summary`, `GET /research/features/live-ok`,
+  `GET /research/status` (`include_gates` query; Railway presence flags; auth presence only),
+  `/health` (auth degraded OK)
+- Strategy: contest scoring algebra (`OBSERVED_DEFAULT_SLOT_MULTIPLIERS`),
+  `ordered_five_card_actions` (120) + `best_shadow_ordering` / `rank_shadow_orderings`,
+  entry gates checklist, `posture_from_readiness`
 - Data: `research_data_summary` over season catalog + coverage_matrix
-- Features: `player_prior_mean` + `live_ok_feature_names()`
-- daily_shadow artifact now includes provider_status (presence only)
-- Box verification: pytest **53 passed**; ruff + mypy clean on `nfl-oracle/src`
+- Features: `player_prior_mean` + `live_ok_feature_names()`; prior feature rows helper
+- daily_shadow artifact includes provider_status (presence only)
+- Circular-import fix: `posture`/`gates` lazy-import provider stubs (strategy package exports safe)
+- Box verification: pytest **66 passed**; ruff + mypy clean on touched paths
+- **Still deny real submit** — `FiveCardProviderStub.submit` raises; gates never flip `contest_entry`
 
 ## Railway config presence (document only; do not deploy)
 
@@ -223,3 +230,23 @@ Checklist (execute only after HOLD clears):
 - Tracking: GitHub issue #94. Box PAT lacks Contents:Write.
 - Codespace has `/tmp/nfl-schemas.bundle` + `/tmp/cs-push-bundle.sh` (cp OK); SSH from box hangs — run push inside CS.
 - No Railway deploy; nfl-oracle has no railway.toml.
+
+
+## Overnight research hardening (2026-09-06 01:18 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Verified contest scoring algebra scaffold: `nfl_oracle.strategy.algebra`
+  (`score = value * (slot_multiplier + multiplierBonus)` non-negative branch;
+  observed defaults `[2, 1.8, 1.6, 1.4, 1.2]`; negative branch refused)
+- Entry gates: `nfl_oracle.strategy.gates.evaluate_entry_gates` — checklist always
+  keeps `contest_entry=False`; `FiveCardProviderStub.submit` still hard-denies
+- Research API: `GET /research/schemas/scoring`, `GET /research/gates/entry`,
+  `POST /research/shadow/rank-orderings`; shadow preview gains contest algebra +
+  best ordering; `/research/status` includes entry_gates + auth presence
+- Features: `week`, `prior_n_games`, `card_boost_post_settlement` (live_ok=false);
+  `nfl_oracle.features.rows` walk-forward prior feature rows
+- Box state (honest): Real Sports auth missing; GitHub Contents write 403; no
+  in-repo Railway Dockerfile/railway.toml; staging names only; no deploy
+- Verification: pytest **66 passed**; ruff + mypy clean on `nfl-oracle/src`
+

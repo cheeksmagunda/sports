@@ -87,19 +87,19 @@ def best_shadow_ordering(
 
     from nfl_oracle.strategy.scoring import shadow_weighted_score
 
-    best_action = None
-    best_total = float("-inf")
+    legacy_best: FiveCardAction | None = None
+    legacy_total = float("-inf")
     for action in ordered_five_card_actions(player_ids, slot_multipliers=slot_multipliers):
-        score = shadow_weighted_score(
+        legacy = shadow_weighted_score(
             action,
             values_by_player,
             default_multiplier=default_multiplier,
         )
-        if score.total > best_total:
-            best_total = score.total
-            best_action = action
-    assert best_action is not None
-    return best_action, best_total
+        if legacy.total > legacy_total:
+            legacy_total = legacy.total
+            legacy_best = action
+    assert legacy_best is not None
+    return legacy_best, legacy_total
 
 
 def rank_shadow_orderings(
