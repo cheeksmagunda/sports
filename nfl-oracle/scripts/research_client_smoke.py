@@ -26,6 +26,7 @@ GET_ROUTES = (
     "/research/schemas/scoring",
     "/research/features/live-ok",
     "/research/provider/status",
+    "/research/provider/rules-offline",
     "/research/gates/entry",
     "/research/catalog/seasons",
     "/research/coverage/summary",
@@ -101,6 +102,26 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
                 raise AssertionError("draft_readiness.submit_hard_denied must be true")
             if results["draft_readiness"].get("contest_entry") is not False:
                 raise AssertionError("draft_readiness.contest_entry must be false")
+        if path == "/research/provider/rules-offline":
+            if body.get("submit_enabled") is not False:
+                raise AssertionError("rules-offline submit_enabled must be false")
+            if body.get("provider_contract_verified") is not False:
+                raise AssertionError("rules-offline provider_contract_verified must be false")
+            notes = body.get("offline_rule_notes") or {}
+            rules = body.get("unknown_rules") or []
+            if len(rules) < 7:
+                raise AssertionError(f"expected >=7 unknown rules, got {len(rules)}")
+            missing = [r for r in rules if r not in notes]
+            if missing:
+                raise AssertionError(f"offline notes missing for {missing}")
+        if path == "/research/features/live-ok":
+            live = body.get("live_ok") or []
+            if len(live) < 20:
+                raise AssertionError(f"live_ok too sparse: {len(live)}")
+            if "injury_status" not in live or "opponent_adjusted_prior" not in live:
+                raise AssertionError("expected injury/opponent-adjusted in live_ok")
+            if "same_slate_final_value" in live:
+                raise AssertionError("same_slate_final_value must not be live_ok")
         if path == "/research/gates/entry":
             if body.get("contest_entry") is not False:
                 raise AssertionError("gates contest_entry must be false")

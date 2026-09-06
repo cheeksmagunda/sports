@@ -122,7 +122,6 @@ Offline baselines (no network, no contest entry):
 
 - `global_mean`: historical mean Real value from earlier seasons
 - `position_mean` / `position_median`: per-position priors with global fallback
-
 Walk-forward evaluation is season-based: train on seasons strictly earlier than
 the held-out season, then score MAE / RMSE / bias on the held-out anchors.
 
@@ -175,7 +174,7 @@ make check-boundaries
 - Research HTTP scaffold: `nfl_oracle.service.create_app` / `nfl-research-serve`
   (`make research-serve`; schemas incl. scoring, catalog, coverage + schedule
   summary/census, identity density, shadow preview + rank-orderings, entry
-  gates, live-ok features, status; contest entry always false)
+  gates, live-ok features, provider rules-offline, status; contest entry always false)
 - Strategy helpers: 120 five-card orderings + readiness→posture mapping
 - Railway: **no** in-repo `railway.toml`/`Dockerfile`; staging project names only
   in STATUS (do not deploy from this package)

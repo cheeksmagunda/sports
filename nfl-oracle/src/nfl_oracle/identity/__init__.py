@@ -3,7 +3,11 @@
 from nfl_oracle.identity.aliases import (
     apply_alias_table,
     merge_external_ids,
+    name_match_keys,
+    normalize_alias_key,
+    normalize_display_name,
     reconcile_alias_collisions,
+    suggest_dedup_candidates,
     upsert_with_aliases,
 )
 from nfl_oracle.identity.density import IdentityDensity, summarize_identity_density
@@ -23,8 +27,12 @@ __all__ = [
     "identity_players_file",
     "load_identity_map_from_players_file",
     "merge_external_ids",
+    "name_match_keys",
+    "normalize_alias_key",
+    "normalize_display_name",
     "reconcile_alias_collisions",
     "research_identity_summary",
+    "suggest_dedup_candidates",
     "summarize_identity_density",
     "upsert_from_players_payload",
     "upsert_with_aliases",

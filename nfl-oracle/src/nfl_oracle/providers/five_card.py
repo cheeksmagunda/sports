@@ -41,6 +41,7 @@ class ProviderReadiness:
             },
             "issue_refs": list(self.issue_refs),
             "observation_only": True,
+            "provider_contract_verified": False,
         }
 
 
@@ -57,17 +58,80 @@ UNKNOWN_PROVIDER_RULES = (
     "submission_payload_shape",
 )
 
-# Offline documentation only — does not remove keys from UNKNOWN_PROVIDER_RULES.
+# Offline / public-rules documentation only. Best-effort notes from Drive NFL
+# strategy playbook + 2026-09-02 empirical findings on *finalized* contests.
+# Documenting a rule here does NOT remove it from UNKNOWN_PROVIDER_RULES and
+# does NOT enable submit, inventory fetch, or contest entry.
 OFFLINE_RULE_NOTES: dict[str, str] = {
+    "provider_roster_and_inventory_eligibility": (
+        "Best-effort: finalized contests expose draftable pools via draftinfo / "
+        "search and per-game /players rosters; full two-team depth is not the "
+        "fantasy-eligible subset. Pre-lock inventory eligibility, ownership "
+        "caps, and card-availability gates remain unverified — no live slate "
+        "inventory fetch in this package."
+    ),
+    "provider_duplicate_card_rules": (
+        "Best-effort: structural shadow checks reject duplicate player_ids in a "
+        "five-card set (5 distinct Real ids). Whether the provider additionally "
+        "forbids duplicate cards across concurrent entries, shared inventory, or "
+        "boost stacking is unverified against live Real Sports."
+    ),
     "slot_weights_and_scoring": (
-        "OBSERVED_DEFAULT_SLOT_MULTIPLIERS used for shadow algebra; live provider "
-        "weights still unverified (#91)"
+        "Best-effort public/offline: OBSERVED_DEFAULT_SLOT_MULTIPLIERS "
+        "[2.0, 1.8, 1.6, 1.4, 1.2] from draftinfo defaultMultipliers (contests "
+        "1069/870/1070; byte-identical on non-NFL 2124). Formula (non-negative): "
+        "item_score = value * (slot_multiplier + multiplierBonus). Prefer "
+        "per-contest defaultMultipliers when available. Still unverified as a "
+        "closed #91 provider contract — shadow algebra only."
+    ),
+    "provider_lock_semantics": (
+        "Best-effort: playbook requires decision_at < lock_at when lock is known; "
+        "WNBA used earliest tip as a lock *proxy* only. No pre-lock NFL contest "
+        "state has been captured; exact Real Sports NFL lock timestamp field, "
+        "late-scratch behavior, and post-lock mutation rules remain unknown."
+    ),
+    "multiplier_bonus_pre_lock_visibility": (
+        "Best-effort empirical: finalized contest stats populate multiplierBonus "
+        "(0..3.0 step 0.1; higher boosts on lower-ranked players per "
+        "descriptionText). Pregame search observed uniform zeros — historical "
+        "finalized boosts do NOT prove pre-lock visibility. Feature "
+        "card_boost_post_settlement stays live_ok=false until proven."
     ),
     "negative_value_scoring_branch": (
-        "contest_shadow_score documents non-negative default branch offline; live "
-        "provider branch unverified"
+        "Best-effort: non-negative branch verified exactly on observed NFL "
+        "finalized lineups. A non-NFL row showed value=-0.6442 with score equal "
+        "to value despite multiplier=4.9 (multiplier did not amplify). Offline "
+        "contest_shadow_score refuses the non-negative formula on negatives "
+        "unless allow_unresolved_negative=True. Live provider branch unverified."
+    ),
+    "submission_payload_shape": (
+        "Best-effort: finalized /entries lineup items expose playerId, order "
+        "(0..4), multiplier, multiplierBonus, value, score. That is a "
+        "*settlement* shape, not a proven submit body. No NFL contest entry "
+        "POST has been issued from this package; payload keys, auth headers, "
+        "and idempotency remain unknown. submit() hard-denies."
     ),
 }
+
+
+def offline_provider_rule_document() -> dict[str, Any]:
+    """Machine-readable offline notes for UNKNOWN_PROVIDER_RULES (no submit)."""
+
+    return {
+        "name": "nfl_unknown_provider_rules_offline_notes",
+        "version": 1,
+        "contest_entry": False,
+        "observation_only": True,
+        "provider_contract_verified": False,
+        "submit_enabled": False,
+        "issue_refs": ["#89", "#91"],
+        "unknown_rules": list(UNKNOWN_PROVIDER_RULES),
+        "offline_rule_notes": dict(OFFLINE_RULE_NOTES),
+        "note": (
+            "Notes are best-effort public/offline documentation only. Presence "
+            "of a note does not close the rule or authorize contest entry."
+        ),
+    }
 
 
 class FiveCardProviderStub:

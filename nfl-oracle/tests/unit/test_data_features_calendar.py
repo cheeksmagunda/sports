@@ -36,8 +36,8 @@ def test_feature_registry_marks_same_slate_live_forbidden() -> None:
     assert specs["home_away"].live_ok is True
     doc = features_document()
     assert doc["version"] == 1
-    assert doc["feature_count"] >= 16
-    assert doc["live_ok_count"] >= 14
+    assert doc["feature_count"] >= 28
+    assert doc["live_ok_count"] >= 24
 
 
 def test_calendar_season_labels() -> None:

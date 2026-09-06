@@ -72,5 +72,7 @@ def research_identity_summary(
             "n_with_external_alias": aliases["n_with_external_alias"],
             "alias_collision_count": aliases["alias_collision_count"],
             "display_name_collision_count": aliases["display_name_collision_count"],
+            "normalized_name_collision_count": aliases["normalized_name_collision_count"],
+            "soft_name_collision_count": aliases["soft_name_collision_count"],
         },
     }
