@@ -37,14 +37,14 @@ def test_offline_research_mirrors_dense_coverage_and_identity() -> None:
     assert dense_mat.seasons.keys() == off_mat.seasons.keys()
 
 
-def test_schedule_fixture_four_seasons_density() -> None:
+def test_schedule_fixture_eight_seasons_full_week_census() -> None:
     games = load_schedules_csv(FIXTURES / "schedule" / "dense_schedules.csv")
     dens = summarize_schedule_density(games)
-    assert dens.season_count == 4
-    assert dens.game_count >= 36
-    assert dens.week_count >= 12
-    assert set(dens.seasons) == {2022, 2023, 2024, 2025}
-    assert dens.missing_gameday_count >= 1
+    assert dens.season_count == 8
+    assert dens.game_count >= 2000
+    assert dens.week_count >= 140
+    assert set(dens.seasons) == {2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025}
+    assert dens.missing_gameday_count == 0
 
 
 def test_research_root_and_schema_documents_observation_only() -> None:

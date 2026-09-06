@@ -23,6 +23,7 @@ def test_load_season_game_catalog_seeds() -> None:
 def test_data_paths_layout() -> None:
     paths = resolve_data_paths()
     assert paths.catalog.name == "catalog"
+    assert paths.schedule.name == "schedule"
     assert paths.raw_corpus_g.name == "corpus_g"
     game = paths.corpus_g_game(2002, 126323)
     assert game.parts[-2:] == ("2002", "126323")
@@ -32,8 +33,11 @@ def test_feature_registry_marks_same_slate_live_forbidden() -> None:
     specs = {s.name: s for s in feature_registry()}
     assert specs["same_slate_final_value"].live_ok is False
     assert specs["position_prior_mean"].live_ok is True
+    assert specs["home_away"].live_ok is True
     doc = features_document()
     assert doc["version"] == 1
+    assert doc["feature_count"] >= 16
+    assert doc["live_ok_count"] >= 14
 
 
 def test_calendar_season_labels() -> None:

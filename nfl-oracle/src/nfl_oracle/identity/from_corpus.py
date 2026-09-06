@@ -53,12 +53,31 @@ def upsert_from_players_payload(identity: IdentityMap, payload: dict[str, Any]) 
             team_id = int(team_id_raw) if team_id_raw is not None else None
         except (TypeError, ValueError):
             team_id = None
+        ext: dict[str, str] = {}
+        raw_ext = row.get("external_ids") or row.get("externalIds") or {}
+        if isinstance(raw_ext, dict):
+            for k, v in raw_ext.items():
+                if v is not None and str(v).strip():
+                    ext[str(k)] = str(v)
+        for flat_key, ns in (
+            ("gsisId", "gsis"),
+            ("gsis_id", "gsis"),
+            ("espnId", "espn"),
+            ("espn_id", "espn"),
+            ("sleeperId", "sleeper"),
+            ("sleeper_id", "sleeper"),
+            ("pfrId", "pfr"),
+            ("pfr_id", "pfr"),
+        ):
+            if row.get(flat_key):
+                ext[ns] = str(row[flat_key])
         identity.upsert(
             IdentityRecord(
                 real_player_id=real_id,
                 display_name=name,
                 position=str(position) if position else None,
                 team_id=team_id,
+                external_ids=ext,
             )
         )
         count += 1

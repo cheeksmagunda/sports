@@ -1,12 +1,13 @@
-"""Read-only research summaries over catalog + coverage matrix."""
+"""Read-only research summaries over catalog + coverage matrix + schedule."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
+from nfl_oracle.calendar.schedule import research_schedule_summary
 from nfl_oracle.data.catalog import SeasonGameCatalog, load_season_game_catalog
-from nfl_oracle.data.coverage_matrix import load_coverage_matrix_doc
+from nfl_oracle.data.coverage_matrix import catalog_matrix_alignment, load_coverage_matrix_doc
 from nfl_oracle.data.density import summarize_coverage_density
 from nfl_oracle.data.paths import resolve_data_paths
 
@@ -17,6 +18,7 @@ def research_data_summary(
     catalog_path: Path | None = None,
     matrix_path: Path | None = None,
     identity_players_path: Path | None = None,
+    schedule_path: Path | None = None,
 ) -> dict[str, Any]:
     """Offline JSON summary for research service / daily-shadow artifacts."""
 
@@ -26,18 +28,17 @@ def research_data_summary(
 
     catalog_error: str | None = None
     catalog: SeasonGameCatalog | None = None
+    seasons: dict[str, list[int]] = {}
     try:
         catalog = load_season_game_catalog(cat_file)
         seasons = catalog.to_json_obj()
         season_count = len(catalog.seasons)
         seed_game_count = sum(len(v) for v in catalog.seasons.values())
     except FileNotFoundError:
-        seasons = {}
         season_count = 0
         seed_game_count = 0
         catalog_error = "catalog_missing"
     except (TypeError, ValueError, OSError) as exc:
-        seasons = {}
         season_count = 0
         seed_game_count = 0
         catalog_error = type(exc).__name__
@@ -49,6 +50,13 @@ def research_data_summary(
         status_counts[row.status] = status_counts.get(row.status, 0) + 1
 
     density = summarize_coverage_density(catalog=catalog, matrix=matrix)
+    alignment = catalog_matrix_alignment(catalog_seasons=seasons, matrix=matrix)
+    schedule = research_schedule_summary(
+        project_root=project_root,
+        schedule_path=schedule_path,
+        catalog_seed_count=seed_game_count,
+        catalog_seasons=seasons,
+    )
     # Local import avoids identity <-> data package init cycles.
     from nfl_oracle.identity.load import research_identity_summary
 
@@ -73,7 +81,9 @@ def research_data_summary(
             "season_row_count": len(rows),
             "status_counts": status_counts,
             "gap_count": len(matrix.gaps),
+            "alignment": alignment,
         },
+        "schedule": schedule,
         "density": density.to_dict(),
         "identity": identity,
     }

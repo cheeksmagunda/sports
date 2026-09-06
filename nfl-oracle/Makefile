@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -66,3 +66,6 @@ research-serve:
 research-smoke:
 	env -u DATABASE_URL -u DATABASE_PUBLIC_URL -u REDIS_URL \
 		$(UV_RUN) --extra dev python scripts/research_client_smoke.py $(SMOKE_ARGS)
+
+cache-schedules:
+	$(UV_RUN) python scripts/cache_nflverse_schedules.py

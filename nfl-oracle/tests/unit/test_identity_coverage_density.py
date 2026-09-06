@@ -26,11 +26,13 @@ def test_dense_players_fixture_identity_density() -> None:
     payload = json.loads((FIXTURES / "identity" / "dense_players.json").read_text(encoding="utf-8"))
     ident = IdentityMap()
     n = upsert_from_players_payload(ident, payload)
-    assert n >= 55
+    assert n >= 80
     density = summarize_identity_density(ident)
     assert density.n_identities == n
-    assert density.n_complete >= 50
+    assert density.n_complete >= 70
     assert density.complete_ratio > 0.8
+    assert density.n_with_external_alias >= 50
+    assert density.alias_ratio > 0.5
     assert density.n_with_display_name >= 36
     assert "QB" in density.position_counts
     assert "DEF" in density.position_counts
@@ -89,15 +91,19 @@ def test_research_summary_includes_density_and_identity_from_offline_root() -> N
     assert summary["density"]["status_counts"]["known"] == 12
     assert summary["coverage_matrix"]["path_exists"] is True
     assert summary["identity"]["path_exists"] is True
-    assert summary["identity"]["n_identities"] >= 55
-    assert summary["identity"]["density"]["n_complete"] >= 50
+    assert summary["identity"]["n_identities"] >= 80
+    assert summary["identity"]["density"]["n_complete"] >= 70
+    assert summary["schedule"]["density"]["season_count"] >= 8
+    assert "coverage_census" in summary["schedule"]
 
 
 def test_load_identity_map_from_offline_players_file() -> None:
     path = FIXTURES / "offline_research" / "data" / "identity" / "players.json"
     ident = load_identity_map_from_players_file(path)
-    assert len(ident) >= 55
+    assert len(ident) >= 80
     summary = research_identity_summary(players_path=path)
     assert summary["contest_entry"] is False
     assert summary["error"] is None
     assert summary["density"]["complete_ratio"] > 0.8
+    assert summary["density"]["n_with_external_alias"] >= 50
+    assert summary["aliases"]["n_with_external_alias"] >= 50

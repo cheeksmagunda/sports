@@ -32,6 +32,7 @@ def test_research_route_surface_contest_entry_false() -> None:
         "/research/gates/entry",
         "/research/catalog/seasons",
         "/research/coverage/summary",
+        "/research/schedule/summary",
         "/research/identity/density",
         "/research/status",
         "/research/status?include_gates=false",
@@ -208,3 +209,16 @@ def test_health_auth_degraded_ok_for_research() -> None:
     assert health["status"] in {"ok", "degraded"}
     # Auth missing is expected on box; research still serves.
     assert "contest_entry" not in health or health.get("contest_entry") is False
+
+
+def test_schedule_summary_offline_census() -> None:
+    client = _client()
+    body = client.get("/research/schedule/summary").json()
+    assert body["contest_entry"] is False
+    assert body["density"]["season_count"] >= 8
+    assert body["density"]["game_count"] >= 1000
+    assert body["continuous_regular_season_count"] >= 3
+    cov = client.get("/research/coverage/summary").json()
+    assert cov["schedule"]["density"]["season_count"] >= 8
+    assert cov["schedule"]["continuous_regular_season_count"] >= 3
+    assert "coverage_census" in cov["schedule"]

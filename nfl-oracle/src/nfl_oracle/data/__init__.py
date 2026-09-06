@@ -4,6 +4,7 @@ from nfl_oracle.data.catalog import SeasonGameCatalog, load_season_game_catalog
 from nfl_oracle.data.coverage import CoverageStatus, SeasonCoverageRow
 from nfl_oracle.data.coverage_matrix import (
     CoverageMatrixDocument,
+    catalog_matrix_alignment,
     load_coverage_matrix_doc,
     save_coverage_matrix_doc,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "DataPaths",
     "SeasonCoverageRow",
     "SeasonGameCatalog",
+    "catalog_matrix_alignment",
     "load_coverage_matrix_doc",
     "load_season_game_catalog",
     "research_data_summary",

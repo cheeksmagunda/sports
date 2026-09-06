@@ -144,7 +144,17 @@ uv run --package nfl-oracle nfl-value-baselines --json
 make test
 make lint
 make typecheck
+make research-smoke          # offline TestClient research suite subset
+make research-smoke SMOKE_ARGS=--json
 ```
+
+`make research-smoke` runs `scripts/research_client_smoke.py` against
+`tests/fixtures/offline_research` via FastAPI TestClient (no network). It asserts
+schema/catalog/coverage/schedule/identity routes, shadow preview + rank-orderings,
+and **hard-deny** entry gates (`package_submit_hard_deny` + unverified provider
+contract). Strip live DB/redis env like `make test`. Observation only — never
+enables contest entry.
+
 
 From monorepo root:
 
@@ -163,9 +173,9 @@ make check-boundaries
 - `nfl_oracle.features` — FeatureSpec registry (`nfl_oracle.features.schema`)
 - `make strategy-schema` / `uv run --package nfl-oracle nfl-strategy-schema --schema-only`
 - Research HTTP scaffold: `nfl_oracle.service.create_app` / `nfl-research-serve`
-  (`make research-serve`; schemas incl. scoring, catalog, coverage summary,
-  shadow preview + rank-orderings, entry gates, live-ok features, status;
-  contest entry always false)
+  (`make research-serve`; schemas incl. scoring, catalog, coverage + schedule
+  summary/census, identity density, shadow preview + rank-orderings, entry
+  gates, live-ok features, status; contest entry always false)
 - Strategy helpers: 120 five-card orderings + readiness→posture mapping
 - Railway: **no** in-repo `railway.toml`/`Dockerfile`; staging project names only
   in STATUS (do not deploy from this package)

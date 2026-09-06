@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from nfl_oracle.common.paths import resolve_project_root
+from nfl_oracle.identity.aliases import reconcile_alias_collisions
 from nfl_oracle.identity.density import IdentityDensity, summarize_identity_density
 from nfl_oracle.identity.from_corpus import upsert_from_players_payload
 from nfl_oracle.identity.map import IdentityMap
@@ -59,6 +60,7 @@ def research_identity_summary(
             "n_identities": 0,
         }
     density: IdentityDensity = summarize_identity_density(identity)
+    aliases = reconcile_alias_collisions(identity)
     return {
         "contest_entry": False,
         "observation_only": True,
@@ -66,4 +68,9 @@ def research_identity_summary(
         "error": None,
         "n_identities": len(identity),
         "density": density.to_dict(),
+        "aliases": {
+            "n_with_external_alias": aliases["n_with_external_alias"],
+            "alias_collision_count": aliases["alias_collision_count"],
+            "display_name_collision_count": aliases["display_name_collision_count"],
+        },
     }
