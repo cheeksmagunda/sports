@@ -8,6 +8,12 @@ from nfl_oracle.strategy.algebra import (
     scoring_document,
 )
 from nfl_oracle.strategy.clocks import feature_clocks_ok, live_feature_allowed
+from nfl_oracle.strategy.dry_run import (
+    build_offline_contest_dry_run,
+    default_value_label_fixture_root,
+    pick_decision_slate,
+    prove_submit_hard_denied,
+)
 from nfl_oracle.strategy.enumerate import (
     ORDERINGS_PER_SET,
     best_shadow_ordering,
@@ -85,4 +91,8 @@ __all__ = [
     "shadow_score_with_feature_model",
     "value_model_strategy_note",
     "values_from_model",
+    "build_offline_contest_dry_run",
+    "default_value_label_fixture_root",
+    "pick_decision_slate",
+    "prove_submit_hard_denied",
 ]

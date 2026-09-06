@@ -1,7 +1,7 @@
 # Status
 
-Last verified: 2026-09-06 ~02:05 CT (OpenAPI research tags split + readiness-score
-endpoint; 144 pytest; local branch only; no push)
+Last verified: 2026-09-06 ~02:10 CT (offline contest dry-run path;
+155 pytest; local branch only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -9,7 +9,7 @@ treating any row as production truth.
 ## Application state
 
 - Package: `nfl-oracle` workspace member
-- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines + observation-only data/strategy/feature/calendar/identity scaffolds + read-only research service routes
+- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines + observation-only data/strategy/feature/calendar/identity scaffolds + read-only research service routes + **offline contest dry-run** (shadow slate; hard-deny submit)
 - Wired into root `make test-nfl` / `lint` / `typecheck` / `build`; `make -C nfl-oracle strategy-schema`
 - Not started: Corpus C contests, verified five-card provider contract (#91), production deploys,
   contest submission, Railway production secret injection, in-repo Railway deploy source
@@ -448,4 +448,19 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   (`nfl_oracle.strategy.readiness_score`); also optional on `/research/status`
 - High score does **not** authorize contest entry; auth missing expected on box
 - pytest: 144; branch still local-only (push 403)
+
+
+## Offline contest dry-run (2026-09-06 ~02:10 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- `nfl_oracle.strategy.dry_run` — builds a five-card shadow slate from offline
+  value-label fixtures (`tests/fixtures/value_labels`); default values =
+  walk-forward player/position priors; optional **`feature_ridge`**
+- Labels: `mode=dry_run`, `dry_run=true`, `observation_only=true`,
+  `contest_entry=false`; `submit_proof` calls stub.submit and records hard deny
+- CLI: `nfl-contest-dry-run` / `make -C nfl-oracle contest-dry-run`
+- Research: `GET /research/shadow/contest-dry-run` (`use_feature_ridge`,
+  `decision_season`, `top_k` query params)
+- pytest: **155**; still **no push**; real contest entry remains hard-denied
 

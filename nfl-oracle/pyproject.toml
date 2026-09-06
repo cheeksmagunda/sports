@@ -38,6 +38,7 @@ nfl-value-baselines = "nfl_oracle.baselines.cli:main"
 nfl-strategy-schema = "nfl_oracle.strategy.cli:main"
 nfl-research-serve = "nfl_oracle.service.cli:main"
 nfl-provider-status = "nfl_oracle.providers.cli:main"
+nfl-contest-dry-run = "nfl_oracle.strategy.dry_run_cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -35,6 +35,10 @@ from nfl_oracle.strategy.algebra import (
     scoring_document,
 )
 from nfl_oracle.strategy.document import strategy_document
+from nfl_oracle.strategy.dry_run import (
+    build_offline_contest_dry_run,
+    default_value_label_fixture_root,
+)
 from nfl_oracle.strategy.enumerate import best_shadow_ordering, rank_shadow_orderings
 from nfl_oracle.strategy.gates import evaluate_entry_gates
 from nfl_oracle.strategy.posture import posture_from_readiness
@@ -360,6 +364,31 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "returned": len(ranked),
             "rankings": ranked,
         }
+
+    @shadow.get("/shadow/contest-dry-run")
+    def shadow_contest_dry_run(
+        decision_season: int | None = Query(default=None),
+        use_feature_ridge: bool = Query(default=False),
+        top_k: int = Query(default=5, ge=1, le=120),
+        prove_submit_denied: bool = Query(default=True),
+        corpus_root: str | None = Query(
+            default=None,
+            description="Optional value-label fixture root; default bundled fixtures",
+        ),
+    ) -> dict[str, Any]:
+        """Offline five-card shadow slate (dry_run / observation_only; hard-deny submit)."""
+
+        root = Path(corpus_root) if corpus_root else default_value_label_fixture_root()
+        try:
+            return build_offline_contest_dry_run(
+                corpus_root=root,
+                decision_season=decision_season,
+                use_feature_ridge=use_feature_ridge,
+                top_k_orderings=top_k,
+                prove_submit_denied=prove_submit_denied,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @data.get("/catalog/seasons")
     def catalog_seasons() -> dict[str, Any]:

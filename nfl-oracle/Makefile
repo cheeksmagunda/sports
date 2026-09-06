@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules contest-dry-run
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -20,6 +20,7 @@ help:
 	@echo "  make hydrate-identity - offline identity fixture summary"
 	@echo "  make research-serve - local read-only research HTTP (127.0.0.1:8088)"
 	@echo "  make research-smoke - offline TestClient smoke (hard-deny; SMOKE_ARGS=--json)"
+	@echo "  make contest-dry-run - offline five-card shadow slate (dry_run; hard-deny submit)"
 
 setup:
 	$(MAKE) -C .. setup
@@ -69,3 +70,6 @@ research-smoke:
 
 cache-schedules:
 	$(UV_RUN) python scripts/cache_nflverse_schedules.py
+
+contest-dry-run:
+	$(UV_RUN) nfl-contest-dry-run --json
