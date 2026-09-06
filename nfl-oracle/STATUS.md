@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:23 CT (identity/coverage density fixtures + research integration tests; 78 pytest; GitHub write still 403; no push; submit still hard-denied)
+Last verified: 2026-09-06 ~01:30 CT (denser fixtures + identity research route + draft_readiness honesty; 81 pytest; deny-by-default gates hard; GitHub write still 403; no push; submit still hard-denied)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -265,4 +265,18 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   shadow/rank, gates hard-deny, validation 422s)
 - Box verification: pytest **78 passed**; ruff + mypy clean on `nfl-oracle/src`
 - **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403
+
+## Denser fixtures + draft readiness honesty (2026-09-06 ~01:30 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Denser offline fixtures: 8 seasons / 36 catalog seeds; coverage matrix 6 known / 1 unknown / 1 blocked (18 matrix games); identity ~41 players (≥36 complete)
+- Offline research root now includes `data/identity/players.json`
+- Extra value_labels fixtures: 2022/1002, 2025/5001
+- Research API: `GET /research/identity/density`; `/research/status` adds `identity` + `draft_readiness` (submit_hard_denied, railway_deploy_ready=false, deny_by_default_entry_gates)
+- `research_data_summary` includes `identity` block
+- Integration tests cover denser coverage/identity, draft_readiness honesty, provider submit/inventory hard-deny
+- Entry gates: `package_submit_hard_deny` remains ok=False; `contest_entry` never flips
+- Box verification: pytest **81 passed**; ruff + mypy clean on `nfl-oracle` paths
+- **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403; no Railway Dockerfile/railway.toml
 

@@ -3,10 +3,74 @@
     {
       "reason": "sparse_seed_only",
       "season": 2024
+    },
+    {
+      "reason": "auth_missing_fixture",
+      "season": 2025
     }
   ],
-  "generated_at": "2026-09-06T06:00:00+00:00",
+  "generated_at": "2026-09-06T06:30:00+00:00",
   "seasons": {
+    "2018": {
+      "games": {
+        "1801": {
+          "game_id": 1801
+        },
+        "1802": {
+          "game_id": 1802
+        },
+        "1803": {
+          "game_id": 1803
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2019": {
+      "games": {
+        "1901": {
+          "game_id": 1901
+        },
+        "1902": {
+          "game_id": 1902
+        },
+        "1903": {
+          "game_id": 1903
+        },
+        "1904": {
+          "game_id": 1904
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2020": {
+      "games": {
+        "2001": {
+          "game_id": 2001
+        },
+        "2002": {
+          "game_id": 2002
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2021": {
+      "games": {
+        "2101": {
+          "game_id": 2101
+        },
+        "2102": {
+          "game_id": 2102
+        },
+        "2103": {
+          "game_id": 2103
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
     "2022": {
       "games": {
         "2201": {
@@ -17,6 +81,9 @@
         },
         "2203": {
           "game_id": 2203
+        },
+        "2204": {
+          "game_id": 2204
         }
       },
       "status": "known",

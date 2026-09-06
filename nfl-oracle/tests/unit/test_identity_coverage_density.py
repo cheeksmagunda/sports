@@ -11,6 +11,8 @@ from nfl_oracle.data.density import summarize_coverage_density
 from nfl_oracle.data.summary import research_data_summary
 from nfl_oracle.identity import (
     IdentityMap,
+    load_identity_map_from_players_file,
+    research_identity_summary,
     summarize_identity_density,
     upsert_from_players_payload,
 )
@@ -22,13 +24,14 @@ def test_dense_players_fixture_identity_density() -> None:
     payload = json.loads((FIXTURES / "identity" / "dense_players.json").read_text(encoding="utf-8"))
     ident = IdentityMap()
     n = upsert_from_players_payload(ident, payload)
-    assert n >= 20
+    assert n >= 40
     density = summarize_identity_density(ident)
     assert density.n_identities == n
-    assert density.n_complete >= 20
-    assert density.complete_ratio > 0.7
-    assert density.n_with_display_name >= 20
+    assert density.n_complete >= 36
+    assert density.complete_ratio > 0.8
+    assert density.n_with_display_name >= 36
     assert "QB" in density.position_counts
+    assert "DEF" in density.position_counts
     dumped = density.to_dict()
     assert dumped["n_complete"] == density.n_complete
     assert "complete_ratio" in dumped
@@ -62,21 +65,37 @@ def test_dense_coverage_fixture_density() -> None:
     catalog = load_season_game_catalog(FIXTURES / "coverage" / "dense_catalog.json")
     matrix = load_coverage_matrix_doc(FIXTURES / "coverage" / "dense_matrix.json")
     dens = summarize_coverage_density(catalog=catalog, matrix=matrix)
-    assert dens.catalog_season_count == 4
-    assert dens.catalog_seed_game_count == 14
-    assert dens.mean_seeds_per_season == 3.5
-    assert dens.status_counts["known"] == 2
+    assert dens.catalog_season_count == 8
+    assert dens.catalog_seed_game_count == 36
+    assert dens.mean_seeds_per_season == 4.5
+    assert dens.min_seeds_per_season == 3
+    assert dens.max_seeds_per_season == 6
+    assert dens.status_counts["known"] == 6
     assert dens.status_counts["unknown"] == 1
     assert dens.status_counts["blocked"] == 1
-    assert dens.known_ratio == 0.5
-    assert dens.matrix_game_id_count == 5
+    assert dens.known_ratio == 0.75
+    assert dens.matrix_game_id_count == 18
     assert dens.seasons_with_zero_matrix_games == 2
 
 
-def test_research_summary_includes_density_from_offline_root() -> None:
+def test_research_summary_includes_density_and_identity_from_offline_root() -> None:
     root = FIXTURES / "offline_research"
     summary = research_data_summary(project_root=root)
     assert summary["contest_entry"] is False
-    assert summary["density"]["catalog_season_count"] == 4
-    assert summary["density"]["status_counts"]["known"] == 2
+    assert summary["density"]["catalog_season_count"] == 8
+    assert summary["density"]["catalog_seed_game_count"] == 36
+    assert summary["density"]["status_counts"]["known"] == 6
     assert summary["coverage_matrix"]["path_exists"] is True
+    assert summary["identity"]["path_exists"] is True
+    assert summary["identity"]["n_identities"] >= 40
+    assert summary["identity"]["density"]["n_complete"] >= 36
+
+
+def test_load_identity_map_from_offline_players_file() -> None:
+    path = FIXTURES / "offline_research" / "data" / "identity" / "players.json"
+    ident = load_identity_map_from_players_file(path)
+    assert len(ident) >= 40
+    summary = research_identity_summary(players_path=path)
+    assert summary["contest_entry"] is False
+    assert summary["error"] is None
+    assert summary["density"]["complete_ratio"] > 0.8

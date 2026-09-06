@@ -30,10 +30,10 @@ def test_position_mean_prior_predicts_train_position_average() -> None:
 
 def test_walk_forward_is_oos_by_season_and_reports_pooled_metrics() -> None:
     report = evaluate_walk_forward(_labels())
-    assert report.seasons == (2022, 2023, 2024)
-    assert report.n_labels == 11
+    assert report.seasons == (2022, 2023, 2024, 2025)
+    assert report.n_labels == 21
     test_seasons = sorted({fold.test_season for fold in report.folds})
-    assert test_seasons == [2023, 2024]
+    assert test_seasons == [2023, 2024, 2025]
     for fold in report.folds:
         assert fold.test_season not in fold.train_seasons
         assert max(fold.train_seasons) < fold.test_season
@@ -41,7 +41,7 @@ def test_walk_forward_is_oos_by_season_and_reports_pooled_metrics() -> None:
         assert fold.metrics.mae is not None
     for kind in ("global_mean", "position_mean", "position_median"):
         pooled = report.pooled[kind]
-        assert pooled.n == 8  # 2023 (4) + 2024 (4)
+        assert pooled.n == 13  # 2023 (4) + 2024 (4) + 2025 (5)
         assert pooled.mae is not None and pooled.mae >= 0.0
         assert pooled.rmse is not None and pooled.rmse >= pooled.mae - 1e-9
 
@@ -59,7 +59,7 @@ def test_cli_json_on_fixtures(capsys) -> None:
     assert payload["report"]["observation_only"] is True
     assert payload["report"]["contest_entry"] is False
     assert "position_mean" in payload["report"]["pooled"]
-    assert payload["report"]["n_labels"] == 11
+    assert payload["report"]["n_labels"] == 21
 
 
 def test_cli_schema_only(capsys) -> None:

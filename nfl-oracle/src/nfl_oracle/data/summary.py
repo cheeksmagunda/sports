@@ -16,6 +16,7 @@ def research_data_summary(
     project_root: Path | None = None,
     catalog_path: Path | None = None,
     matrix_path: Path | None = None,
+    identity_players_path: Path | None = None,
 ) -> dict[str, Any]:
     """Offline JSON summary for research service / daily-shadow artifacts."""
 
@@ -48,6 +49,13 @@ def research_data_summary(
         status_counts[row.status] = status_counts.get(row.status, 0) + 1
 
     density = summarize_coverage_density(catalog=catalog, matrix=matrix)
+    # Local import avoids identity <-> data package init cycles.
+    from nfl_oracle.identity.load import research_identity_summary
+
+    identity = research_identity_summary(
+        project_root=project_root,
+        players_path=identity_players_path,
+    )
 
     return {
         "contest_entry": False,
@@ -67,4 +75,5 @@ def research_data_summary(
             "gap_count": len(matrix.gaps),
         },
         "density": density.to_dict(),
+        "identity": identity,
     }
