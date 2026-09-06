@@ -155,6 +155,15 @@ make check-boundaries
 ```
 
 
+
+## Data / strategy / feature scaffolds (observation only)
+
+- `nfl_oracle.data` — catalog / coverage / paths helpers
+- `nfl_oracle.strategy` — pre-lock clock gates, five-card structural checks, shadow snapshots
+- `nfl_oracle.features` — FeatureSpec registry (`nfl_oracle.features.schema`)
+- `make strategy-schema` / `uv run --package nfl-oracle nfl-strategy-schema --schema-only`
+- Research HTTP scaffold: `nfl_oracle.service.create_app` (schemas + catalog; no entry)
+
 ## Codespace daily ops (planned)
 
 **HOLD** until Codespaces `RAILWAY_TOKEN` is confirmed. Org-wide default:

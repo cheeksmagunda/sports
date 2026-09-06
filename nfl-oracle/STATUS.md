@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-05 (daily-shadow scaffold + Mac railway link; Codespace live-wire blocked on gh codespace scope)
+Last verified: 2026-09-06 (data/strategy/feature/calendar/identity/service scaffolds on codex/nfl-data-schemas-scaffold; CS SSH from box still hung)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -8,9 +8,9 @@ treating any row as production truth.
 ## Application state
 
 - Package: `nfl-oracle` workspace member
-- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines
-- Wired into root `make test-nfl` / `lint` / `typecheck` / `build`
-- Not started: Corpus C contests, five-card ranking policy, production services,
+- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines + observation-only data/strategy/feature/calendar/identity scaffolds + read-only research service routes
+- Wired into root `make test-nfl` / `lint` / `typecheck` / `build`; `make -C nfl-oracle strategy-schema`
+- Not started: Corpus C contests, verified five-card provider contract (#91), production deploys,
   contest submission, Railway production secret injection
 
 ## Auth
@@ -82,6 +82,19 @@ Provenance + manifests carry `event_time`, `source_available_at`, `captured_at`,
 and `decision_at` (null on historical backfill). See README train/live section.
 
 
+
+## Data / strategy / feature scaffolds (2026-09-06 CT)
+
+Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest entry):
+
+- `nfl_oracle.data` — seed catalog loader, coverage row vocabulary, data path helpers
+- `nfl_oracle.strategy` — clock gates, five-card structural legality, shadow snapshot + `nfl-strategy-schema` CLI
+- `nfl_oracle.features` — FeatureSpec v1 registry (pre-lock priors vs same-slate finals)
+- `nfl_oracle.calendar` — season label helper (week unresolved without schedule)
+- `nfl_oracle.identity` — Real-primary in-memory identity map stub
+- `nfl_oracle.service` — oracle-core FastAPI research routes for schema/catalog JSON only
+
+Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Railway deploy source.
 
 ## Codespace live-wire (2026-09-05 CT)
 
