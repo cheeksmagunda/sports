@@ -24,7 +24,7 @@ class FeatureSpec:
 
 
 def feature_registry() -> tuple[FeatureSpec, ...]:
-    """Small honest registry — placeholders until denser Corpus G priors land."""
+    """Honest registry — expand carefully; keep same-slate finals live-forbidden."""
 
     return (
         FeatureSpec(
@@ -34,6 +34,14 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             live_ok=True,
             availability_rule="known_at_slate_construction",
             description="NFL season year for the game/slate.",
+        ),
+        FeatureSpec(
+            name="week",
+            dtype="int",
+            train_ok=True,
+            live_ok=True,
+            availability_rule="known_from_public_schedule_or_slate_meta",
+            description="Season week when schedule/slate is known.",
         ),
         FeatureSpec(
             name="player_prior_mean",
@@ -58,6 +66,25 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             live_ok=True,
             availability_rule="fit_on_seasons_strictly_earlier_than_decision_season",
             description="Walk-forward global mean Real value prior.",
+        ),
+        FeatureSpec(
+            name="prior_n_games",
+            dtype="int",
+            train_ok=True,
+            live_ok=True,
+            availability_rule="count_of_train_labels_strictly_earlier_than_decision_season",
+            description="Sample size supporting the player prior (0 if fallback).",
+        ),
+        FeatureSpec(
+            name="card_boost_post_settlement",
+            dtype="float",
+            train_ok=True,
+            live_ok=False,
+            availability_rule="post_settlement_contest_stats_only_pre_lock_unobserved",
+            description=(
+                "multiplierBonus from finalized contest stats. Search showed zeros "
+                "pregame; not a live feature until pre-lock visibility is proven."
+            ),
         ),
         FeatureSpec(
             name="same_slate_final_value",
