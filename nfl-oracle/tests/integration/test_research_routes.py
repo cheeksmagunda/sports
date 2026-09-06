@@ -36,6 +36,7 @@ def test_research_route_surface_contest_entry_false() -> None:
         "/research/schedule/summary",
         "/research/identity/density",
         "/research/health/readiness-score",
+        "/research/shadow/contest-dry-run",
         "/research/status",
         "/research/status?include_gates=false",
     ]
@@ -401,3 +402,29 @@ def test_health_readiness_score_endpoint_offline() -> None:
     assert status["draft_readiness"]["readiness_band"] == status["readiness_score"]["band"]
     omitted = client.get("/research/status?include_readiness_score=false").json()
     assert "readiness_score" not in omitted
+
+
+def test_contest_dry_run_route_offline() -> None:
+    client = _client()
+    resp = client.get("/research/shadow/contest-dry-run")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["dry_run"] is True
+    assert body["observation_only"] is True
+    assert body["mode"] == "dry_run"
+    assert body["contest_entry"] is False
+    assert body["submit_enabled"] is False
+    assert body["submit_proof"]["submit_denied"] is True
+    assert len(body["five_card_set"]) == 5
+    assert body["best_ordering"]["contest_entry"] is False
+
+    ridge = client.get(
+        "/research/shadow/contest-dry-run",
+        params={"use_feature_ridge": True, "top_k": 2},
+    )
+    assert ridge.status_code == 200
+    rbody = ridge.json()
+    assert rbody["value_source"] == "feature_ridge"
+    assert rbody["dry_run"] is True
+    assert rbody["observation_only"] is True
+    assert rbody["contest_entry"] is False

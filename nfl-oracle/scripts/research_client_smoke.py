@@ -33,6 +33,7 @@ GET_ROUTES = (
     "/research/schedule/summary",
     "/research/identity/density",
     "/research/health/readiness-score",
+    "/research/shadow/contest-dry-run",
     "/research/status",
 )
 
@@ -83,6 +84,7 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
         "schedule_density": {},
         "provider_contract_gate_denied": False,
         "gates_hard_deny_ok": False,
+        "contest_dry_run_ok": False,
     }
 
     def getter(path: str) -> dict[str, Any]:
@@ -115,6 +117,16 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
             missing = [r for r in rules if r not in notes]
             if missing:
                 raise AssertionError(f"offline notes missing for {missing}")
+        if path == "/research/shadow/contest-dry-run":
+            if body.get("dry_run") is not True:
+                raise AssertionError("contest-dry-run dry_run must be true")
+            if body.get("observation_only") is not True:
+                raise AssertionError("contest-dry-run observation_only must be true")
+            if body.get("mode") != "dry_run":
+                raise AssertionError("contest-dry-run mode must be dry_run")
+            if body.get("submit_proof", {}).get("submit_denied") is not True:
+                raise AssertionError("contest-dry-run submit must be denied")
+            results["contest_dry_run_ok"] = True
         if path == "/research/features/live-ok":
             live = body.get("live_ok") or []
             if len(live) < 20:
