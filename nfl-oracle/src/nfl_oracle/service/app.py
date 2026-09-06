@@ -13,6 +13,7 @@ from nfl_oracle import __version__
 from nfl_oracle.data.catalog import load_season_game_catalog
 from nfl_oracle.data.summary import research_data_summary
 from nfl_oracle.features.schema import features_document, live_ok_feature_names
+from nfl_oracle.identity.load import research_identity_summary
 from nfl_oracle.labels.schema import schema_document as label_schema
 from nfl_oracle.providers.auth_status import probe_realsports_auth
 from nfl_oracle.providers.five_card import FiveCardProviderStub
@@ -249,11 +250,28 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
     def coverage_summary() -> dict[str, Any]:
         return research_data_summary(project_root=project_root)
 
+    @router.get("/identity/density")
+    def identity_density() -> dict[str, Any]:
+        """Offline identity field-fill density; never enables contest entry."""
+
+        return research_identity_summary(project_root=project_root)
+
     @router.get("/status")
     def research_status(
         include_gates: bool = Query(default=True),
     ) -> dict[str, Any]:
         ready = stub.readiness()
+        data = research_data_summary(project_root=project_root)
+        identity = research_identity_summary(project_root=project_root)
+        entry = evaluate_entry_gates(stub=stub)
+        railway = {
+            "in_repo_config": False,
+            "dockerfile": False,
+            "staging_project_name": "nfl-oracle-staging",
+            "staging_service_name": "nfl-oracle",
+            "deploy_source_connected": False,
+            "note": "external staging placeholders only; do not deploy from this package",
+        }
         payload: dict[str, Any] = {
             "app": "nfl-oracle",
             "version": __version__,
@@ -261,27 +279,34 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "contest_entry": False,
             "posture": posture_from_readiness(ready).value,
             "provider": ready.to_json_obj(),
-            "data": research_data_summary(project_root=project_root),
+            "data": data,
+            "identity": identity,
             "scoring": {
                 "observed_default_slot_multipliers": list(OBSERVED_DEFAULT_SLOT_MULTIPLIERS),
                 "schema": "/research/schemas/scoring",
             },
-            "railway": {
-                "in_repo_config": False,
-                "dockerfile": False,
-                "staging_project_name": "nfl-oracle-staging",
-                "staging_service_name": "nfl-oracle",
-                "deploy_source_connected": False,
-                "note": "external staging placeholders only; do not deploy from this package",
-            },
+            "railway": railway,
             "auth": {
                 "usable": ready.auth.usable,
                 "status": ready.status.value,
                 "note": "presence only; secret values never returned",
             },
+            "draft_readiness": {
+                "observation_only": True,
+                "contest_entry": False,
+                "submit_hard_denied": True,
+                "all_research_gates_ok": entry.all_research_gates_ok,
+                "auth_usable": ready.auth.usable,
+                "coverage_seed_game_count": data.get("density", {}).get(
+                    "catalog_seed_game_count", 0
+                ),
+                "identity_n": identity.get("n_identities", 0),
+                "railway_deploy_ready": False,
+                "policy": "deny_by_default_entry_gates",
+            },
         }
         if include_gates:
-            payload["entry_gates"] = evaluate_entry_gates(stub=stub).to_json_obj()
+            payload["entry_gates"] = entry.to_json_obj()
         return payload
 
     meta = ServiceMetadata(name="nfl-oracle", version=__version__, environment="research")

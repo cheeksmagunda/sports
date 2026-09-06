@@ -31,6 +31,7 @@ def main() -> int:
 
     for players_fixture in (
         ROOT / "tests" / "fixtures" / "identity" / "dense_players.json",
+        ROOT / "tests" / "fixtures" / "offline_research" / "data" / "identity" / "players.json",
         ROOT / "tests" / "fixtures" / "corpus_g" / "players.json",
         ROOT / "tests" / "fixtures" / "players_126323.json",
     ):

@@ -53,8 +53,8 @@ def test_labels_from_stats_payload_skips_null_value() -> None:
 
 def test_load_labels_from_fixture_corpus() -> None:
     labels = load_labels_from_corpus_root(FIXTURE_ROOT)
-    assert len(labels) == 11
+    assert len(labels) == 21
     seasons = sorted({row.season for row in labels})
-    assert seasons == [2022, 2023, 2024]
+    assert seasons == [2022, 2023, 2024, 2025]
     assert all(isinstance(row, ValueLabel) for row in labels)
     assert all(row.source_available_at for row in labels)
