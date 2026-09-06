@@ -132,6 +132,19 @@ PR #92 `chat/89-nfl-real-corpus` branch confirmed:
   not stale local CLI state.
 - No contest entry code or credentials staged.
 
+## Box Real Sports auth (2026-09-06 CT)
+
+Executor box `/workspace/sports` on branch `codex/nfl-data-schemas-scaffold`:
+
+- [x] Offline `scripts/auth-check nfl-oracle --offline` passed
+- [ ] No `REALSPORTS_STORAGE_STATE_B64GZ` / path env on box
+- [ ] No `nfl-oracle/.secrets/*.sops.env` or age private key on box
+- [ ] No registered local machines via ListMachines for pulling scraper state
+- Live Corpus G backfill blocked until Ben seeds storage_state (SOPS decrypt via
+  `scripts/with-secrets wnba-oracle -- …`, Codespaces secret, or local
+  `nfl-oracle/scraper/storage_state.json` mode 0600)
+- Never print token / storage_state values
+
 ## Codespace daily ops (planned)
 
 **HOLD** until Ben confirms Codespaces secret `RAILWAY_TOKEN` is set for
@@ -156,3 +169,9 @@ Checklist (execute only after HOLD clears):
 - [ ] Record run timestamps + clock fields (`event_time`, `source_available_at`,
       `captured_at`, `decision_at`) on artifacts / strategy notes
 - [ ] Optional parallel: denser Corpus G census only when Ben picks it up
+
+## Codespace secret inventory (2026-09-06 CT)
+
+- Codespaces secret `RAILWAY_TOKEN` is present (name-only check via `gh secret list --app codespaces`).
+- No Real Sports storage-state secrets in repo or Codespaces secret lists.
+- Repo secrets include Railway workspace token and DB-related keys (WNBA); none are NFL storage_state.
