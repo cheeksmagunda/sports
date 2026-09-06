@@ -98,6 +98,19 @@ Executor attempt from Ben's Mac worktree `/private/tmp/sports-nfl-oracle-89`.
   CS railway link + `make install` / `make -C nfl-oracle daily-shadow`.
 - Never echo `RAILWAY_TOKEN` values.
 
+## Codespace checkout (2026-09-06 03:28 UTC)
+
+PR #92 `chat/89-nfl-real-corpus` branch confirmed:
+
+- [x] Branch checked out from `main`
+- [x] `RAILWAY_TOKEN` environment variable present (not printed)
+- [x] `uv sync --all-extras` succeeded; all workspace deps installed
+- [x] `make -C nfl-oracle test` passed (22 tests, 1.17s)
+- [x] Lint/typecheck/build wired; ready for daily shadow ops
+- Note: Root `make setup` hit linting warnings unrelated to nfl-oracle (scripts/daily_shadow.py line length). App itself is clean.
+- Railway CLI (`railway` binary) not installed in Codespace; defer to operator dashboard link/secret creation.
+- No contest entry code or credentials staged.
+
 ## Codespace daily ops (planned)
 
 **HOLD** until Ben confirms Codespaces secret `RAILWAY_TOKEN` is set for

@@ -105,6 +105,7 @@ See `CONTRIBUTING.md` for the lightweight process and data-science checklist.
 ```text
 packages/oracle-core/   Domain-free shared platform, imported as oracle_core
 wnba-oracle/            WNBA application and all WNBA-owned behavior
+nfl-oracle/             NFL application and all NFL-owned behavior
 scripts/                Portfolio operations, secret injection, boundary checks
 ```
 

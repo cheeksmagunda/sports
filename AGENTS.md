@@ -139,20 +139,35 @@ on GitHub. The GitHub Codespace built from this repository is the canonical
 development environment. The operator's laptop checkout stays synchronized
 with git. Nothing else is authoritative.
 
-Access points and how each one stays synchronized:
+### Access points and sync guarantees
 
-- Claude Code CLI, Copilot coding agent, Codex cloud, and the Claude
-  GitHub App read the repository directly on every task. They are always
-  current; no action is required.
-- Claude.ai and ChatGPT projects contain uploaded static copies of
-  `AGENTS.md`, `README.md`, `STATUS.md`, `Makefile`, and
-  `pyproject.toml`. Those copies drift. Before acting on any of them,
-  fetch the live version through the GitHub connector and treat the live
-  file as authoritative. If a snapshot and the live repository disagree,
-  say so and follow the repository. The operator re-uploads snapshots
-  when the context freshness workflow flags a change.
-- The GitHub mobile app reads the repository directly and is always
-  current.
+**Always-current entry points** (read repository directly on every task):
+- GitHub Copilot CLI (`copilot` command, local terminal)
+- GitHub Codespaces (browser and local forwarded)
+- Copilot Desktop / GitHub Desktop
+- Copilot Web (web.github.dev)
+- Claude Code CLI (local terminal, if configured)
+- GitHub mobile app
+
+**Static-copy entry points** (may be stale; fetch live before acting):
+- Claude.ai projects (web session with uploaded snapshots)
+- ChatGPT projects (web session with uploaded snapshots)
+- Grok web sessions (read-only, snapshot if needed)
+- Local Grok/Claude session files (sync from repo manually)
+
+### Keeping static snapshots current
+
+Claude.ai and ChatGPT projects contain uploaded static copies of
+`AGENTS.md`, `README.md`, `STATUS.md`, `Makefile`, `pyproject.toml`,
+and each application's `AGENTS.md`, `README.md`, and `STATUS.md`.
+Those copies drift. Before acting on any of them:
+
+1. Fetch the live version from the repository through the GitHub connector
+2. Treat the live file as authoritative
+3. If a snapshot and the live repository disagree, note the discrepancy
+   and follow the repository
+4. The operator re-uploads snapshots when the context freshness workflow
+   flags a change
 
 Sync-critical files: every `AGENTS.md`, `README.md`, and `STATUS.md`,
 plus root `Makefile`, `pyproject.toml`, `.devcontainer/`, and
@@ -161,8 +176,40 @@ must re-read it before related work, and the operator refreshes the
 uploaded snapshots. A scheduled workflow opens a tracking issue when
 these files change so re-uploads are not forgotten.
 
-Never act on remembered or cached copies of these files when a live copy
-is reachable.
+### Repository structure for all entry points
+
+All entry points access the same monorepo structure:
+
+- **oracle-core** (`packages/oracle-core/`) — domain-free platform
+  shared by all applications
+- **wnba-oracle** (`wnba-oracle/`) — WNBA application, owns models,
+  features, strategy, scoring, calendar, contests, and provider adapters
+- **nfl-oracle** (`nfl-oracle/`) — NFL application, owns models,
+  features, strategy, scoring, calendar, contests, and provider adapters
+- **Shared commands** — all entry points run the same `make` targets
+  from root or app directory
+
+Command compatibility across entry points:
+
+```sh
+# All entry points support these from /workspaces/sports root:
+make setup                      # Install locked dependencies
+make test                       # Run offline tests
+make test-core                  # Core-only tests
+make test-app APP=wnba-oracle   # WNBA-only tests
+make test-app APP=nfl-oracle    # NFL-only tests
+make lint                       # Ruff check + format
+make typecheck                  # mypy across apps
+make check-boundaries           # Verify dependency direction
+make build                      # Build application images
+
+# App-specific commands from app directory:
+cd nfl-oracle && make test      # Run nfl-oracle tests only
+cd wnba-oracle && make test     # Run wnba-oracle tests only
+```
+
+Never act on remembered or cached copies of sync-critical files when a
+live copy is reachable.
 
 ## Pull request autonomy
 
