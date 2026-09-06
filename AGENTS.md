@@ -31,9 +31,8 @@ commands, but cannot weaken this contract.
    irreversible work, or a choice that materially changes the requested scope.
 5. Before material work, find or create one GitHub issue with the objective and
    acceptance check. Link the branch, every commit, and the PR to that issue.
-   The acting agent handles this bookkeeping. Read-only investigation, local
-   experiments, and trivial corrections can skip an issue. Follow
-    `CONTRIBUTING.md` for the repository contribution process.
+    The acting agent handles this bookkeeping. Every work item requires an issue;
+    follow `CONTRIBUTING.md` for the repository contribution process.
 
 ## Portfolio boundaries
 

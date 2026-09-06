@@ -9,9 +9,8 @@ manage that bookkeeping.
 ## Before work
 
 Read the root `AGENTS.md`, the nearest application `AGENTS.md`, `README.md`,
-and `STATUS.md`. Read-only investigation is always welcome. For material work,
-open one GitHub issue first with an objective, acceptance check, and risk or
-rollback note when relevant.
+and `STATUS.md`. Open or reuse one GitHub issue before every work item with an
+objective, acceptance check, and risk or rollback note.
 
 Material work includes features, bugs, refactors, dependency or workflow
 changes, data or model changes, deployments, credentials, schedules, and
