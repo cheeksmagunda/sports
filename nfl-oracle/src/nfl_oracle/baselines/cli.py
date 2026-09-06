@@ -22,6 +22,7 @@ ALL_METHODS: tuple[BaselineKind, ...] = (
     "position_mean",
     "position_median",
     "player_mean",
+    "feature_ridge",
 )
 
 
@@ -61,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Baseline methods to evaluate (default: global/position mean+median). "
-            "Include player_mean for walk-forward player priors with position/global fallback."
+            "Optional: player_mean; feature_ridge (leakage-safe prior-feature ridge)."
         ),
     )
     return parser

@@ -29,6 +29,12 @@ from nfl_oracle.strategy.schema import (
 )
 from nfl_oracle.strategy.scoring import ShadowScore, shadow_weighted_score
 from nfl_oracle.strategy.snapshot import DecisionPosture
+from nfl_oracle.strategy.value_preds import (
+    predict_values_by_player,
+    shadow_score_with_feature_model,
+    value_model_strategy_note,
+    values_from_model,
+)
 
 # Compat alias
 LineupLegality = LegalityCheck
@@ -63,4 +69,8 @@ __all__ = [
     "shadow_weighted_score",
     "strategy_document",
     "validate_five_card",
+    "predict_values_by_player",
+    "shadow_score_with_feature_model",
+    "value_model_strategy_note",
+    "values_from_model",
 ]

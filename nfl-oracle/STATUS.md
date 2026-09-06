@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~02:15 CT (Claude gaps #2/#4/#5 offline; identity dedup; feature stubs; provider rule notes; 122 pytest; local-only; no push)
+Last verified: 2026-09-06 ~02:05 CT (Claude gap #3 feature_ridge on a802bc5; 132 pytest; local-only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -52,9 +52,10 @@ treating any row as production truth.
 - Extract: `nfl_oracle.labels.extract` from Corpus G `stats.json` + clocks
 - Baselines: `global_mean`, `position_mean`, `position_median` via
   `nfl_oracle.baselines.walk_forward` (OOS by season)
-- CLI: `nfl-value-baselines` (offline; `--schema-only` / `--root` / `--json`)
+- Optional: `player_mean`, `feature_ridge` (leakage-safe prior-feature ridge)
+- CLI: `nfl-value-baselines` (offline; `--schema-only` / `--root` / `--json` / `--methods`)
 - Metrics: pooled MAE / RMSE / bias on held-out season anchors
-- Still out of scope: contest submission, live entry, fancy models
+- Still out of scope: contest submission, live entry
 
 ## Coverage gaps
 
@@ -355,8 +356,7 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   unchanged (offline notes only for slot weights / negative branch).
 - Box verification: pytest **116 passed**; ruff + mypy clean; research-smoke OK
 - Honest gaps: Real Sports auth missing (posture `blocked`); GitHub Contents
-  write 403; branch local-only; no Railway Dockerfile/railway.toml; value model
-  beyond mean/median still deferred; #91 live contract still open.
+  write 403; branch local-only; no Railway Dockerfile/railway.toml; Claude gap #3 feature_ridge landed (optional); #91 live contract still open.
 
 ## Claude gap #1 — full-season schedule census (2026-09-06 ~01:55 CT)
 
@@ -396,4 +396,22 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Honest gaps unchanged: Real Sports auth missing; GitHub Contents write 403;
   no Railway Dockerfile; value model beyond mean/median still deferred; #91 live
   contract still open.
+
+
+## Claude gap #3 — feature-driven value model (2026-09-06 ~02:05 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Built on peer HEAD `a802bc5` (gaps #2/#4/#5). Optional walk-forward method
+  **`feature_ridge`**: stdlib ridge on live_ok prior features
+  (`player_prior_mean`, position mean/median, global/team priors,
+  `prior_n_games`, position one-hots). No numpy/sklearn required.
+- Modules: `nfl_oracle.baselines.ridge`, `nfl_oracle.baselines.value_model`,
+  `nfl_oracle.strategy.value_preds` (shadow `values_by_player` wiring)
+- CLI: `nfl-value-baselines --methods feature_ridge` (optional). **Default**
+  path unchanged: `global_mean` / `position_mean` / `position_median` only.
+- Leakage proofs: train seasons strictly earlier than test; design matrix never
+  includes label/`same_slate_*`; mutating held-out y does not change OOS preds.
+- Box verification: pytest **132 passed**; ruff + mypy clean on touched paths
+- **Still deny real submit**; Real Sports auth optional/missing; no GitHub push
 
