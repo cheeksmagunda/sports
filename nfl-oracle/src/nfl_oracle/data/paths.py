@@ -12,6 +12,8 @@ from nfl_oracle.common.paths import resolve_project_root
 class DataPaths:
     root: Path
     catalog: Path
+    schedule: Path
+    cache: Path
     raw_corpus_g: Path
     artifacts: Path
 
@@ -25,6 +27,8 @@ def resolve_data_paths(project_root: Path | None = None) -> DataPaths:
     return DataPaths(
         root=data,
         catalog=data / "catalog",
+        schedule=data / "schedule",
+        cache=data / "cache",
         raw_corpus_g=data / "raw" / "corpus_g",
         artifacts=data / "artifacts",
     )

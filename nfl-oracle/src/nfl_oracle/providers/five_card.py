@@ -36,20 +36,38 @@ class ProviderReadiness:
             "contest_entry": self.contest_entry,
             "auth": self.auth.to_json_obj(),
             "unknown_rules": list(self.unknown_rules),
+            "offline_rule_notes": {
+                k: OFFLINE_RULE_NOTES[k] for k in self.unknown_rules if k in OFFLINE_RULE_NOTES
+            },
             "issue_refs": list(self.issue_refs),
             "observation_only": True,
         }
 
 
+# Rules still unverified against live Real Sports (#91). Offline research may
+# *observe* defaults (e.g. OBSERVED_DEFAULT_SLOT_MULTIPLIERS) without closing the
+# provider contract — submit stays hard-denied regardless.
 UNKNOWN_PROVIDER_RULES = (
     "provider_roster_and_inventory_eligibility",
     "provider_duplicate_card_rules",
-    "slot_weights_and_scoring",
+    "slot_weights_and_scoring",  # offline observed defaults only; not provider-verified
     "provider_lock_semantics",
     "multiplier_bonus_pre_lock_visibility",
-    "negative_value_scoring_branch",
+    "negative_value_scoring_branch",  # offline algebra has a documented non-negative branch
     "submission_payload_shape",
 )
+
+# Offline documentation only — does not remove keys from UNKNOWN_PROVIDER_RULES.
+OFFLINE_RULE_NOTES: dict[str, str] = {
+    "slot_weights_and_scoring": (
+        "OBSERVED_DEFAULT_SLOT_MULTIPLIERS used for shadow algebra; live provider "
+        "weights still unverified (#91)"
+    ),
+    "negative_value_scoring_branch": (
+        "contest_shadow_score documents non-negative default branch offline; live "
+        "provider branch unverified"
+    ),
+}
 
 
 class FiveCardProviderStub:

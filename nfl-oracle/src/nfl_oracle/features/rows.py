@@ -28,6 +28,7 @@ def prior_feature_row(
         "season": season,
         "player_prior_mean": prior.mean_value,
         "prior_fallback": prior.fallback,
+        "prior_fallback_level": prior.fallback,
         "prior_n_games": prior.n_games,
         "same_slate_final_value": None,  # never populate for live/shadow
         "live_ok": True,

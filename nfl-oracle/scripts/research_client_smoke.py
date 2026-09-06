@@ -29,6 +29,7 @@ GET_ROUTES = (
     "/research/gates/entry",
     "/research/catalog/seasons",
     "/research/coverage/summary",
+    "/research/schedule/summary",
     "/research/identity/density",
     "/research/status",
 )
@@ -77,6 +78,8 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
         "draft_readiness": {},
         "posture": None,
         "coverage_density": {},
+        "schedule_density": {},
+        "provider_contract_gate_denied": False,
         "gates_hard_deny_ok": False,
     }
 
@@ -107,6 +110,15 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
             )
             if deny is None or deny.get("ok") is not False:
                 raise AssertionError("package_submit_hard_deny must be present and ok=false")
+            contract = next(
+                (g for g in body.get("gates", []) if g.get("key") == "provider_contract_verified"),
+                None,
+            )
+            if contract is None or contract.get("ok") is not False:
+                raise AssertionError(
+                    "provider_contract_verified must be present and ok=false without #91 contract"
+                )
+            results["provider_contract_gate_denied"] = True
             results["gates_hard_deny_ok"] = True
         if path == "/research/coverage/summary":
             dens = body.get("density") or {}
@@ -122,6 +134,36 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
             known = (dens.get("status_counts") or {}).get("known", 0)
             if known < 12:
                 raise AssertionError(f"coverage known seasons too sparse: {known}")
+            sched = body.get("schedule") or {}
+            sdens = sched.get("density") or {}
+            if sdens.get("season_count", 0) < 20:
+                raise AssertionError(
+                    f"coverage.summary schedule seasons too sparse: {sdens.get('season_count')}"
+                )
+            if sdens.get("game_count", 0) < 6000:
+                raise AssertionError(
+                    f"coverage.summary schedule games too sparse: {sdens.get('game_count')}"
+                )
+            if (sched.get("continuous_regular_season_count") or 0) < 20:
+                raise AssertionError("coverage.summary continuous regular seasons too sparse")
+        if path == "/research/schedule/summary":
+            dens = body.get("density") or {}
+            results["schedule_density"] = dens
+            if dens.get("season_count", 0) < 20:
+                raise AssertionError(
+                    f"schedule density seasons too sparse: {dens.get('season_count')}"
+                )
+            if dens.get("game_count", 0) < 6000:
+                raise AssertionError(f"schedule density games too sparse: {dens.get('game_count')}")
+            if dens.get("week_count", 0) < 400:
+                raise AssertionError(
+                    f"schedule density week slots too sparse: {dens.get('week_count')}"
+                )
+            continuous = body.get("continuous_regular_season_count") or 0
+            if continuous < 20:
+                raise AssertionError(f"continuous regular seasons too sparse: {continuous}")
+            if body.get("contest_entry") is not False:
+                raise AssertionError("schedule summary contest_entry must be false")
 
     preview_payload = {
         "player_ids": [1, 2, 3, 4, 5],
@@ -209,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(summary, indent=2, sort_keys=True))
     else:
         dens = summary.get("coverage_density") or {}
+        sdens = summary.get("schedule_density") or {}
         print(
             "research_client_smoke OK: "
             f"routes={summary['routes_ok_count']} "
@@ -216,8 +259,11 @@ def main(argv: list[str] | None = None) -> int:
             f"shadow_preview={summary['shadow_preview_ok']} "
             f"rank_orderings={summary['rank_orderings_ok']} "
             f"gates_hard_deny={summary.get('gates_hard_deny_ok')} "
+            f"provider_contract_denied={summary.get('provider_contract_gate_denied')} "
             f"matrix_games={dens.get('matrix_game_id_count')} "
             f"known={((dens.get('status_counts') or {}).get('known'))} "
+            f"schedule_seasons={sdens.get('season_count')} "
+            f"schedule_games={sdens.get('game_count')} "
             f"submit_hard_denied="
             f"{summary['draft_readiness'].get('submit_hard_denied')} "
             f"contest_entry=false"

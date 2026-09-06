@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:40 CT (denser coverage matrix 14/70/12known/40games; research-smoke polished + hard-deny; local-only; no push)
+Last verified: 2026-09-06 ~01:50 CT (nflverse schedule census; identity aliases; feature depth; research-smoke; 116 pytest; local-only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -331,4 +331,29 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - `make research-smoke` polish: strip `DATABASE_URL`/`REDIS_URL` like `make test`; `SMOKE_ARGS` passthrough; smoke asserts density floors + `package_submit_hard_deny`
 - **Still deny real submit** — entry gates hard-deny; `contest_entry` never flips
 - Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`); GitHub Contents write 403; branch local-only; no Railway Dockerfile/railway.toml
+
+## Offline census + identity aliases + feature depth (2026-09-06 ~01:45 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- **Schedule/coverage census:** denser offline schedules (8 seasons / ≥120 games /
+  ≥60 week-slots; 2023–2025 full weeks 1–18). Helpers: `try_load_schedules_csv`,
+  `resolve_schedule_csv_path`, `build_gameday_week_index`, `season_week_census`,
+  `coverage_schedule_census`, `research_schedule_summary`. Research routes:
+  `GET /research/schedule/summary`; coverage summary embeds schedule + census.
+- **Identity aliases:** `identity.aliases` (`upsert_with_aliases`,
+  `apply_alias_table`, `reconcile_alias_collisions`); density tracks
+  `n_with_external_alias` / `alias_ratio`. Fixture ~89 players with gsis/espn
+  aliases + intentional display-name collision pair.
+- **Feature registry depth:** pre-lock live_ok features expanded (calendar /
+  matchup / identity / prior tiers incl. median + team prior + days_rest +
+  kickoff_slot); `features_document` reports group/live counts.
+- **research-smoke:** documented in README; TestClient subset asserts schedule
+  census floors + `provider_contract_verified` ok=false + package hard-deny.
+- **Still deny real submit** — entry gates hard-deny; `UNKNOWN_PROVIDER_RULES`
+  unchanged (offline notes only for slot weights / negative branch).
+- Box verification: pytest **116 passed**; ruff + mypy clean; research-smoke OK
+- Honest gaps: Real Sports auth missing (posture `blocked`); GitHub Contents
+  write 403; branch local-only; no Railway Dockerfile/railway.toml; value model
+  beyond mean/median still deferred; #91 live contract still open.
 

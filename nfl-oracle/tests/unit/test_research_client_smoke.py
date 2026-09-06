@@ -19,9 +19,12 @@ def test_research_client_smoke_offline() -> None:
         assert summary["contest_entry"] is False
         assert summary["shadow_preview_ok"] is True
         assert summary["rank_orderings_ok"] is True
-        assert summary["routes_ok_count"] >= 13
+        assert summary["routes_ok_count"] >= 14
         assert summary["draft_readiness"]["submit_hard_denied"] is True
         assert summary["gates_hard_deny_ok"] is True
+        assert summary["provider_contract_gate_denied"] is True
+        assert summary["schedule_density"]["season_count"] >= 20
+        assert summary["schedule_density"]["game_count"] >= 6000
         assert summary["coverage_density"]["catalog_season_count"] >= 14
         assert summary["coverage_density"]["matrix_game_id_count"] >= 40
         assert summary["coverage_density"]["status_counts"]["known"] >= 12

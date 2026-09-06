@@ -10,6 +10,7 @@ from oracle_core.service import HealthCheck, ServiceMetadata, create_service
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nfl_oracle import __version__
+from nfl_oracle.calendar.schedule import research_schedule_summary
 from nfl_oracle.data.catalog import load_season_game_catalog
 from nfl_oracle.data.summary import research_data_summary
 from nfl_oracle.features.schema import features_document, live_ok_feature_names
@@ -249,6 +250,20 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
     @router.get("/coverage/summary")
     def coverage_summary() -> dict[str, Any]:
         return research_data_summary(project_root=project_root)
+
+    @router.get("/schedule/summary")
+    def schedule_summary() -> dict[str, Any]:
+        """Offline nflverse schedule density; never enables contest entry."""
+
+        data = research_data_summary(project_root=project_root)
+        catalog = data.get("catalog") or {}
+        seed_count = int(catalog.get("seed_game_count") or 0)
+        seasons = catalog.get("seasons") or {}
+        return research_schedule_summary(
+            project_root=project_root,
+            catalog_seed_count=seed_count,
+            catalog_seasons=seasons if isinstance(seasons, dict) else None,
+        )
 
     @router.get("/identity/density")
     def identity_density() -> dict[str, Any]:
