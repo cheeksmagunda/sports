@@ -177,8 +177,11 @@ def strategy_document() -> dict[str, Any]:
             "orderings_per_set": 120,
             "legality": "structural_only_until_provider_contract_verified",
             "unknown_rules": list(UNKNOWN_RULES),
+            "observed_default_slot_multipliers": [2.0, 1.8, 1.6, 1.4, 1.2],
+            "scoring_helper": "nfl_oracle.strategy.algebra.contest_shadow_score",
         },
         "labels": label_schema_document(),
         "observation_only": True,
         "playbook": "drive/NFL-ORACLE Data Science Resources, Strategy, Research, and more.txt",
+        "entry_gates": "nfl_oracle.strategy.gates.evaluate_entry_gates",
     }
