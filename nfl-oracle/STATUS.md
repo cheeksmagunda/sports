@@ -97,6 +97,7 @@ Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest
 - `nfl_oracle.strategy.scoring` — observation-only weighted five-card shadow score
 - `nfl_oracle.data.coverage_matrix` — load/save helpers for catalog coverage_matrix.json
 - baselines CLI `--methods` includes optional `player_mean`
+- `nfl_oracle.calendar.schedule` — offline nflverse schedules.csv parser (public data)
 - `scripts/hydrate_identity_fixtures.py` — offline identity summary from fixtures
 - GitHub push from box blocked (PAT Contents write 403); commits local on `codex/nfl-data-schemas-scaffold`
 
