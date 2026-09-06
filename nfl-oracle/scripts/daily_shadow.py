@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -93,7 +92,10 @@ def main() -> int:
 
     print(f"daily_shadow: wrote {artifact_path}")
     print(f"daily_shadow: wrote {latest}")
-    print(f"daily_shadow: ok={steps['ok']} coverage_rc={cov.returncode} baselines_rc={base.returncode}")
+    print(
+        "daily_shadow: "
+        f"ok={steps['ok']} coverage_rc={cov.returncode} baselines_rc={base.returncode}"
+    )
     return 0 if steps["ok"] else 1
 
 

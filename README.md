@@ -11,9 +11,11 @@ infrastructure only.
 ## Development surfaces
 
 The repository is designed to behave the same on a local checkout, in GitHub
-Codespaces, and in GitHub Actions. The lockfile and Makefile are the shared
-contract; credentials are supplied by the host surface and are never baked
-into the image or committed to the repository.
+Codespaces, and in GitHub Actions. Codespaces is the canonical development
+environment for managing the whole portfolio across Claude, Codex, Copilot,
+and Grok. The lockfile and Makefile are the shared contract; credentials are
+supplied by the host surface and are never baked into the image or committed
+to the repository.
 
 ### GitHub Codespaces
 
@@ -22,7 +24,9 @@ Use the button above to create or resume a Codespace on `main`, or choose
 [documented resume link](https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/setting-up-your-repository/facilitating-quick-creation-and-resumption-of-codespaces).
 The devcontainer starts PostgreSQL and Redis, installs the locked workspace,
 and runs `make codespaces-smoke`. Required setup does not install Claude,
-Copilot, or other vendor tooling. Those are optional editor capabilities.
+Codex, Copilot, Grok, or other vendor tooling. Those are optional editor or
+chat capabilities that should attach to the live repo or receive refreshed
+snapshots.
 
 Inside a Codespace, use the same commands as locally:
 
@@ -95,8 +99,9 @@ change is not accepted because it looks plausible on one slate.
 AI-assisted work follows the same lightweight contract. The agent should state
 what it inspected, separate verified facts from inference, avoid hidden
 external mutations, run the smallest useful checks, and leave a concise
-handoff in the issue or pull request. Claude, Copilot, Codex, and local or
-cloud sessions are optional entry points, not separate sources of truth.
+handoff in the issue or pull request. Claude, Codex, Copilot, Grok, and local,
+Codespaces, web, app, or mobile sessions are optional entry points, not
+separate sources of truth.
 
 See `CONTRIBUTING.md` for the lightweight process and data-science checklist.
 
@@ -106,6 +111,8 @@ See `CONTRIBUTING.md` for the lightweight process and data-science checklist.
 packages/oracle-core/   Domain-free shared platform, imported as oracle_core
 wnba-oracle/            WNBA application and all WNBA-owned behavior
 nfl-oracle/             NFL application and all NFL-owned behavior
+nba-oracle/             NBA application and all NBA-owned behavior
+nhl-oracle/             NHL application and all NHL-owned behavior
 scripts/                Portfolio operations, secret injection, boundary checks
 ```
 

@@ -8,6 +8,26 @@ read-only slate and lineup data.
 Current deployment, model, service, schedule, corpus, incident, and measurement
 facts are in `STATUS.md` and must be reverified before production work.
 
+## Connection surfaces
+
+Use root `../ENTRY_POINTS.md` for the portfolio-wide Codespace, agent, auth,
+and cloud project rules. For WNBA work, open or rejoin the repo's GitHub
+Codespace, read root `../AGENTS.md`, this app's `AGENTS.md`, this `README.md`,
+and `STATUS.md`, then run from the monorepo root:
+
+```sh
+make test-app APP=wnba-oracle
+scripts/auth-check wnba-oracle --offline
+```
+
+Railway production state is WNBA-owned and recorded in `STATUS.md`. Use native
+Railway CLI or the documented WNBA Railway GraphQL helper only from an
+authorized live environment; do not mint per-agent GitHub PATs or copy
+Codespaces secrets into Claude, Codex, Copilot, Grok, Cursor, or chat. Cloud
+projects must include the root snapshot bundle plus `wnba-oracle/AGENTS.md`,
+`wnba-oracle/README.md`, and `wnba-oracle/STATUS.md`, then verify against live
+`main` before material work.
+
 ## Local backend setup
 
 See root `README.md` for workspace setup, authentication, and optional encrypted

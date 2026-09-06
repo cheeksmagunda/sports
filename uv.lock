@@ -10,7 +10,9 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "nba-oracle",
     "nfl-oracle",
+    "nhl-oracle",
     "oracle-core",
     "sports-workspace",
     "wnba-oracle",
@@ -651,6 +653,30 @@ wheels = [
 ]
 
 [[package]]
+name = "nba-oracle"
+version = "0.1.0"
+source = { editable = "nba-oracle" }
+dependencies = [
+    { name = "oracle-core" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13,<2.0" },
+    { name = "oracle-core", editable = "packages/oracle-core" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7,<1.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "nfl-oracle"
 version = "0.1.0"
 source = { editable = "nfl-oracle" }
@@ -685,6 +711,30 @@ requires-dist = [
     { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21,<1.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7,<1.0" },
     { name = "structlog", specifier = ">=24.4,<26.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "nhl-oracle"
+version = "0.1.0"
+source = { editable = "nhl-oracle" }
+dependencies = [
+    { name = "oracle-core" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13,<2.0" },
+    { name = "oracle-core", editable = "packages/oracle-core" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7,<1.0" },
 ]
 provides-extras = ["dev"]
 

@@ -6,7 +6,7 @@ command -v uv >/dev/null
 command -v make >/dev/null
 
 echo "Checking workspace imports"
-uv run --frozen --package wnba-oracle python -c 'import oracle_core, wnba_oracle; assert oracle_core.Dossier'
+uv run --frozen --package wnba-oracle python -c 'import oracle_core, wnba_oracle, nfl_oracle, nba_oracle, nhl_oracle; assert oracle_core.Dossier'
 
 if [ "${SPORTS_DEVCONTAINER:-}" = "true" ]; then
     echo "Checking PostgreSQL and Redis services"

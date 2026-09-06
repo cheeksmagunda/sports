@@ -1,4 +1,4 @@
-.PHONY: setup install test test-core test-portfolio test-app test-wnba test-nfl test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries
+.PHONY: setup install test test-core test-portfolio test-app test-wnba test-nfl test-nba test-nhl test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries
 
 UV_RUN = uv run --frozen
 
@@ -10,7 +10,7 @@ setup:
 install:
 	uv sync --frozen --all-packages --all-extras
 
-test: test-core test-portfolio test-wnba test-nfl
+test: test-core test-portfolio test-wnba test-nfl test-nba test-nhl
 
 test-core:
 	$(UV_RUN) --package oracle-core --extra dev python -m pytest packages/oracle-core/tests -q
@@ -28,6 +28,12 @@ test-wnba:
 
 test-nfl:
 	$(MAKE) test-app APP=nfl-oracle
+
+test-nba:
+	$(MAKE) test-app APP=nba-oracle
+
+test-nhl:
+	$(MAKE) test-app APP=nhl-oracle
 
 test-integration:
 	$(UV_RUN) --package wnba-oracle --extra dev python wnba-oracle/scripts/check_migrations.py
@@ -66,16 +72,24 @@ lint:
 	cd wnba-oracle && $(UV_RUN) --package wnba-oracle --extra dev ruff format --check src tests scripts
 	cd nfl-oracle && $(UV_RUN) --package nfl-oracle --extra dev ruff check src tests scripts
 	cd nfl-oracle && $(UV_RUN) --package nfl-oracle --extra dev ruff format --check src tests scripts
+	cd nba-oracle && $(UV_RUN) --package nba-oracle --extra dev ruff check src tests
+	cd nba-oracle && $(UV_RUN) --package nba-oracle --extra dev ruff format --check src tests
+	cd nhl-oracle && $(UV_RUN) --package nhl-oracle --extra dev ruff check src tests
+	cd nhl-oracle && $(UV_RUN) --package nhl-oracle --extra dev ruff format --check src tests
 
 typecheck:
 	$(UV_RUN) --package oracle-core --extra dev python -m mypy --config-file packages/oracle-core/pyproject.toml packages/oracle-core/src
 	$(UV_RUN) --package wnba-oracle --extra dev python -m mypy --config-file wnba-oracle/pyproject.toml wnba-oracle/src
 	$(UV_RUN) --package nfl-oracle --extra dev python -m mypy --config-file nfl-oracle/pyproject.toml nfl-oracle/src
+	$(UV_RUN) --package nba-oracle --extra dev python -m mypy --config-file nba-oracle/pyproject.toml nba-oracle/src
+	$(UV_RUN) --package nhl-oracle --extra dev python -m mypy --config-file nhl-oracle/pyproject.toml nhl-oracle/src
 
 build:
 	uv build --package oracle-core --out-dir dist
 	uv build --package wnba-oracle --out-dir dist
 	uv build --package nfl-oracle --out-dir dist
+	uv build --package nba-oracle --out-dir dist
+	uv build --package nhl-oracle --out-dir dist
 
 codespaces-smoke:
 	sh scripts/codespaces-smoke.sh

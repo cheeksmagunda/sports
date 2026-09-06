@@ -6,6 +6,26 @@ games/box/play archive with Real `value` labels) and honest coverage audits.
 Slice 1 scope is read-only ingest + redacted persistence. Contest submission,
 live entry, and Railway production secrets are explicitly out of scope here.
 
+## Connection surfaces
+
+Use root `../ENTRY_POINTS.md` for the portfolio-wide Codespace, agent, auth,
+and cloud project rules. For NFL work, open or rejoin the repo's GitHub
+Codespace, read root `../AGENTS.md`, this app's `AGENTS.md`, this `README.md`,
+and `STATUS.md`, then run from the monorepo root:
+
+```sh
+make test-app APP=nfl-oracle
+scripts/auth-check nfl-oracle --offline
+```
+
+Railway state is NFL-owned and recorded in `STATUS.md`; current Slice 1 work is
+read-only and does not authorize contest submission, production secret
+injection, or standing per-agent PATs. Use native `gh` and Railway sessions in
+the Codespace or an operator-authorized one-session login only. Cloud projects
+must include the root snapshot bundle plus `nfl-oracle/AGENTS.md`,
+`nfl-oracle/README.md`, and `nfl-oracle/STATUS.md`, then verify against live
+`main` before material work.
+
 ## Auth (headers_or_capture / storage_state)
 
 Reuse the WNBA-derived Real Sports session pattern without importing WNBA

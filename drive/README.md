@@ -2,7 +2,7 @@
 
 `drive/` is a shared workspace for temporary files, task briefs, agent handoffs, research inventories, and static one-time use documents.
 
-Because the repository on `main` is the single source of truth for all access points (Copilot CLI, Copilot coding agent, Claude Code, GitHub App, Codespaces), putting working documents here ensures that any agent on any surface can read them without the operator needing to copy/paste content.
+Because the repository on `main` is the single source of truth for all access points, putting working documents here ensures that Claude, Codex, Copilot, Grok, Codespaces, and GitHub-connected agents can read them without the operator needing to copy/paste content. Static project copies still need refresh from live `main` before material work.
 
 ## Conventions
 

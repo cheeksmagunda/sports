@@ -107,8 +107,14 @@ PR #92 `chat/89-nfl-real-corpus` branch confirmed:
 - [x] `uv sync --all-extras` succeeded; all workspace deps installed
 - [x] `make -C nfl-oracle test` passed (22 tests, 1.17s)
 - [x] Lint/typecheck/build wired; ready for daily shadow ops
-- Note: Root `make setup` hit linting warnings unrelated to nfl-oracle (scripts/daily_shadow.py line length). App itself is clean.
-- Railway CLI (`railway` binary) not installed in Codespace; defer to operator dashboard link/secret creation.
+- [x] Root Codespaces smoke passes after `daily_shadow.py` lint cleanup and
+  includes NBA/NHL scaffold checks.
+- Railway CLI installed in Codespace (`railway 5.49.2`), but auth returns
+  Unauthorized with the current `RAILWAY_TOKEN`; `railway link` / `status`
+  stay blocked until a refreshed token has project access.
+- Local Railway auth cache was cleared (`railway logout` + config cleanup) and
+  `railway whoami` still returns Unauthorized, so this is token access/scope,
+  not stale local CLI state.
 - No contest entry code or credentials staged.
 
 ## Codespace daily ops (planned)

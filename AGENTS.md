@@ -82,6 +82,14 @@ commands, but cannot weaken this contract.
 
 - Required operational interfaces are ordinary files, process environment
   variables, shell commands, documented CLIs, and HTTPS APIs.
+- GitHub login, Copilot, Actions, and Codespaces secrets live in the repo's
+  Codespace for sports work. Do not mint per-agent PATs for Claude, Codex,
+  Copilot, or Grok.
+- Claude, Codex, and Copilot are clients for the Codespace, live checkout, or
+  live GitHub repository. They are not separate GitHub credential homes.
+- Grok Bot is the only Cursor-based surface. Use Cursor cloud agents on this
+  repo or an operator-authorized one-session `gh` login only. Do not copy
+  Codespaces credentials into chat, Cursor, or other agents.
 - MCP servers, desktop automation, browser control, and product-specific
   connectors are optional accelerators. No required workflow may depend on one
   as its only implementation.
@@ -141,40 +149,51 @@ with git. Nothing else is authoritative.
 
 ### Access points and sync guarantees
 
-**Always-current entry points** (read repository directly on every task):
-- GitHub Copilot CLI (`copilot` command, local terminal)
-- GitHub Codespaces (browser and local forwarded)
-- Copilot Desktop / GitHub Desktop
-- Copilot Web (web.github.dev)
-- Claude Code CLI (local terminal, if configured)
-- GitHub mobile app
+**Live entry points** (read repository directly on every task):
+- GitHub Codespaces in a browser, local editor, or mobile-capable GitHub view
+- GitHub Copilot CLI, app, GitHub UI, or mobile when attached to this repo or
+  Codespace
+- Claude Code CLI, Claude app, or Claude web/mobile when attached to this repo
+  through a live checkout, Codespace, or GitHub connector
+- Codex CLI, app, or web/mobile when attached to this repo through a live
+  checkout, Codespace, or GitHub connector
+- Grok app, web, mobile, or grokbot when attached to this repo through a live
+  checkout, Codespace, or GitHub connector
+- GitHub Desktop and other local editors opened on the synchronized checkout
+
+Only call work portfolio-current after the relevant commit is on live `main`.
+A dirty or unpushed Codespace is local state, not portfolio state.
 
 **Static-copy entry points** (may be stale; fetch live before acting):
-- Claude.ai projects (web session with uploaded snapshots)
-- ChatGPT projects (web session with uploaded snapshots)
-- Grok web sessions (read-only, snapshot if needed)
-- Local Grok/Claude session files (sync from repo manually)
+- Claude, Codex, Copilot, and Grok cloud projects or chats that use uploaded
+  files, pasted context, exported session files, or knowledge bases instead of
+  reading the repository directly
+- Local agent session files or mobile chats that were prepared from a prior
+  snapshot
 
 ### Keeping static snapshots current
 
-Claude.ai and ChatGPT projects contain uploaded static copies of
-`AGENTS.md`, `README.md`, `STATUS.md`, `Makefile`, `pyproject.toml`,
-and each application's `AGENTS.md`, `README.md`, and `STATUS.md`.
-Those copies drift. Before acting on any of them:
+Claude, Codex, Copilot, and Grok cloud projects may contain uploaded static
+copies of the root instructions and application documents. The canonical
+snapshot bundle is root `AGENTS.md`, root `README.md`, root `Makefile`, root
+`pyproject.toml`, `.devcontainer/`, `.github/workflows/`, and each
+application's `AGENTS.md`, `README.md`, and `STATUS.md`. The root of this
+repository has no `STATUS.md`; mutable state belongs to application
+`STATUS.md` files. Static copies drift. Before acting on any of them:
 
 1. Fetch the live version from the repository through the GitHub connector
 2. Treat the live file as authoritative
 3. If a snapshot and the live repository disagree, note the discrepancy
    and follow the repository
-4. The operator re-uploads snapshots when the context freshness workflow
-   flags a change
+4. The operator re-uploads snapshots to all configured Claude, Codex, Copilot,
+   and Grok projects when the context freshness workflow flags a change
 
-Sync-critical files: every `AGENTS.md`, `README.md`, and `STATUS.md`,
-plus root `Makefile`, `pyproject.toml`, `.devcontainer/`, and
-`.github/workflows/`. When one of these changes on `main`, every agent
-must re-read it before related work, and the operator refreshes the
-uploaded snapshots. A scheduled workflow opens a tracking issue when
-these files change so re-uploads are not forgotten.
+Sync-critical files: every `AGENTS.md` and `README.md`, every application
+`STATUS.md`, plus root `Makefile`, `pyproject.toml`, `.devcontainer/`, and
+`.github/workflows/`. When one of these changes on `main`, every agent must
+re-read it before related work, and the operator refreshes the uploaded
+snapshots. A scheduled workflow opens a tracking issue when these files change
+so re-uploads are not forgotten.
 
 ### Repository structure for all entry points
 
@@ -185,6 +204,10 @@ All entry points access the same monorepo structure:
 - **wnba-oracle** (`wnba-oracle/`) — WNBA application, owns models,
   features, strategy, scoring, calendar, contests, and provider adapters
 - **nfl-oracle** (`nfl-oracle/`) — NFL application, owns models,
+  features, strategy, scoring, calendar, contests, and provider adapters
+- **nba-oracle** (`nba-oracle/`) — NBA application, owns models,
+  features, strategy, scoring, calendar, contests, and provider adapters
+- **nhl-oracle** (`nhl-oracle/`) — NHL application, owns models,
   features, strategy, scoring, calendar, contests, and provider adapters
 - **Shared commands** — all entry points run the same `make` targets
   from root or app directory
@@ -198,6 +221,8 @@ make test                       # Run offline tests
 make test-core                  # Core-only tests
 make test-app APP=wnba-oracle   # WNBA-only tests
 make test-app APP=nfl-oracle    # NFL-only tests
+make test-app APP=nba-oracle    # NBA-only tests
+make test-app APP=nhl-oracle    # NHL-only tests
 make lint                       # Ruff check + format
 make typecheck                  # mypy across apps
 make check-boundaries           # Verify dependency direction
@@ -206,6 +231,8 @@ make build                      # Build application images
 # App-specific commands from app directory:
 cd nfl-oracle && make test      # Run nfl-oracle tests only
 cd wnba-oracle && make test     # Run wnba-oracle tests only
+cd nba-oracle && make test      # Run nba-oracle tests only
+cd nhl-oracle && make test      # Run nhl-oracle tests only
 ```
 
 Never act on remembered or cached copies of sync-critical files when a

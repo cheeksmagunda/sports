@@ -13,6 +13,8 @@ members = [
     "packages/*",
     "wnba-oracle",
     "nfl-oracle",
+    "nba-oracle",
+    "nhl-oracle",
 ]
 
 [tool.uv.sources]
