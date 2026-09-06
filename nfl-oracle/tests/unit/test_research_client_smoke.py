@@ -18,6 +18,7 @@ def test_research_client_smoke_offline() -> None:
         summary = mod.run_smoke(fixture_root=FIXTURE_ROOT, base_url=None)
         assert summary["contest_entry"] is False
         assert summary["shadow_preview_ok"] is True
+        assert summary["rank_orderings_ok"] is True
         assert summary["routes_ok_count"] >= 13
         assert summary["draft_readiness"]["submit_hard_denied"] is True
         assert summary["posture"] in {

@@ -52,13 +52,13 @@ def test_dense_schedule_fixture_density() -> None:
     path = FIXTURES / "schedule" / "dense_schedules.csv"
     games = load_schedules_csv(path)
     dens = summarize_schedule_density(games)
-    assert dens.season_count == 3
-    assert dens.game_count >= 24
-    assert dens.week_count >= 8
+    assert dens.season_count == 4
+    assert dens.game_count >= 36
+    assert dens.week_count >= 12
     assert dens.min_games_per_season is not None
     assert dens.max_games_per_season is not None
     assert dens.min_games_per_season <= dens.max_games_per_season
-    assert dens.team_count >= 12
+    assert dens.team_count >= 20
     assert dens.missing_gameday_count >= 1
     assert "2024" in dens.weeks_by_season
     assert 1 in dens.weeks_by_season["2024"]
@@ -90,7 +90,7 @@ def test_catalog_vs_schedule_density_with_dense_fixtures() -> None:
         catalog_seed_count=seed_total,
         schedule_game_count=dens.game_count,
     )
-    assert cmp["catalog_seed_count"] == 45
+    assert cmp["catalog_seed_count"] == 56
     assert cmp["schedule_game_count"] == dens.game_count
     assert cmp["contest_entry"] is False
     assert cmp["seed_to_schedule_ratio"] > 1.0  # seeds denser than small schedule fixture
