@@ -1,0 +1,43 @@
+# Status
+
+Last verified: 2026-09-05 (Slice 1 package stabilize for issue #89)
+
+This file records application state only. Re-verify auth and coverage before
+treating any row as production truth.
+
+## Application state
+
+- Package: `nfl-oracle` workspace member
+- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests
+- Wired into root `make test-nfl` / `lint` / `typecheck` / `build`
+- Not started: Corpus C contests, five-card ranking policy, production services,
+  contest submission, Railway production secret injection
+
+## Auth
+
+- Pattern: `headers_or_capture` in `nfl_oracle.ingest.realsports`
+- Session source: operator-seeded `scraper/storage_state.json`,
+  `NFL_REALSPORTS_STORAGE_STATE` / `REALSPORTS_STORAGE_STATE_PATH`, or
+  `REALSPORTS_STORAGE_STATE_B64GZ` (same Real Sports account mechanics as WNBA,
+  without importing WNBA domain code)
+- Secrets stay local under ignored `scraper/` / `.secrets/`; never committed
+
+## Train vs live
+
+- Training may use post-game Real `value` as labels after finalization
+- Live / prospective decisions use only pre-lock features (strategy playbook
+  clocks + leakage blacklist)
+- No contest entry code in this package
+
+## Corpus G proof
+
+- Target: season 2002, game id 126323 (2002-09-08)
+- Seed catalog: `data/catalog/season_game_ids.json`
+- Raw payloads and coverage matrices are gitignored; fixtures under
+  `tests/fixtures/` are redacted/synthetic for CI
+
+## Coverage gaps
+
+- Catalog currently holds anchor game ids, not a full season schedule
+- Continuous season discovery remains open
+- Contest-era Corpus C is explicitly deferred

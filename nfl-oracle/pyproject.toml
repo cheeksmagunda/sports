@@ -1,0 +1,58 @@
+[project]
+name = "nfl-oracle"
+version = "0.1.0"
+description = "Real Sports NFL corpus ingest and five-card research application."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Ben Oracle" }]
+
+dependencies = [
+    "oracle-core==0.1.0",
+    "httpx>=0.28,<0.30",
+    "pydantic>=2.9,<3.0",
+    "pydantic-settings>=2.6,<3.0",
+    "structlog>=24.4,<26.0",
+    "playwright>=1.59.0",
+]
+
+[tool.uv.sources]
+oracle-core = { workspace = true }
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3,<10.0",
+    "pytest-asyncio>=0.24,<2.0",
+    "respx>=0.21,<1.0",
+    "ruff>=0.7,<1.0",
+    "mypy>=1.13,<2.0",
+]
+
+[project.scripts]
+nfl-corpus-g-backfill = "nfl_oracle.ingest.backfill:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nfl_oracle"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["nfl_oracle"]
+mypy_path = ["src"]

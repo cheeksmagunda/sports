@@ -12,6 +12,7 @@ package = false
 members = [
     "packages/*",
     "wnba-oracle",
+    "nfl-oracle",
 ]
 
 [tool.uv.sources]

@@ -1,0 +1,57 @@
+# Secrets and env
+.env
+.env.*
+!.env.example
+.envrc
+.secrets/
+*.sops.env
+credentials.md
+*.har
+*.pem
+*.key
+
+# Playwright / Real Sports session material (never commit)
+scraper/
+storage_state.json
+request_token_cache.json
+**/storage_state.json
+**/request_token_cache.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Corpus G research payloads and coverage artifacts (keep markers + seed ids)
+data/raw/*
+!data/raw/.gitkeep
+data/raw/corpus_g/**
+!data/raw/corpus_g/.gitkeep
+data/catalog/*
+!data/catalog/.gitkeep
+!data/catalog/season_game_ids.json
+*.parquet
+!tests/fixtures/**/*.parquet
+
+# Logs / IDE
+logs/
+*.log
+.vscode/
+.idea/
+.DS_Store
+.python-version
+
+# Local coverage dumps / research extracts that may still carry identity
+coverage_samples/
+**/corpus_g_coverage_samples/

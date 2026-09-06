@@ -1,0 +1,1 @@
+{"playerBoxScores": [{"id": 1, "playerId": 10, "value": 3.5, "userId": "LEAK", "user": {"id": "LEAK"}}, {"id": 2, "playerId": 11, "value": null}], "gameBoxScore": {"homeScore": 21, "awayScore": 17}, "token": "secret-token"}

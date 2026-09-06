@@ -10,6 +10,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "nfl-oracle",
     "oracle-core",
     "sports-workspace",
     "wnba-oracle",
@@ -648,6 +649,44 @@ sdist = { url = "https://files.pythonhosted.org/packages/0d/f8/761434ce98e39d6bd
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6b/c2/17c805220de846ea9280f62a003c0cdebddf1de3d387614162891502a3a6/nba_api-1.11.4-py3-none-any.whl", hash = "sha256:f489b2a1d67ee4298f5173775b335d0e43e63455ed157a5612b542094b9f1963", size = 322583, upload-time = "2026-02-20T07:02:36.578Z" },
 ]
+
+[[package]]
+name = "nfl-oracle"
+version = "0.1.0"
+source = { editable = "nfl-oracle" }
+dependencies = [
+    { name = "httpx" },
+    { name = "oracle-core" },
+    { name = "playwright" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "structlog" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "respx" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28,<0.30" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13,<2.0" },
+    { name = "oracle-core", editable = "packages/oracle-core" },
+    { name = "playwright", specifier = ">=1.59.0" },
+    { name = "pydantic", specifier = ">=2.9,<3.0" },
+    { name = "pydantic-settings", specifier = ">=2.6,<3.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24,<2.0" },
+    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21,<1.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7,<1.0" },
+    { name = "structlog", specifier = ">=24.4,<26.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "numpy"
