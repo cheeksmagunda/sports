@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-05 (Slice 2 Corpus G coverage + clocks for issue #89)
+Last verified: 2026-09-05 (Railway staging env-name correction for PR #92 / #89)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -20,6 +20,15 @@ treating any row as production truth.
   `NFL_REALSPORTS_STORAGE_STATE` / `REALSPORTS_STORAGE_STATE_PATH`, or
   `REALSPORTS_STORAGE_STATE_B64GZ` (same Real Sports account mechanics as WNBA,
   without importing WNBA domain code)
+- Device identity for header harvest: `NFL_DEVICE_UUID` and `NFL_DEVICE_NAME`
+  (see `realsports.py`). Not `NFL_REALSPORTS_DEVICE_*`.
+- Railway staging (`nfl-oracle-staging` / `nfl-oracle`): placeholders include
+  storage-state keys plus additive `NFL_DEVICE_*`; legacy
+  `NFL_REALSPORTS_DEVICE_*` names may remain present and unused by code.
+  No deploy source connected (0/1 online by design). No contest code.
+- Codespaces `RAILWAY_TOKEN`: Railway CLI cannot mint tokens; Ben must manually
+  `gh secret set RAILWAY_TOKEN --app codespaces --repo cheeksmagunda/sports`
+  after creating a dashboard token. Never record token values here.
 - Secrets stay local under ignored `scraper/` / `.secrets/`; never committed
 
 ## Train vs live

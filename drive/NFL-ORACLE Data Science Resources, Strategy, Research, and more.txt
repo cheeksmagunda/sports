@@ -2608,3 +2608,25 @@ Dated note: 2026-09-05 20:56 CDT
 - Used existing `nfl-corpus-g-backfill` CLI; no contest entry; Railway staging
   not recreated.
 - No secrets recorded here.
+
+
+Dated note: 2026-09-05 21:20 CDT
+### Slice note - Railway staging env-name correction + Codespace token (PR #92 / #89)
+
+Append-only. No secret values. No contest entry.
+
+- Verified on Ben's Mac: `nfl_oracle.ingest.realsports` reads `NFL_DEVICE_UUID`
+  and `NFL_DEVICE_NAME` (optional `WNBA_DEVICE_*` fallbacks). It does not read
+  `NFL_REALSPORTS_DEVICE_UUID` / `NFL_REALSPORTS_DEVICE_NAME`.
+- Railway project `nfl-oracle-staging` / service `nfl-oracle` / environment
+  labeled `production` (staging project): placeholders already had
+  `NFL_REALSPORTS_STORAGE_STATE`, `REALSPORTS_STORAGE_STATE_B64GZ`, and the old
+  `NFL_REALSPORTS_DEVICE_*` names. Claude ADDED (additive) `NFL_DEVICE_UUID` and
+  `NFL_DEVICE_NAME` with placeholder values; left old names in place (harmless).
+- No deploy source connected (0/1 online by design). No contest code.
+- Codespaces `RAILWAY_TOKEN`: Railway CLI cannot mint tokens. Ben must manually
+  `gh secret set RAILWAY_TOKEN --app codespaces --repo cheeksmagunda/sports`
+  after creating a token in the Railway dashboard. Do not put token values in
+  docs or chat.
+- Package README/STATUS updated to list the correct device env names and note
+  legacy aliases still present on Railway (.env.example already had both).

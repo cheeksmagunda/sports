@@ -25,6 +25,14 @@ Environment (see `.env.example`):
 | `REALSPORTS_STORAGE_STATE_B64GZ` | Base64(gzip(storage_state.json)) for ephemeral bootstrap (CI/staging) |
 | `REALSPORTS_TOKEN_CACHE_PATH` / `NFL_REALSPORTS_TOKEN_CACHE` | Optional token cache path override |
 | `NFL_ORACLE_SCRAPER_DIR` | Override the private `scraper/` directory |
+| `NFL_DEVICE_UUID` | Device UUID used when harvesting Real Sports headers (`realsports.py`) |
+| `NFL_DEVICE_NAME` | Device name used when harvesting headers (default `nfl-oracle-dev-01`) |
+
+Code reads `NFL_DEVICE_UUID` / `NFL_DEVICE_NAME` (with optional `WNBA_DEVICE_*`
+fallbacks). It does **not** read `NFL_REALSPORTS_DEVICE_UUID` /
+`NFL_REALSPORTS_DEVICE_NAME`. Those legacy names may still exist as harmless
+placeholders on Railway project `nfl-oracle-staging` / service `nfl-oracle`;
+the additive correct names are what the package uses.
 
 Default local storage path: `nfl-oracle/scraper/storage_state.json`.
 Never commit `scraper/`, cookies, tokens, or payloads containing `userId`.
