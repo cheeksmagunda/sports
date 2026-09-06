@@ -223,3 +223,124 @@ def test_schedule_summary_offline_census() -> None:
     assert cov["schedule"]["density"]["season_count"] >= 8
     assert cov["schedule"]["continuous_regular_season_count"] >= 3
     assert "coverage_census" in cov["schedule"]
+
+
+def _synthetic_train_labels() -> list[dict]:
+    """Offline-safe inline labels for feature_ridge shadow path."""
+
+    rows: list[dict] = []
+    roster = [(101, "QB"), (102, "RB"), (103, "WR"), (104, "TE"), (105, "K")]
+    for season, bump in ((2022, 0.0), (2023, 1.0)):
+        for pid, pos in roster:
+            rows.append(
+                {
+                    "player_id": pid,
+                    "game_id": season * 1000 + pid,
+                    "season": season,
+                    "position": pos,
+                    "value": float(pid % 100) + bump,
+                    "team_id": 1,
+                }
+            )
+    return rows
+
+
+def test_e2e_schedule_shadow_rank_rules_offline() -> None:
+    """End-to-end research path: schedule + shadow rank + provider rules-offline."""
+
+    client = _client()
+
+    schedule = client.get("/research/schedule/summary").json()
+    assert schedule["contest_entry"] is False
+    assert schedule["density"]["season_count"] >= 8
+    assert schedule["density"]["game_count"] >= 1000
+
+    rules = client.get("/research/provider/rules-offline").json()
+    assert rules["contest_entry"] is False
+    assert rules["observation_only"] is True
+    assert rules["provider_contract_verified"] is False
+    assert rules["submit_enabled"] is False
+    assert len(rules["unknown_rules"]) >= 1
+    assert len(rules["offline_rule_notes"]) == len(rules["unknown_rules"])
+
+    # Default path remains offline-safe (explicit values; flag off).
+    ranked_default = client.post(
+        "/research/shadow/rank-orderings",
+        json={
+            "player_ids": [101, 102, 103, 104, 105],
+            "values_by_player": {"101": 9.0, "102": 7.0, "103": 5.0, "104": 3.0, "105": 1.0},
+            "top_k": 5,
+        },
+    )
+    assert ranked_default.status_code == 200
+    dbody = ranked_default.json()
+    assert dbody["contest_entry"] is False
+    assert dbody["use_feature_value_model"] is False
+    assert dbody["value_model"]["value_source"] == "explicit"
+    assert dbody["value_model"]["default_offline_safe"] is True
+    assert dbody["returned"] == 5
+
+    # Opt-in feature_ridge path via clear flag.
+    ranked_model = client.post(
+        "/research/shadow/rank-orderings",
+        json={
+            "player_ids": [101, 102, 103, 104, 105],
+            "use_feature_value_model": True,
+            "decision_season": 2024,
+            "player_positions": {
+                "101": "QB",
+                "102": "RB",
+                "103": "WR",
+                "104": "TE",
+                "105": "K",
+            },
+            "train_labels": _synthetic_train_labels(),
+            "top_k": 5,
+        },
+    )
+    assert ranked_model.status_code == 200, ranked_model.text
+    mbody = ranked_model.json()
+    assert mbody["contest_entry"] is False
+    assert mbody["use_feature_value_model"] is True
+    assert mbody["value_model"]["value_source"] == "feature_ridge"
+    assert mbody["value_model"]["method"] == "feature_ridge"
+    assert mbody["value_model"]["n_train_labels"] == 10
+    assert len(mbody["values_by_player"]) == 5
+    assert mbody["rankings"][0]["total"] >= mbody["rankings"][-1]["total"]
+
+    preview = client.post(
+        "/research/shadow/preview",
+        json={
+            "player_ids": [101, 102, 103, 104, 105],
+            "use_feature_value_model": True,
+            "decision_season": 2024,
+            "player_positions": {
+                "101": "QB",
+                "102": "RB",
+                "103": "WR",
+                "104": "TE",
+                "105": "K",
+            },
+            "train_labels": _synthetic_train_labels(),
+            "include_best_ordering": True,
+        },
+    )
+    assert preview.status_code == 200, preview.text
+    pbody = preview.json()
+    assert pbody["contest_entry"] is False
+    assert pbody["value_model"]["value_source"] == "feature_ridge"
+    assert "contest_shadow_score" in pbody or "shadow_score" in pbody
+
+
+def test_feature_value_model_flag_default_offline_safe_422() -> None:
+    client = _client()
+    # Flag on without train labels / season → 422 (does not silently invent values).
+    resp = client.post(
+        "/research/shadow/rank-orderings",
+        json={
+            "player_ids": [1, 2, 3, 4, 5],
+            "use_feature_value_model": True,
+            "player_positions": {"1": "QB", "2": "RB", "3": "WR", "4": "TE", "5": "K"},
+        },
+    )
+    assert resp.status_code == 422

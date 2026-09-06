@@ -19,6 +19,7 @@ from nfl_oracle.features.schema import (
     offline_stub_feature_names,
 )
 from nfl_oracle.identity.load import research_identity_summary
+from nfl_oracle.labels.schema import ValueLabel
 from nfl_oracle.labels.schema import schema_document as label_schema
 from nfl_oracle.providers.auth_status import probe_realsports_auth
 from nfl_oracle.providers.five_card import (
@@ -36,6 +37,7 @@ from nfl_oracle.strategy.enumerate import best_shadow_ordering, rank_shadow_orde
 from nfl_oracle.strategy.gates import evaluate_entry_gates
 from nfl_oracle.strategy.posture import posture_from_readiness
 from nfl_oracle.strategy.schema import FiveCardAction
+from nfl_oracle.strategy.value_preds import resolve_shadow_values, value_model_strategy_note
 
 
 class _AuthHealth:
@@ -56,6 +58,19 @@ class _AuthHealth:
         )
 
 
+class TrainLabelIn(BaseModel):
+    """Minimal train label row for optional feature_ridge shadow values."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    player_id: int
+    game_id: int = 0
+    season: int
+    position: str
+    value: float
+    team_id: int | None = None
+
+
 class ShadowPreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -66,17 +81,28 @@ class ShadowPreviewRequest(BaseModel):
     boosts_by_player: dict[str, float] = Field(default_factory=dict)
     use_contest_algebra: bool = True
     include_best_ordering: bool = True
+    # Default False = offline-safe explicit values path (no model fit).
+    use_feature_value_model: bool = False
+    player_positions: dict[str, str] = Field(default_factory=dict)
+    decision_season: int | None = None
+    train_labels: list[TrainLabelIn] = Field(default_factory=list)
+    value_model_alpha: float = 1.0
 
 
 class RankOrderingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     player_ids: tuple[int, int, int, int, int]
-    values_by_player: dict[str, float]
+    values_by_player: dict[str, float] = Field(default_factory=dict)
     boosts_by_player: dict[str, float] = Field(default_factory=dict)
     slot_multipliers: tuple[float, float, float, float, float] | None = None
     top_k: int = Field(default=10, ge=1, le=120)
     use_contest_algebra: bool = True
+    use_feature_value_model: bool = False
+    player_positions: dict[str, str] = Field(default_factory=dict)
+    decision_season: int | None = None
+    train_labels: list[TrainLabelIn] = Field(default_factory=list)
+    value_model_alpha: float = 1.0
 
 
 def _parse_float_map(raw: dict[str, float]) -> dict[int, float]:
@@ -87,6 +113,54 @@ def _parse_float_map(raw: dict[str, float]) -> dict[int, float]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+def _parse_str_map(raw: dict[str, str]) -> dict[int, str]:
+    out: dict[int, str] = {}
+    for key, val in raw.items():
+        try:
+            out[int(key)] = str(val)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _train_labels_from_body(rows: list[TrainLabelIn]) -> list[ValueLabel]:
+    return [
+        ValueLabel(
+            player_id=row.player_id,
+            game_id=row.game_id,
+            season=row.season,
+            position=row.position,
+            value=row.value,
+            team_id=row.team_id,
+        )
+        for row in rows
+    ]
+
+
+def _resolve_request_values(
+    *,
+    player_ids: tuple[int, int, int, int, int],
+    values_by_player: dict[str, float],
+    use_feature_value_model: bool,
+    player_positions: dict[str, str],
+    decision_season: int | None,
+    train_labels: list[TrainLabelIn],
+    value_model_alpha: float,
+) -> tuple[dict[int, float], dict[str, Any]]:
+    try:
+        return resolve_shadow_values(
+            player_ids=list(player_ids),
+            values_by_player=_parse_float_map(values_by_player),
+            use_feature_value_model=use_feature_value_model,
+            player_positions=_parse_str_map(player_positions),
+            decision_season=decision_season,
+            train_labels=_train_labels_from_body(train_labels),
+            alpha=value_model_alpha,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _action_from_body(
@@ -160,7 +234,16 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
     def shadow_preview(body: ShadowPreviewRequest) -> dict[str, Any]:
         action = _action_from_body(body.player_ids, body.slot_multipliers, body.notes)
         preview = stub.shadow_preview(action)
-        values = _parse_float_map(body.values_by_player)
+        values, value_meta = _resolve_request_values(
+            player_ids=body.player_ids,
+            values_by_player=body.values_by_player,
+            use_feature_value_model=body.use_feature_value_model,
+            player_positions=body.player_positions,
+            decision_season=body.decision_season,
+            train_labels=body.train_labels,
+            value_model_alpha=body.value_model_alpha,
+        )
+        preview["value_model"] = value_meta
         boosts = _parse_float_map(body.boosts_by_player)
         if values:
             if body.use_contest_algebra:
@@ -224,9 +307,24 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
 
     @router.post("/shadow/rank-orderings")
     def shadow_rank_orderings(body: RankOrderingsRequest) -> dict[str, Any]:
-        values = _parse_float_map(body.values_by_player)
+        values, value_meta = _resolve_request_values(
+            player_ids=body.player_ids,
+            values_by_player=body.values_by_player,
+            use_feature_value_model=body.use_feature_value_model,
+            player_positions=body.player_positions,
+            decision_season=body.decision_season,
+            train_labels=body.train_labels,
+            value_model_alpha=body.value_model_alpha,
+        )
         if len(values) < 1:
-            raise HTTPException(status_code=422, detail="values_by_player_required")
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "values_by_player_required"
+                    if not body.use_feature_value_model
+                    else "feature_value_model_produced_no_values"
+                ),
+            )
         # Structural validate first for clear 422s
         _action_from_body(body.player_ids, body.slot_multipliers)
         try:
@@ -244,6 +342,9 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "contest_entry": False,
             "observation_only": True,
             "use_contest_algebra": body.use_contest_algebra,
+            "use_feature_value_model": body.use_feature_value_model,
+            "value_model": value_meta,
+            "values_by_player": {str(k): v for k, v in values.items()},
             "orderings_evaluated": 120,
             "returned": len(ranked),
             "rankings": ranked,
@@ -317,6 +418,12 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "scoring": {
                 "observed_default_slot_multipliers": list(OBSERVED_DEFAULT_SLOT_MULTIPLIERS),
                 "schema": "/research/schemas/scoring",
+            },
+            "value_model": {
+                **value_model_strategy_note(),
+                "shadow_flag": "use_feature_value_model",
+                "shadow_flag_default": False,
+                "default_offline_safe": True,
             },
             "railway": railway,
             "auth": {

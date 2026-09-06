@@ -68,3 +68,51 @@ def test_gates_route_hard_denies_submit() -> None:
     assert "package_submit_hard_deny" in keys
     deny = next(g for g in gates["gates"] if g["key"] == "package_submit_hard_deny")
     assert deny["ok"] is False
+
+
+def test_shadow_feature_value_model_flag_opt_in() -> None:
+    client = TestClient(create_app())
+    train = []
+    for season in (2022, 2023):
+        for pid, pos, val in (
+            (1, "QB", 10.0),
+            (2, "RB", 5.0),
+            (3, "WR", 4.0),
+            (4, "TE", 3.0),
+            (5, "K", 2.0),
+        ):
+            train.append(
+                {
+                    "player_id": pid,
+                    "game_id": season * 100 + pid,
+                    "season": season,
+                    "position": pos,
+                    "value": val + (0.5 if season == 2023 else 0.0),
+                }
+            )
+    resp = client.post(
+        "/research/shadow/preview",
+        json={
+            "player_ids": [1, 2, 3, 4, 5],
+            "use_feature_value_model": True,
+            "decision_season": 2024,
+            "player_positions": {"1": "QB", "2": "RB", "3": "WR", "4": "TE", "5": "K"},
+            "train_labels": train,
+            "include_best_ordering": False,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["contest_entry"] is False
+    assert body["value_model"]["use_feature_value_model"] is True
+    assert body["value_model"]["value_source"] == "feature_ridge"
+    assert "shadow_score" in body
+
+
+def test_status_exposes_value_model_flag_default() -> None:
+    client = TestClient(create_app())
+    status = client.get("/research/status").json()
+    assert status["value_model"]["shadow_flag"] == "use_feature_value_model"
+    assert status["value_model"]["shadow_flag_default"] is False
+    assert status["value_model"]["default_offline_safe"] is True
+    assert status["value_model"]["contest_entry"] is False

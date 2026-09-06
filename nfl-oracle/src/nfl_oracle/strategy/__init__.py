@@ -31,6 +31,7 @@ from nfl_oracle.strategy.scoring import ShadowScore, shadow_weighted_score
 from nfl_oracle.strategy.snapshot import DecisionPosture
 from nfl_oracle.strategy.value_preds import (
     predict_values_by_player,
+    resolve_shadow_values,
     shadow_score_with_feature_model,
     value_model_strategy_note,
     values_from_model,
@@ -70,6 +71,7 @@ __all__ = [
     "strategy_document",
     "validate_five_card",
     "predict_values_by_player",
+    "resolve_shadow_values",
     "shadow_score_with_feature_model",
     "value_model_strategy_note",
     "values_from_model",
