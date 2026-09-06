@@ -7,11 +7,12 @@ enable contest entry; ``contest_entry`` remains False regardless of checklist.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from nfl_oracle.providers.five_card import FiveCardProviderStub, ProviderContractStatus
-from nfl_oracle.strategy.posture import posture_from_readiness
 from nfl_oracle.strategy.schema import Posture
+
+if TYPE_CHECKING:
+    from nfl_oracle.providers.five_card import FiveCardProviderStub
 
 
 @dataclass(frozen=True)
@@ -35,9 +36,7 @@ class EntryGateReport:
             "posture": self.posture.value,
             "all_research_gates_ok": self.all_research_gates_ok,
             "blocked_reasons": list(self.blocked_reasons),
-            "gates": [
-                {"key": g.key, "ok": g.ok, "detail": g.detail} for g in self.items
-            ],
+            "gates": [{"key": g.key, "ok": g.ok, "detail": g.detail} for g in self.items],
             "policy": "submit_hard_denied_until_explicit_authorization",
             "observation_only": True,
         }
@@ -51,6 +50,13 @@ def evaluate_entry_gates(
     submit_explicitly_authorized: bool = False,
 ) -> EntryGateReport:
     """Evaluate research readiness; never returns contest_entry=True."""
+
+    # Local imports avoid strategy <-> providers circular import at package load.
+    from nfl_oracle.providers.five_card import (
+        FiveCardProviderStub,
+        ProviderContractStatus,
+    )
+    from nfl_oracle.strategy.posture import posture_from_readiness
 
     provider = stub or FiveCardProviderStub()
     ready = provider.readiness()
@@ -66,8 +72,7 @@ def evaluate_entry_gates(
         ),
         GateItem(
             key="provider_contract_verified",
-            ok=provider_contract_verified
-            and ready.status == ProviderContractStatus.VERIFIED,
+            ok=provider_contract_verified and ready.status == ProviderContractStatus.VERIFIED,
             detail=(
                 "live #91 five-card contract verified"
                 if provider_contract_verified
@@ -100,7 +105,6 @@ def evaluate_entry_gates(
     )
 
     blocked = tuple(g.key for g in items if not g.ok)
-    # Research gates exclude the permanent hard-deny for "all_research_gates_ok"
     research_keys = {
         "realsports_auth_present",
         "provider_contract_verified",

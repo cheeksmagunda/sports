@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from nfl_oracle.providers.five_card import (
-    FiveCardProviderStub,
-    ProviderContractStatus,
-    ProviderReadiness,
-)
+from typing import TYPE_CHECKING
+
 from nfl_oracle.strategy.schema import Posture
+
+if TYPE_CHECKING:
+    from nfl_oracle.providers.five_card import FiveCardProviderStub, ProviderReadiness
 
 
 def posture_from_readiness(ready: ProviderReadiness) -> Posture:
     """Map stub readiness to strategy Posture without enabling contest entry."""
+
+    from nfl_oracle.providers.five_card import ProviderContractStatus
 
     if ready.contest_entry:
         # Defensive: stub always sets contest_entry=False.
@@ -29,5 +31,7 @@ def posture_from_readiness(ready: ProviderReadiness) -> Posture:
 
 
 def current_posture(*, stub: FiveCardProviderStub | None = None) -> Posture:
+    from nfl_oracle.providers.five_card import FiveCardProviderStub
+
     provider = stub or FiveCardProviderStub()
     return posture_from_readiness(provider.readiness())
