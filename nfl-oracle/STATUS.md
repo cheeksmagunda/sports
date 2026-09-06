@@ -307,6 +307,6 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Offline research root mirrors denser catalog/matrix
 - Script: `scripts/research_client_smoke.py` / `make -C nfl-oracle research-smoke` (TestClient offline)
 - STATUS posture table above documents deny-by-default strategy posture
-- Box verification: pytest + ruff + mypy on `nfl-oracle` paths
+- Box verification: pytest **94 passed**; ruff + mypy clean on `nfl-oracle` paths
 - **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403; no Railway Dockerfile/railway.toml
 
