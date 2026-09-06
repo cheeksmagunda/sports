@@ -80,3 +80,29 @@ committed live in `data/catalog/season_game_ids.json`.
 
 Provenance + manifests carry `event_time`, `source_available_at`, `captured_at`,
 and `decision_at` (null on historical backfill). See README train/live section.
+
+
+## Codespace daily ops (planned)
+
+**HOLD** until Ben confirms Codespaces secret `RAILWAY_TOKEN` is set for
+`cheeksmagunda/sports`. Prep/docs only until then. Do not create/start
+Codespaces, mint tokens, set secrets, or deploy from this checklist.
+
+Org-wide default: Codespaces is the long-term home for **every** app's daily
+processes in this monorepo (Mac is not the standing ops host). NFL is the first
+concrete slice.
+
+Checklist (execute only after HOLD clears):
+
+- [ ] Confirm `RAILWAY_TOKEN` Codespaces secret present (Ben dashboard mint +
+      `gh secret set RAILWAY_TOKEN --app codespaces --repo cheeksmagunda/sports`)
+- [ ] Keep existing sports Codespace; refresh checkout to `chat/89-nfl-real-corpus`
+      (PR #92) or a dedicated daily branch (do not recreate blindly)
+- [ ] Set Real env key names as Codespace secrets only (never git):
+      `NFL_DEVICE_UUID`, `NFL_DEVICE_NAME`, plus storage-state keys as needed.
+      Do not rely on `NFL_REALSPORTS_DEVICE_*` (code does not read those).
+- [ ] Daily shadow pipeline (America/Chicago clocks; no contest entry; #91 shadow):
+      Corpus G coverage refresh → label/baseline recompute → status artifact
+- [ ] Record run timestamps + clock fields (`event_time`, `source_available_at`,
+      `captured_at`, `decision_at`) on artifacts / strategy notes
+- [ ] Optional parallel: denser Corpus G census only when Ben picks it up

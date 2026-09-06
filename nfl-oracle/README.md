@@ -133,3 +133,13 @@ make test-app APP=nfl-oracle
 make check-applications
 make check-boundaries
 ```
+
+
+## Codespace daily ops (planned)
+
+**HOLD** until Codespaces `RAILWAY_TOKEN` is confirmed. Org-wide default:
+Codespaces is the long-term home for every app's daily processes (NFL is the
+first concrete slice). Full checklist lives in `STATUS.md`. Shadow only: Corpus G
+coverage refresh → label/baseline recompute → status artifact; no contest entry;
+no recreate-blind Codespace; device secrets are `NFL_DEVICE_UUID` /
+`NFL_DEVICE_NAME` only (never git).

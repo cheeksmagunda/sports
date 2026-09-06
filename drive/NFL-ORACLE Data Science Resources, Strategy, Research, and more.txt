@@ -2716,3 +2716,70 @@ Corpus G payloads.
 - Contest-era Corpus C labels (deferred) and five-card ordering baselines
 - Nested experiments only after these priors are beaten OOS on denser data
 
+
+
+Dated note: 2026-09-05 22:07 CDT
+### Slice note - Codespace daily ops plan (PREP ONLY; PR #92 / #89)
+
+Append-only. No secret values. No Codespace create/start. No token mint. No deploy.
+
+Org-wide default (Ben): GitHub Codespaces is the long-term home for EVERY app's
+daily processes in this monorepo (not Mac as the standing ops host). NFL detail
+below is the first concrete slice; same ops home applies to other packages when
+their daily pipelines move.
+
+#### Hold gate
+- HOLD all Codespace daily-ops execution until Ben confirms Codespaces secret
+  `RAILWAY_TOKEN` is set for `cheeksmagunda/sports`.
+- Railway CLI cannot mint tokens. Ben creates a Railway dashboard token, then:
+  `gh secret set RAILWAY_TOKEN --app codespaces --repo cheeksmagunda/sports`
+- Never commit token values, storage_state, or Real env values to git.
+
+#### Codespace lifecycle (do not recreate blindly)
+- Keep the existing sports Codespace.
+- Refresh checkout to PR #92 branch `chat/89-nfl-real-corpus` or a dedicated
+  daily ops branch derived from it.
+- Prefer pull/rebase/reset of an existing Codespace over creating a new one.
+
+#### Secrets (Codespace secrets only; never git)
+- `RAILWAY_TOKEN` (Codespaces app secret; Ben-minted; HOLD until confirmed).
+- Real Sports session / device keys as Codespace secrets using the names the
+  code actually reads:
+  - `NFL_DEVICE_UUID`
+  - `NFL_DEVICE_NAME`
+  - plus existing storage-state keys as needed
+    (`NFL_REALSPORTS_STORAGE_STATE` / `REALSPORTS_STORAGE_STATE_PATH` /
+    `REALSPORTS_STORAGE_STATE_B64GZ`).
+- Do not use `NFL_REALSPORTS_DEVICE_*` for new secrets; code ignores those names
+  (legacy Railway placeholders may remain unused).
+
+#### Daily shadow pipeline (no contest entry; #91 shadow)
+Planned once the hold gate clears (shadow / observation only):
+
+1. Corpus G coverage refresh (read-only ingest / matrix update on seeds).
+2. Label extract + walk-forward baseline recompute (`nfl-value-baselines`).
+3. Write a status artifact (coverage + baseline metrics summary).
+4. Explicitly NO contest entry / submission.
+
+This aligns with issue #91 shadow posture and current package scope (Corpus G +
+labels + baselines only).
+
+#### Schedule + clocks (document now; execute after HOLD clears)
+- Preferred wall clock: America/Chicago (CDT/CST). Record run timestamps in CT
+  on status artifacts and strategy appends.
+- Respect train/live clock contract on every artifact:
+  `event_time`, `source_available_at`, `captured_at`, `decision_at`
+  (historical Corpus G keeps `decision_at` null; live features require
+  source_available_at and captured_at <= decision_at).
+- Same-slate final Real `value` remains a train/research label only; blacklisted
+  as a live feature.
+
+#### Parallel / optional
+- Denser Corpus G census walks remain optional until Ben picks them up; not a
+  blocker for the daily shadow pipeline once secrets are confirmed.
+
+#### Explicit non-goals for this prep note
+- Creating or starting Codespaces
+- Setting secrets or minting tokens
+- Deploying Railway or connecting deploy sources
+- Contest entry
