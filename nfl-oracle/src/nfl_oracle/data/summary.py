@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from nfl_oracle.data.catalog import load_season_game_catalog
+from nfl_oracle.data.catalog import SeasonGameCatalog, load_season_game_catalog
 from nfl_oracle.data.coverage_matrix import load_coverage_matrix_doc
+from nfl_oracle.data.density import summarize_coverage_density
 from nfl_oracle.data.paths import resolve_data_paths
 
 
@@ -23,6 +24,7 @@ def research_data_summary(
     mat_file = matrix_path or (paths.catalog / "coverage_matrix.json")
 
     catalog_error: str | None = None
+    catalog: SeasonGameCatalog | None = None
     try:
         catalog = load_season_game_catalog(cat_file)
         seasons = catalog.to_json_obj()
@@ -45,6 +47,8 @@ def research_data_summary(
     for row in rows:
         status_counts[row.status] = status_counts.get(row.status, 0) + 1
 
+    density = summarize_coverage_density(catalog=catalog, matrix=matrix)
+
     return {
         "contest_entry": False,
         "observation_only": True,
@@ -62,4 +66,5 @@ def research_data_summary(
             "status_counts": status_counts,
             "gap_count": len(matrix.gaps),
         },
+        "density": density.to_dict(),
     }

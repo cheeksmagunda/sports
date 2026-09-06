@@ -7,6 +7,19 @@ from typing import Any
 from nfl_oracle.identity.map import IdentityMap, IdentityRecord
 
 
+def _display_name(row: dict[str, Any]) -> str | None:
+    for key in ("displayName", "name", "fullName"):
+        value = row.get(key)
+        if value:
+            return str(value)
+    first = row.get("firstName")
+    last = row.get("lastName")
+    parts = [str(p) for p in (first, last) if p]
+    if parts:
+        return " ".join(parts)
+    return None
+
+
 def upsert_from_players_payload(identity: IdentityMap, payload: dict[str, Any]) -> int:
     """Upsert Real player rows from a redacted `/players` JSON body.
 
@@ -32,7 +45,7 @@ def upsert_from_players_payload(identity: IdentityMap, payload: dict[str, Any]) 
             real_id = int(pid)
         except (TypeError, ValueError):
             continue
-        name = row.get("displayName") or row.get("name") or row.get("fullName")
+        name = _display_name(row)
         position = row.get("position") or row.get("pos")
         team_id_raw = row.get("teamId")
         team_id: int | None
@@ -43,7 +56,7 @@ def upsert_from_players_payload(identity: IdentityMap, payload: dict[str, Any]) 
         identity.upsert(
             IdentityRecord(
                 real_player_id=real_id,
-                display_name=str(name) if name else None,
+                display_name=name,
                 position=str(position) if position else None,
                 team_id=team_id,
             )

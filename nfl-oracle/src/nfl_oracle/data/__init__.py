@@ -7,10 +7,12 @@ from nfl_oracle.data.coverage_matrix import (
     load_coverage_matrix_doc,
     save_coverage_matrix_doc,
 )
+from nfl_oracle.data.density import CoverageDensity, summarize_coverage_density
 from nfl_oracle.data.paths import DataPaths, resolve_data_paths
 from nfl_oracle.data.summary import research_data_summary
 
 __all__ = [
+    "CoverageDensity",
     "CoverageMatrixDocument",
     "CoverageStatus",
     "DataPaths",
@@ -21,4 +23,5 @@ __all__ = [
     "research_data_summary",
     "resolve_data_paths",
     "save_coverage_matrix_doc",
+    "summarize_coverage_density",
 ]
