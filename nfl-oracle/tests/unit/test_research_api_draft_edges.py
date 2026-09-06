@@ -30,10 +30,10 @@ def test_offline_research_mirrors_dense_coverage_and_identity() -> None:
     dense_mat = load_coverage_matrix_doc(FIXTURES / "coverage" / "dense_matrix.json")
     off_mat = load_coverage_matrix_doc(OFFLINE / "data" / "catalog" / "coverage_matrix.json")
     dens = summarize_coverage_density(catalog=off_cat, matrix=off_mat)
-    assert dens.catalog_season_count == 12
-    assert dens.catalog_seed_game_count == 56
-    assert dens.status_counts["known"] == 10
-    assert dens.matrix_game_id_count == 32
+    assert dens.catalog_season_count == 14
+    assert dens.catalog_seed_game_count == 70
+    assert dens.status_counts["known"] == 12
+    assert dens.matrix_game_id_count == 40
     assert dense_mat.seasons.keys() == off_mat.seasons.keys()
 
 
@@ -153,6 +153,6 @@ def test_coverage_summary_reports_unknown_and_blocked() -> None:
     counts = body["coverage_matrix"]["status_counts"]
     assert counts["unknown"] == 1
     assert counts["blocked"] == 1
-    assert counts["known"] == 10
+    assert counts["known"] == 12
     assert body["density"]["seasons_with_zero_matrix_games"] == 2
     assert body["contest_entry"] is False

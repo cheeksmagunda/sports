@@ -90,7 +90,7 @@ def test_catalog_vs_schedule_density_with_dense_fixtures() -> None:
         catalog_seed_count=seed_total,
         schedule_game_count=dens.game_count,
     )
-    assert cmp["catalog_seed_count"] == 56
+    assert cmp["catalog_seed_count"] == 70
     assert cmp["schedule_game_count"] == dens.game_count
     assert cmp["contest_entry"] is False
     assert cmp["seed_to_schedule_ratio"] > 1.0  # seeds denser than small schedule fixture
