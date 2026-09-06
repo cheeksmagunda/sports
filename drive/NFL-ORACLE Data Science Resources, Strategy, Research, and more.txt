@@ -2534,3 +2534,47 @@ Do not convert an abstract's association into a causal claim. Do not convert agg
 8. Review the research section at least annually and after each Big Data Bowl or major player-health publication cycle.
 
 End of master list. The document remains one self-contained NFL Oracle research, strategy, evidence, and future-design file. Last Updated: 2026-09-02.
+
+
+===== SLICE-1 BUILD LOG (append-only) =====
+Dated note: 2026-09-05 20:29 CDT
+Issue: #89 — Stabilize experimental nfl-oracle package for PR-ready merge
+
+### Auth wiring (headers_or_capture / storage_state)
+- NFL uses `nfl_oracle.ingest.realsports.headers_or_capture` mirroring WNBA session
+  mechanics without importing wnba_oracle domain packages.
+- Operator paths: private `nfl-oracle/scraper/storage_state.json` (0600),
+  `NFL_REALSPORTS_STORAGE_STATE` / `REALSPORTS_STORAGE_STATE_PATH`, optional
+  sibling `wnba-oracle/scraper/storage_state.json` bootstrap by path only.
+- Ephemeral bootstrap: `REALSPORTS_STORAGE_STATE_B64GZ` (base64 gzip of storage
+  state) via `scripts/seed_storage_state.py`. Token cache similarly private and
+  gitignored (`request_token_cache.json`).
+- Documented in `nfl-oracle/README.md` + `.env.example`. No live secret values
+  recorded here.
+
+### Train vs live config / clock boundaries (Slice 1)
+- Training/research may attach post-game Real `value` as labels after finalization.
+- Live/prospective decisions only pre-lock features (source_available_at and
+  captured_at ≤ decision_at). Same-slate finals / bonus / ranks / ownership
+  remain blacklisted as features per section 8 above.
+- No contest submission / entry code in Slice 1 package.
+
+### CI / workspace membership
+- Root `pyproject.toml` workspace members include `nfl-oracle`; `uv.lock` updated.
+- Root Makefile gains `test-nfl` and includes nfl-oracle in `lint`, `typecheck`,
+  and `build` so backend-ci exercises the new application.
+- Package `.gitignore` excludes `scraper/`, `.secrets/`, raw `data/raw/corpus_g/**`,
+  catalog dumps (except seed `season_game_ids.json`), and coverage sample dumps.
+- Root `.gitignore` excludes `drive/corpus_g_coverage_samples/` and token/storage
+  state filenames. Redacted/synthetic fixtures only under `tests/fixtures/`.
+
+### Railway / secrets approach
+- Not configuring Railway production secrets in this PR (avoid interactive login /
+  accidental secret commits). Staging secret injection remains an operator step
+  for Claude/Ben: prefer `REALSPORTS_STORAGE_STATE_B64GZ` in a private secret
+  store if/when a staging service is created. No Railway changes attempted unless
+  non-interactive CLI is already authenticated.
+
+### Out of scope (still)
+- Contest entry, Corpus C contests, five-card live policy, production deploy.
+
