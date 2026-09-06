@@ -58,9 +58,10 @@ treating any row as production truth.
 
 ## Coverage gaps
 
-- Catalog holds anchor game ids (3-5 per season), not a full season schedule
-- Tracked seasons 2002–2025 all have ≥1 ingested Corpus G seed (status `known`)
-- Full-season census / continuous discovery still open for denser coverage
+- Catalog still holds Corpus G **seed anchors** (3-5 ids/season); schedule census is separate
+- Offline nflverse/nfldata schedules now provide **continuous full-season slates**
+  (2002–2025 slim CSV under `data/schedule/schedules.csv`; CC BY 4.0)
+- Tracked seasons 2002–2025 still need denser Corpus G ingest beyond seeds
 - Contest-era Corpus C is explicitly deferred
 
 
@@ -357,3 +358,17 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   write 403; branch local-only; no Railway Dockerfile/railway.toml; value model
   beyond mean/median still deferred; #91 live contract still open.
 
+## Claude gap #1 — full-season schedule census (2026-09-06 ~01:55 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Public **nflverse/nfldata** `games.csv` cached/slimmed (CC BY 4.0; see `DATA_ATTRIBUTION.md`)
+- Committed continuous slates: `data/schedule/schedules.csv` — **24 seasons / 6499 games**
+  (REG+post); fixture `tests/fixtures/schedule/dense_schedules.csv` — **8 seasons / 2227 games**
+- Loaders: `resolve_schedule_csv_path`, `try_load_schedules_csv`, `summarize_season_slate`,
+  `season_week_census`, `coverage_schedule_census`, `research_schedule_summary`
+- Continuous REG discovery: weeks 1..17 (legacy) / 1..18 (modern) without holes;
+  smoke reports `schedule_seasons=24 schedule_games=6499`
+- Refresh: `scripts/cache_nflverse_schedules.py` / `make cache-schedules`
+- Research: `GET /research/schedule/summary` + coverage summary embeds schedule census
+- **Still deny real submit**; Real Sports auth optional/missing; no GitHub push
