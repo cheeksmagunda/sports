@@ -12,6 +12,7 @@ from nfl_oracle.strategy.schema import (
     clocks_allow_feature,
     strategy_document,
 )
+from nfl_oracle.strategy.scoring import ShadowScore, shadow_weighted_score
 from nfl_oracle.strategy.snapshot import DecisionPosture
 
 # Compat alias
@@ -31,5 +32,7 @@ __all__ = [
     "feature_clocks_ok",
     "live_feature_allowed",
     "strategy_document",
+    "ShadowScore",
+    "shadow_weighted_score",
     "validate_five_card",
 ]

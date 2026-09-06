@@ -93,6 +93,8 @@ Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest
 - `nfl_oracle.calendar` — season label helper (week unresolved without schedule)
 - `nfl_oracle.identity` — Real-primary in-memory identity map stub
 - `nfl_oracle.service` — oracle-core FastAPI research routes for schema/catalog JSON only
+- `nfl_oracle.baselines.player_priors` — walk-forward player/position/global prior scaffold
+- `nfl_oracle.strategy.scoring` — observation-only weighted five-card shadow score
 
 Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Railway deploy source.
 

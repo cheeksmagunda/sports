@@ -32,6 +32,7 @@ dev = [
 nfl-corpus-g-backfill = "nfl_oracle.ingest.backfill:main"
 nfl-value-baselines = "nfl_oracle.baselines.cli:main"
 nfl-strategy-schema = "nfl_oracle.strategy.cli:main"
+nfl-research-serve = "nfl_oracle.service.cli:main"
 
 [build-system]
 requires = ["hatchling"]
