@@ -216,3 +216,10 @@ Checklist (execute only after HOLD clears):
 - Codespaces secret `RAILWAY_TOKEN` is present (name-only check via `gh secret list --app codespaces`).
 - No Real Sports storage-state secrets in repo or Codespaces secret lists.
 - Repo secrets include Railway workspace token and DB-related keys (WNBA); none are NFL storage_state.
+
+## GitHub publish blocker (2026-09-06 CT)
+
+- Branch `codex/nfl-data-schemas-scaffold` is local-only (ahead of `main`; push 403).
+- Tracking: GitHub issue #94. Box PAT lacks Contents:Write.
+- Codespace has `/tmp/nfl-schemas.bundle` + `/tmp/cs-push-bundle.sh` (cp OK); SSH from box hangs — run push inside CS.
+- No Railway deploy; nfl-oracle has no railway.toml.
