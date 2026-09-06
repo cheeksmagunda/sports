@@ -23,6 +23,8 @@ from nfl_oracle.labels.schema import ValueLabel
 from nfl_oracle.labels.schema import schema_document as label_schema
 from nfl_oracle.providers.auth_status import probe_realsports_auth
 from nfl_oracle.providers.five_card import (
+    OFFLINE_RULE_NOTES,
+    UNKNOWN_PROVIDER_RULES,
     FiveCardProviderStub,
     offline_provider_rule_document,
 )
@@ -36,6 +38,7 @@ from nfl_oracle.strategy.document import strategy_document
 from nfl_oracle.strategy.enumerate import best_shadow_ordering, rank_shadow_orderings
 from nfl_oracle.strategy.gates import evaluate_entry_gates
 from nfl_oracle.strategy.posture import posture_from_readiness
+from nfl_oracle.strategy.readiness_score import readiness_score_from_summaries
 from nfl_oracle.strategy.schema import FiveCardAction
 from nfl_oracle.strategy.value_preds import resolve_shadow_values, value_model_strategy_note
 
@@ -179,26 +182,34 @@ def _action_from_body(
 
 
 def create_app(*, project_root: Path | None = None) -> FastAPI:
-    router = APIRouter(prefix="/research", tags=["research"])
+    """Research FastAPI app with split OpenAPI tags (observation only)."""
+
+    # Split tags so /docs groups schemas / provider / shadow / data / status
+    # instead of one flat "research" bucket.
+    schemas = APIRouter(prefix="/research", tags=["research-schemas"])
+    provider = APIRouter(prefix="/research", tags=["research-provider"])
+    shadow = APIRouter(prefix="/research", tags=["research-shadow"])
+    data = APIRouter(prefix="/research", tags=["research-data"])
+    status = APIRouter(prefix="/research", tags=["research-status"])
     stub = FiveCardProviderStub()
 
-    @router.get("/schemas/labels")
+    @schemas.get("/schemas/labels")
     def labels() -> dict[str, Any]:
         return label_schema()
 
-    @router.get("/schemas/strategy")
+    @schemas.get("/schemas/strategy")
     def strategy() -> dict[str, Any]:
         return strategy_document()
 
-    @router.get("/schemas/features")
+    @schemas.get("/schemas/features")
     def features() -> dict[str, Any]:
         return features_document()
 
-    @router.get("/schemas/scoring")
+    @schemas.get("/schemas/scoring")
     def scoring() -> dict[str, Any]:
         return scoring_document()
 
-    @router.get("/features/live-ok")
+    @schemas.get("/features/live-ok")
     def features_live_ok() -> dict[str, Any]:
         live = list(live_ok_feature_names())
         stubs = list(offline_stub_feature_names())
@@ -211,26 +222,26 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "observation_only": True,
         }
 
-    @router.get("/provider/status")
+    @provider.get("/provider/status")
     def provider_status() -> dict[str, Any]:
         ready = stub.readiness()
         payload = ready.to_json_obj()
         payload["posture"] = posture_from_readiness(ready).value
         return payload
 
-    @router.get("/provider/rules-offline")
+    @provider.get("/provider/rules-offline")
     def provider_rules_offline() -> dict[str, Any]:
         """Best-effort public-rules notes; does not enable submit."""
 
         return offline_provider_rule_document()
 
-    @router.get("/gates/entry")
+    @status.get("/gates/entry")
     def entry_gates() -> dict[str, Any]:
         """Readiness checklist; contest_entry is always false."""
 
         return evaluate_entry_gates(stub=stub).to_json_obj()
 
-    @router.post("/shadow/preview")
+    @shadow.post("/shadow/preview")
     def shadow_preview(body: ShadowPreviewRequest) -> dict[str, Any]:
         action = _action_from_body(body.player_ids, body.slot_multipliers, body.notes)
         preview = stub.shadow_preview(action)
@@ -305,7 +316,7 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
         preview["contest_entry"] = False
         return preview
 
-    @router.post("/shadow/rank-orderings")
+    @shadow.post("/shadow/rank-orderings")
     def shadow_rank_orderings(body: RankOrderingsRequest) -> dict[str, Any]:
         values, value_meta = _resolve_request_values(
             player_ids=body.player_ids,
@@ -350,7 +361,7 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "rankings": ranked,
         }
 
-    @router.get("/catalog/seasons")
+    @data.get("/catalog/seasons")
     def catalog_seasons() -> dict[str, Any]:
         try:
             cat = load_season_game_catalog(
@@ -366,16 +377,16 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "contest_entry": False,
         }
 
-    @router.get("/coverage/summary")
+    @data.get("/coverage/summary")
     def coverage_summary() -> dict[str, Any]:
         return research_data_summary(project_root=project_root)
 
-    @router.get("/schedule/summary")
+    @data.get("/schedule/summary")
     def schedule_summary() -> dict[str, Any]:
         """Offline nflverse schedule density; never enables contest entry."""
 
-        data = research_data_summary(project_root=project_root)
-        catalog = data.get("catalog") or {}
+        data_sum = research_data_summary(project_root=project_root)
+        catalog = data_sum.get("catalog") or {}
         seed_count = int(catalog.get("seed_game_count") or 0)
         seasons = catalog.get("seasons") or {}
         return research_schedule_summary(
@@ -384,18 +395,46 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             catalog_seasons=seasons if isinstance(seasons, dict) else None,
         )
 
-    @router.get("/identity/density")
+    @data.get("/identity/density")
     def identity_density() -> dict[str, Any]:
         """Offline identity field-fill density; never enables contest entry."""
 
         return research_identity_summary(project_root=project_root)
 
-    @router.get("/status")
+    def _build_readiness_score() -> dict[str, Any]:
+        data_sum = research_data_summary(project_root=project_root)
+        identity = research_identity_summary(project_root=project_root)
+        ready = stub.readiness()
+        report = readiness_score_from_summaries(
+            data_summary=data_sum,
+            identity_summary=identity,
+            live_ok_feature_count=len(live_ok_feature_names()),
+            unknown_provider_rule_count=len(UNKNOWN_PROVIDER_RULES),
+            offline_rule_note_count=len(OFFLINE_RULE_NOTES),
+            auth_usable=ready.auth.usable,
+        )
+        payload = report.to_json_obj()
+        payload["posture"] = posture_from_readiness(ready).value
+        payload["auth"] = {
+            "usable": ready.auth.usable,
+            "status": ready.status.value,
+            "note": "presence only; secret values never returned",
+        }
+        return payload
+
+    @status.get("/health/readiness-score")
+    def health_readiness_score() -> dict[str, Any]:
+        """0–100 research density score; never authorizes contest entry."""
+
+        return _build_readiness_score()
+
+    @status.get("/status")
     def research_status(
         include_gates: bool = Query(default=True),
+        include_readiness_score: bool = Query(default=True),
     ) -> dict[str, Any]:
         ready = stub.readiness()
-        data = research_data_summary(project_root=project_root)
+        data_sum = research_data_summary(project_root=project_root)
         identity = research_identity_summary(project_root=project_root)
         entry = evaluate_entry_gates(stub=stub)
         railway = {
@@ -413,7 +452,7 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             "contest_entry": False,
             "posture": posture_from_readiness(ready).value,
             "provider": ready.to_json_obj(),
-            "data": data,
+            "data": data_sum,
             "identity": identity,
             "scoring": {
                 "observed_default_slot_multipliers": list(OBSERVED_DEFAULT_SLOT_MULTIPLIERS),
@@ -437,22 +476,41 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
                 "submit_hard_denied": True,
                 "all_research_gates_ok": entry.all_research_gates_ok,
                 "auth_usable": ready.auth.usable,
-                "coverage_seed_game_count": data.get("density", {}).get(
+                "coverage_seed_game_count": data_sum.get("density", {}).get(
                     "catalog_seed_game_count", 0
                 ),
                 "identity_n": identity.get("n_identities", 0),
                 "railway_deploy_ready": False,
                 "policy": "deny_by_default_entry_gates",
             },
+            "openapi_tags": [
+                "research-schemas",
+                "research-provider",
+                "research-shadow",
+                "research-data",
+                "research-status",
+            ],
         }
         if include_gates:
             payload["entry_gates"] = entry.to_json_obj()
+        if include_readiness_score:
+            score_payload = readiness_score_from_summaries(
+                data_summary=data_sum,
+                identity_summary=identity,
+                live_ok_feature_count=len(live_ok_feature_names()),
+                unknown_provider_rule_count=len(UNKNOWN_PROVIDER_RULES),
+                offline_rule_note_count=len(OFFLINE_RULE_NOTES),
+                auth_usable=ready.auth.usable,
+            ).to_json_obj()
+            payload["readiness_score"] = score_payload
+            payload["draft_readiness"]["readiness_score"] = score_payload["score"]
+            payload["draft_readiness"]["readiness_band"] = score_payload["band"]
         return payload
 
     meta = ServiceMetadata(name="nfl-oracle", version=__version__, environment="research")
     return create_service(
         meta,
-        routers=(router,),
+        routers=(schemas, provider, shadow, data, status),
         health_contributors=(_AuthHealth(),),
         title="NFL Oracle Research",
         root_payload={

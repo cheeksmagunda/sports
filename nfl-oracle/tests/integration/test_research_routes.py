@@ -35,6 +35,7 @@ def test_research_route_surface_contest_entry_false() -> None:
         "/research/coverage/summary",
         "/research/schedule/summary",
         "/research/identity/density",
+        "/research/health/readiness-score",
         "/research/status",
         "/research/status?include_gates=false",
     ]
@@ -344,3 +345,59 @@ def test_feature_value_model_flag_default_offline_safe_422() -> None:
         },
     )
     assert resp.status_code == 422
+
+
+def test_openapi_research_tags_are_split() -> None:
+    client = _client()
+    schema = client.get("/openapi.json").json()
+    path_tags: set[str] = set()
+    for path_item in schema["paths"].values():
+        for op in path_item.values():
+            if isinstance(op, dict):
+                path_tags.update(op.get("tags") or [])
+    expected = {
+        "research-schemas",
+        "research-provider",
+        "research-shadow",
+        "research-data",
+        "research-status",
+    }
+    assert expected <= path_tags
+    assert "research" not in path_tags  # legacy single-tag bucket removed
+    assert "research-schemas" in schema["paths"]["/research/schemas/labels"]["get"]["tags"]
+    assert "research-shadow" in schema["paths"]["/research/shadow/preview"]["post"]["tags"]
+    assert (
+        "research-status"
+        in schema["paths"]["/research/health/readiness-score"]["get"]["tags"]
+    )
+
+
+def test_health_readiness_score_endpoint_offline() -> None:
+    client = _client()
+    resp = client.get("/research/health/readiness-score")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["contest_entry"] is False
+    assert body["observation_only"] is True
+    assert body["entry_authorized"] is False
+    assert body["name"] == "nfl_research_readiness_score"
+    assert 0.0 <= body["score"] <= 100.0
+    assert body["band"] in {
+        "thin",
+        "usable_offline",
+        "dense_offline",
+        "research_strong",
+    }
+    keys = {c["key"] for c in body["components"]}
+    assert "catalog_seeds" in keys
+    assert "schedule_density" in keys
+    assert "realsports_auth" in keys
+    # Dense offline fixtures should clear usable band even without auth.
+    assert body["score"] >= 40.0
+
+    status = client.get("/research/status").json()
+    assert "readiness_score" in status
+    assert status["readiness_score"]["contest_entry"] is False
+    assert status["draft_readiness"]["readiness_band"] == status["readiness_score"]["band"]
+    omitted = client.get("/research/status?include_readiness_score=false").json()
+    assert "readiness_score" not in omitted

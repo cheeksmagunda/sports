@@ -32,6 +32,7 @@ GET_ROUTES = (
     "/research/coverage/summary",
     "/research/schedule/summary",
     "/research/identity/density",
+    "/research/health/readiness-score",
     "/research/status",
 )
 
