@@ -150,3 +150,28 @@ def test_research_contest_dry_run_endpoint() -> None:
     assert rbody["value_source"] == "feature_ridge"
     assert rbody["dry_run"] is True
     assert rbody["contest_entry"] is False
+
+
+def test_dry_run_optional_schedule_slate_attachment() -> None:
+    from datetime import date
+
+    offline = Path(__file__).resolve().parents[1] / "fixtures" / "offline_research"
+    payload = build_offline_contest_dry_run(
+        corpus_root=FIXTURE_ROOT,
+        include_schedule_slate=True,
+        schedule_week=1,
+        project_root=offline,
+    )
+    assert payload["schedule_slate"] is not None
+    assert payload["schedule_slate"]["contest_entry"] is False
+    assert payload["schedule_slate"]["resolved"] is True
+    assert payload["contest_entry"] is False
+    by_date = build_offline_contest_dry_run(
+        corpus_root=FIXTURE_ROOT,
+        include_schedule_slate=True,
+        schedule_date=date(2024, 9, 5),
+        project_root=offline,
+    )
+    assert by_date["schedule_slate"]["resolve_mode"] == "date_exact_gameday"
+    plain = build_offline_contest_dry_run(corpus_root=FIXTURE_ROOT)
+    assert plain["schedule_slate"] is None

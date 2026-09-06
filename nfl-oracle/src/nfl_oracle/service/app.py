@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from nfl_oracle import __version__
 from nfl_oracle.calendar.schedule import research_schedule_summary
+from nfl_oracle.calendar.slate import research_schedule_slate
 from nfl_oracle.data.catalog import load_season_game_catalog
 from nfl_oracle.data.summary import research_data_summary
 from nfl_oracle.features.schema import (
@@ -371,6 +372,15 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
         use_feature_ridge: bool = Query(default=False),
         top_k: int = Query(default=5, ge=1, le=120),
         prove_submit_denied: bool = Query(default=True),
+        include_schedule_slate: bool = Query(
+            default=False,
+            description="Optionally attach offline schedule week slate (observation only)",
+        ),
+        schedule_week: int | None = Query(default=None, ge=1, le=30),
+        schedule_date: str | None = Query(
+            default=None,
+            description="ISO date for optional schedule slate resolution",
+        ),
         corpus_root: str | None = Query(
             default=None,
             description="Optional value-label fixture root; default bundled fixtures",
@@ -378,7 +388,15 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
     ) -> dict[str, Any]:
         """Offline five-card shadow slate (dry_run / observation_only; hard-deny submit)."""
 
+        from datetime import date as date_cls
+
         root = Path(corpus_root) if corpus_root else default_value_label_fixture_root()
+        day = None
+        if schedule_date:
+            try:
+                day = date_cls.fromisoformat(schedule_date)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail="invalid_schedule_date") from exc
         try:
             return build_offline_contest_dry_run(
                 corpus_root=root,
@@ -386,6 +404,10 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
                 use_feature_ridge=use_feature_ridge,
                 top_k_orderings=top_k,
                 prove_submit_denied=prove_submit_denied,
+                include_schedule_slate=include_schedule_slate,
+                schedule_week=schedule_week,
+                schedule_date=day,
+                project_root=project_root,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -422,6 +444,42 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             project_root=project_root,
             catalog_seed_count=seed_count,
             catalog_seasons=seasons if isinstance(seasons, dict) else None,
+        )
+
+    @data.get("/schedule/slate")
+    def schedule_slate(
+        season: int | None = Query(default=None, description="NFL season label"),
+        week: int | None = Query(default=None, ge=1, le=30, description="Schedule week"),
+        date: str | None = Query(
+            default=None,
+            description="ISO date YYYY-MM-DD; resolves week via dense schedule",
+        ),
+        team: str | None = Query(
+            default=None,
+            description="Optional team abbr; includes team_opponent when on slate",
+        ),
+    ) -> dict[str, Any]:
+        """Resolve week slate (games + opponents) from date or season+week."""
+
+        from datetime import date as date_cls
+
+        day = None
+        if date:
+            try:
+                day = date_cls.fromisoformat(date)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail="invalid_date") from exc
+        if day is None and (season is None or week is None):
+            raise HTTPException(
+                status_code=422,
+                detail="provide_season_and_week_or_date",
+            )
+        return research_schedule_slate(
+            project_root=project_root,
+            season=season,
+            week=week,
+            day=day,
+            team=team,
         )
 
     @data.get("/identity/density")

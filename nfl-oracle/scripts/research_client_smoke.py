@@ -199,6 +199,31 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
             if body.get("contest_entry") is not False:
                 raise AssertionError("schedule summary contest_entry must be false")
 
+    # Parametric slate resolve (not in GET_ROUTES — needs query string)
+    if base_url:
+        import httpx
+
+        sresp = httpx.get(
+            base_url.rstrip("/") + "/research/schedule/slate",
+            params={"season": 2024, "week": 1},
+            timeout=10.0,
+        )
+        if sresp.status_code != 200:
+            raise AssertionError(f"schedule slate status={sresp.status_code}")
+        sbody = sresp.json()
+    else:
+        assert client is not None
+        sresp = client.get("/research/schedule/slate", params={"season": 2024, "week": 1})
+        if sresp.status_code != 200:
+            raise AssertionError(f"schedule slate status={sresp.status_code}")
+        sbody = sresp.json()
+    if sbody.get("contest_entry") is not False:
+        raise AssertionError("schedule slate contest_entry must be false")
+    if sbody.get("resolved") is not True:
+        raise AssertionError("schedule slate must resolve")
+    results["schedule_slate_ok"] = True
+    results["routes_ok"].append("/research/schedule/slate?season=2024&week=1")
+
     preview_payload = {
         "player_ids": [1, 2, 3, 4, 5],
         "values_by_player": {"1": 10, "2": 5, "3": 4, "4": 3, "5": 2},
@@ -257,6 +282,10 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
     results["rank_orderings_ok"] = True
     results["routes_ok_count"] = len(results["routes_ok"])
     return results
+
+
+
+
 
 
 def main(argv: list[str] | None = None) -> int:

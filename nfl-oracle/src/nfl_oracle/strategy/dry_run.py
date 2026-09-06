@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
@@ -156,11 +157,17 @@ def build_offline_contest_dry_run(
     alpha: float = 1.0,
     top_k_orderings: int = 5,
     prove_submit_denied: bool = True,
+    include_schedule_slate: bool = False,
+    schedule_week: int | None = None,
+    schedule_date: date | None = None,
+    project_root: Path | str | None = None,
 ) -> dict[str, Any]:
     """Produce a five-card shadow slate from offline fixtures (dry_run).
 
     Default value path uses walk-forward player/position priors (no ridge fit).
     Opt into ``use_feature_ridge`` for leakage-safe prior-feature ridge values.
+    Optionally attach an offline schedule week slate (games/opponents) when
+    ``include_schedule_slate`` is set — observation only; never enables entry.
     """
 
     if labels is None:
@@ -262,6 +269,25 @@ def build_offline_contest_dry_run(
         )
     ]
 
+    schedule_slate_payload: dict[str, Any] | None = None
+    if include_schedule_slate:
+        from nfl_oracle.calendar.slate import research_schedule_slate
+
+        root_for_sched = Path(project_root) if project_root is not None else None
+        week = schedule_week if schedule_week is not None else 1
+        season_for_sched = slate.season
+        if schedule_date is not None:
+            schedule_slate_payload = research_schedule_slate(
+                project_root=root_for_sched,
+                day=schedule_date,
+            )
+        else:
+            schedule_slate_payload = research_schedule_slate(
+                project_root=root_for_sched,
+                season=season_for_sched,
+                week=week,
+            )
+
     return {
         "name": "nfl_offline_contest_dry_run",
         "version": 1,
@@ -296,6 +322,7 @@ def build_offline_contest_dry_run(
         "submit_proof": submit_proof,
         "n_labels_total": len(labels),
         "n_train_labels": len(train),
+        "schedule_slate": schedule_slate_payload,
         "policy": "offline_dry_run_hard_denies_real_submit",
         "issue_refs": ["#89", "#91"],
     }

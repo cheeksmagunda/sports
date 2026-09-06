@@ -24,6 +24,16 @@ from nfl_oracle.calendar.schedule import (
     weeks_for_season,
 )
 from nfl_oracle.calendar.season import SeasonWeek, season_label_for_date, season_week_for_date
+from nfl_oracle.calendar.slate import (
+    SlateResolution,
+    opponent_for_team,
+    opponents_by_team,
+    research_schedule_slate,
+    resolve_slate,
+    resolve_slate_for_date,
+    resolve_slate_for_season_week,
+    scheduled_game_to_dict,
+)
 
 __all__ = [
     "NFLVERSE_SCHEDULE_URL",
@@ -31,6 +41,7 @@ __all__ = [
     "ScheduledGame",
     "ScheduleDensity",
     "SeasonSlateCensus",
+    "SlateResolution",
     "SeasonWeek",
     "build_gameday_week_index",
     "catalog_vs_schedule_density",
@@ -45,6 +56,13 @@ __all__ = [
     "season_label_for_date",
     "season_week_census",
     "season_week_for_date",
+    "scheduled_game_to_dict",
+    "opponents_by_team",
+    "opponent_for_team",
+    "resolve_slate",
+    "resolve_slate_for_date",
+    "resolve_slate_for_season_week",
+    "research_schedule_slate",
     "summarize_schedule_density",
     "summarize_season_slate",
     "try_load_schedules_csv",
