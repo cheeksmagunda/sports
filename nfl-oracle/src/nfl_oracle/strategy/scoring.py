@@ -34,7 +34,7 @@ def shadow_weighted_score(
     for pid, mult in zip(action.player_ids, multis, strict=True):
         per.append(float(mult) * float(values_by_player.get(pid, 0.0)))
     total = sum(per)
-    note = ShadowScore.__dataclass_fields__["notes"].default  # type: ignore[index]
+    note = "observation_only_weighted_sum"
     if not legality.structurally_valid:
         note = "structural_invalid;" + ",".join(legality.structural_errors)
     return ShadowScore(

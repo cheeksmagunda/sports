@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import Any
 
 from nfl_oracle.providers.auth_status import probe_realsports_auth
 from nfl_oracle.providers.five_card import FiveCardProviderStub
@@ -24,7 +25,10 @@ def main(argv: list[str] | None = None) -> int:
 
     stub = FiveCardProviderStub()
     ready = stub.readiness()
-    payload: dict = {"provider": ready.to_json_obj(), "auth": probe_realsports_auth().to_json_obj()}
+    payload: dict[str, Any] = {
+        "provider": ready.to_json_obj(),
+        "auth": probe_realsports_auth().to_json_obj(),
+    }
 
     if args.preview_ids.strip():
         parts = [p.strip() for p in args.preview_ids.split(",") if p.strip()]

@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:30 CT (denser fixtures + identity research route + draft_readiness honesty; 81 pytest; deny-by-default gates hard; GitHub write still 403; no push; submit still hard-denied)
+Last verified: 2026-09-06 ~01:40 CT (schedule+coverage fixture densification + research client smoke + strategy posture docs; deny-by-default gates hard; GitHub write still 403; no push; submit still hard-denied)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -278,5 +278,35 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Integration tests cover denser coverage/identity, draft_readiness honesty, provider submit/inventory hard-deny
 - Entry gates: `package_submit_hard_deny` remains ok=False; `contest_entry` never flips
 - Box verification: pytest **81 passed**; ruff + mypy clean on `nfl-oracle` paths
+- **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403; no Railway Dockerfile/railway.toml
+
+
+## Strategy posture vocabulary (2026-09-06 CT)
+
+Observation-only `nfl_oracle.strategy.schema.Posture` / `posture_from_readiness`:
+
+| Posture | When | Contest entry |
+|---------|------|---------------|
+| `blocked` | Real auth missing, or defensive if readiness ever claims `contest_entry=true` | never |
+| `shadow_only` | Provider stub status with auth present | never |
+| `ready_pending_contract` | Auth present, contract still `#91` unverified | never |
+| `capture_only` | Contract marked verified; package still denies submit | never |
+
+Box / CI default without storage_state → `blocked` via `auth_missing`.
+`evaluate_entry_gates` always keeps `contest_entry=false`; `package_submit_hard_deny` stays `ok=false`.
+Research `/research/status` and `/research/provider/status` expose posture for honesty only.
+
+## Schedule + denser coverage fixtures (2026-09-06 ~01:40 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Schedule helpers: `summarize_schedule_density`, `load_schedules_csv`, `week_for_gameday`,
+  `catalog_vs_schedule_density`; `season_week_for_date(..., schedule=)` resolves week offline
+- Fixture: `tests/fixtures/schedule/dense_schedules.csv` (3 seasons / ≥24 games / ≥8 week-slots)
+- Coverage denser: 10 seasons / 45 catalog seeds; matrix 8 known / 1 unknown / 1 blocked (26 matrix games)
+- Offline research root mirrors denser catalog/matrix
+- Script: `scripts/research_client_smoke.py` / `make -C nfl-oracle research-smoke` (TestClient offline)
+- STATUS posture table above documents deny-by-default strategy posture
+- Box verification: pytest + ruff + mypy on `nfl-oracle` paths
 - **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403; no Railway Dockerfile/railway.toml
 
