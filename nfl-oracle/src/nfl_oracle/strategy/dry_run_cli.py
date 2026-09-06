@@ -67,13 +67,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--schedule-week",
         type=int,
         default=None,
-        help="Schedule week when --include-schedule-slate (default: 1).",
+        help="Schedule week when --include-schedule-slate (else label event_time / week-1).",
     )
     parser.add_argument(
         "--schedule-date",
         type=str,
         default=None,
         help="ISO date YYYY-MM-DD for schedule slate resolution.",
+    )
+    parser.add_argument(
+        "--schedule-team",
+        type=str,
+        default=None,
+        help="Optional team abbr when attaching schedule slate (opponent lookup).",
     )
     parser.add_argument(
         "--project-root",
@@ -109,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
             include_schedule_slate=args.include_schedule_slate,
             schedule_week=args.schedule_week,
             schedule_date=day,
+            schedule_team=args.schedule_team,
             project_root=args.project_root,
         )
     except ValueError as exc:
@@ -128,6 +135,14 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"submit_denied={proof.get('submit_denied')} contest_entry={payload['contest_entry']}"
         )
+        slate = payload.get("schedule_slate")
+        if slate is not None:
+            attach = slate.get("dry_run_attach") or {}
+            print(
+                "schedule_slate="
+                f"resolved={slate.get('resolved')} week={slate.get('week')} "
+                f"games={slate.get('game_count')} source={attach.get('source')}"
+            )
         return 0
 
     print(json.dumps(payload, indent=2, sort_keys=True))

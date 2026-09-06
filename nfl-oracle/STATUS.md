@@ -1,7 +1,7 @@
 # Status
 
-Last verified: 2026-09-06 ~02:20 CT (week/slate resolution helpers;
-168 pytest; local branch only; no push)
+Last verified: 2026-09-06 ~02:30 CT (contest dry-run schedule slate harden;
+172 pytest; local branch only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -68,6 +68,8 @@ treating any row as production truth.
   (dense offline schedules; exact gameday or week span; no invented weeks)
 - Research: `GET /research/schedule/slate?season=&week=` or `?date=YYYY-MM-DD` (+ optional `team`)
 - Dry-run optional: `include_schedule_slate` / `--include-schedule-slate` attaches schedule slate
+- **Hardened attach** (`resolve_dry_run_schedule_slate`): priority explicit date → week →
+  label `event_time` → week-1 fallback; `dry_run_attach` meta; optional `schedule_team`
 - Contest entry unchanged (`contest_entry=false`; submit hard-deny intact)
 
 ## Coverage gaps
@@ -475,6 +477,17 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Research: `GET /research/shadow/contest-dry-run` (`use_feature_ridge`,
   `decision_season`, `top_k` query params)
 - pytest: **155**; still **no push**; real contest entry remains hard-denied
+
+
+## Contest dry-run × week/slate harden (2026-09-06 ~02:30 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- `resolve_dry_run_schedule_slate` — priority: explicit `schedule_date` →
+  `schedule_week` → label `event_time` → week-1 fallback; records `dry_run_attach`
+- Optional `schedule_team` on dry-run CLI / research route for opponent lookup
+- Tests: unit priority + CLI text attach; integration date/auto/422
+- pytest: **172**; gates unchanged (`contest_entry=false`; submit hard-deny)
 
 
 ## Walk-forward eval report (2026-09-06 ~02:15 CT)
