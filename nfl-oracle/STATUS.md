@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-05 (Corpus G unknown-season fill for PR #92 / #89)
+Last verified: 2026-09-05 (Real value label schema + walk-forward baselines for PR #92 / #89)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -8,7 +8,7 @@ treating any row as production truth.
 ## Application state
 
 - Package: `nfl-oracle` workspace member
-- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests
+- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines
 - Wired into root `make test-nfl` / `lint` / `typecheck` / `build`
 - Not started: Corpus C contests, five-card ranking policy, production services,
   contest submission, Railway production secret injection
@@ -44,6 +44,17 @@ treating any row as production truth.
 - Seed catalog: `data/catalog/season_game_ids.json`
 - Raw payloads and coverage matrices are gitignored; fixtures under
   `tests/fixtures/` are redacted/synthetic for CI
+
+
+## Value labels + baselines (observation only)
+
+- Schema: `nfl_oracle.labels.schema` (`real_value_label` v1)
+- Extract: `nfl_oracle.labels.extract` from Corpus G `stats.json` + clocks
+- Baselines: `global_mean`, `position_mean`, `position_median` via
+  `nfl_oracle.baselines.walk_forward` (OOS by season)
+- CLI: `nfl-value-baselines` (offline; `--schema-only` / `--root` / `--json`)
+- Metrics: pooled MAE / RMSE / bias on held-out season anchors
+- Still out of scope: contest submission, live entry, fancy models
 
 ## Coverage gaps
 

@@ -1,0 +1,1 @@
+{"playerBoxScores": [{"id": 1, "playerId": 101, "position": "QB", "value": 4.0, "teamId": 1, "didNotPlay": false}, {"id": 2, "playerId": 102, "position": "RB", "value": 2.0, "teamId": 1, "didNotPlay": false}, {"id": 3, "playerId": 103, "position": "WR", "value": 3.0, "teamId": 1, "didNotPlay": false}], "gameBoxScore": {}}

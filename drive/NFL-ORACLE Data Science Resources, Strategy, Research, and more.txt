@@ -2659,3 +2659,60 @@ Append-only. No secret values. No contest entry.
 - Package tests/lint/typecheck green locally. Raw payloads stay gitignored.
 - Still not a full season census; denser id walks remain open. No blocked
   seasons this pass (auth succeeded).
+
+## Build log: Real value label schema + walk-forward baselines (2026-09-05 CT)
+
+Assigned under nfl-bot / issue #89 / PR #92. Shadow and observation only. No contest entry.
+
+### Label schema (landed)
+
+Package module: `nfl_oracle.labels.schema` (`real_value_label` v1).
+
+Target: Corpus G `playerBoxScores[].value` as the realized Real Sports player value label.
+
+Fields: player_id, game_id, season, position, value, team_id, event_time,
+source_available_at, captured_at, decision_at, label_role, corpus, source_endpoint,
+did_not_play.
+
+Train vs live clocks (unchanged contract, now wired into label rows):
+
+- Training may attach finalized Real value as labels.
+- Live / prospective decisions use only features with source_available_at and
+  captured_at <= decision_at (pre-lock).
+- Same-slate final value, bonus, ranks, snaps, TDs, ownership, and post-lock
+  boxes/plays remain blacklisted as live features.
+- Historical Corpus G backfill keeps decision_at null.
+
+Extraction: `nfl_oracle.labels.extract` reads
+`data/raw/corpus_g/{season}/{game_id}/stats.json` plus optional manifest clocks.
+
+### Walk-forward baselines (MVP landed)
+
+Module: `nfl_oracle.baselines` + CLI `nfl-value-baselines`.
+
+Baselines (transparent priors only; no fancy models yet):
+
+1. global_mean
+2. position_mean (unseen position -> global prior)
+3. position_median (unseen position -> global prior)
+
+Evaluation: season walk-forward. For each test season S, fit on seasons < S,
+score OOS MAE / RMSE / bias on S anchors. Pooled metrics concatenate OOS folds.
+
+Honest caveats recorded in the report notes:
+
+- Corpus G currently holds sparse season anchors (a few games per season), so
+  position priors are noisy and are baselines, not contest decision claims.
+- No contest submission path is exercised; CLI is offline filesystem-only.
+
+CI: fixture corpus under `nfl-oracle/tests/fixtures/value_labels/` (three
+synthetic seasons). Local operators may point `--root` at gitignored raw
+Corpus G payloads.
+
+### Next (not in this MVP)
+
+- Denser season census before interpreting position-prior gaps as football signal
+- Player-level recent-value prior once identity continuity across anchors is audited
+- Contest-era Corpus C labels (deferred) and five-card ordering baselines
+- Nested experiments only after these priors are beaten OOS on denser data
+

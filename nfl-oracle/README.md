@@ -91,6 +91,33 @@ Coverage and resume cursors live under `data/catalog/` (gitignored except seed
 uv run --package nfl-oracle nfl-corpus-g-backfill --season 2002 --game-ids 126323
 ```
 
+## Real `value` labels + walk-forward baselines (shadow)
+
+Corpus G `playerBoxScores[].value` is treated as a **train/research label** after
+finalization. Same-slate finals are blacklisted as live features. Schema fields
+and train/live clock boundaries live in `nfl_oracle.labels.schema` (also printed
+by the CLI).
+
+Offline baselines (no network, no contest entry):
+
+- `global_mean`: historical mean Real value from earlier seasons
+- `position_mean` / `position_median`: per-position priors with global fallback
+
+Walk-forward evaluation is season-based: train on seasons strictly earlier than
+the held-out season, then score MAE / RMSE / bias on the held-out anchors.
+
+```sh
+# schema only
+uv run --package nfl-oracle nfl-value-baselines --schema-only
+
+# fixtures (CI-safe)
+uv run --package nfl-oracle nfl-value-baselines \
+  --root nfl-oracle/tests/fixtures/value_labels --json
+
+# local Corpus G raw root (gitignored payloads; operator machine only)
+uv run --package nfl-oracle nfl-value-baselines --json
+```
+
 ## Local commands
 
 ```sh

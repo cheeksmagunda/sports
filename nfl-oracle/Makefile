@@ -12,6 +12,7 @@ help:
 	@echo "  make lint        - ruff check"
 	@echo "  make typecheck   - mypy"
 	@echo "  make fmt         - ruff format"
+	@echo "  make baselines   - offline Real value walk-forward baselines"
 
 setup:
 	$(MAKE) -C .. setup
@@ -31,3 +32,6 @@ typecheck:
 
 fmt:
 	$(UV_RUN) --extra dev ruff format src/ tests/ scripts/
+
+baselines:
+	$(UV_RUN) nfl-value-baselines --json
