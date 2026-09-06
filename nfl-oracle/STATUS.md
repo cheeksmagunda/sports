@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-05 (Real value label schema + walk-forward baselines for PR #92 / #89)
+Last verified: 2026-09-05 (daily-shadow scaffold + Mac railway link; Codespace live-wire blocked on gh codespace scope)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -81,6 +81,22 @@ committed live in `data/catalog/season_game_ids.json`.
 Provenance + manifests carry `event_time`, `source_available_at`, `captured_at`,
 and `decision_at` (null on historical backfill). See README train/live section.
 
+
+
+## Codespace live-wire (2026-09-05 CT)
+
+Executor attempt from Ben's Mac worktree `/private/tmp/sports-nfl-oracle-89`.
+
+- Scaffold landed on branch `chat/89-nfl-real-corpus`: `nfl-oracle/scripts/daily_shadow.py`
+  + `make -C nfl-oracle daily-shadow` (coverage matrix refresh -> `nfl-value-baselines` ->
+  `data/artifacts/daily_shadow_*.json`). Observation / #91 shadow only. No contest entry.
+- Mac Railway CLI: `railway whoami` OK; linked `nfl-oracle-staging` / service `nfl-oracle`
+  (environment labeled `production` on staging project). Service offline by design.
+- **Blocked:** Mac `gh` token lacks `codespace` scope, so cannot SSH/list Codespaces.
+  Ben (already in `/workspaces/sports`) should paste the CS command block from the
+  strategy playbook dated note to finish checkout + `RAILWAY_TOKEN` presence check +
+  CS railway link + `make install` / `make -C nfl-oracle daily-shadow`.
+- Never echo `RAILWAY_TOKEN` values.
 
 ## Codespace daily ops (planned)
 

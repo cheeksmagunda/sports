@@ -55,3 +55,6 @@ logs/
 # Local coverage dumps / research extracts that may still carry identity
 coverage_samples/
 **/corpus_g_coverage_samples/
+
+# Daily shadow status artifacts (local/CS only; may summarize coverage)
+data/artifacts/

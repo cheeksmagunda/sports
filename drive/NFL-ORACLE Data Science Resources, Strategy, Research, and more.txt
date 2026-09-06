@@ -2783,3 +2783,72 @@ labels + baselines only).
 - Setting secrets or minting tokens
 - Deploying Railway or connecting deploy sources
 - Contest entry
+
+Dated note: 2026-09-05 22:28 CDT
+### Slice note - Codespace live-wire assign (PARTIAL; PR #92 / #89)
+
+Append-only. No secret values. No contest entry. Slice 4 remains paused.
+
+Executor (nfl-bot-assistant) on Mac worktree tip before this commit: 47821fb.
+
+#### Five-item refine status
+
+1) Checkout PR #92 branch `chat/89-nfl-real-corpus` in Codespace — BLOCKED from Mac.
+   Mac `gh` lacks `codespace` scope (`gh auth refresh -h github.com -s codespace` needs
+   interactive browser). Ben is already in `/workspaces/sports` (was on main). Paste block below.
+2) Verify `RAILWAY_TOKEN` present in Codespace env (presence only) — BLOCKED same (needs CS shell).
+3) `railway status` / link for `nfl-oracle-staging` / `nfl-oracle` — DONE on Mac worktree
+   (CLI logged in as Cheeks Magunda; project linked; service nfl-oracle Offline). CS still needs
+   its own link once token secret is available there.
+4) Install nfl-oracle deps — run on Mac in this pass; CS paste includes `make install`.
+5) Strategy-doc + PR notes append — this note + STATUS Codespace live-wire section. No secrets.
+
+#### Scaffolding landed (Mac push to chat/89-nfl-real-corpus)
+
+- `nfl-oracle/scripts/daily_shadow.py` — coverage (`nfl-corpus-g-backfill --refresh-matrix-only`)
+  -> labels/baselines (`nfl-value-baselines --json`) -> status artifact under
+  `nfl-oracle/data/artifacts/` (gitignored).
+- `make -C nfl-oracle daily-shadow` Makefile target.
+- `.gitignore` ignores `data/artifacts/`.
+- Aligns STATUS checklist: coverage -> labels/baselines -> status artifact; #91 shadow; no contest.
+
+#### Paste-ready Commands (run inside open Codespace `/workspaces/sports`)
+
+```bash
+# 1) leave main -> PR #92 branch
+cd /workspaces/sports
+git fetch origin chat/89-nfl-real-corpus
+git checkout chat/89-nfl-real-corpus
+git pull --ff-only origin chat/89-nfl-real-corpus
+git rev-parse --short HEAD && git branch --show-current
+
+# 2) RAILWAY_TOKEN presence only (never echo value)
+if test -n "${RAILWAY_TOKEN:-}"; then echo RAILWAY_TOKEN=yes; else echo RAILWAY_TOKEN=no; fi
+
+# 3) railway CLI against staging (uses token if present; no secret dumps)
+command -v railway || (curl -fsSL https://railway.com/install.sh | sh)
+railway whoami
+railway link -p nfl-oracle-staging -s nfl-oracle
+railway status
+
+# 4) install workspace deps + smoke offline shadow scaffold
+make install
+make -C nfl-oracle daily-shadow || true
+make -C nfl-oracle test
+
+# 5) pull latest notes after Mac push
+git pull --ff-only origin chat/89-nfl-real-corpus
+```
+
+If `RAILWAY_TOKEN=no`, Ben sets Codespaces secret (dashboard mint +
+`gh secret set RAILWAY_TOKEN --app codespaces --repo cheeksmagunda/sports`) then rebuilds CS env.
+
+#### Slice 4
+Remains paused (no contest entry; observation/shadow only).
+
+#### Explicit non-goals this pass
+- Contest entry
+- Echoing token values
+- Creating new Codespaces
+- Unpausing Slice 4
+

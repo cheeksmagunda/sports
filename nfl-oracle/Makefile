@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -13,6 +13,7 @@ help:
 	@echo "  make typecheck   - mypy"
 	@echo "  make fmt         - ruff format"
 	@echo "  make baselines   - offline Real value walk-forward baselines"
+	@echo "  make daily-shadow - coverage→baselines→status artifact (#91 shadow)"
 
 setup:
 	$(MAKE) -C .. setup
@@ -35,3 +36,6 @@ fmt:
 
 baselines:
 	$(UV_RUN) nfl-value-baselines --json
+
+daily-shadow:
+	$(UV_RUN) python scripts/daily_shadow.py
