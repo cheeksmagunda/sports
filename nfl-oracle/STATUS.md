@@ -1,7 +1,7 @@
 # Status
 
-Last verified: 2026-09-06 ~02:10 CT (offline contest dry-run path;
-155 pytest; local branch only; no push)
+Last verified: 2026-09-06 ~02:15 CT (walk-forward eval report path;
+160 pytest; local branch only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -55,6 +55,9 @@ treating any row as production truth.
   `nfl_oracle.baselines.walk_forward` (OOS by season)
 - Optional: `player_mean`, `feature_ridge` (leakage-safe prior-feature ridge)
 - CLI: `nfl-value-baselines` (offline; `--schema-only` / `--root` / `--json` / `--methods`)
+- **Eval report:** `nfl-walk-forward-report` / `make walk-forward-report` — baselines vs
+  `feature_ridge` on fixtures → `artifacts/walk_forward_fixture_sample.{json,md}`
+  ([sample MD](artifacts/walk_forward_fixture_sample.md))
 - Metrics: pooled MAE / RMSE / bias on held-out season anchors
 - Still out of scope: contest submission, live entry
 
@@ -463,4 +466,21 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Research: `GET /research/shadow/contest-dry-run` (`use_feature_ridge`,
   `decision_season`, `top_k` query params)
 - pytest: **155**; still **no push**; real contest entry remains hard-denied
+
+
+## Walk-forward eval report (2026-09-06 ~02:15 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Offline **baselines vs `feature_ridge`** walk-forward report on fixture labels
+- Modules: `nfl_oracle.baselines.eval_report` + CLI `nfl-walk-forward-report`
+- Make: `make -C nfl-oracle walk-forward-report`
+- Checked-in sample: [`artifacts/walk_forward_fixture_sample.md`](artifacts/walk_forward_fixture_sample.md)
+  (+ `.json`); generated `walk_forward_latest.*` gitignored
+- Tests: `tests/unit/test_eval_report.py`
+- **Dry-run / submit gates unchanged** — `contest_entry=false`; hard-deny intact
+- Fixture-scale ranking (illustrative): `position_mean` best MAE; `feature_ridge`
+  does not beat classical priors on the tiny fixture set
+- Box verification: pytest **160 passed**; ruff + mypy clean on baselines eval paths
+- Still **no push**; Real Sports auth optional/missing
 
