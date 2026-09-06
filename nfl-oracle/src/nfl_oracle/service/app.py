@@ -11,6 +11,7 @@ from nfl_oracle import __version__
 from nfl_oracle.data.catalog import load_season_game_catalog
 from nfl_oracle.features.schema import features_document
 from nfl_oracle.labels.schema import schema_document as label_schema
+from nfl_oracle.providers.five_card import FiveCardProviderStub
 from nfl_oracle.strategy.document import strategy_document
 
 
@@ -28,6 +29,11 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
     @router.get("/schemas/features")
     def features() -> dict:
         return features_document()
+
+    @router.get("/provider/status")
+    def provider_status() -> dict:
+        ready = FiveCardProviderStub().readiness()
+        return ready.to_json_obj()
 
     @router.get("/catalog/seasons")
     def catalog_seasons() -> dict:

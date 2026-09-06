@@ -23,3 +23,13 @@ def test_research_routes_offline() -> None:
     catalog = client.get("/research/catalog/seasons").json()
     assert catalog["season_count"] >= 1
     assert "2025" in catalog["seasons"]
+
+
+def test_provider_status_route() -> None:
+    client = TestClient(create_app())
+    resp = client.get("/research/provider/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["contest_entry"] is False
+    assert "status" in body
+    assert "auth" in body

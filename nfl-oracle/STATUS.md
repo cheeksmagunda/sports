@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 (data/strategy/feature/calendar/identity/service scaffolds on codex/nfl-data-schemas-scaffold; CS SSH from box still hung)
+Last verified: 2026-09-06 ~01:10 CT (provider stubs + prior scaffolds on codex/nfl-data-schemas-scaffold; GitHub write still 403; CS SSH from box still hung)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -102,6 +102,16 @@ Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest
 - GitHub push from box blocked (PAT Contents write 403); commits local on `codex/nfl-data-schemas-scaffold`
 
 Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Railway deploy source.
+
+
+## Provider stubs (#91) (2026-09-06 CT)
+
+- `nfl_oracle.providers.auth_status.probe_realsports_auth` — presence-only probe (no secret values)
+- `nfl_oracle.providers.five_card.FiveCardProviderStub` — shadow preview / hard-deny submit+inventory
+- CLI: `nfl-provider-status` / `make -C nfl-oracle provider-status`
+- Research: `GET /research/provider/status`
+- Box auth still missing; status expected `auth_missing`
+- GitHub push/MCP write still 403; see `/workspace/codex-nfl/HANDOFF.md`
 
 ## Codespace live-wire (2026-09-05 CT)
 
