@@ -33,7 +33,7 @@ commands, but cannot weaken this contract.
    acceptance check. Link the branch, every commit, and the PR to that issue.
    The acting agent handles this bookkeeping. Read-only investigation, local
    experiments, and trivial corrections can skip an issue. Follow
-   `CONTRIBUTING.md`; keep the process light for this hobby app.
+    `CONTRIBUTING.md` for the repository contribution process.
 
 ## Portfolio boundaries
 
