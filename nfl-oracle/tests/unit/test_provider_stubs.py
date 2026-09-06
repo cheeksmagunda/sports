@@ -7,9 +7,12 @@ import pytest
 from nfl_oracle.providers.auth_status import probe_realsports_auth
 from nfl_oracle.providers.cli import main as provider_main
 from nfl_oracle.providers.five_card import (
+    OFFLINE_RULE_NOTES,
+    UNKNOWN_PROVIDER_RULES,
     FiveCardProviderStub,
     ProviderContractStatus,
     ProviderNotReady,
+    offline_provider_rule_document,
 )
 from nfl_oracle.strategy.schema import FiveCardAction
 
@@ -51,3 +54,21 @@ def test_provider_cli_json(capsys: pytest.CaptureFixture[str]) -> None:
     assert "provider" in out
     assert "contest_entry" in out
     assert "password" not in out.lower()
+
+
+def test_offline_rule_notes_cover_unknown_rules_without_enabling_submit() -> None:
+    assert len(UNKNOWN_PROVIDER_RULES) == 7
+    for key in UNKNOWN_PROVIDER_RULES:
+        assert key in OFFLINE_RULE_NOTES
+        assert len(OFFLINE_RULE_NOTES[key]) > 40
+    doc = offline_provider_rule_document()
+    assert doc["contest_entry"] is False
+    assert doc["submit_enabled"] is False
+    assert doc["provider_contract_verified"] is False
+    assert set(doc["unknown_rules"]) == set(UNKNOWN_PROVIDER_RULES)
+    stub = FiveCardProviderStub()
+    ready = stub.readiness()
+    payload = ready.to_json_obj()
+    assert payload["contest_entry"] is False
+    assert payload["provider_contract_verified"] is False
+    assert set(payload["offline_rule_notes"]) == set(UNKNOWN_PROVIDER_RULES)

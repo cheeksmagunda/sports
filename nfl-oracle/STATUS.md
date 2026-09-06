@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:50 CT (nflverse schedule census; identity aliases; feature depth; research-smoke; 116 pytest; local-only; no push)
+Last verified: 2026-09-06 ~02:15 CT (Claude gaps #2/#4/#5 offline; identity dedup; feature stubs; provider rule notes; 122 pytest; local-only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -372,3 +372,28 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Refresh: `scripts/cache_nflverse_schedules.py` / `make cache-schedules`
 - Research: `GET /research/schedule/summary` + coverage summary embeds schedule census
 - **Still deny real submit**; Real Sports auth optional/missing; no GitHub push
+
+## Claude gaps #2 / #4 / #5 offline (2026-09-06 ~02:15 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- **Gap #4 identity:** `normalize_display_name` / `name_match_keys` / soft
+  nickname bridges beyond first+last; `suggest_dedup_candidates` (never
+  auto-merges). Fixtures ~115 players with Jr/III collisions, nickname soft
+  keys, intentional shared-gsis alias collision. Tests cover collisions.
+- **Gap #5 features:** injury / weather / pace / opponent-adjusted
+  FeatureSpecs with `offline_stub=True` and clear live_ok flags;
+  `offline_stub_feature_row` emits null/false placeholders;
+  `live_ok_feature_names()` ≥24 including injury/weather/pace/opp-adj.
+- **Gap #2 provider rules:** `OFFLINE_RULE_NOTES` now covers all 7
+  `UNKNOWN_PROVIDER_RULES` (best-effort public/playbook notes). Notes do
+  **not** remove keys or enable submit. Research:
+  `GET /research/provider/rules-offline`; docs
+  `src/nfl_oracle/providers/RULES_OFFLINE.md`.
+- **Still deny real submit** — entry gates hard-deny; `submit()` raises;
+  `provider_contract_verified=false`.
+- Box verification: pytest **122 passed**; ruff + mypy clean; research-smoke OK
+- Honest gaps unchanged: Real Sports auth missing; GitHub Contents write 403;
+  no Railway Dockerfile; value model beyond mean/median still deferred; #91 live
+  contract still open.
+

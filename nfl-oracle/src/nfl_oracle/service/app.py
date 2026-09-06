@@ -13,11 +13,18 @@ from nfl_oracle import __version__
 from nfl_oracle.calendar.schedule import research_schedule_summary
 from nfl_oracle.data.catalog import load_season_game_catalog
 from nfl_oracle.data.summary import research_data_summary
-from nfl_oracle.features.schema import features_document, live_ok_feature_names
+from nfl_oracle.features.schema import (
+    features_document,
+    live_ok_feature_names,
+    offline_stub_feature_names,
+)
 from nfl_oracle.identity.load import research_identity_summary
 from nfl_oracle.labels.schema import schema_document as label_schema
 from nfl_oracle.providers.auth_status import probe_realsports_auth
-from nfl_oracle.providers.five_card import FiveCardProviderStub
+from nfl_oracle.providers.five_card import (
+    FiveCardProviderStub,
+    offline_provider_rule_document,
+)
 from nfl_oracle.strategy.algebra import (
     OBSERVED_DEFAULT_SLOT_MULTIPLIERS,
     contest_score_to_json,
@@ -119,8 +126,13 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
 
     @router.get("/features/live-ok")
     def features_live_ok() -> dict[str, Any]:
+        live = list(live_ok_feature_names())
+        stubs = list(offline_stub_feature_names())
         return {
-            "live_ok": list(live_ok_feature_names()),
+            "live_ok": live,
+            "live_ok_count": len(live),
+            "offline_stub_features": stubs,
+            "offline_stub_count": len(stubs),
             "contest_entry": False,
             "observation_only": True,
         }
@@ -131,6 +143,12 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
         payload = ready.to_json_obj()
         payload["posture"] = posture_from_readiness(ready).value
         return payload
+
+    @router.get("/provider/rules-offline")
+    def provider_rules_offline() -> dict[str, Any]:
+        """Best-effort public-rules notes; does not enable submit."""
+
+        return offline_provider_rule_document()
 
     @router.get("/gates/entry")
     def entry_gates() -> dict[str, Any]:

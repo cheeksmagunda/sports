@@ -29,6 +29,7 @@ def test_research_route_surface_contest_entry_false() -> None:
         "/research/schemas/scoring",
         "/research/features/live-ok",
         "/research/provider/status",
+        "/research/provider/rules-offline",
         "/research/gates/entry",
         "/research/catalog/seasons",
         "/research/coverage/summary",
@@ -54,7 +55,7 @@ def test_coverage_summary_uses_offline_dense_fixtures() -> None:
     assert body["coverage_matrix"]["status_counts"]["blocked"] == 1
     assert body["density"]["known_ratio"] == pytest.approx(12 / 14)
     assert body["density"]["mean_seeds_per_season"] == pytest.approx(70 / 14)
-    assert body["identity"]["n_identities"] >= 55
+    assert body["identity"]["n_identities"] >= 100
     assert body["contest_entry"] is False
 
 
@@ -78,7 +79,7 @@ def test_identity_density_route_offline() -> None:
     body = client.get("/research/identity/density").json()
     assert body["contest_entry"] is False
     assert body["path_exists"] is True
-    assert body["n_identities"] >= 55
+    assert body["n_identities"] >= 100
     assert body["density"]["n_complete"] >= 50
     assert body["density"]["complete_ratio"] > 0.8
     assert "QB" in body["density"]["position_counts"]
@@ -94,7 +95,7 @@ def test_status_railway_gates_and_draft_readiness_honesty() -> None:
     assert status["railway"]["deploy_source_connected"] is False
     assert status["entry_gates"]["contest_entry"] is False
     assert status["data"]["density"]["catalog_seed_game_count"] == 70
-    assert status["identity"]["n_identities"] >= 55
+    assert status["identity"]["n_identities"] >= 100
     assert "note" in status["auth"]
     draft = status["draft_readiness"]
     assert draft["contest_entry"] is False
@@ -102,7 +103,7 @@ def test_status_railway_gates_and_draft_readiness_honesty() -> None:
     assert draft["railway_deploy_ready"] is False
     assert draft["policy"] == "deny_by_default_entry_gates"
     assert draft["coverage_seed_game_count"] == 70
-    assert draft["identity_n"] >= 55
+    assert draft["identity_n"] >= 100
 
     omitted = client.get("/research/status?include_gates=false").json()
     assert "entry_gates" not in omitted

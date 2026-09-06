@@ -7,7 +7,9 @@ from nfl_oracle.features.schema import (
     features_by_group,
     features_document,
     live_ok_feature_names,
+    offline_stub_feature_names,
 )
+from nfl_oracle.features.stubs import offline_stub_feature_row
 
 __all__ = [
     "FeatureSpec",
@@ -16,5 +18,7 @@ __all__ = [
     "features_by_group",
     "features_document",
     "live_ok_feature_names",
+    "offline_stub_feature_names",
+    "offline_stub_feature_row",
     "prior_feature_row",
 ]

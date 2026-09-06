@@ -65,13 +65,17 @@ def test_summarize_season_slate_recent() -> None:
 def test_identity_aliases_and_collisions() -> None:
     path = FIXTURES / "identity" / "dense_players.json"
     ident = load_identity_map_from_players_file(path)
-    assert len(ident) >= 80
+    assert len(ident) >= 100
     dens_summary = research_identity_summary(players_path=path)
     assert dens_summary["density"]["n_with_external_alias"] >= 50
     assert dens_summary["aliases"]["display_name_collision_count"] >= 1
+    assert dens_summary["aliases"]["normalized_name_collision_count"] >= 1
+    assert dens_summary["aliases"]["alias_collision_count"] >= 1
     report = reconcile_alias_collisions(ident)
     assert report["n_with_external_alias"] >= 50
     assert report["display_name_collision_count"] >= 1
+    assert report["normalized_name_collision_count"] >= 1
+    assert report["alias_collision_count"] >= 1
 
     blank = IdentityMap()
     upsert_with_aliases(

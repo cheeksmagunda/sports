@@ -976,6 +976,350 @@
       "id": 9100,
       "pos": "WR",
       "gsis_id": "00-009100"
+    },
+    {
+      "firstName": "Michael",
+      "lastName": "Johnson Jr.",
+      "playerId": 99101,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 201,
+      "gsis_id": "00-099101",
+      "espn_id": "299101",
+      "displayName": "Michael Johnson Jr."
+    },
+    {
+      "firstName": "Michael",
+      "lastName": "Johnson",
+      "playerId": 99102,
+      "position": "CB",
+      "sport": "nfl",
+      "teamId": 202,
+      "gsis_id": "00-099102",
+      "espn_id": "299102",
+      "displayName": "Michael Johnson"
+    },
+    {
+      "firstName": "Robert",
+      "lastName": "Williams",
+      "playerId": 99103,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 203,
+      "gsis_id": "00-099103",
+      "espn_id": "299103",
+      "displayName": "Robert Williams",
+      "sleeper_id": "s99103"
+    },
+    {
+      "firstName": "Bob",
+      "lastName": "Williams",
+      "playerId": 99104,
+      "position": "TE",
+      "sport": "nfl",
+      "teamId": 204,
+      "gsis_id": "00-099104",
+      "espn_id": "299104",
+      "displayName": "Bob Williams",
+      "external_ids": {
+        "nickname_of": "99103"
+      }
+    },
+    {
+      "firstName": "Dup",
+      "lastName": "GsisA",
+      "playerId": 99105,
+      "position": "QB",
+      "sport": "nfl",
+      "teamId": 205,
+      "gsis_id": "00-COLLIDE-GSIS",
+      "espn_id": "299105",
+      "displayName": "Dup GsisA"
+    },
+    {
+      "firstName": "Dup",
+      "lastName": "GsisB",
+      "playerId": 99106,
+      "position": "QB",
+      "sport": "nfl",
+      "teamId": 206,
+      "gsis_id": "00-COLLIDE-GSIS",
+      "espn_id": "299106",
+      "displayName": "Dup GsisB"
+    },
+    {
+      "firstName": "James",
+      "lastName": "Brown III",
+      "playerId": 99107,
+      "position": "LB",
+      "sport": "nfl",
+      "teamId": 207,
+      "gsis_id": "00-099107",
+      "espn_id": "299107",
+      "displayName": "James Brown III"
+    },
+    {
+      "firstName": "James",
+      "lastName": "Brown",
+      "playerId": 99108,
+      "position": "LB",
+      "sport": "nfl",
+      "teamId": 208,
+      "gsis_id": "00-099108",
+      "espn_id": "299108",
+      "displayName": "James Brown"
+    },
+    {
+      "firstName": "SynExtra01",
+      "lastName": "QB",
+      "playerId": 9201,
+      "position": "QB",
+      "sport": "nfl",
+      "teamId": 131,
+      "gsis_id": "00-009201",
+      "espn_id": "29201",
+      "sleeper_id": "39201",
+      "external_ids": {
+        "pfr": "Pfr9201"
+      }
+    },
+    {
+      "firstName": "SynExtra02",
+      "lastName": "RB",
+      "playerId": 9202,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 132,
+      "gsis_id": "00-009202",
+      "espn_id": "29202",
+      "sleeper_id": "39202",
+      "external_ids": {
+        "pfr": "Pfr9202"
+      }
+    },
+    {
+      "firstName": "SynExtra03",
+      "lastName": "WR",
+      "playerId": 9203,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 133,
+      "gsis_id": "00-009203",
+      "espn_id": "29203",
+      "sleeper_id": "39203",
+      "external_ids": {
+        "pfr": "Pfr9203"
+      }
+    },
+    {
+      "firstName": "SynExtra04",
+      "lastName": "TE",
+      "playerId": 9204,
+      "position": "TE",
+      "sport": "nfl",
+      "teamId": 134,
+      "gsis_id": "00-009204",
+      "espn_id": "29204",
+      "sleeper_id": "39204",
+      "external_ids": {
+        "pfr": "Pfr9204"
+      }
+    },
+    {
+      "firstName": "SynExtra05",
+      "lastName": "K",
+      "playerId": 9205,
+      "position": "K",
+      "sport": "nfl",
+      "teamId": 135,
+      "gsis_id": "00-009205",
+      "espn_id": "29205",
+      "sleeper_id": "39205",
+      "external_ids": {
+        "pfr": "Pfr9205"
+      }
+    },
+    {
+      "firstName": "SynExtra06",
+      "lastName": "DEF",
+      "playerId": 9206,
+      "position": "DEF",
+      "sport": "nfl",
+      "teamId": 136,
+      "gsis_id": "00-009206",
+      "espn_id": "29206",
+      "sleeper_id": "39206",
+      "external_ids": {
+        "pfr": "Pfr9206"
+      }
+    },
+    {
+      "firstName": "SynExtra07",
+      "lastName": "QB",
+      "playerId": 9207,
+      "position": "QB",
+      "sport": "nfl",
+      "teamId": 137,
+      "gsis_id": "00-009207",
+      "espn_id": "29207",
+      "sleeper_id": "39207",
+      "external_ids": {
+        "pfr": "Pfr9207"
+      }
+    },
+    {
+      "firstName": "SynExtra08",
+      "lastName": "RB",
+      "playerId": 9208,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 138,
+      "gsis_id": "00-009208",
+      "espn_id": "29208",
+      "sleeper_id": "39208",
+      "external_ids": {
+        "pfr": "Pfr9208"
+      }
+    },
+    {
+      "firstName": "SynExtra09",
+      "lastName": "WR",
+      "playerId": 9209,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 139,
+      "gsis_id": "00-009209",
+      "espn_id": "29209",
+      "sleeper_id": "39209",
+      "external_ids": {
+        "pfr": "Pfr9209"
+      }
+    },
+    {
+      "firstName": "SynExtra10",
+      "lastName": "TE",
+      "playerId": 9210,
+      "position": "TE",
+      "sport": "nfl",
+      "teamId": 140,
+      "gsis_id": "00-009210",
+      "espn_id": "29210",
+      "sleeper_id": "39210",
+      "external_ids": {
+        "pfr": "Pfr9210"
+      }
+    },
+    {
+      "firstName": "SynExtra11",
+      "lastName": "K",
+      "playerId": 9211,
+      "position": "K",
+      "sport": "nfl",
+      "teamId": 141,
+      "gsis_id": "00-009211",
+      "espn_id": "29211",
+      "sleeper_id": "39211",
+      "external_ids": {
+        "pfr": "Pfr9211"
+      }
+    },
+    {
+      "firstName": "SynExtra12",
+      "lastName": "DEF",
+      "playerId": 9212,
+      "position": "DEF",
+      "sport": "nfl",
+      "teamId": 142,
+      "gsis_id": "00-009212",
+      "espn_id": "29212",
+      "sleeper_id": "39212",
+      "external_ids": {
+        "pfr": "Pfr9212"
+      }
+    },
+    {
+      "firstName": "SynExtra13",
+      "lastName": "QB",
+      "playerId": 9213,
+      "position": "QB",
+      "sport": "nfl",
+      "teamId": 143,
+      "gsis_id": "00-009213",
+      "espn_id": "29213",
+      "sleeper_id": "39213",
+      "external_ids": {
+        "pfr": "Pfr9213"
+      }
+    },
+    {
+      "firstName": "SynExtra14",
+      "lastName": "RB",
+      "playerId": 9214,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 144,
+      "gsis_id": "00-009214",
+      "espn_id": "29214",
+      "sleeper_id": "39214",
+      "external_ids": {
+        "pfr": "Pfr9214"
+      }
+    },
+    {
+      "firstName": "SynExtra15",
+      "lastName": "WR",
+      "playerId": 9215,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 145,
+      "gsis_id": "00-009215",
+      "espn_id": "29215",
+      "sleeper_id": "39215",
+      "external_ids": {
+        "pfr": "Pfr9215"
+      }
+    },
+    {
+      "firstName": "SynExtra16",
+      "lastName": "TE",
+      "playerId": 9216,
+      "position": "TE",
+      "sport": "nfl",
+      "teamId": 146,
+      "gsis_id": "00-009216",
+      "espn_id": "29216",
+      "sleeper_id": "39216",
+      "external_ids": {
+        "pfr": "Pfr9216"
+      }
+    },
+    {
+      "firstName": "SynExtra17",
+      "lastName": "K",
+      "playerId": 9217,
+      "position": "K",
+      "sport": "nfl",
+      "teamId": 147,
+      "gsis_id": "00-009217",
+      "espn_id": "29217",
+      "sleeper_id": "39217",
+      "external_ids": {
+        "pfr": "Pfr9217"
+      }
+    },
+    {
+      "firstName": "SynExtra18",
+      "lastName": "DEF",
+      "playerId": 9218,
+      "position": "DEF",
+      "sport": "nfl",
+      "teamId": 148,
+      "gsis_id": "00-009218",
+      "espn_id": "29218",
+      "sleeper_id": "39218",
+      "external_ids": {
+        "pfr": "Pfr9218"
+      }
     }
   ]
 }
