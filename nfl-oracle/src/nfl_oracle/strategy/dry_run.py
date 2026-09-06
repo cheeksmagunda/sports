@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -148,6 +148,110 @@ def prove_submit_hard_denied(action: FiveCardAction) -> dict[str, Any]:
     }
 
 
+
+def _parse_event_date(raw: str | None) -> date | None:
+    """Parse ISO / RFC3339 event_time to a calendar date (UTC date component)."""
+
+    if not raw:
+        return None
+    s = raw.strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        return date.fromisoformat(s[:10])
+    except ValueError:
+        pass
+    try:
+        return datetime.fromisoformat(s).date()
+    except ValueError:
+        return None
+
+
+def resolve_dry_run_schedule_slate(
+    *,
+    decision_season: int,
+    slate_players: Sequence[ValueLabel],
+    schedule_week: int | None = None,
+    schedule_date: date | None = None,
+    project_root: Path | str | None = None,
+    schedule_team: str | None = None,
+) -> dict[str, Any]:
+    """Attach offline week slate using explicit week/date or label event_time.
+
+    Priority:
+    1. ``schedule_date``
+    2. ``schedule_week`` (+ decision season)
+    3. First parseable ``event_time`` on decision-slate labels → date resolve
+    4. Fallback: week 1 of decision season (documented in attach meta)
+
+    Never enables contest entry; unresolved schedules still return a payload.
+    """
+
+    from nfl_oracle.calendar.slate import research_schedule_slate
+
+    root_for_sched = Path(project_root) if project_root is not None else None
+    attach_source: str
+    day: date | None = schedule_date
+    week: int | None = schedule_week
+    season: int | None = decision_season
+
+    if day is not None:
+        attach_source = "explicit_schedule_date"
+        payload = research_schedule_slate(
+            project_root=root_for_sched,
+            day=day,
+            team=schedule_team,
+        )
+    elif week is not None:
+        attach_source = "explicit_schedule_week"
+        payload = research_schedule_slate(
+            project_root=root_for_sched,
+            season=season,
+            week=week,
+            team=schedule_team,
+        )
+    else:
+        derived: date | None = None
+        for row in slate_players:
+            derived = _parse_event_date(row.event_time)
+            if derived is not None:
+                break
+        if derived is not None:
+            attach_source = "label_event_time"
+            day = derived
+            payload = research_schedule_slate(
+                project_root=root_for_sched,
+                day=day,
+                team=schedule_team,
+            )
+        else:
+            attach_source = "default_week_1_fallback"
+            week = 1
+            payload = research_schedule_slate(
+                project_root=root_for_sched,
+                season=season,
+                week=week,
+                team=schedule_team,
+            )
+
+    payload = dict(payload)
+    payload["contest_entry"] = False
+    payload["observation_only"] = True
+    payload["dry_run_attach"] = {
+        "source": attach_source,
+        "requested_schedule_week": schedule_week,
+        "requested_schedule_date": schedule_date.isoformat() if schedule_date else None,
+        "decision_season": decision_season,
+        "resolved_week": payload.get("week"),
+        "resolved_season": payload.get("season"),
+        "resolved": bool(payload.get("resolved")),
+        "contest_entry": False,
+    }
+    return payload
+
+
 def build_offline_contest_dry_run(
     *,
     corpus_root: Path | str | None = None,
@@ -160,6 +264,7 @@ def build_offline_contest_dry_run(
     include_schedule_slate: bool = False,
     schedule_week: int | None = None,
     schedule_date: date | None = None,
+    schedule_team: str | None = None,
     project_root: Path | str | None = None,
 ) -> dict[str, Any]:
     """Produce a five-card shadow slate from offline fixtures (dry_run).
@@ -167,7 +272,9 @@ def build_offline_contest_dry_run(
     Default value path uses walk-forward player/position priors (no ridge fit).
     Opt into ``use_feature_ridge`` for leakage-safe prior-feature ridge values.
     Optionally attach an offline schedule week slate (games/opponents) when
-    ``include_schedule_slate`` is set — observation only; never enables entry.
+    ``include_schedule_slate`` is set. Resolution prefers explicit date, then
+    week, then label ``event_time``, else week-1 fallback — observation only;
+    never enables entry.
     """
 
     if labels is None:
@@ -271,22 +378,14 @@ def build_offline_contest_dry_run(
 
     schedule_slate_payload: dict[str, Any] | None = None
     if include_schedule_slate:
-        from nfl_oracle.calendar.slate import research_schedule_slate
-
-        root_for_sched = Path(project_root) if project_root is not None else None
-        week = schedule_week if schedule_week is not None else 1
-        season_for_sched = slate.season
-        if schedule_date is not None:
-            schedule_slate_payload = research_schedule_slate(
-                project_root=root_for_sched,
-                day=schedule_date,
-            )
-        else:
-            schedule_slate_payload = research_schedule_slate(
-                project_root=root_for_sched,
-                season=season_for_sched,
-                week=week,
-            )
+        schedule_slate_payload = resolve_dry_run_schedule_slate(
+            decision_season=slate.season,
+            slate_players=slate.players,
+            schedule_week=schedule_week,
+            schedule_date=schedule_date,
+            project_root=project_root,
+            schedule_team=schedule_team,
+        )
 
     return {
         "name": "nfl_offline_contest_dry_run",

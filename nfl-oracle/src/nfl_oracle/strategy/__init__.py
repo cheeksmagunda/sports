@@ -10,6 +10,7 @@ from nfl_oracle.strategy.algebra import (
 from nfl_oracle.strategy.clocks import feature_clocks_ok, live_feature_allowed
 from nfl_oracle.strategy.dry_run import (
     build_offline_contest_dry_run,
+    resolve_dry_run_schedule_slate,
     default_value_label_fixture_root,
     pick_decision_slate,
     prove_submit_hard_denied,
@@ -92,6 +93,7 @@ __all__ = [
     "value_model_strategy_note",
     "values_from_model",
     "build_offline_contest_dry_run",
+    "resolve_dry_run_schedule_slate",
     "default_value_label_fixture_root",
     "pick_decision_slate",
     "prove_submit_hard_denied",

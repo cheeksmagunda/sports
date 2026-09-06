@@ -11,10 +11,12 @@ from nfl_oracle.labels.extract import load_labels_from_corpus_root
 from nfl_oracle.labels.schema import ValueLabel
 from nfl_oracle.service.app import create_app
 from nfl_oracle.strategy.dry_run import (
+    _parse_event_date,
     build_offline_contest_dry_run,
     default_value_label_fixture_root,
     pick_decision_slate,
     prove_submit_hard_denied,
+    resolve_dry_run_schedule_slate,
     select_five_card_set,
 )
 from nfl_oracle.strategy.dry_run_cli import main as dry_run_main
@@ -152,10 +154,72 @@ def test_research_contest_dry_run_endpoint() -> None:
     assert rbody["contest_entry"] is False
 
 
+def test_parse_event_date_iso_z() -> None:
+    assert _parse_event_date("2025-09-07T17:00:00.000Z").isoformat() == "2025-09-07"
+    assert _parse_event_date("2024-09-05") is not None
+    assert _parse_event_date(None) is None
+    assert _parse_event_date("not-a-date") is None
+
+
+def test_resolve_dry_run_schedule_slate_priority() -> None:
+    from datetime import date
+
+    offline = OFFLINE_ROOT
+    labels = load_labels_from_corpus_root(FIXTURE_ROOT)
+    slate = pick_decision_slate(labels)
+    # Explicit week wins over label event_time.
+    by_week = resolve_dry_run_schedule_slate(
+        decision_season=slate.season,
+        slate_players=slate.players,
+        schedule_week=2,
+        project_root=offline,
+    )
+    assert by_week["dry_run_attach"]["source"] == "explicit_schedule_week"
+    assert by_week["week"] == 2
+    assert by_week["contest_entry"] is False
+    # Explicit date wins.
+    by_date = resolve_dry_run_schedule_slate(
+        decision_season=slate.season,
+        slate_players=slate.players,
+        schedule_date=date(2024, 9, 5),
+        schedule_team="KC",
+        project_root=offline,
+    )
+    assert by_date["dry_run_attach"]["source"] == "explicit_schedule_date"
+    assert by_date["resolve_mode"] == "date_exact_gameday"
+    assert by_date["team_opponent"] == "BAL"
+    # Label event_time when no explicit week/date (2025-09-07 → week 1).
+    by_event = resolve_dry_run_schedule_slate(
+        decision_season=slate.season,
+        slate_players=slate.players,
+        project_root=offline,
+    )
+    assert by_event["dry_run_attach"]["source"] == "label_event_time"
+    assert by_event["resolved"] is True
+    assert by_event["week"] == 1
+    assert by_event["season"] == 2025
+    # Fallback week-1 when labels lack event_time.
+    bare = [
+        ValueLabel(player_id=1, game_id=1, season=2024, position="QB", value=1.0),
+        ValueLabel(player_id=2, game_id=1, season=2024, position="RB", value=1.0),
+        ValueLabel(player_id=3, game_id=1, season=2024, position="WR", value=1.0),
+        ValueLabel(player_id=4, game_id=1, season=2024, position="TE", value=1.0),
+        ValueLabel(player_id=5, game_id=1, season=2024, position="K", value=1.0),
+    ]
+    fallback = resolve_dry_run_schedule_slate(
+        decision_season=2024,
+        slate_players=bare,
+        project_root=offline,
+    )
+    assert fallback["dry_run_attach"]["source"] == "default_week_1_fallback"
+    assert fallback["week"] == 1
+    assert fallback["contest_entry"] is False
+
+
 def test_dry_run_optional_schedule_slate_attachment() -> None:
     from datetime import date
 
-    offline = Path(__file__).resolve().parents[1] / "fixtures" / "offline_research"
+    offline = OFFLINE_ROOT
     payload = build_offline_contest_dry_run(
         corpus_root=FIXTURE_ROOT,
         include_schedule_slate=True,
@@ -165,6 +229,7 @@ def test_dry_run_optional_schedule_slate_attachment() -> None:
     assert payload["schedule_slate"] is not None
     assert payload["schedule_slate"]["contest_entry"] is False
     assert payload["schedule_slate"]["resolved"] is True
+    assert payload["schedule_slate"]["dry_run_attach"]["source"] == "explicit_schedule_week"
     assert payload["contest_entry"] is False
     by_date = build_offline_contest_dry_run(
         corpus_root=FIXTURE_ROOT,
@@ -173,5 +238,32 @@ def test_dry_run_optional_schedule_slate_attachment() -> None:
         project_root=offline,
     )
     assert by_date["schedule_slate"]["resolve_mode"] == "date_exact_gameday"
+    assert by_date["schedule_slate"]["dry_run_attach"]["source"] == "explicit_schedule_date"
+    # Auto-resolve from fixture label event_time (no week/date args).
+    auto = build_offline_contest_dry_run(
+        corpus_root=FIXTURE_ROOT,
+        include_schedule_slate=True,
+        project_root=offline,
+    )
+    assert auto["schedule_slate"]["dry_run_attach"]["source"] == "label_event_time"
+    assert auto["schedule_slate"]["resolved"] is True
+    assert auto["contest_entry"] is False
     plain = build_offline_contest_dry_run(corpus_root=FIXTURE_ROOT)
     assert plain["schedule_slate"] is None
+
+
+def test_dry_run_cli_include_schedule_slate(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = dry_run_main(
+        [
+            "--root",
+            str(FIXTURE_ROOT),
+            "--text",
+            "--include-schedule-slate",
+            "--project-root",
+            str(OFFLINE_ROOT),
+        ]
+    )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "schedule_slate=resolved=True" in out
+    assert "source=label_event_time" in out

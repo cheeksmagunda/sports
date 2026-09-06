@@ -381,6 +381,10 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
             default=None,
             description="ISO date for optional schedule slate resolution",
         ),
+        schedule_team: str | None = Query(
+            default=None,
+            description="Optional team abbr when include_schedule_slate (opponent lookup)",
+        ),
         corpus_root: str | None = Query(
             default=None,
             description="Optional value-label fixture root; default bundled fixtures",
@@ -407,6 +411,7 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
                 include_schedule_slate=include_schedule_slate,
                 schedule_week=schedule_week,
                 schedule_date=day,
+                schedule_team=schedule_team,
                 project_root=project_root,
             )
         except ValueError as exc:

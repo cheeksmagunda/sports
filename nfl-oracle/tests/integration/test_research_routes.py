@@ -473,3 +473,41 @@ def test_contest_dry_run_optional_schedule_slate() -> None:
     assert slate["resolved"] is True
     assert slate["week"] == 1
     assert slate["game_count"] >= 1
+
+
+def test_contest_dry_run_schedule_slate_date_and_event_auto() -> None:
+    client = _client()
+    by_date = client.get(
+        "/research/shadow/contest-dry-run",
+        params={
+            "include_schedule_slate": True,
+            "schedule_date": "2024-09-05",
+            "schedule_team": "KC",
+        },
+    )
+    assert by_date.status_code == 200
+    body = by_date.json()
+    assert body["contest_entry"] is False
+    slate = body["schedule_slate"]
+    assert slate["resolve_mode"] == "date_exact_gameday"
+    assert slate["dry_run_attach"]["source"] == "explicit_schedule_date"
+    assert slate["team_opponent"] == "BAL"
+    assert slate["contest_entry"] is False
+
+    auto = client.get(
+        "/research/shadow/contest-dry-run",
+        params={"include_schedule_slate": True, "decision_season": 2025},
+    )
+    assert auto.status_code == 200
+    abody = auto.json()
+    assert abody["contest_entry"] is False
+    aslate = abody["schedule_slate"]
+    assert aslate["dry_run_attach"]["source"] == "label_event_time"
+    assert aslate["resolved"] is True
+    assert aslate["week"] == 1
+
+    bad = client.get(
+        "/research/shadow/contest-dry-run",
+        params={"include_schedule_slate": True, "schedule_date": "not-a-date"},
+    )
+    assert bad.status_code == 422
