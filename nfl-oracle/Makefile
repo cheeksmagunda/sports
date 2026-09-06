@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -18,6 +18,7 @@ help:
 	@echo "  make auth-presence - env/path presence check (no secret values)"
 	@echo "  make strategy-schema - emit strategy schema JSON"
 	@echo "  make hydrate-identity - offline identity fixture summary"
+	@echo "  make research-serve - local read-only research HTTP (127.0.0.1:8088)"
 
 setup:
 	$(MAKE) -C .. setup
@@ -55,3 +56,6 @@ provider-status:
 
 auth-presence:
 	$(UV_RUN) python scripts/auth_presence_check.py
+
+research-serve:
+	$(UV_RUN) --extra serve nfl-research-serve --host 127.0.0.1 --port 8088

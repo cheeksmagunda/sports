@@ -696,6 +696,10 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "respx" },
     { name = "ruff" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+serve = [
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -711,8 +715,10 @@ requires-dist = [
     { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21,<1.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7,<1.0" },
     { name = "structlog", specifier = ">=24.4,<26.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'dev'", specifier = ">=0.32,<1.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'serve'", specifier = ">=0.32,<1.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "serve"]
 
 [[package]]
 name = "nhl-oracle"
