@@ -36,6 +36,14 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             description="NFL season year for the game/slate.",
         ),
         FeatureSpec(
+            name="player_prior_mean",
+            dtype="float",
+            train_ok=True,
+            live_ok=True,
+            availability_rule="fit_on_seasons_strictly_earlier_than_decision_season",
+            description="Walk-forward player mean prior; falls back to position/global.",
+        ),
+        FeatureSpec(
             name="position_prior_mean",
             dtype="float",
             train_ok=True,
@@ -71,3 +79,13 @@ def features_document() -> dict[str, Any]:
         "live_blacklist": list(LIVE_FEATURE_BLACKLIST),
         "observation_only": True,
     }
+
+
+def live_ok_feature_names() -> tuple[str, ...]:
+    """Names marked live_ok and not on the same-slate blacklist."""
+
+    return tuple(
+        spec.name
+        for spec in feature_registry()
+        if spec.live_ok and spec.name not in LIVE_FEATURE_BLACKLIST
+    )

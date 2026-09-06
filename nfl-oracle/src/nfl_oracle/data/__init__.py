@@ -8,6 +8,7 @@ from nfl_oracle.data.coverage_matrix import (
     save_coverage_matrix_doc,
 )
 from nfl_oracle.data.paths import DataPaths, resolve_data_paths
+from nfl_oracle.data.summary import research_data_summary
 
 __all__ = [
     "CoverageMatrixDocument",
@@ -17,6 +18,7 @@ __all__ = [
     "SeasonGameCatalog",
     "load_coverage_matrix_doc",
     "load_season_game_catalog",
+    "research_data_summary",
     "resolve_data_paths",
     "save_coverage_matrix_doc",
 ]

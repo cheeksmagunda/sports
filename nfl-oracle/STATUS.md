@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:10 CT (provider stubs + prior scaffolds on codex/nfl-data-schemas-scaffold; GitHub write still 403; CS SSH from box still hung)
+Last verified: 2026-09-06 ~01:20 CT (research service routes + strategy enumerate/posture + data summary; GitHub write still 403; no push attempted)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -11,7 +11,7 @@ treating any row as production truth.
 - Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines + observation-only data/strategy/feature/calendar/identity scaffolds + read-only research service routes
 - Wired into root `make test-nfl` / `lint` / `typecheck` / `build`; `make -C nfl-oracle strategy-schema`
 - Not started: Corpus C contests, verified five-card provider contract (#91), production deploys,
-  contest submission, Railway production secret injection
+  contest submission, Railway production secret injection, in-repo Railway deploy source
 
 ## Auth
 
@@ -112,6 +112,32 @@ Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Rai
 - Research: `GET /research/provider/status`
 - Box auth still missing; status expected `auth_missing`
 - GitHub push/MCP write still 403; see `/workspace/codex-nfl/HANDOFF.md`
+
+
+
+## Research service path (2026-09-06 CT)
+
+Runnable offline research HTTP (observation only; no contest entry; no deploy):
+
+- CLI: `nfl-research-serve` / `make -C nfl-oracle research-serve` (needs `--extra serve` / uvicorn)
+- Routes: schemas (labels/strategy/features), catalog, provider status + posture,
+  `POST /research/shadow/preview`, `GET /research/coverage/summary`,
+  `GET /research/features/live-ok`, `GET /research/status`, `/health` (auth degraded OK)
+- Strategy: `ordered_five_card_actions` (120 orderings) + `best_shadow_ordering`;
+  `posture_from_readiness` maps provider stub → Posture
+- Data: `research_data_summary` over season catalog + coverage_matrix
+- Features: `player_prior_mean` + `live_ok_feature_names()`
+- daily_shadow artifact now includes provider_status (presence only)
+- Box verification: pytest **53 passed**; ruff + mypy clean on `nfl-oracle/src`
+
+## Railway config presence (document only; do not deploy)
+
+- **In-repo:** no `nfl-oracle/railway.toml`, no `nfl-oracle/Dockerfile` (unlike wnba-oracle).
+- **External:** Railway project `nfl-oracle-staging` / service `nfl-oracle` exists as
+  offline placeholders (0/1 online by design). No deploy source connected from this package.
+- Research status route reports `railway.in_repo_config=false` and staging names only.
+- Do not create Railway services, inject production secrets, or connect a deploy source
+  from this overnight pass.
 
 ## Codespace live-wire (2026-09-05 CT)
 

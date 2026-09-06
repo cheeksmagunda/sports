@@ -162,7 +162,12 @@ make check-boundaries
 - `nfl_oracle.strategy` — pre-lock clock gates, five-card structural checks, shadow snapshots
 - `nfl_oracle.features` — FeatureSpec registry (`nfl_oracle.features.schema`)
 - `make strategy-schema` / `uv run --package nfl-oracle nfl-strategy-schema --schema-only`
-- Research HTTP scaffold: `nfl_oracle.service.create_app` (schemas + catalog; no entry)
+- Research HTTP scaffold: `nfl_oracle.service.create_app` / `nfl-research-serve`
+  (`make research-serve`; schemas, catalog, coverage summary, shadow preview,
+  provider posture; no entry)
+- Strategy helpers: 120 five-card orderings + readiness→posture mapping
+- Railway: **no** in-repo `railway.toml`/`Dockerfile`; staging project names only
+  in STATUS (do not deploy from this package)
 
 ## Codespace daily ops (planned)
 

@@ -82,9 +82,24 @@ def main() -> int:
         }
     steps["baselines"] = baseline_payload
 
+    # 3) provider/auth readiness (presence only; no secrets)
+    prov = _run(_uv("nfl-provider-status", "--json"))
+    if prov.returncode == 0 and (prov.stdout or "").strip():
+        try:
+            steps["provider_status"] = json.loads(prov.stdout)
+        except json.JSONDecodeError:
+            steps["provider_status"] = {"raw_stdout_tail": (prov.stdout or "")[-1000:]}
+    else:
+        steps["provider_status"] = {
+            "error": True,
+            "returncode": prov.returncode,
+            "stderr_tail": (prov.stderr or "")[-1000:],
+        }
+
     finished = datetime.now(CT)
     steps["finished_at_ct"] = finished.isoformat()
     steps["ok"] = cov.returncode == 0 and base.returncode == 0
+    steps["provider_status_rc"] = prov.returncode
 
     artifact_path.write_text(json.dumps(steps, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     latest = ARTIFACT_DIR / "daily_shadow_latest.json"

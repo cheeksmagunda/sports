@@ -1,7 +1,13 @@
 """Observation-only strategy contracts; no provider or submission integration."""
 
 from nfl_oracle.strategy.clocks import feature_clocks_ok, live_feature_allowed
+from nfl_oracle.strategy.enumerate import (
+    ORDERINGS_PER_SET,
+    best_shadow_ordering,
+    ordered_five_card_actions,
+)
 from nfl_oracle.strategy.lineup import FiveCardLineup, validate_five_card
+from nfl_oracle.strategy.posture import current_posture, posture_from_readiness
 from nfl_oracle.strategy.schema import (
     LIVE_FEATURE_BLACKLIST,
     FiveCardAction,
@@ -34,5 +40,10 @@ __all__ = [
     "strategy_document",
     "ShadowScore",
     "shadow_weighted_score",
+    "posture_from_readiness",
+    "current_posture",
+    "ordered_five_card_actions",
+    "best_shadow_ordering",
+    "ORDERINGS_PER_SET",
     "validate_five_card",
 ]
