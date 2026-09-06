@@ -43,7 +43,7 @@ class CoverageMatrixDocument:
             status_raw = block.get("status") or infer_status_from_seeds(game_ids)
             status: CoverageStatus
             if status_raw in SEASON_STATUSES:
-                status = status_raw  # type: ignore[assignment]
+                status = status_raw
             else:
                 status = infer_status_from_seeds(game_ids)
             rows.append(

@@ -47,11 +47,11 @@ def test_research_route_surface_contest_entry_false() -> None:
 def test_coverage_summary_uses_offline_dense_fixtures() -> None:
     client = _client()
     body = client.get("/research/coverage/summary").json()
-    assert body["catalog"]["season_count"] == 8
-    assert body["catalog"]["seed_game_count"] == 36
-    assert body["coverage_matrix"]["status_counts"]["known"] == 6
+    assert body["catalog"]["season_count"] == 10
+    assert body["catalog"]["seed_game_count"] == 45
+    assert body["coverage_matrix"]["status_counts"]["known"] == 8
     assert body["coverage_matrix"]["status_counts"]["blocked"] == 1
-    assert body["density"]["known_ratio"] == 0.75
+    assert body["density"]["known_ratio"] == 0.8
     assert body["density"]["mean_seeds_per_season"] == 4.5
     assert body["identity"]["n_identities"] >= 40
     assert body["contest_entry"] is False
@@ -60,8 +60,9 @@ def test_coverage_summary_uses_offline_dense_fixtures() -> None:
 def test_catalog_seasons_offline_dense() -> None:
     client = _client()
     body = client.get("/research/catalog/seasons").json()
-    assert body["season_count"] == 8
+    assert body["season_count"] == 10
     assert body["seasons"]["2024"] == [2401, 2402, 2403, 2404, 2405]
+    assert body["seasons"]["2016"] == [1601, 1602, 1603, 1604]
     assert body["seasons"]["2018"] == [1801, 1802, 1803, 1804]
     assert body["contest_entry"] is False
 
@@ -86,7 +87,7 @@ def test_status_railway_gates_and_draft_readiness_honesty() -> None:
     assert status["railway"]["dockerfile"] is False
     assert status["railway"]["deploy_source_connected"] is False
     assert status["entry_gates"]["contest_entry"] is False
-    assert status["data"]["density"]["catalog_seed_game_count"] == 36
+    assert status["data"]["density"]["catalog_seed_game_count"] == 45
     assert status["identity"]["n_identities"] >= 40
     assert "note" in status["auth"]
     draft = status["draft_readiness"]
@@ -94,7 +95,7 @@ def test_status_railway_gates_and_draft_readiness_honesty() -> None:
     assert draft["submit_hard_denied"] is True
     assert draft["railway_deploy_ready"] is False
     assert draft["policy"] == "deny_by_default_entry_gates"
-    assert draft["coverage_seed_game_count"] == 36
+    assert draft["coverage_seed_game_count"] == 45
     assert draft["identity_n"] >= 40
 
     omitted = client.get("/research/status?include_gates=false").json()

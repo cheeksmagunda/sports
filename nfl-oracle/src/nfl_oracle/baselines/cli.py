@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     labels = load_labels_from_corpus_root(root)
     methods: tuple[BaselineKind, ...]
     if args.methods:
-        methods = tuple(args.methods)  # type: ignore[arg-type]
+        methods = tuple(args.methods)
     else:
         methods = DEFAULT_BASELINES
     report = evaluate_walk_forward(labels, baselines=methods)

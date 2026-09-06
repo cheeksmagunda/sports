@@ -9,8 +9,38 @@
       "season": 2025
     }
   ],
-  "generated_at": "2026-09-06T06:30:00+00:00",
+  "generated_at": "2026-09-06T07:00:00+00:00",
   "seasons": {
+    "2016": {
+      "games": {
+        "1601": {
+          "game_id": 1601
+        },
+        "1602": {
+          "game_id": 1602
+        },
+        "1603": {
+          "game_id": 1603
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2017": {
+      "games": {
+        "1701": {
+          "game_id": 1701
+        },
+        "1702": {
+          "game_id": 1702
+        },
+        "1703": {
+          "game_id": 1703
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
     "2018": {
       "games": {
         "1801": {
@@ -51,6 +81,9 @@
         },
         "2002": {
           "game_id": 2002
+        },
+        "2003": {
+          "game_id": 2003
         }
       },
       "status": "known",
@@ -96,6 +129,9 @@
         },
         "2302": {
           "game_id": 2302
+        },
+        "2303": {
+          "game_id": 2303
         }
       },
       "status": "known",
