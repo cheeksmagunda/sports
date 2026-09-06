@@ -76,6 +76,8 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
         "rank_orderings_ok": False,
         "draft_readiness": {},
         "posture": None,
+        "coverage_density": {},
+        "gates_hard_deny_ok": False,
     }
 
     def getter(path: str) -> dict[str, Any]:
@@ -105,6 +107,21 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
             )
             if deny is None or deny.get("ok") is not False:
                 raise AssertionError("package_submit_hard_deny must be present and ok=false")
+            results["gates_hard_deny_ok"] = True
+        if path == "/research/coverage/summary":
+            dens = body.get("density") or {}
+            results["coverage_density"] = dens
+            if dens.get("catalog_season_count", 0) < 14:
+                raise AssertionError(
+                    f"coverage density seasons too sparse: {dens.get('catalog_season_count')}"
+                )
+            if dens.get("matrix_game_id_count", 0) < 40:
+                raise AssertionError(
+                    f"coverage matrix games too sparse: {dens.get('matrix_game_id_count')}"
+                )
+            known = (dens.get("status_counts") or {}).get("known", 0)
+            if known < 12:
+                raise AssertionError(f"coverage known seasons too sparse: {known}")
 
     preview_payload = {
         "player_ids": [1, 2, 3, 4, 5],
@@ -191,12 +208,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(summary, indent=2, sort_keys=True))
     else:
+        dens = summary.get("coverage_density") or {}
         print(
             "research_client_smoke OK: "
             f"routes={summary['routes_ok_count']} "
             f"posture={summary['posture']} "
             f"shadow_preview={summary['shadow_preview_ok']} "
             f"rank_orderings={summary['rank_orderings_ok']} "
+            f"gates_hard_deny={summary.get('gates_hard_deny_ok')} "
+            f"matrix_games={dens.get('matrix_game_id_count')} "
+            f"known={((dens.get('status_counts') or {}).get('known'))} "
             f"submit_hard_denied="
             f"{summary['draft_readiness'].get('submit_hard_denied')} "
             f"contest_entry=false"

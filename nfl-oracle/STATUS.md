@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:50 CT (fixtures+research API past 100 pytest; research-smoke TestClient; submit hard-denied; local-only branch + auth gap honest; no push)
+Last verified: 2026-09-06 ~01:40 CT (denser coverage matrix 14/70/12known/40games; research-smoke polished + hard-deny; local-only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -320,5 +320,15 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Research API tests expanded (`tests/unit/test_research_api_draft_edges.py`); smoke hits GET routes + shadow preview + rank-orderings via TestClient (`scripts/research_client_smoke.py` / `make research-smoke`)
 - Box verification: pytest **103 passed**; ruff + mypy clean on `nfl-oracle` paths
 - **Still deny real submit** — `FiveCardProviderStub.submit` raises; entry gates `package_submit_hard_deny` ok=false; `contest_entry` never flips
+- Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`); GitHub Contents write 403; branch local-only; no Railway Dockerfile/railway.toml
+
+## Research-smoke polish + denser matrix (2026-09-06 ~01:40 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Coverage denser: **14 seasons / 70 catalog seeds**; matrix **12 known / 1 unknown / 1 blocked** (40 matrix games); known_ratio ≈ 0.857
+- Offline research root mirrors denser catalog/matrix (`tests/fixtures/coverage/dense_{catalog,matrix}.json`)
+- `make research-smoke` polish: strip `DATABASE_URL`/`REDIS_URL` like `make test`; `SMOKE_ARGS` passthrough; smoke asserts density floors + `package_submit_hard_deny`
+- **Still deny real submit** — entry gates hard-deny; `contest_entry` never flips
 - Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`); GitHub Contents write 403; branch local-only; no Railway Dockerfile/railway.toml
 

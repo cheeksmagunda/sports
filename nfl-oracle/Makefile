@@ -19,7 +19,7 @@ help:
 	@echo "  make strategy-schema - emit strategy schema JSON"
 	@echo "  make hydrate-identity - offline identity fixture summary"
 	@echo "  make research-serve - local read-only research HTTP (127.0.0.1:8088)"
-	@echo "  make research-smoke - offline TestClient research route smoke"
+	@echo "  make research-smoke - offline TestClient smoke (hard-deny; SMOKE_ARGS=--json)"
 
 setup:
 	$(MAKE) -C .. setup
@@ -61,5 +61,8 @@ auth-presence:
 research-serve:
 	$(UV_RUN) --extra serve nfl-research-serve --host 127.0.0.1 --port 8088
 
+# Offline-only by default: strip live DB/redis env like `make test`.
+# Gates stay hard-deny (contest_entry=false). Override flags via SMOKE_ARGS.
 research-smoke:
-	$(UV_RUN) --extra dev python scripts/research_client_smoke.py
+	env -u DATABASE_URL -u DATABASE_PUBLIC_URL -u REDIS_URL \
+		$(UV_RUN) --extra dev python scripts/research_client_smoke.py $(SMOKE_ARGS)

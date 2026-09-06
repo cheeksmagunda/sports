@@ -67,16 +67,16 @@ def test_dense_coverage_fixture_density() -> None:
     catalog = load_season_game_catalog(FIXTURES / "coverage" / "dense_catalog.json")
     matrix = load_coverage_matrix_doc(FIXTURES / "coverage" / "dense_matrix.json")
     dens = summarize_coverage_density(catalog=catalog, matrix=matrix)
-    assert dens.catalog_season_count == 12
-    assert dens.catalog_seed_game_count == 56
-    assert dens.mean_seeds_per_season == pytest.approx(56 / 12)
+    assert dens.catalog_season_count == 14
+    assert dens.catalog_seed_game_count == 70
+    assert dens.mean_seeds_per_season == pytest.approx(70 / 14)
     assert dens.min_seeds_per_season == 4
     assert dens.max_seeds_per_season == 6
-    assert dens.status_counts["known"] == 10
+    assert dens.status_counts["known"] == 12
     assert dens.status_counts["unknown"] == 1
     assert dens.status_counts["blocked"] == 1
-    assert dens.known_ratio == pytest.approx(10 / 12)
-    assert dens.matrix_game_id_count == 32
+    assert dens.known_ratio == pytest.approx(12 / 14)
+    assert dens.matrix_game_id_count == 40
     assert dens.seasons_with_zero_matrix_games == 2
 
 
@@ -84,9 +84,9 @@ def test_research_summary_includes_density_and_identity_from_offline_root() -> N
     root = FIXTURES / "offline_research"
     summary = research_data_summary(project_root=root)
     assert summary["contest_entry"] is False
-    assert summary["density"]["catalog_season_count"] == 12
-    assert summary["density"]["catalog_seed_game_count"] == 56
-    assert summary["density"]["status_counts"]["known"] == 10
+    assert summary["density"]["catalog_season_count"] == 14
+    assert summary["density"]["catalog_seed_game_count"] == 70
+    assert summary["density"]["status_counts"]["known"] == 12
     assert summary["coverage_matrix"]["path_exists"] is True
     assert summary["identity"]["path_exists"] is True
     assert summary["identity"]["n_identities"] >= 55
