@@ -1,6 +1,7 @@
 # Status
 
-Last verified: 2026-09-06 ~02:05 CT (Claude gap #3 feature_ridge on a802bc5; 132 pytest; local-only; no push)
+Last verified: 2026-09-06 ~02:10 CT (feature_ridge wired into shadow routes behind
+`use_feature_value_model=false` default; 136 pytest; local branch only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -414,4 +415,28 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   includes label/`same_slate_*`; mutating held-out y does not change OOS preds.
 - Box verification: pytest **132 passed**; ruff + mypy clean on touched paths
 - **Still deny real submit**; Real Sports auth optional/missing; no GitHub push
+
+
+## Shadow value-model flag (2026-09-06 ~02:10 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Wired optional **`feature_ridge`** into research shadow preview / rank-orderings
+  via request flag **`use_feature_value_model`** (default **`False`** = offline-safe
+  explicit `values_by_player` path; no model fit unless opted in).
+- Opt-in requires `player_positions`, `decision_season`, and inline `train_labels`
+  (seasons strictly earlier than decision). Response includes `value_model` meta
+  (`value_source` = `explicit` | `feature_ridge`).
+- Status exposes `value_model.shadow_flag` / `shadow_flag_default=false`.
+- E2E TestClient: schedule summary + shadow rank (explicit + flag) + provider
+  rules-offline (`tests/integration/test_research_routes.py`).
+- `make research-smoke` remains the offline smoke entry (hard-deny; strips DB/redis).
+- Box verification: pytest **136 passed**; ruff + mypy clean on touched paths;
+  `research-smoke` OK.
+- **Still deny real submit** — entry gates hard-deny; `submit()` raises;
+  `provider_contract_verified=false`.
+- Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`);
+  GitHub Contents write 403; branch local-only / unpushed; no Railway
+  Dockerfile/railway.toml; draft readiness gates deny by default; #91 live
+  contract still open.
 

@@ -149,9 +149,7 @@ def test_default_walk_forward_omits_feature_ridge() -> None:
 
 
 def test_cli_feature_ridge_optional(capsys) -> None:
-    code = baselines_main(
-        ["--root", str(FIXTURE_ROOT), "--methods", "feature_ridge", "--json"]
-    )
+    code = baselines_main(["--root", str(FIXTURE_ROOT), "--methods", "feature_ridge", "--json"])
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["methods"] == ["feature_ridge"]

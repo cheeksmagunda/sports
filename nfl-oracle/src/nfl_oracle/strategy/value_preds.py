@@ -85,7 +85,70 @@ def value_model_strategy_note() -> dict[str, Any]:
         "method": "feature_ridge",
         "optional": True,
         "default_offline_path": "mean_median_baselines",
+        "shadow_flag": "use_feature_value_model",
+        "shadow_flag_default": False,
         "leakage_rule": "train seasons strictly earlier than decision_season",
         "observation_only": True,
         "contest_entry": False,
     }
+
+
+def resolve_shadow_values(
+    *,
+    player_ids: Sequence[int],
+    values_by_player: dict[int, float] | None,
+    use_feature_value_model: bool = False,
+    player_positions: dict[int, str] | None = None,
+    decision_season: int | None = None,
+    train_labels: Sequence[ValueLabel] | None = None,
+    team_ids: dict[int, int] | None = None,
+    alpha: float = 1.0,
+) -> tuple[dict[int, float], dict[str, Any]]:
+    """Resolve values for shadow preview / rank-orderings.
+
+    Default path (``use_feature_value_model=False``) is offline-safe: callers
+    must supply ``values_by_player`` explicitly. Opting into
+    ``feature_ridge`` requires positions, decision_season, and train labels
+    from earlier seasons only.
+    """
+
+    explicit = dict(values_by_player or {})
+    meta: dict[str, Any] = {
+        "use_feature_value_model": use_feature_value_model,
+        "value_source": "explicit",
+        "contest_entry": False,
+        "observation_only": True,
+    }
+    if not use_feature_value_model:
+        meta.update(value_model_strategy_note())
+        meta["value_source"] = "explicit"
+        meta["default_offline_safe"] = True
+        return explicit, meta
+
+    if decision_season is None:
+        raise ValueError("decision_season_required_for_feature_value_model")
+    positions = player_positions or {}
+    missing_pos = [pid for pid in player_ids if pid not in positions]
+    if missing_pos:
+        raise ValueError(f"player_positions_required_for_ids:{missing_pos}")
+    if not train_labels:
+        raise ValueError("train_labels_required_for_feature_value_model")
+
+    players = [(pid, positions[pid]) for pid in player_ids]
+    predicted = predict_values_by_player(
+        train_labels,
+        players,
+        decision_season=decision_season,
+        team_ids=team_ids,
+        alpha=alpha,
+    )
+    # Explicit map wins on overlap (operator override); predicted fills gaps.
+    merged = dict(predicted)
+    merged.update(explicit)
+    meta.update(value_model_strategy_note())
+    meta["value_source"] = "feature_ridge"
+    meta["decision_season"] = decision_season
+    meta["n_train_labels"] = sum(1 for row in train_labels if row.season < decision_season)
+    meta["default_offline_safe"] = False
+    meta["alpha"] = alpha
+    return merged, meta

@@ -74,9 +74,7 @@ def build_prior_rows_for_players(
         by_pos_vals[lab.position].append(lab.value)
         if lab.team_id is not None:
             by_team[lab.team_id].append(lab.value)
-    pos_median = {
-        pos: float(statistics.median(vs)) for pos, vs in by_pos_vals.items() if vs
-    }
+    pos_median = {pos: float(statistics.median(vs)) for pos, vs in by_pos_vals.items() if vs}
     team_mean = {tid: sum(vs) / len(vs) for tid, vs in by_team.items() if vs}
     teams = team_ids or {}
 
