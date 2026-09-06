@@ -2578,3 +2578,11 @@ Issue: #89 — Stabilize experimental nfl-oracle package for PR-ready merge
 ### Out of scope (still)
 - Contest entry, Corpus C contests, five-card live policy, production deploy.
 
+
+Dated note: 2026-09-05 20:41 CDT
+### PR opened for Slice 1 stabilize
+- PR: https://github.com/cheeksmagunda/sports/pull/92 (Refs #89)
+- Commits: feat package + workspace; chore CI/gitignore; docs strategy append
+- Railway: CLI authenticated on Mac, but no service/secrets created or injected
+- CI: test-and-quality + secret-scan + issue-link enforce green; full backend-ci awaited
+
