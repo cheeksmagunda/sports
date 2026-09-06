@@ -73,6 +73,7 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
         "mode": "live_http" if base_url else "testclient_offline",
         "routes_ok": [],
         "shadow_preview_ok": False,
+        "rank_orderings_ok": False,
         "draft_readiness": {},
         "posture": None,
     }
@@ -133,6 +134,34 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
     if "contest_shadow_score" not in pbody:
         raise AssertionError("shadow preview missing contest_shadow_score")
     results["shadow_preview_ok"] = True
+
+    rank_payload = {
+        "player_ids": [1, 2, 3, 4, 5],
+        "values_by_player": {"1": 10, "2": 5, "3": 4, "4": 3, "5": 2},
+        "top_k": 5,
+    }
+    if base_url:
+        import httpx
+
+        rresp = httpx.post(
+            base_url.rstrip("/") + "/research/shadow/rank-orderings",
+            json=rank_payload,
+            timeout=10.0,
+        )
+        if rresp.status_code != 200:
+            raise AssertionError(f"rank-orderings status={rresp.status_code}")
+        rbody = rresp.json()
+    else:
+        assert client is not None
+        rresp = client.post("/research/shadow/rank-orderings", json=rank_payload)
+        if rresp.status_code != 200:
+            raise AssertionError(f"rank-orderings status={rresp.status_code}")
+        rbody = rresp.json()
+    if rbody.get("contest_entry") is not False:
+        raise AssertionError("rank-orderings contest_entry must be false")
+    if rbody.get("returned", 0) < 1:
+        raise AssertionError("rank-orderings returned empty")
+    results["rank_orderings_ok"] = True
     results["routes_ok_count"] = len(results["routes_ok"])
     return results
 
@@ -167,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
             f"routes={summary['routes_ok_count']} "
             f"posture={summary['posture']} "
             f"shadow_preview={summary['shadow_preview_ok']} "
+            f"rank_orderings={summary['rank_orderings_ok']} "
             f"submit_hard_denied="
             f"{summary['draft_readiness'].get('submit_hard_denied')} "
             f"contest_entry=false"

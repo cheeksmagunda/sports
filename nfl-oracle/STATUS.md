@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:40 CT (schedule+coverage fixture densification + research client smoke + strategy posture docs; deny-by-default gates hard; GitHub write still 403; no push; submit still hard-denied)
+Last verified: 2026-09-06 ~01:50 CT (fixtures+research API past 100 pytest; research-smoke TestClient; submit hard-denied; local-only branch + auth gap honest; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -309,4 +309,16 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - STATUS posture table above documents deny-by-default strategy posture
 - Box verification: pytest **94 passed**; ruff + mypy clean on `nfl-oracle` paths
 - **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403; no Railway Dockerfile/railway.toml
+
+## Draft readiness densify (2026-09-06 ~01:50 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Coverage denser: **12 seasons / 56 catalog seeds**; matrix **10 known / 1 unknown / 1 blocked** (32 matrix games); known_ratio ≈ 0.833
+- Identity denser: **~57 players** (≥50 complete) mirrored into offline research root
+- Schedule denser: **4 seasons / ≥36 games / ≥12 week-slots** (`tests/fixtures/schedule/dense_schedules.csv`)
+- Research API tests expanded (`tests/unit/test_research_api_draft_edges.py`); smoke hits GET routes + shadow preview + rank-orderings via TestClient (`scripts/research_client_smoke.py` / `make research-smoke`)
+- Box verification: pytest **103 passed**; ruff + mypy clean on `nfl-oracle` paths
+- **Still deny real submit** — `FiveCardProviderStub.submit` raises; entry gates `package_submit_hard_deny` ok=false; `contest_entry` never flips
+- Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`); GitHub Contents write 403; branch local-only; no Railway Dockerfile/railway.toml
 

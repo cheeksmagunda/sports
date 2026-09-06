@@ -291,6 +291,134 @@
       "teamId": 103
     },
     {
+      "firstName": "Syn37",
+      "lastName": "PlayerQB",
+      "playerId": 9037,
+      "position": "QB",
+      "sport": "nfl",
+      "teamId": 100
+    },
+    {
+      "firstName": "Syn38",
+      "lastName": "PlayerRB",
+      "playerId": 9038,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 101
+    },
+    {
+      "firstName": "Syn39",
+      "lastName": "PlayerWR",
+      "playerId": 9039,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 102
+    },
+    {
+      "firstName": "Syn40",
+      "lastName": "PlayerTE",
+      "playerId": 9040,
+      "position": "TE",
+      "sport": "nfl",
+      "teamId": 103
+    },
+    {
+      "firstName": "Syn41",
+      "lastName": "PlayerK",
+      "playerId": 9041,
+      "position": "K",
+      "sport": "nfl",
+      "teamId": 104
+    },
+    {
+      "firstName": "Syn42",
+      "lastName": "PlayerDEF",
+      "playerId": 9042,
+      "position": "DEF",
+      "sport": "nfl",
+      "teamId": 105
+    },
+    {
+      "firstName": "Syn43",
+      "lastName": "PlayerWR",
+      "playerId": 9043,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 106
+    },
+    {
+      "firstName": "Syn44",
+      "lastName": "PlayerRB",
+      "playerId": 9044,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 107
+    },
+    {
+      "firstName": "Syn45",
+      "lastName": "PlayerQB",
+      "playerId": 9045,
+      "position": "QB",
+      "sport": "nfl",
+      "teamId": 108
+    },
+    {
+      "firstName": "Syn46",
+      "lastName": "PlayerRB",
+      "playerId": 9046,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 109
+    },
+    {
+      "firstName": "Syn47",
+      "lastName": "PlayerWR",
+      "playerId": 9047,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 100
+    },
+    {
+      "firstName": "Syn48",
+      "lastName": "PlayerTE",
+      "playerId": 9048,
+      "position": "TE",
+      "sport": "nfl",
+      "teamId": 101
+    },
+    {
+      "firstName": "Syn49",
+      "lastName": "PlayerK",
+      "playerId": 9049,
+      "position": "K",
+      "sport": "nfl",
+      "teamId": 102
+    },
+    {
+      "firstName": "Syn50",
+      "lastName": "PlayerDEF",
+      "playerId": 9050,
+      "position": "DEF",
+      "sport": "nfl",
+      "teamId": 103
+    },
+    {
+      "firstName": "Syn51",
+      "lastName": "PlayerWR",
+      "playerId": 9051,
+      "position": "WR",
+      "sport": "nfl",
+      "teamId": 104
+    },
+    {
+      "firstName": "Syn52",
+      "lastName": "PlayerRB",
+      "playerId": 9052,
+      "position": "RB",
+      "sport": "nfl",
+      "teamId": 105
+    },
+    {
       "firstName": "Sparse",
       "lastName": null,
       "playerId": 9099,

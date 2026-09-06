@@ -9,8 +9,38 @@
       "season": 2025
     }
   ],
-  "generated_at": "2026-09-06T07:00:00+00:00",
+  "generated_at": "2026-09-06T07:30:00+00:00",
   "seasons": {
+    "2014": {
+      "games": {
+        "1401": {
+          "game_id": 1401
+        },
+        "1402": {
+          "game_id": 1402
+        },
+        "1403": {
+          "game_id": 1403
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2015": {
+      "games": {
+        "1501": {
+          "game_id": 1501
+        },
+        "1502": {
+          "game_id": 1502
+        },
+        "1503": {
+          "game_id": 1503
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
     "2016": {
       "games": {
         "1601": {
