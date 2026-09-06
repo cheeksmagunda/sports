@@ -2630,3 +2630,32 @@ Append-only. No secret values. No contest entry.
   docs or chat.
 - Package README/STATUS updated to list the correct device env names and note
   legacy aliases still present on Railway (.env.example already had both).
+
+
+Dated note: 2026-09-05 21:40 CDT
+### Slice note - Corpus G unknown-season fill (PR #92 / #89)
+
+Append-only. No secret values. No contest entry.
+
+- Goal: steady fill of previously unknown Corpus G seasons (recent to older),
+  document known/unknown/blocked in coverage matrix, keep CI green.
+- Discovery method: read-only feed probes against Real Sports game ids using
+  existing `headers_or_capture` / operator storage_state. Legacy archive ids
+  live in the ~121k–126k range (newer seasons have lower ids within that band);
+  modern contest-era ids start around 17682 for 2021. Empty stubs often return
+  HTTP 200 with null game meta; only treat rows with non-null `game.season` as
+  discovered.
+- Updated committed seed catalog `nfl-oracle/data/catalog/season_game_ids.json`
+  and in-code `SEED_GAMES` fallbacks for every tracked season 2002–2025.
+- Local backfill via `nfl-corpus-g-backfill` ingested a few anchors per newly
+  seeded season. Coverage matrix (gitignored) now reports all tracked seasons
+  as `known` with Real `value` present on boxes (partial non-null on DNP rows
+  for older seasons; near-complete for modern).
+- Example Real value rates this pass: 2020 222/250 boxes; 2019 220/251;
+  2017 160/179; 2016 166/196; 2015 177/206; 2013–2004 similarly ~80–90% on
+  sampled boxes. Clock fields preserved on provenance (`event_time`,
+  `source_available_at` often null on older seasons, `captured_at`,
+  `decision_at` null on historical backfill).
+- Package tests/lint/typecheck green locally. Raw payloads stay gitignored.
+- Still not a full season census; denser id walks remain open. No blocked
+  seasons this pass (auth succeeded).

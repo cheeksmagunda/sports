@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-05 (Railway staging env-name correction for PR #92 / #89)
+Last verified: 2026-09-05 (Corpus G unknown-season fill for PR #92 / #89)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -47,8 +47,9 @@ treating any row as production truth.
 
 ## Coverage gaps
 
-- Catalog currently holds anchor game ids, not a full season schedule
-- Continuous season discovery remains open
+- Catalog holds anchor game ids (3-5 per season), not a full season schedule
+- Tracked seasons 2002–2025 all have ≥1 ingested Corpus G seed (status `known`)
+- Full-season census / continuous discovery still open for denser coverage
 - Contest-era Corpus C is explicitly deferred
 
 
