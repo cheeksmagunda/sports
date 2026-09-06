@@ -28,13 +28,15 @@ DEFAULT_INTER_GAME_DELAY_S = 2.0
 
 # Seed game ids for honest first-pass proofs. Not a full season census.
 SEED_GAMES: dict[int, list[int]] = {
-    2002: [126323],
-    2014: [123127],
-    2018: [122057],
-    2022: [18000],
-    2023: [18497],
-    2024: [18800],
-    2025: [19450, 19451],
+    2025: [19440, 19445, 19449, 19450, 19451],
+    2024: [18790, 18800, 18810, 18900],
+    2023: [18490, 18497, 18500, 18550],
+    2022: [18000, 18010, 18050, 18100],
+    2021: [17700, 17800, 17900, 17950],
+    2018: [122050, 122057, 122060],
+    2014: [123120, 123127, 123130],
+    2003: [126320],
+    2002: [126323, 126330],
 }
 
 
@@ -44,6 +46,15 @@ class BackfillCursor:
     last_game_id: int | None = None
     completed_game_ids: list[int] = field(default_factory=list)
     updated_at: str = ""
+
+
+# Season-level coverage vocabulary for the matrix (not HTTP status).
+SEASON_STATUS_KNOWN = "known"
+SEASON_STATUS_UNKNOWN = "unknown"
+SEASON_STATUS_BLOCKED = "blocked"
+
+# Seasons we track in the matrix even before game ids are discovered.
+TRACKED_SEASONS: tuple[int, ...] = tuple(range(2002, 2026))
 
 
 @dataclass
@@ -58,6 +69,11 @@ class CoverageCell:
     play_count: int
     paths: dict[str, str]
     ingested_at: str
+    event_time: str | None = None
+    source_available_at: str | None = None
+    captured_at: str | None = None
+    decision_at: str | None = None
+    value_note: str | None = None
 
 
 def cursor_path(store: CorpusGStore) -> Path:
@@ -101,13 +117,122 @@ def load_coverage_matrix(store: CorpusGStore) -> dict[str, Any]:
     return payload
 
 
+def _value_note_for_cell(cell: CoverageCell) -> str:
+    if cell.box_count <= 0:
+        return "no playerBoxScores observed"
+    if cell.value_nonnull <= 0:
+        return "boxes present but Real value all-null (not usable as label yet)"
+    ratio = cell.value_nonnull / cell.box_count
+    return (
+        f"Real value present on {cell.value_nonnull}/{cell.box_count} boxes "
+        f"({ratio:.0%}); usable as post-final training label only"
+    )
+
+
+def _summarize_season_block(season_key: str, season_block: dict[str, Any]) -> dict[str, Any]:
+    games: dict[str, Any] = season_block.get("games") or {}
+    explicit_status = season_block.get("status")
+    if explicit_status == SEASON_STATUS_BLOCKED and not games:
+        status = SEASON_STATUS_BLOCKED
+    elif games:
+        status = SEASON_STATUS_KNOWN
+    else:
+        status = explicit_status or SEASON_STATUS_UNKNOWN
+
+    value_notes: list[str] = []
+    total_boxes = 0
+    total_value = 0
+    for game in games.values():
+        if not isinstance(game, dict):
+            continue
+        boxes = int(game.get("box_count") or 0)
+        value = int(game.get("value_nonnull") or 0)
+        total_boxes += boxes
+        total_value += value
+        note = game.get("value_note")
+        if note:
+            value_notes.append(f"game {game.get('game_id')}: {note}")
+    if games and total_boxes > 0:
+        season_value_note = (
+            f"{len(games)} game(s) ingested; Real value on {total_value}/{total_boxes} boxes"
+        )
+    elif status == SEASON_STATUS_BLOCKED:
+        season_value_note = str(
+            season_block.get("value_note")
+            or "blocked (auth/storage or provider refusal); no honest ingest"
+        )
+    else:
+        season_value_note = str(
+            season_block.get("value_note") or "no game ids discovered / ingested yet"
+        )
+
+    out = dict(season_block)
+    out["status"] = status
+    out["games"] = games
+    out["games_ingested"] = len(games)
+    out["value_note"] = season_value_note
+    if value_notes:
+        out["game_value_notes"] = value_notes
+    out.setdefault("season", int(season_key) if season_key.isdigit() else season_key)
+    return out
+
+
+def ensure_season_skeleton(matrix: dict[str, Any]) -> dict[str, Any]:
+    """Ensure tracked seasons exist with known/unknown/blocked status fields."""
+
+    seasons: dict[str, Any] = matrix.setdefault("seasons", {})
+    for season in TRACKED_SEASONS:
+        key = str(season)
+        block = seasons.setdefault(key, {"games": {}, "status": SEASON_STATUS_UNKNOWN})
+        if "games" not in block or not isinstance(block.get("games"), dict):
+            block["games"] = {}
+        seasons[key] = _summarize_season_block(key, block)
+    matrix["seasons"] = dict(sorted(seasons.items(), key=lambda kv: kv[0], reverse=True))
+    matrix.setdefault("gaps", [])
+    matrix["status_vocabulary"] = {
+        SEASON_STATUS_KNOWN: "At least one Corpus G game ingested for the season",
+        SEASON_STATUS_UNKNOWN: "No game ids discovered or ingested yet",
+        SEASON_STATUS_BLOCKED: "Auth/storage missing/stale or provider systematically refused",
+    }
+    return matrix
+
+
+def mark_season_blocked(store: CorpusGStore, season: int, reason: str) -> None:
+    matrix = ensure_season_skeleton(load_coverage_matrix(store))
+    key = str(season)
+    block = matrix["seasons"].setdefault(key, {"games": {}})
+    block["status"] = SEASON_STATUS_BLOCKED
+    block["value_note"] = reason
+    matrix["seasons"][key] = _summarize_season_block(key, block)
+    matrix["generated_at"] = datetime.now(UTC).isoformat()
+    gaps = matrix.setdefault("gaps", [])
+    gap = {"season": season, "status": SEASON_STATUS_BLOCKED, "reason": reason}
+    if gap not in gaps:
+        gaps.append(gap)
+    atomic_write_json(coverage_matrix_path(store), matrix)
+
+
+def refresh_coverage_matrix(store: CorpusGStore) -> dict[str, Any]:
+    matrix = ensure_season_skeleton(load_coverage_matrix(store))
+    matrix["generated_at"] = datetime.now(UTC).isoformat()
+    atomic_write_json(coverage_matrix_path(store), matrix)
+    return matrix
+
+
 def _upsert_coverage(store: CorpusGStore, cell: CoverageCell) -> None:
-    matrix = load_coverage_matrix(store)
+    matrix = ensure_season_skeleton(load_coverage_matrix(store))
     seasons: dict[str, Any] = matrix.setdefault("seasons", {})
     season_key = str(cell.season)
     season_block = seasons.setdefault(season_key, {"games": {}})
     games: dict[str, Any] = season_block.setdefault("games", {})
-    games[str(cell.game_id)] = asdict(cell)
+    cell_payload = asdict(cell)
+    if not cell_payload.get("value_note"):
+        cell_payload["value_note"] = _value_note_for_cell(cell)
+    games[str(cell.game_id)] = cell_payload
+    season_block["games"] = games
+    season_block["status"] = SEASON_STATUS_KNOWN
+    seasons[season_key] = _summarize_season_block(season_key, season_block)
+    matrix["seasons"] = dict(sorted(seasons.items(), key=lambda kv: kv[0], reverse=True))
     matrix["generated_at"] = datetime.now(UTC).isoformat()
     atomic_write_json(coverage_matrix_path(store), matrix)
 
@@ -162,6 +287,7 @@ async def backfill_season(
                 season_hint=season,
             )
             results.append(result)
+            ingested_at = datetime.now(UTC).isoformat()
             cell = CoverageCell(
                 season=result.season if result.season is not None else season,
                 game_id=result.game_id,
@@ -172,7 +298,11 @@ async def backfill_season(
                 player_count=result.player_count,
                 play_count=result.play_count,
                 paths={a.provenance.endpoint: str(a.path) for a in result.artifacts},
-                ingested_at=datetime.now(UTC).isoformat(),
+                ingested_at=ingested_at,
+                event_time=result.event_time,
+                source_available_at=result.source_available_at,
+                captured_at=result.captured_at or ingested_at,
+                decision_at=result.decision_at,
             )
             _upsert_coverage(store, cell)
             done.add(game_id)
@@ -205,15 +335,32 @@ def backfill_season_sync(**kwargs: Any) -> list[GameIngestResult]:
 def main(argv: list[str] | None = None) -> int:
     configure_logging()
     parser = argparse.ArgumentParser(description="Resumable Corpus G season backfill")
-    parser.add_argument("--season", type=int, required=True)
+    parser.add_argument("--season", type=int, required=False, default=None)
     parser.add_argument("--game-id", type=int, action="append", default=None)
     parser.add_argument("--delay-s", type=float, default=DEFAULT_INTER_GAME_DELAY_S)
     parser.add_argument("--no-resume", action="store_true")
+    parser.add_argument(
+        "--refresh-matrix-only",
+        action="store_true",
+        help="Rewrite coverage_matrix.json season skeleton/statuses without network I/O",
+    )
     args = parser.parse_args(argv)
+    if args.refresh_matrix_only:
+        store = CorpusGStore()
+        matrix = refresh_coverage_matrix(store)
+        print(f"coverage={coverage_matrix_path(store)}")
+        for key, block in (matrix.get("seasons") or {}).items():
+            print(f"season={key} status={block.get('status')} note={block.get('value_note')}")
+        return 0
+    if args.season is None:
+        print("[BLOCK] --season is required unless --refresh-matrix-only", file=sys.stderr)
+        return 2
     game_ids = load_season_game_ids(args.season, explicit=args.game_id)
     if not game_ids:
         print(f"[BLOCK] no game ids for season {args.season}; pass --game-id", file=sys.stderr)
         return 2
+    store = CorpusGStore()
+    refresh_coverage_matrix(store)
     try:
         results = backfill_season_sync(
             season=args.season,
@@ -222,15 +369,19 @@ def main(argv: list[str] | None = None) -> int:
             resume=not args.no_resume,
         )
     except (StorageStateMissing, StorageStateStale) as exc:
+        mark_season_blocked(store, args.season, f"auth blocked: {exc}")
         print(f"[BLOCK] {exc}", file=sys.stderr)
         return 78
     for result in results:
         print(
             f"game={result.game_id} season={result.season} day={result.day} "
             f"boxes={result.box_count} value={result.value_nonnull} "
-            f"players={result.player_count} plays={result.play_count}"
+            f"players={result.player_count} plays={result.play_count} "
+            f"event_time={result.event_time} source_available_at={result.source_available_at}"
         )
-    store = CorpusGStore()
+    matrix = refresh_coverage_matrix(store)
+    season_block = (matrix.get("seasons") or {}).get(str(args.season), {})
+    print(f"season_status={season_block.get('status')} value_note={season_block.get('value_note')}")
     print(f"coverage={coverage_matrix_path(store)}")
     print(f"cursor={cursor_path(store)}")
     return 0 if results else 1

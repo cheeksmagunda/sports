@@ -2586,3 +2586,25 @@ Dated note: 2026-09-05 20:41 CDT
 - Railway: CLI authenticated on Mac, but no service/secrets created or injected
 - CI: test-and-quality + secret-scan + issue-link enforce green; full backend-ci awaited
 
+Dated note: 2026-09-05 20:56 CDT
+### Slice 2 — Corpus G coverage thicken + train/live clocks (#89 / PR #92)
+
+- Expanded `nfl-oracle/data/catalog/season_game_ids.json` (committed seed catalog)
+  and regenerated local `coverage_matrix.json` season-by-season (recent → older).
+- Season status vocabulary on the matrix: `known` / `unknown` / `blocked`, plus
+  Real `value` presence notes per season and per ingested game.
+- Per-season status after this pass (games ingested in catalog; not a full census):
+  - known: 2025 (5), 2024 (4), 2023 (4), 2022 (4), 2021 (4), 2018 (3), 2014 (3),
+    2003 (1), 2002 (2). Real `value` present on boxes for all ingested games
+    (modern seasons ~100% non-null; older seasons partial non-null on DNP rows).
+  - unknown: remaining tracked 2002–2025 seasons without discovered seed ids yet
+    (e.g. 2019–2020, 2015–2017, 2004–2013 gaps). Continuous discovery still open.
+  - blocked: none this pass (auth via operator storage_state succeeded).
+- Train/live clock fields implemented on provenance sidecars + `manifest.json`:
+  `event_time`, `source_available_at`, `captured_at`, `decision_at` (null on
+  historical Corpus G backfill). Documented in README/STATUS and embedded
+  `clock_field_docs`. Older seasons often have null `source_available_at`
+  (provider omits finalization clocks) — do not invent from kickoff.
+- Used existing `nfl-corpus-g-backfill` CLI; no contest entry; Railway staging
+  not recreated.
+- No secrets recorded here.

@@ -12,6 +12,12 @@ import httpx
 from oracle_core.artifacts import atomic_write_bytes, atomic_write_json, sha256_bytes
 
 from nfl_oracle.common.paths import resolve_project_root
+from nfl_oracle.ingest.clocks import (
+    clock_field_docs,
+    clocks_for_game,
+    event_time_from_game,
+    source_available_at_from_game,
+)
 from nfl_oracle.ingest.realsports import (
     BASE,
     SPORT,
@@ -41,6 +47,9 @@ class Provenance:
     captured_at: str
     byte_len: int
     redacted: bool = True
+    event_time: str | None = None
+    source_available_at: str | None = None
+    decision_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +69,9 @@ class GameCoverageCounts:
     game_day: str | None
     game_season: int | None
     game_status: str | None
+    event_time: str | None = None
+    source_available_at: str | None = None
+    game: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +87,10 @@ class GameIngestResult:
     artifacts: tuple[StoredArtifact, ...]
     skipped_unchanged: tuple[str, ...]
     manifest_path: str = ""
+    event_time: str | None = None
+    source_available_at: str | None = None
+    captured_at: str | None = None
+    decision_at: str | None = None
 
 
 def summarize_payloads(
@@ -106,6 +122,9 @@ def summarize_payloads(
         game_day=str(game.get("day")) if game.get("day") else None,
         game_season=season,
         game_status=str(game.get("status")) if game.get("status") else None,
+        event_time=event_time_from_game(game),
+        source_available_at=source_available_at_from_game(game),
+        game=game or None,
     )
 
 
@@ -146,6 +165,9 @@ class CorpusGStore:
         payload: dict[str, Any],
         source_url: str,
         captured_at: datetime | None = None,
+        event_time: str | None = None,
+        source_available_at: str | None = None,
+        decision_at: str | None = None,
     ) -> StoredArtifact:
         redacted = redact_corpus_payload(payload)
         assert_no_identity_leak(redacted)
@@ -162,6 +184,9 @@ class CorpusGStore:
             content_sha256=digest,
             captured_at=captured,
             byte_len=len(body),
+            event_time=event_time,
+            source_available_at=source_available_at,
+            decision_at=decision_at,
         )
         directory = self.game_dir(season, game_id)
         payload_path = directory / ENDPOINT_FILENAMES[endpoint]
@@ -184,6 +209,14 @@ class CorpusGStore:
     def write_manifest(self, result: GameIngestResult) -> Path:
         directory = self.game_dir(result.season, result.game_id)
         path = directory / "manifest.json"
+        clocks = clocks_for_game(
+            None,
+            captured_at=result.captured_at,
+            decision_at=result.decision_at,
+        )
+        # Prefer clocks already resolved on the ingest result (from feed.game).
+        clocks["event_time"] = result.event_time
+        clocks["source_available_at"] = result.source_available_at
         payload = {
             "corpus": "G",
             "sport": "nfl",
@@ -193,6 +226,8 @@ class CorpusGStore:
             "status": result.status,
             "host": BASE,
             "read_only": True,
+            "clocks": clocks,
+            "clock_field_docs": clock_field_docs(),
             "coverage": {
                 "n_player_box_scores": result.box_count,
                 "n_value_nonnull": result.value_nonnull,
@@ -207,6 +242,10 @@ class CorpusGStore:
                     "bytes": item.provenance.byte_len,
                     "source_url": item.provenance.source_url,
                     "wrote": item.wrote,
+                    "captured_at": item.provenance.captured_at,
+                    "event_time": item.provenance.event_time,
+                    "source_available_at": item.provenance.source_available_at,
+                    "decision_at": item.provenance.decision_at,
                 }
                 for item in result.artifacts
             ],
@@ -236,6 +275,7 @@ async def ingest_game(
     coverage = summarize_payloads(stats=stats, players=players, feed=feed)
     season = coverage.game_season if coverage.game_season is not None else season_hint
 
+    captured_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     artifacts: list[StoredArtifact] = []
     skipped: list[str] = []
     for endpoint, payload, url in (
@@ -253,6 +293,10 @@ async def ingest_game(
             endpoint=endpoint,  # type: ignore[arg-type]
             payload=payload,
             source_url=url,
+            captured_at=datetime.fromisoformat(captured_at.replace("Z", "+00:00")),
+            event_time=coverage.event_time,
+            source_available_at=coverage.source_available_at,
+            decision_at=None,
         )
         artifacts.append(stored)
         if not stored.wrote:
@@ -269,6 +313,10 @@ async def ingest_game(
         play_count=coverage.n_plays,
         artifacts=tuple(artifacts),
         skipped_unchanged=tuple(skipped),
+        event_time=coverage.event_time,
+        source_available_at=coverage.source_available_at,
+        captured_at=captured_at,
+        decision_at=None,
     )
     manifest_path = store.write_manifest(result)
     return GameIngestResult(
@@ -283,4 +331,8 @@ async def ingest_game(
         artifacts=result.artifacts,
         skipped_unchanged=result.skipped_unchanged,
         manifest_path=str(manifest_path),
+        event_time=result.event_time,
+        source_available_at=result.source_available_at,
+        captured_at=result.captured_at,
+        decision_at=result.decision_at,
     )

@@ -49,6 +49,20 @@ Per the NFL strategy playbook (training/live clocks and leakage blacklist):
 - This package does **not** implement contest submission or entry. Capture-only /
   shadow modes come later under separate authorization.
 
+### Clock fields on Corpus G artifacts
+
+Persisted on provenance sidecars and `manifest.json` (historical backfill sets
+`decision_at` to null):
+
+| Field | Applies to | Meaning |
+|---|---|---|
+| `event_time` | every game artifact | Kickoff / event time (`game.dateTime`) |
+| `source_available_at` | every game artifact | Provider finalization clock when known (`postProcessedAt` → `gameEndDateTime` → `closedAt`); null on older seasons rather than inventing availability |
+| `captured_at` | every artifact | When nfl-oracle fetched and wrote the redacted payload |
+| `decision_at` | live decision snapshots only | Pre-lock decision wall-clock; null on Corpus G research backfill |
+
+Live features require `source_available_at` and `captured_at` ≤ `decision_at`.
+
 ## Corpus G
 
 Routes:

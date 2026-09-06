@@ -46,3 +46,7 @@ def test_store_persists_redacted_and_is_idempotent(tmp_path) -> None:
     prov = json.loads(first.provenance_path.read_text(encoding="utf-8"))
     assert prov["content_sha256"] == first.provenance.content_sha256
     assert prov["endpoint"] == "stats"
+    assert "captured_at" in prov
+    assert "event_time" in prov
+    assert "source_available_at" in prov
+    assert "decision_at" in prov
