@@ -43,7 +43,7 @@ jobs:
         run: |
           set -eu
           existing=$(gh issue list --state open --search "Context freshness in:title" --json number --jq '.[0].number' || true)
-          body=$(printf 'Sync-critical files changed on `main` in the past week:\n\n```\n%s\n```\n\nPer the Context synchronization section of `AGENTS.md`:\n\n1. Re-upload the changed files to the Claude.ai and ChatGPT "Sports Oracle" project knowledge snapshots.\n2. Confirm both project instruction prompts still match the live `AGENTS.md`.\n3. Close this issue when snapshots are refreshed.\n' "$SUMMARY")
+          body=$(printf 'Sync-critical files changed on `main` in the past week:\n\n```\n%s\n```\n\nPer the Context synchronization section of `AGENTS.md`:\n\n1. Refresh the changed files in every configured Claude, Codex, Copilot, and Grok static project or chat snapshot.\n2. Confirm each project instruction prompt still matches the live `AGENTS.md`.\n3. Close this issue when snapshots are refreshed.\n' "$SUMMARY")
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
           else

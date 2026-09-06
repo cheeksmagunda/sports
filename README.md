@@ -74,14 +74,13 @@ own ignored secret files, connector configuration, skills, and narrowly scoped
 workflow credentials. Those application-owned surfaces must not be assumed by
 another sport or promoted into the shared core.
 
-## Lightweight contribution process
+## Contribution process
 
-This is a hobby project, so the process is intentionally small. Read-only
-exploration, local experiments, and one-line fixes do not need an issue. Create
-one issue before material work such as a feature, bug fix, refactor, dependency
+Read-only exploration and local experiments do not need an issue. Create one
+issue before material work such as a feature, bug fix, refactor, dependency
 change, data or model change, deployment change, or credential/schedule work.
-The issue only needs a short objective, acceptance check, and risk or rollback
-note. Link branches, commits, and pull requests to that issue.
+Record the objective, acceptance check, and risk or rollback note. Link
+branches, commits, and pull requests to that issue.
 
 Use a short-lived branch or worktree, keep the change focused, and let the
 shared checks run before merging. Production changes require an issue, a green
@@ -96,14 +95,14 @@ checks, a simple baseline, calibration or uncertainty measurements, random
 seed, artifact identity, and the result that justifies the change. A model
 change is not accepted because it looks plausible on one slate.
 
-AI-assisted work follows the same lightweight contract. The agent should state
+AI-assisted work follows the same repository contract. The agent should state
 what it inspected, separate verified facts from inference, avoid hidden
 external mutations, run the smallest useful checks, and leave a concise
 handoff in the issue or pull request. Claude, Codex, Copilot, Grok, and local,
 Codespaces, web, app, or mobile sessions are optional entry points, not
 separate sources of truth.
 
-See `CONTRIBUTING.md` for the lightweight process and data-science checklist.
+See `CONTRIBUTING.md` for the contribution process and data-science checklist.
 
 ## Workspace
 

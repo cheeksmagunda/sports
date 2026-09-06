@@ -168,6 +168,8 @@ make build                   # Build app container images
 # Auth checks (no secrets printed)
 scripts/auth-check wnba-oracle --offline
 scripts/auth-check nfl-oracle --offline
+scripts/auth-check nba-oracle --offline
+scripts/auth-check nhl-oracle --offline
 ```
 
 ### External CLI tools (operator/environment-dependent)
