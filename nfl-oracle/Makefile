@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -42,3 +42,6 @@ daily-shadow:
 
 strategy-schema:
 	$(UV_RUN) nfl-strategy-schema --schema-only
+
+hydrate-identity:
+	$(UV_RUN) python scripts/hydrate_identity_fixtures.py

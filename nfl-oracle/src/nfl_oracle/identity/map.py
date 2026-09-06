@@ -28,3 +28,6 @@ class IdentityMap:
 
     def __len__(self) -> int:
         return len(self._by_real)
+
+    def player_ids(self) -> list[int]:
+        return sorted(self._by_real)

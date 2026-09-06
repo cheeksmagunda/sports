@@ -91,10 +91,14 @@ Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest
 - `nfl_oracle.strategy` — clock gates, five-card structural legality, shadow snapshot + `nfl-strategy-schema` CLI
 - `nfl_oracle.features` — FeatureSpec v1 registry (pre-lock priors vs same-slate finals)
 - `nfl_oracle.calendar` — season label helper (week unresolved without schedule)
-- `nfl_oracle.identity` — Real-primary in-memory identity map stub
+- `nfl_oracle.identity` — Real-primary identity map + Corpus G players hydrate
 - `nfl_oracle.service` — oracle-core FastAPI research routes for schema/catalog JSON only
 - `nfl_oracle.baselines.player_priors` — walk-forward player/position/global prior scaffold
 - `nfl_oracle.strategy.scoring` — observation-only weighted five-card shadow score
+- `nfl_oracle.data.coverage_matrix` — load/save helpers for catalog coverage_matrix.json
+- baselines CLI `--methods` includes optional `player_mean`
+- `scripts/hydrate_identity_fixtures.py` — offline identity summary from fixtures
+- GitHub push from box blocked (PAT Contents write 403); commits local on `codex/nfl-data-schemas-scaffold`
 
 Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Railway deploy source.
 
