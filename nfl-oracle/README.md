@@ -138,7 +138,14 @@ uv run --package nfl-oracle nfl-value-baselines \
 
 # local Corpus G raw root (gitignored payloads; operator machine only)
 uv run --package nfl-oracle nfl-value-baselines --json
+
+# baselines vs feature_ridge eval report → artifacts/ (sample checked in)
+make -C nfl-oracle walk-forward-report
+# or: uv run --package nfl-oracle nfl-walk-forward-report
 ```
+
+See [`artifacts/walk_forward_fixture_sample.md`](artifacts/walk_forward_fixture_sample.md)
+for a small fixture-scale comparison (observation only; not contest decision value).
 
 ## Local commands
 
