@@ -17,6 +17,12 @@ from nfl_oracle.strategy.enumerate import (
 from nfl_oracle.strategy.gates import EntryGateReport, evaluate_entry_gates
 from nfl_oracle.strategy.lineup import FiveCardLineup, validate_five_card
 from nfl_oracle.strategy.posture import current_posture, posture_from_readiness
+from nfl_oracle.strategy.readiness_score import (
+    ResearchReadinessScore,
+    band_for_score,
+    compute_research_readiness_score,
+    readiness_score_from_summaries,
+)
 from nfl_oracle.strategy.schema import (
     LIVE_FEATURE_BLACKLIST,
     FiveCardAction,
@@ -59,6 +65,10 @@ __all__ = [
     "contest_shadow_score",
     "current_posture",
     "evaluate_entry_gates",
+    "ResearchReadinessScore",
+    "band_for_score",
+    "compute_research_readiness_score",
+    "readiness_score_from_summaries",
     "feature_clocks_ok",
     "live_feature_allowed",
     "ordered_five_card_actions",

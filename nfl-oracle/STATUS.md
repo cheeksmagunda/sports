@@ -1,7 +1,7 @@
 # Status
 
-Last verified: 2026-09-06 ~02:10 CT (feature_ridge wired into shadow routes behind
-`use_feature_value_model=false` default; 136 pytest; local branch only; no push)
+Last verified: 2026-09-06 ~02:05 CT (OpenAPI research tags split + readiness-score
+endpoint; 144 pytest; local branch only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -439,4 +439,13 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   GitHub Contents write 403; branch local-only / unpushed; no Railway
   Dockerfile/railway.toml; draft readiness gates deny by default; #91 live
   contract still open.
+
+## Research OpenAPI tags + readiness score (2026-09-06 CT)
+
+- OpenAPI tags split: `research-schemas`, `research-provider`, `research-shadow`,
+  `research-data`, `research-status` (legacy flat `research` tag removed)
+- `GET /research/health/readiness-score` — 0–100 observation-only density score
+  (`nfl_oracle.strategy.readiness_score`); also optional on `/research/status`
+- High score does **not** authorize contest entry; auth missing expected on box
+- pytest: 144; branch still local-only (push 403)
 
