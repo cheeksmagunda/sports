@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 ~01:25 CT (contest algebra + entry gates + shadow rank routes; 66 pytest; GitHub write still 403; no push; submit still hard-denied)
+Last verified: 2026-09-06 ~01:23 CT (identity/coverage density fixtures + research integration tests; 78 pytest; GitHub write still 403; no push; submit still hard-denied)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -249,4 +249,20 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
 - Box state (honest): Real Sports auth missing; GitHub Contents write 403; no
   in-repo Railway Dockerfile/railway.toml; staging names only; no deploy
 - Verification: pytest **66 passed**; ruff + mypy clean on `nfl-oracle/src`
+
+
+## Identity / coverage density + research integration (2026-09-06 ~01:23 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Offline density helpers: `nfl_oracle.identity.density`, `nfl_oracle.data.density`
+- Dense fixtures: `tests/fixtures/identity/dense_players.json`,
+  `tests/fixtures/coverage/dense_{catalog,matrix}.json`,
+  `tests/fixtures/offline_research/data/catalog/*` for research TestClient roots
+- Identity hydrate composes `firstName`+`lastName`; `hydrate_identity_fixtures` emits density
+- `research_data_summary` includes `density` block (seed means + matrix status ratios)
+- Integration: `tests/integration/test_research_routes.py` (full route surface, dense coverage,
+  shadow/rank, gates hard-deny, validation 422s)
+- Box verification: pytest **78 passed**; ruff + mypy clean on `nfl-oracle/src`
+- **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403
 

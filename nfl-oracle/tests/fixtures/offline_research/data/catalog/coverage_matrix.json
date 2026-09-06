@@ -1,0 +1,49 @@
+{
+  "gaps": [
+    {
+      "reason": "sparse_seed_only",
+      "season": 2024
+    }
+  ],
+  "generated_at": "2026-09-06T06:00:00+00:00",
+  "seasons": {
+    "2022": {
+      "games": {
+        "2201": {
+          "game_id": 2201
+        },
+        "2202": {
+          "game_id": 2202
+        },
+        "2203": {
+          "game_id": 2203
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2023": {
+      "games": {
+        "2301": {
+          "game_id": 2301
+        },
+        "2302": {
+          "game_id": 2302
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2024": {
+      "games": {},
+      "status": "unknown",
+      "value_note": "fixture no ingest yet"
+    },
+    "2025": {
+      "blocked_reason": "auth_missing_fixture",
+      "games": {},
+      "status": "blocked",
+      "value_note": "fixture blocked"
+    }
+  }
+}
