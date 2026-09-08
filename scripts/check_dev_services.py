@@ -5,10 +5,9 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 
+from oracle_core.storage import create_postgres_engine
 from redis import Redis
 from sqlalchemy import text
-
-from oracle_core.storage import create_postgres_engine
 
 
 def probe_postgres(url: str) -> None:
@@ -42,8 +41,7 @@ def main(environ: Mapping[str, str] | None = None) -> int:
             return 1
         try:
             probe(value)
-        except Exception:
-            # Driver exceptions can contain passwords or connection URLs.
+        except Exception:  # noqa: BLE001 - driver exceptions can contain passwords or connection URLs
             print(f"{name}: unreachable; check the development service")
             return 1
         print(f"{name}: reachable")
