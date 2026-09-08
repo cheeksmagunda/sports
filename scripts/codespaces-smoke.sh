@@ -9,6 +9,8 @@ echo "Checking workspace imports"
 uv run --frozen --package wnba-oracle python -c 'import oracle_core, wnba_oracle, nfl_oracle, nba_oracle, nhl_oracle; assert oracle_core.Dossier'
 
 if [ "${SPORTS_DEVCONTAINER:-}" = "true" ]; then
+    echo "Checking the Codespaces SSH server"
+    command -v sshd >/dev/null
     echo "Checking PostgreSQL and Redis services"
     uv run --frozen --package wnba-oracle python scripts/check_dev_services.py
 else

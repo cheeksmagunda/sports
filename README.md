@@ -39,6 +39,37 @@ GitHub CLI authentication is provided by the Codespaces session. Application
 secrets belong in Codespaces secrets or the process environment for the
 specific command that needs them. Do not create a plaintext `.env` file.
 
+The devcontainer includes an SSH server for terminal access. Use your existing
+local GitHub CLI login to connect to the Codespace. If that login lacks
+Codespaces access, run `gh auth refresh --hostname github.com --scopes codespace`
+and complete GitHub's authorization prompt.
+
+```sh
+gh codespace ssh --repo cheeksmagunda/sports
+```
+
+For repeatable commands, use the name returned by `gh codespace list` and keep
+the complete login-shell command quoted:
+
+```sh
+gh codespace ssh --codespace CODESPACE_NAME -- \
+  "bash -lc 'cd /workspaces/sports && make write-path-check'"
+```
+
+The login shell loads the Codespace's existing environment for GitHub and
+project operations. A non-login SSH command may lack that environment. Local
+GitHub authentication opens the connection; project commands use the
+Codespace's own authentication. Run edits and verification in the remote
+checkout, and inspect its branch and working tree before making changes.
+
+Railway operations use the operator's authenticated local Railway CLI.
+Codespaces and other cloud sessions do not have Railway access. Never copy
+the local Railway login or its credentials into a cloud session.
+
+The SSH feature takes effect in newly created or rebuilt containers. An
+existing Codespace without an SSH server needs that prerequisite before
+`gh codespace ssh` can connect. Save ongoing work before any planned rebuild.
+
 ## Start without setup decisions
 
 Requirements: Python 3.11 or 3.12, `uv`, and Git. Use existing native `gh` and
