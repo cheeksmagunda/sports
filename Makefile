@@ -5,7 +5,6 @@ UV_RUN = uv run --frozen
 setup:
 	uv lock --check
 	uv sync --frozen --all-packages --all-extras
-	$(MAKE) codespaces-smoke
 
 install:
 	uv sync --frozen --all-packages --all-extras
