@@ -1,0 +1,1907 @@
+{
+  "started_at_utc": "2026-09-04T03:29:46Z",
+  "base": "https://web.realapp.com",
+  "auth": "<redacted>",
+  "known_good": [
+    {
+      "contestId": 870,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 870,
+        "sport": "nfl",
+        "day": "2025-09-15",
+        "endDay": "2025-09-15",
+        "season": 2025,
+        "numBrawlers": 20841,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-09-14T11:00:20.202Z",
+        "processedAt": "2025-09-16T05:29:37.364Z"
+      },
+      "sport_ok": true
+    },
+    {
+      "contestId": 1069,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1069,
+        "sport": "nfl",
+        "day": "2025-11-09",
+        "endDay": "2025-11-09",
+        "season": 2025,
+        "numBrawlers": 26320,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-11-08T12:00:14.501Z",
+        "processedAt": "2025-11-10T04:59:51.832Z"
+      },
+      "sport_ok": true
+    },
+    {
+      "contestId": 1069,
+      "route": "/draftinfo",
+      "status": 200,
+      "sport": null,
+      "message": null,
+      "sport_ok": true
+    },
+    {
+      "contestId": 1069,
+      "route": "/payoutinfo",
+      "status": 200,
+      "sport": null,
+      "message": null,
+      "sport_ok": true
+    },
+    {
+      "contestId": 1069,
+      "route": "/entries",
+      "status": 200,
+      "sport": "nfl",
+      "n_entries": 20,
+      "numBrawlers": 26320,
+      "sport_ok": true
+    },
+    {
+      "contestId": 1069,
+      "route": "/stats",
+      "status": 200,
+      "sport": "nfl",
+      "message": null,
+      "sport_ok": true
+    },
+    {
+      "contestId": 1070,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1070,
+        "sport": "nfl",
+        "day": "2025-11-10",
+        "endDay": "2025-11-10",
+        "season": 2025,
+        "numBrawlers": 21598,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-11-09T12:00:37.384Z",
+        "processedAt": "2025-11-11T04:53:52.090Z"
+      },
+      "sport_ok": true
+    }
+  ],
+  "census_ladder": [
+    {
+      "contestId": 1,
+      "status": 403,
+      "message": "Not a valid contest",
+      "summary": null,
+      "sport_ok": false
+    },
+    {
+      "contestId": 10,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 10,
+        "sport": "nfl",
+        "day": "2024-11-28",
+        "endDay": "2024-11-28",
+        "season": 2024,
+        "numBrawlers": 32125,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-11-26T23:00:28.975Z",
+        "processedAt": "2024-11-29T05:38:55.471Z"
+      },
+      "sport_ok": true
+    },
+    {
+      "contestId": 20,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 20,
+        "sport": "nhl",
+        "day": "2024-11-30",
+        "endDay": "2024-11-30",
+        "season": 2024,
+        "numBrawlers": 4827,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-11-30T05:18:29.144Z",
+        "processedAt": "2024-12-01T05:42:46.263Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 30,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 30,
+        "sport": "ncaam",
+        "day": "2024-12-03",
+        "endDay": "2024-12-03",
+        "season": 2025,
+        "numBrawlers": 6147,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-03T05:19:21.916Z",
+        "processedAt": "2024-12-04T06:22:26.041Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 40,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 40,
+        "sport": "nba",
+        "day": "2024-12-06",
+        "endDay": "2024-12-06",
+        "season": 2025,
+        "numBrawlers": 15659,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-06T05:28:33.708Z",
+        "processedAt": "2024-12-07T05:50:22.373Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 45,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 45,
+        "sport": "ncaam",
+        "day": "2024-12-07",
+        "endDay": "2024-12-07",
+        "season": 2025,
+        "numBrawlers": 5738,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-07T05:14:28.377Z",
+        "processedAt": "2024-12-08T06:06:53.848Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 50,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 50,
+        "sport": "ncaam",
+        "day": "2024-DEC-08",
+        "endDay": "2024-DEC-08",
+        "season": 2025,
+        "numBrawlers": 0,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-08T06:50:58.689Z",
+        "processedAt": "2025-02-17T08:02:23.307Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 60,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 60,
+        "sport": "nba",
+        "day": "2024-12-11",
+        "endDay": "2024-12-11",
+        "season": 2025,
+        "numBrawlers": 18347,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-10T12:00:56.436Z",
+        "processedAt": "2024-12-12T05:46:37.182Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 80,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 80,
+        "sport": "nhl",
+        "day": "2024-12-16",
+        "endDay": "2024-12-16",
+        "season": 2024,
+        "numBrawlers": 8170,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-15T12:00:43.540Z",
+        "processedAt": "2024-12-17T06:35:42.191Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 100,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 100,
+        "sport": "nfl",
+        "day": "2024-12-21",
+        "endDay": "2024-12-21",
+        "season": 2024,
+        "numBrawlers": 26989,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-20T12:00:34.105Z",
+        "processedAt": "2024-12-22T00:59:48.317Z"
+      },
+      "sport_ok": true
+    },
+    {
+      "contestId": 120,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 120,
+        "sport": "ncaaf",
+        "day": "2024-12-27",
+        "endDay": "2024-12-27",
+        "season": 2024,
+        "numBrawlers": 16155,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2024-12-26T12:00:34.024Z",
+        "processedAt": "2024-12-28T07:49:46.149Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 150,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 150,
+        "sport": "ncaaf",
+        "day": "2025-01-03",
+        "endDay": "2025-01-03",
+        "season": 2024,
+        "numBrawlers": 12882,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-01-02T12:00:10.493Z",
+        "processedAt": "2025-01-04T04:19:16.137Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 200,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 200,
+        "sport": "nhl",
+        "day": "2025-01-17",
+        "endDay": "2025-01-17",
+        "season": 2024,
+        "numBrawlers": 11086,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-01-16T12:00:45.556Z",
+        "processedAt": "2025-01-18T03:13:24.653Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 300,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 300,
+        "sport": "ncaam",
+        "day": "2025-02-20",
+        "endDay": "2025-02-20",
+        "season": 2025,
+        "numBrawlers": 14662,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-02-19T12:00:12.006Z",
+        "processedAt": "2025-02-21T06:31:17.329Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 400,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 400,
+        "sport": "nhl",
+        "day": "2025-03-25",
+        "endDay": "2025-03-25",
+        "season": 2024,
+        "numBrawlers": 13698,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-03-24T11:00:53.918Z",
+        "processedAt": "2025-03-26T05:44:12.409Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 500,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 500,
+        "sport": "mlb",
+        "day": "2025-04-25",
+        "endDay": "2025-04-25",
+        "season": 2025,
+        "numBrawlers": 17973,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-04-24T11:00:55.331Z",
+        "processedAt": "2025-04-26T05:27:45.611Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 600,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 600,
+        "sport": "nba",
+        "day": "2025-05-23",
+        "endDay": "2025-05-23",
+        "season": 2025,
+        "numBrawlers": 33838,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-05-22T11:00:34.871Z",
+        "processedAt": "2025-05-24T03:15:37.739Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 700,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 700,
+        "sport": "wnba",
+        "day": "2025-06-29",
+        "endDay": "2025-06-29",
+        "season": 2025,
+        "numBrawlers": 10542,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-06-28T11:00:20.234Z",
+        "processedAt": "2025-06-30T03:05:06.658Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 800,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 800,
+        "sport": "soccer",
+        "day": "2025-08-22",
+        "endDay": "2025-08-22",
+        "season": 2025,
+        "numBrawlers": 2891,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-08-21T11:00:50.482Z",
+        "processedAt": "2025-08-22T21:27:49.833Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 850,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 850,
+        "sport": "mlb",
+        "day": "2025-09-08",
+        "endDay": "2025-09-08",
+        "season": 2025,
+        "numBrawlers": 10069,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-09-07T11:00:16.194Z",
+        "processedAt": "2025-09-09T05:20:33.637Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 900,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 900,
+        "sport": "ncaaf",
+        "day": "2025-09-25",
+        "endDay": "2025-09-25",
+        "season": 2025,
+        "numBrawlers": 4948,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-09-24T11:00:47.083Z",
+        "processedAt": "2025-09-26T03:16:57.069Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 950,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 950,
+        "sport": "wnba",
+        "day": "2025-10-12",
+        "endDay": "2025-10-12",
+        "season": 2025,
+        "numBrawlers": 0,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-10-11T11:00:11.498Z",
+        "processedAt": "2025-10-12T11:30:20.145Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 1000,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1000,
+        "sport": "ncaaf",
+        "day": "2025-10-25",
+        "endDay": "2025-10-25",
+        "season": 2025,
+        "numBrawlers": 12678,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-10-24T11:00:55.327Z",
+        "processedAt": "2025-10-26T06:31:26.266Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 1050,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1050,
+        "sport": "soccer",
+        "day": "2025-11-05",
+        "endDay": "2025-11-05",
+        "season": 2025,
+        "numBrawlers": 5752,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-11-04T12:00:12.624Z",
+        "processedAt": "2025-11-05T22:27:21.708Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 1100,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1100,
+        "sport": "nfl",
+        "day": "2025-11-17",
+        "endDay": "2025-11-17",
+        "season": 2025,
+        "numBrawlers": 19566,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-11-16T12:00:28.797Z",
+        "processedAt": "2025-11-18T04:42:50.980Z"
+      },
+      "sport_ok": true
+    },
+    {
+      "contestId": 1200,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1200,
+        "sport": "ncaam",
+        "day": "2025-12-09",
+        "endDay": "2025-12-09",
+        "season": 2026,
+        "numBrawlers": 9052,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2025-12-08T12:01:00.070Z",
+        "processedAt": "2025-12-10T05:46:24.382Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 1500,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1500,
+        "sport": "nba",
+        "day": "2026-03-02",
+        "endDay": "2026-03-02",
+        "season": 2026,
+        "numBrawlers": 23911,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2026-03-01T12:00:09.163Z",
+        "processedAt": "2026-03-03T06:22:36.085Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 1800,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 1800,
+        "sport": "soccer",
+        "day": "2026-05-18",
+        "endDay": "2026-05-18",
+        "season": 2025,
+        "numBrawlers": 5291,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2026-05-17T11:00:49.067Z",
+        "processedAt": "2026-05-18T21:28:47.083Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 2000,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 2000,
+        "sport": "soccer",
+        "day": "2026-07-15",
+        "endDay": "2026-07-15",
+        "season": 2025,
+        "numBrawlers": 14077,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2026-07-14T11:01:00.146Z",
+        "processedAt": "2026-07-15T21:34:30.870Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 2100,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 2100,
+        "sport": "mlb",
+        "day": "2026-08-25",
+        "endDay": "2026-08-25",
+        "season": 2026,
+        "numBrawlers": 9598,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2026-08-24T11:00:43.804Z",
+        "processedAt": "2026-08-26T05:33:10.557Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 2120,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 2120,
+        "sport": "mlb",
+        "day": "2026-08-31",
+        "endDay": "2026-08-31",
+        "season": 2026,
+        "numBrawlers": 8778,
+        "isFinalized": true,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2026-08-30T11:00:54.699Z",
+        "processedAt": "2026-09-01T05:27:13.543Z"
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 2125,
+      "status": 200,
+      "message": null,
+      "summary": {
+        "id": 2125,
+        "sport": "ncaaf",
+        "day": "2026-09-03",
+        "endDay": "2026-09-03",
+        "season": 2026,
+        "numBrawlers": 0,
+        "isFinalized": false,
+        "gameId": null,
+        "lineupSize": 5,
+        "createdAt": "2026-09-02T11:00:54.187Z",
+        "processedAt": null
+      },
+      "sport_ok": false
+    },
+    {
+      "contestId": 2130,
+      "status": 403,
+      "message": "Not a valid contest",
+      "summary": null,
+      "sport_ok": false
+    }
+  ],
+  "targeted_windows": [
+    {
+      "window": "early_2024dec_product",
+      "n_probed_approx": 119,
+      "nfl_hits": [
+        {
+          "id": 5,
+          "sport": "nfl",
+          "day": "2024-11-24",
+          "endDay": "2024-11-24",
+          "season": 2024,
+          "numBrawlers": 12049,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-11-24T08:06:11.470Z",
+          "processedAt": "2024-11-25T04:55:03.888Z"
+        },
+        {
+          "id": 21,
+          "sport": "nfl",
+          "day": "2024-12-01",
+          "endDay": "2024-12-01",
+          "season": 2024,
+          "numBrawlers": 34960,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-11-30T23:33:09.134Z",
+          "processedAt": "2024-12-02T04:47:57.282Z"
+        },
+        {
+          "id": 38,
+          "sport": "nfl",
+          "day": "2024-12-05",
+          "endDay": "2024-12-05",
+          "season": 2024,
+          "numBrawlers": 13309,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-05T05:08:28.669Z",
+          "processedAt": "2024-12-06T04:46:22.308Z"
+        },
+        {
+          "id": 46,
+          "sport": "nfl",
+          "day": "2024-12-08",
+          "endDay": "2024-12-08",
+          "season": 2024,
+          "numBrawlers": 34357,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-07T05:14:43.547Z",
+          "processedAt": "2024-12-09T05:15:36.112Z"
+        },
+        {
+          "id": 51,
+          "sport": "nfl",
+          "day": "2024-12-09",
+          "endDay": "2024-12-09",
+          "season": 2024,
+          "numBrawlers": 16025,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-09T05:17:01.694Z",
+          "processedAt": "2024-12-10T04:49:50.112Z"
+        },
+        {
+          "id": 64,
+          "sport": "nfl",
+          "day": "2024-12-12",
+          "endDay": "2024-12-12",
+          "season": 2024,
+          "numBrawlers": 14908,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-11T12:00:03.895Z",
+          "processedAt": "2024-12-13T04:35:35.458Z"
+        },
+        {
+          "id": 76,
+          "sport": "nfl",
+          "day": "2024-12-15",
+          "endDay": "2024-12-15",
+          "season": 2024,
+          "numBrawlers": 34502,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-14T12:00:09.268Z",
+          "processedAt": "2024-12-16T08:50:00.573Z"
+        },
+        {
+          "id": 79,
+          "sport": "nfl",
+          "day": "2024-12-16",
+          "endDay": "2024-12-16",
+          "season": 2024,
+          "numBrawlers": 17840,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-15T12:00:43.540Z",
+          "processedAt": "2024-12-17T04:57:47.592Z"
+        },
+        {
+          "id": 92,
+          "sport": "nfl",
+          "day": "2024-12-19",
+          "endDay": "2024-12-19",
+          "season": 2024,
+          "numBrawlers": 28061,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-18T12:00:18.783Z",
+          "processedAt": "2024-12-20T04:51:25.967Z"
+        },
+        {
+          "id": 105,
+          "sport": "nfl",
+          "day": "2024-12-22",
+          "endDay": "2024-12-22",
+          "season": 2024,
+          "numBrawlers": 36513,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-21T12:00:40.596Z",
+          "processedAt": "2024-12-23T05:10:25.700Z"
+        },
+        {
+          "id": 109,
+          "sport": "nfl",
+          "day": "2024-12-23",
+          "endDay": "2024-12-23",
+          "season": 2024,
+          "numBrawlers": 23865,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-22T12:00:14.633Z",
+          "processedAt": "2024-12-24T04:39:11.256Z"
+        },
+        {
+          "id": 113,
+          "sport": "nfl",
+          "day": "2024-12-25",
+          "endDay": "2024-12-25",
+          "season": 2024,
+          "numBrawlers": 38147,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-24T12:00:21.371Z",
+          "processedAt": "2024-12-26T01:06:37.036Z"
+        },
+        {
+          "id": 116,
+          "sport": "nfl",
+          "day": "2024-12-26",
+          "endDay": "2024-12-26",
+          "season": 2024,
+          "numBrawlers": 23211,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2024-12-25T12:00:29.654Z",
+          "processedAt": "2024-12-27T04:29:25.328Z"
+        }
+      ],
+      "sample_non_nfl_or_fail": []
+    },
+    {
+      "window": "near_870_2025sep",
+      "n_probed_approx": 41,
+      "nfl_hits": [
+        {
+          "id": 857,
+          "sport": "nfl",
+          "day": "2025-09-11",
+          "endDay": "2025-09-11",
+          "season": 2025,
+          "numBrawlers": 19073,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2025-09-10T11:00:45.806Z",
+          "processedAt": "2025-09-12T03:58:56.083Z"
+        },
+        {
+          "id": 866,
+          "sport": "nfl",
+          "day": "2025-09-14",
+          "endDay": "2025-09-14",
+          "season": 2025,
+          "numBrawlers": 23166,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2025-09-13T11:00:12.976Z",
+          "processedAt": "2025-09-15T03:48:29.871Z"
+        },
+        {
+          "id": 880,
+          "sport": "nfl",
+          "day": "2025-09-18",
+          "endDay": "2025-09-18",
+          "season": 2025,
+          "numBrawlers": 18532,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2025-09-17T11:00:38.528Z",
+          "processedAt": "2025-09-19T03:40:53.074Z"
+        },
+        {
+          "id": 892,
+          "sport": "nfl",
+          "day": "2025-09-21",
+          "endDay": "2025-09-21",
+          "season": 2025,
+          "numBrawlers": 24650,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2025-09-20T11:00:52.501Z",
+          "processedAt": "2025-09-22T03:59:56.819Z"
+        },
+        {
+          "id": 893,
+          "sport": "nfl",
+          "day": "2025-09-22",
+          "endDay": "2025-09-22",
+          "season": 2025,
+          "numBrawlers": 20471,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2025-09-21T11:00:42.264Z",
+          "processedAt": "2025-09-23T03:50:20.699Z"
+        }
+      ],
+      "sample_non_nfl_or_fail": [
+        {
+          "contestId": 860,
+          "sport": "mlb",
+          "day": "2025-09-11",
+          "season": 2025
+        }
+      ]
+    },
+    {
+      "window": "near_1069_2025nov",
+      "n_probed_approx": 31,
+      "nfl_hits": [
+        {
+          "id": 1085,
+          "sport": "nfl",
+          "day": "2025-11-13",
+          "endDay": "2025-11-13",
+          "season": 2025,
+          "numBrawlers": 21419,
+          "isFinalized": true,
+          "gameId": null,
+          "lineupSize": 5,
+          "createdAt": "2025-11-12T12:00:19.784Z",
+          "processedAt": "2025-11-14T04:37:15.619Z"
+        }
+      ],
+      "sample_non_nfl_or_fail": [
+        {
+          "contestId": 1060,
+          "sport": "ncaaf",
+          "day": "2025-11-08",
+          "season": 2025
+        },
+        {
+          "contestId": 1080,
+          "sport": "nhl",
+          "day": "2025-11-12",
+          "season": 2025
+        }
+      ]
+    }
+  ],
+  "nfl_hits": [
+    {
+      "id": 5,
+      "sport": "nfl",
+      "day": "2024-11-24",
+      "endDay": "2024-11-24",
+      "season": 2024,
+      "numBrawlers": 12049,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-11-24T08:06:11.470Z",
+      "processedAt": "2024-11-25T04:55:03.888Z"
+    },
+    {
+      "id": 10,
+      "sport": "nfl",
+      "day": "2024-11-28",
+      "endDay": "2024-11-28",
+      "season": 2024,
+      "numBrawlers": 32125,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-11-26T23:00:28.975Z",
+      "processedAt": "2024-11-29T05:38:55.471Z"
+    },
+    {
+      "id": 21,
+      "sport": "nfl",
+      "day": "2024-12-01",
+      "endDay": "2024-12-01",
+      "season": 2024,
+      "numBrawlers": 34960,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-11-30T23:33:09.134Z",
+      "processedAt": "2024-12-02T04:47:57.282Z"
+    },
+    {
+      "id": 38,
+      "sport": "nfl",
+      "day": "2024-12-05",
+      "endDay": "2024-12-05",
+      "season": 2024,
+      "numBrawlers": 13309,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-05T05:08:28.669Z",
+      "processedAt": "2024-12-06T04:46:22.308Z"
+    },
+    {
+      "id": 46,
+      "sport": "nfl",
+      "day": "2024-12-08",
+      "endDay": "2024-12-08",
+      "season": 2024,
+      "numBrawlers": 34357,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-07T05:14:43.547Z",
+      "processedAt": "2024-12-09T05:15:36.112Z"
+    },
+    {
+      "id": 51,
+      "sport": "nfl",
+      "day": "2024-12-09",
+      "endDay": "2024-12-09",
+      "season": 2024,
+      "numBrawlers": 16025,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-09T05:17:01.694Z",
+      "processedAt": "2024-12-10T04:49:50.112Z"
+    },
+    {
+      "id": 64,
+      "sport": "nfl",
+      "day": "2024-12-12",
+      "endDay": "2024-12-12",
+      "season": 2024,
+      "numBrawlers": 14908,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-11T12:00:03.895Z",
+      "processedAt": "2024-12-13T04:35:35.458Z"
+    },
+    {
+      "id": 76,
+      "sport": "nfl",
+      "day": "2024-12-15",
+      "endDay": "2024-12-15",
+      "season": 2024,
+      "numBrawlers": 34502,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-14T12:00:09.268Z",
+      "processedAt": "2024-12-16T08:50:00.573Z"
+    },
+    {
+      "id": 79,
+      "sport": "nfl",
+      "day": "2024-12-16",
+      "endDay": "2024-12-16",
+      "season": 2024,
+      "numBrawlers": 17840,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-15T12:00:43.540Z",
+      "processedAt": "2024-12-17T04:57:47.592Z"
+    },
+    {
+      "id": 92,
+      "sport": "nfl",
+      "day": "2024-12-19",
+      "endDay": "2024-12-19",
+      "season": 2024,
+      "numBrawlers": 28061,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-18T12:00:18.783Z",
+      "processedAt": "2024-12-20T04:51:25.967Z"
+    },
+    {
+      "id": 100,
+      "sport": "nfl",
+      "day": "2024-12-21",
+      "endDay": "2024-12-21",
+      "season": 2024,
+      "numBrawlers": 26989,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-20T12:00:34.105Z",
+      "processedAt": "2024-12-22T00:59:48.317Z"
+    },
+    {
+      "id": 105,
+      "sport": "nfl",
+      "day": "2024-12-22",
+      "endDay": "2024-12-22",
+      "season": 2024,
+      "numBrawlers": 36513,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-21T12:00:40.596Z",
+      "processedAt": "2024-12-23T05:10:25.700Z"
+    },
+    {
+      "id": 109,
+      "sport": "nfl",
+      "day": "2024-12-23",
+      "endDay": "2024-12-23",
+      "season": 2024,
+      "numBrawlers": 23865,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-22T12:00:14.633Z",
+      "processedAt": "2024-12-24T04:39:11.256Z"
+    },
+    {
+      "id": 113,
+      "sport": "nfl",
+      "day": "2024-12-25",
+      "endDay": "2024-12-25",
+      "season": 2024,
+      "numBrawlers": 38147,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-24T12:00:21.371Z",
+      "processedAt": "2024-12-26T01:06:37.036Z"
+    },
+    {
+      "id": 116,
+      "sport": "nfl",
+      "day": "2024-12-26",
+      "endDay": "2024-12-26",
+      "season": 2024,
+      "numBrawlers": 23211,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2024-12-25T12:00:29.654Z",
+      "processedAt": "2024-12-27T04:29:25.328Z"
+    },
+    {
+      "id": 857,
+      "sport": "nfl",
+      "day": "2025-09-11",
+      "endDay": "2025-09-11",
+      "season": 2025,
+      "numBrawlers": 19073,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-09-10T11:00:45.806Z",
+      "processedAt": "2025-09-12T03:58:56.083Z"
+    },
+    {
+      "id": 866,
+      "sport": "nfl",
+      "day": "2025-09-14",
+      "endDay": "2025-09-14",
+      "season": 2025,
+      "numBrawlers": 23166,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-09-13T11:00:12.976Z",
+      "processedAt": "2025-09-15T03:48:29.871Z"
+    },
+    {
+      "id": 870,
+      "sport": "nfl",
+      "day": "2025-09-15",
+      "endDay": "2025-09-15",
+      "season": 2025,
+      "numBrawlers": 20841,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-09-14T11:00:20.202Z",
+      "processedAt": "2025-09-16T05:29:37.364Z"
+    },
+    {
+      "id": 880,
+      "sport": "nfl",
+      "day": "2025-09-18",
+      "endDay": "2025-09-18",
+      "season": 2025,
+      "numBrawlers": 18532,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-09-17T11:00:38.528Z",
+      "processedAt": "2025-09-19T03:40:53.074Z"
+    },
+    {
+      "id": 892,
+      "sport": "nfl",
+      "day": "2025-09-21",
+      "endDay": "2025-09-21",
+      "season": 2025,
+      "numBrawlers": 24650,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-09-20T11:00:52.501Z",
+      "processedAt": "2025-09-22T03:59:56.819Z"
+    },
+    {
+      "id": 893,
+      "sport": "nfl",
+      "day": "2025-09-22",
+      "endDay": "2025-09-22",
+      "season": 2025,
+      "numBrawlers": 20471,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-09-21T11:00:42.264Z",
+      "processedAt": "2025-09-23T03:50:20.699Z"
+    },
+    {
+      "id": 1069,
+      "sport": "nfl",
+      "day": "2025-11-09",
+      "endDay": "2025-11-09",
+      "season": 2025,
+      "numBrawlers": 26320,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-11-08T12:00:14.501Z",
+      "processedAt": "2025-11-10T04:59:51.832Z"
+    },
+    {
+      "id": 1070,
+      "sport": "nfl",
+      "day": "2025-11-10",
+      "endDay": "2025-11-10",
+      "season": 2025,
+      "numBrawlers": 21598,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-11-09T12:00:37.384Z",
+      "processedAt": "2025-11-11T04:53:52.090Z"
+    },
+    {
+      "id": 1085,
+      "sport": "nfl",
+      "day": "2025-11-13",
+      "endDay": "2025-11-13",
+      "season": 2025,
+      "numBrawlers": 21419,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-11-12T12:00:19.784Z",
+      "processedAt": "2025-11-14T04:37:15.619Z"
+    },
+    {
+      "id": 1100,
+      "sport": "nfl",
+      "day": "2025-11-17",
+      "endDay": "2025-11-17",
+      "season": 2025,
+      "numBrawlers": 19566,
+      "isFinalized": true,
+      "gameId": null,
+      "lineupSize": 5,
+      "createdAt": "2025-11-16T12:00:28.797Z",
+      "processedAt": "2025-11-18T04:42:50.980Z"
+    }
+  ],
+  "home_routes": [
+    {
+      "path": "/home/nfl/next",
+      "params": {
+        "cohort": 0
+      },
+      "status": 200,
+      "latestDay": "2026-09-09",
+      "latestWeek": "default",
+      "n_days": 14
+    },
+    {
+      "path": "/home/nfl/days",
+      "params": {},
+      "status": 200,
+      "message": null,
+      "keys": [
+        "availableSeasons",
+        "currentSeason",
+        "days",
+        "latestDay",
+        "latestWeek"
+      ],
+      "n_days": 68,
+      "first_days": [
+        {
+          "index": 0,
+          "dateTime": "2026-08-07T00:00:00.000Z",
+          "day": "2026-08-06",
+          "week": 0,
+          "weekNum": 0,
+          "count": "1",
+          "pos": "first",
+          "detail": "HF"
+        },
+        {
+          "index": 1,
+          "dateTime": "2026-08-13T23:00:00.000Z",
+          "day": "2026-08-13",
+          "week": "default",
+          "weekNum": 1,
+          "count": "6",
+          "pos": null,
+          "detail": "P1"
+        },
+        {
+          "index": 2,
+          "dateTime": "2026-08-14T23:00:00.000Z",
+          "day": "2026-08-14",
+          "week": "default",
+          "weekNum": 1,
+          "count": "3",
+          "pos": null,
+          "detail": "P1"
+        },
+        {
+          "index": 3,
+          "dateTime": "2026-08-15T17:00:00.000Z",
+          "day": "2026-08-15",
+          "week": "default",
+          "weekNum": 1,
+          "count": "7",
+          "pos": null,
+          "detail": "P1"
+        },
+        {
+          "index": 4,
+          "dateTime": "2026-08-21T00:00:00.000Z",
+          "day": "2026-08-20",
+          "week": 2,
+          "weekNum": 2,
+          "count": "2",
+          "pos": null,
+          "detail": "P2"
+        }
+      ],
+      "last_days": [
+        {
+          "index": 63,
+          "dateTime": "2026-12-29T01:15:00.000Z",
+          "day": "2026-12-28",
+          "week": 16,
+          "weekNum": 16,
+          "count": "1",
+          "pos": null,
+          "detail": "W16"
+        },
+        {
+          "index": 64,
+          "dateTime": "2027-01-01T01:15:00.000Z",
+          "day": "2026-12-31",
+          "week": 17,
+          "weekNum": 17,
+          "count": "1",
+          "pos": null,
+          "detail": "W17"
+        },
+        {
+          "index": 65,
+          "dateTime": "2027-01-03T18:00:00.000Z",
+          "day": "2027-01-03",
+          "week": 17,
+          "weekNum": 17,
+          "count": "14",
+          "pos": null,
+          "detail": "W17"
+        },
+        {
+          "index": 66,
+          "dateTime": "2027-01-05T01:15:00.000Z",
+          "day": "2027-01-04",
+          "week": 17,
+          "weekNum": 17,
+          "count": "1",
+          "pos": null,
+          "detail": "W17"
+        },
+        {
+          "index": 67,
+          "dateTime": "2027-01-10T18:00:00.000Z",
+          "day": "2027-01-10",
+          "week": 18,
+          "weekNum": 18,
+          "count": "16",
+          "pos": "last",
+          "detail": "W18"
+        }
+      ],
+      "latestDay": "2026-09-09"
+    },
+    {
+      "path": "/home/nfl/day/next",
+      "params": {},
+      "status": 500,
+      "message": "day is required",
+      "keys": [
+        "code",
+        "error",
+        "message",
+        "statusCode"
+      ]
+    },
+    {
+      "path": "/home/nfl/boostcontrol",
+      "params": {
+        "cohort": 0,
+        "day": "2024-12-08"
+      },
+      "status": 200,
+      "message": null,
+      "keys": [
+        "header",
+        "numMore",
+        "shouldUpsell",
+        "userPasses"
+      ]
+    },
+    {
+      "path": "/home/nfl/boostcontrol",
+      "params": {
+        "cohort": 0,
+        "day": "2024-09-08"
+      },
+      "status": 200,
+      "message": null,
+      "keys": [
+        "header",
+        "numMore",
+        "shouldUpsell",
+        "userPasses"
+      ]
+    },
+    {
+      "path": "/home/nfl/boostcontrol",
+      "params": {
+        "cohort": 0,
+        "day": "2023-09-10"
+      },
+      "status": 200,
+      "message": null,
+      "keys": [
+        "header",
+        "numMore",
+        "shouldUpsell",
+        "userPasses"
+      ]
+    },
+    {
+      "path": "/home/nfl/next",
+      "params": {
+        "cohort": 0,
+        "day": "2024-12-15"
+      },
+      "status": 200,
+      "message": null,
+      "keys": [
+        "cohortOptions",
+        "days",
+        "emojiUsages",
+        "latestDay",
+        "latestDayContent",
+        "latestWeek",
+        "liveGameInfo"
+      ],
+      "n_days": 14,
+      "first_days": [
+        {
+          "index": 4,
+          "dateTime": "2026-08-21T00:00:00.000Z",
+          "day": "2026-08-20",
+          "week": 2,
+          "weekNum": 2,
+          "count": "2",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 5,
+          "dateTime": "2026-08-21T23:00:00.000Z",
+          "day": "2026-08-21",
+          "week": 2,
+          "weekNum": 2,
+          "count": "3",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 6,
+          "dateTime": "2026-08-22T16:00:00.000Z",
+          "day": "2026-08-22",
+          "week": 2,
+          "weekNum": 2,
+          "count": "10",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 7,
+          "dateTime": "2026-08-24T00:00:00.000Z",
+          "day": "2026-08-23",
+          "week": 2,
+          "weekNum": 2,
+          "count": "1",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 8,
+          "dateTime": "2026-08-27T23:00:00.000Z",
+          "day": "2026-08-27",
+          "week": 3,
+          "weekNum": 3,
+          "count": "4",
+          "pos": null,
+          "detail": "P3"
+        }
+      ],
+      "last_days": [
+        {
+          "index": 13,
+          "dateTime": "2026-09-13T17:00:00.000Z",
+          "day": "2026-09-13",
+          "week": "default",
+          "weekNum": 1,
+          "count": "13",
+          "pos": null,
+          "detail": "W1"
+        },
+        {
+          "index": 14,
+          "dateTime": "2026-09-15T00:15:00.000Z",
+          "day": "2026-09-14",
+          "week": "default",
+          "weekNum": 1,
+          "count": "1",
+          "pos": null,
+          "detail": "W1"
+        },
+        {
+          "index": 15,
+          "dateTime": "2026-09-18T00:15:00.000Z",
+          "day": "2026-09-17",
+          "week": 2,
+          "weekNum": 2,
+          "count": "1",
+          "pos": null,
+          "detail": "W2"
+        },
+        {
+          "index": 16,
+          "dateTime": "2026-09-20T17:00:00.000Z",
+          "day": "2026-09-20",
+          "week": 2,
+          "weekNum": 2,
+          "count": "14",
+          "pos": null,
+          "detail": "W2"
+        },
+        {
+          "index": 17,
+          "dateTime": "2026-09-22T00:15:00.000Z",
+          "day": "2026-09-21",
+          "week": 2,
+          "weekNum": 2,
+          "count": "1",
+          "pos": null,
+          "detail": "W2"
+        }
+      ],
+      "latestDay": "2026-09-09",
+      "content_day": "2026-09-09",
+      "content_season": 2026,
+      "n_games": 1
+    },
+    {
+      "path": "/home/nfl/next",
+      "params": {
+        "cohort": 0,
+        "day": "2024-09-15"
+      },
+      "status": 200,
+      "message": null,
+      "keys": [
+        "cohortOptions",
+        "days",
+        "emojiUsages",
+        "latestDay",
+        "latestDayContent",
+        "latestWeek",
+        "liveGameInfo"
+      ],
+      "n_days": 14,
+      "first_days": [
+        {
+          "index": 4,
+          "dateTime": "2026-08-21T00:00:00.000Z",
+          "day": "2026-08-20",
+          "week": 2,
+          "weekNum": 2,
+          "count": "2",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 5,
+          "dateTime": "2026-08-21T23:00:00.000Z",
+          "day": "2026-08-21",
+          "week": 2,
+          "weekNum": 2,
+          "count": "3",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 6,
+          "dateTime": "2026-08-22T16:00:00.000Z",
+          "day": "2026-08-22",
+          "week": 2,
+          "weekNum": 2,
+          "count": "10",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 7,
+          "dateTime": "2026-08-24T00:00:00.000Z",
+          "day": "2026-08-23",
+          "week": 2,
+          "weekNum": 2,
+          "count": "1",
+          "pos": null,
+          "detail": "P2"
+        },
+        {
+          "index": 8,
+          "dateTime": "2026-08-27T23:00:00.000Z",
+          "day": "2026-08-27",
+          "week": 3,
+          "weekNum": 3,
+          "count": "4",
+          "pos": null,
+          "detail": "P3"
+        }
+      ],
+      "last_days": [
+        {
+          "index": 13,
+          "dateTime": "2026-09-13T17:00:00.000Z",
+          "day": "2026-09-13",
+          "week": "default",
+          "weekNum": 1,
+          "count": "13",
+          "pos": null,
+          "detail": "W1"
+        },
+        {
+          "index": 14,
+          "dateTime": "2026-09-15T00:15:00.000Z",
+          "day": "2026-09-14",
+          "week": "default",
+          "weekNum": 1,
+          "count": "1",
+          "pos": null,
+          "detail": "W1"
+        },
+        {
+          "index": 15,
+          "dateTime": "2026-09-18T00:15:00.000Z",
+          "day": "2026-09-17",
+          "week": 2,
+          "weekNum": 2,
+          "count": "1",
+          "pos": null,
+          "detail": "W2"
+        },
+        {
+          "index": 16,
+          "dateTime": "2026-09-20T17:00:00.000Z",
+          "day": "2026-09-20",
+          "week": 2,
+          "weekNum": 2,
+          "count": "14",
+          "pos": null,
+          "detail": "W2"
+        },
+        {
+          "index": 17,
+          "dateTime": "2026-09-22T00:15:00.000Z",
+          "day": "2026-09-21",
+          "week": 2,
+          "weekNum": 2,
+          "count": "1",
+          "pos": null,
+          "detail": "W2"
+        }
+      ],
+      "latestDay": "2026-09-09",
+      "content_day": "2026-09-09",
+      "content_season": 2026,
+      "n_games": 1
+    }
+  ],
+  "game_archive_samples": [
+    {
+      "gameId": 1,
+      "status": 200,
+      "message": null,
+      "game": null,
+      "sport_ok": false,
+      "n_players": 0
+    },
+    {
+      "gameId": 100,
+      "status": 200,
+      "message": null,
+      "game": null,
+      "sport_ok": false,
+      "n_players": 0
+    },
+    {
+      "gameId": 500,
+      "status": 200,
+      "message": null,
+      "game": null,
+      "sport_ok": false,
+      "n_players": 0
+    },
+    {
+      "gameId": 1000,
+      "status": 200,
+      "message": null,
+      "game": null,
+      "sport_ok": false,
+      "n_players": 0
+    },
+    {
+      "gameId": 5000,
+      "status": 200,
+      "message": null,
+      "game": null,
+      "sport_ok": false,
+      "n_players": 0
+    },
+    {
+      "gameId": 10000,
+      "status": 200,
+      "message": null,
+      "game": null,
+      "sport_ok": false,
+      "n_players": 0
+    },
+    {
+      "gameId": 15000,
+      "status": 200,
+      "message": null,
+      "game": null,
+      "sport_ok": false,
+      "n_players": 0
+    },
+    {
+      "gameId": 18000,
+      "status": 200,
+      "message": null,
+      "game": {
+        "id": 18000,
+        "sport": "nfl",
+        "season": 2022,
+        "seasonType": "regularseason",
+        "day": "2022-11-21",
+        "dateTime": "2022-11-22T01:15:00.000Z",
+        "week": 11,
+        "status": "final",
+        "homeTeamKey": "ARI",
+        "awayTeamKey": "SF"
+      },
+      "sport_ok": true,
+      "n_players": 0
+    },
+    {
+      "gameId": 19457,
+      "status": 200,
+      "message": null,
+      "game": {
+        "id": 19457,
+        "sport": "nfl",
+        "season": 2026,
+        "seasonType": "regularseason",
+        "day": "2026-09-09",
+        "dateTime": "2026-09-10T00:20:00.000Z",
+        "week": 1,
+        "status": "scheduled",
+        "homeTeamKey": "SEA",
+        "awayTeamKey": "NE"
+      },
+      "sport_ok": true,
+      "n_players": 163
+    }
+  ],
+  "failures": [],
+  "notes": [],
+  "auth_ok": "<redacted>",
+  "header_keys_present": [
+    "accept",
+    "content-type",
+    "origin",
+    "real-auth-info",
+    "real-device-id",
+    "real-device-name",
+    "real-device-type",
+    "real-device-uuid",
+    "real-request-token",
+    "real-version",
+    "referer",
+    "user-agent"
+  ],
+  "nfl_hit_count": 25,
+  "years_with_nfl_contests": [
+    "2024",
+    "2025"
+  ],
+  "days_with_nfl_contests": [
+    "2024-11-24",
+    "2024-11-28",
+    "2024-12-01",
+    "2024-12-05",
+    "2024-12-08",
+    "2024-12-09",
+    "2024-12-12",
+    "2024-12-15",
+    "2024-12-16",
+    "2024-12-19",
+    "2024-12-21",
+    "2024-12-22",
+    "2024-12-23",
+    "2024-12-25",
+    "2024-12-26",
+    "2025-09-11",
+    "2025-09-14",
+    "2025-09-15",
+    "2025-09-18",
+    "2025-09-21",
+    "2025-09-22",
+    "2025-11-09",
+    "2025-11-10",
+    "2025-11-13",
+    "2025-11-17"
+  ],
+  "finished_at_utc": "2026-09-04T03:31:53Z"
+}
