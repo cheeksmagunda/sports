@@ -152,7 +152,7 @@ def environment_capabilities() -> list[str]:
         ("redis", ("REDIS_URL",)),
         ("Real Sports session", ("REALSPORTS_STORAGE_STATE_B64GZ",)),
         ("odds provider", ("ODDS_API_KEY",)),
-        ("Railway HTTP", ("RAILWAY_WORKSPACE_TOKEN",)),
+        ("Railway HTTP", ("RAILWAY_TOKEN",)),
         ("watchdog", ("WATCHDOG_PING_URL", "WATCHDOG_HEARTBEAT_URL")),
     )
     return [
