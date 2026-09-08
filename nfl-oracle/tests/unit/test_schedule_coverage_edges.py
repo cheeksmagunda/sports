@@ -77,7 +77,12 @@ def test_season_labels_offseason_and_jan() -> None:
     assert season_week_for_date(date(2026, 5, 1)).week is None
 
 
-def test_posture_stub_verified_and_shadow_and_contest_defensive() -> None:
+def test_posture_stub_verified_and_shadow_and_contest_defensive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "nfl_oracle.providers.five_card.probe_realsports_auth", lambda: _auth(usable=False)
+    )
     stub = ProviderReadiness(
         status=ProviderContractStatus.STUB,
         contest_entry=False,
@@ -121,7 +126,12 @@ def test_contest_algebra_negative_override_edge() -> None:
     assert "override" in forced.notes
 
 
-def test_provider_stub_default_posture_blocked_without_auth() -> None:
+def test_provider_stub_default_posture_blocked_without_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "nfl_oracle.providers.five_card.probe_realsports_auth", lambda: _auth(usable=False)
+    )
     stub = FiveCardProviderStub()
     ready = stub.readiness()
     assert ready.contest_entry is False

@@ -14,6 +14,8 @@ dependencies = [
     "pydantic-settings>=2.6,<3.0",
     "structlog>=24.4,<26.0",
     "playwright>=1.59.0",
+    "nflreadpy>=0.1,<1",
+    "scipy>=1.14,<2",
 ]
 
 [tool.uv.sources]
@@ -40,6 +42,7 @@ nfl-research-serve = "nfl_oracle.service.cli:main"
 nfl-provider-status = "nfl_oracle.providers.cli:main"
 nfl-contest-dry-run = "nfl_oracle.strategy.dry_run_cli:main"
 nfl-walk-forward-report = "nfl_oracle.baselines.eval_cli:main"
+nfl-pipeline = "nfl_oracle.recommendations.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -47,6 +50,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nfl_oracle"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"frontend" = "nfl_oracle/recommendations/frontend"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

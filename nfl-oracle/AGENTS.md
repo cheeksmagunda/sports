@@ -15,6 +15,18 @@ scoring, payout curve, provider adapters, and operational gates. Do not import
 `wnba_oracle` domain packages (`picker`, `features`, `modeling`, `predict`, or
 WNBA schemas). Shared work belongs in `oracle-core` only when provider-neutral.
 
+## Production container boundary
+
+`Dockerfile.production` and `railway.toml` are NFL-owned deployment source.
+They build one image with separate explicit roles: `nfl-pipeline serve` is the
+read-only API, `nfl-pipeline worker` owns pipeline writes and provider refresh,
+and `nfl-pipeline migrate` is an explicit one-shot migration command. The API
+must not migrate on startup. Credentials and derived provider sessions enter
+only through the process environment or the worker's private runtime mount;
+never copy them, local data, or storage state into the image. Keep API and
+worker as separate services and preserve the frozen recommendation if a worker
+restart fails.
+
 ## Exact local commands
 
 From the monorepo root:

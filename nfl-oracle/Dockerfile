@@ -21,6 +21,7 @@ COPY pyproject.toml uv.lock ./
 COPY packages/oracle-core/pyproject.toml packages/oracle-core/README.md ./packages/oracle-core/
 COPY packages/oracle-core/src/ ./packages/oracle-core/src/
 COPY nfl-oracle/pyproject.toml nfl-oracle/README.md ./nfl-oracle/
+COPY nfl-oracle/frontend/ ./nfl-oracle/frontend/
 COPY nfl-oracle/src/ ./nfl-oracle/src/
 
 # Research serve extra only. Do not install Playwright browsers.

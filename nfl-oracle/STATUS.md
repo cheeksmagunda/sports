@@ -1,12 +1,45 @@
 # Status
 
-Last verified: 2026-09-06 ~02:30 CT (contest dry-run schedule slate harden;
-172 pytest; local branch only; no push)
+Last verified: 2026-09-08, local development checkpoint for issue #115.
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
 
-## Application state
+## Current operational readiness
+
+- GitHub `main` was verified at `66955746f76af3a024489606e37620bd43f0d5ac`.
+  The recommendation pipeline and frontend are unfinished branch work on
+  `chat/115-nfl-live-pipeline`, not a production deployment. The local Mac
+  write-path check passed. Railway runtime state was not rechecked during wrap-up.
+- The service scope is five recommended players with committed slot order for
+  the operator to enter manually. Contest submission remains hard-denied.
+- The controlling objective is expected Total Value:
+  `sum(expected Real value * (player boost + slot multiplier))`, with slot
+  multipliers `2.0, 1.8, 1.6, 1.4, 1.2` and player boosts from `0` through `3`.
+  There is no validated production winning strategy or whole-field win probability.
+- Saved contest `2141` targets September 9, 2026: NE at SEA, Real game `19457`,
+  kickoff `2026-09-10T00:20:00Z` (September 9 at 19:20 America/Chicago).
+  The intended T-40 freeze is September 9 at 18:40 America/Chicago, subject
+  to a fresh provider lock/kickoff check. Correctness takes precedence over
+  that first slate.
+- The latest saved slate was captured `2026-09-08T22:46:23.045249Z`: 161
+  observed candidates, one game, and all observed boosts zero. These are
+  observations, not proof of complete eligibility or final boost values.
+- The local Corpus G loader yields 37,710 player-games from 570 validated
+  games across 2024 and 2025, excluding 98 preseason games and one missing
+  value. These ignored local artifacts are not transported by a git checkout.
+- Saved historical daily-contest evidence is one finalized contest, `870`
+  (September 15, 2025), with 20 saved leaders out of 20,841 reported entrants.
+  Full Corpus C collection and audit remain incomplete.
+- Release blockers include unsafe context identity fallbacks, incomplete
+  final pool/boost/context refresh, missing calibrated media/role evidence,
+  incomplete contest evaluation, and active-artifact/readiness API checks.
+  Passing unit tests alone does not resolve these operational risks.
+- The full session requirements, strategy decisions, audit findings, artifact
+  paths, validation results, and continuation instructions are maintained in
+  [issue #115](https://github.com/cheeksmagunda/sports/issues/115).
+
+## Historical application baseline (September 6, 2026)
 
 - Package: `nfl-oracle` workspace member
 - Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines + observation-only data/strategy/feature/calendar/identity scaffolds + read-only research service routes + **offline contest dry-run** (shadow slate; hard-deny submit)
@@ -27,9 +60,10 @@ treating any row as production truth.
   storage-state keys plus additive `NFL_DEVICE_*`; legacy
   `NFL_REALSPORTS_DEVICE_*` names may remain present and unused by code.
   No deploy source connected (0/1 online by design). No contest code.
-- Codespaces `RAILWAY_TOKEN`: Railway CLI cannot mint tokens; Ben must manually
-  `gh secret set RAILWAY_TOKEN --app codespaces --repo cheeksmagunda/sports`
-  after creating a dashboard token. Never record token values here.
+- Railway operations use the authenticated local native Railway CLI. Do not
+  perform Railway operations in cloud sessions or mint/copy an additional
+  token to bypass the boundary recorded in issue #109. Recheck authentication
+  locally before any authorized Railway action.
 - Secrets stay local under ignored `scraper/` / `.secrets/`; never committed
 
 ## Train vs live
@@ -505,4 +539,3 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   does not beat classical priors on the tiny fixture set
 - Box verification: pytest **160 passed**; ruff + mypy clean on baselines eval paths
 - Still **no push**; Real Sports auth optional/missing
-

@@ -1,0 +1,17 @@
+# NFL Oracle Railway build defaults. No service or environment mutation is
+# performed by this file. Configure API and worker as separate services using
+# this same image and explicit start commands.
+#
+# API start command:
+#   nfl-pipeline serve --host 0.0.0.0 --port ${PORT:-8000}
+# Worker start command:
+#   nfl-pipeline worker
+# Migration command, run as an explicit one-shot release step:
+#   nfl-pipeline migrate
+#
+# The API uses a read-only PostgreSQL session and never migrates at startup.
+# The worker owns writes and must receive the scoped NFL worker environment.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "nfl-oracle/Dockerfile.production"

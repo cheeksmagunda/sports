@@ -44,11 +44,14 @@ wnba-oracle/**
 !nfl-oracle/
 nfl-oracle/**
 !nfl-oracle/Dockerfile
+!nfl-oracle/Dockerfile.production
 !nfl-oracle/docker-compose.yml
 !nfl-oracle/pyproject.toml
 !nfl-oracle/README.md
 !nfl-oracle/src/
 !nfl-oracle/src/**
+!nfl-oracle/frontend/
+!nfl-oracle/frontend/**
 !nfl-oracle/data/
 !nfl-oracle/data/catalog/
 !nfl-oracle/data/catalog/**

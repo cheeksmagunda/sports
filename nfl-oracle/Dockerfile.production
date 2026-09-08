@@ -1,0 +1,92 @@
+# NFL Oracle production image. The same image serves the read-only API and runs
+# the separately configured worker. Railway service start commands select the
+# role; this image never performs an implicit migration on API startup.
+#
+# Build from the monorepo root:
+#   docker build -f nfl-oracle/Dockerfile.production -t nfl-oracle:production .
+
+FROM python:3.11-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.13 /uv /uvx /bin/
+
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+WORKDIR /workspace
+COPY pyproject.toml uv.lock ./
+COPY packages/oracle-core/pyproject.toml packages/oracle-core/README.md ./packages/oracle-core/
+COPY packages/oracle-core/src/ ./packages/oracle-core/src/
+COPY nfl-oracle/pyproject.toml nfl-oracle/README.md ./nfl-oracle/
+COPY nfl-oracle/frontend/ ./nfl-oracle/frontend/
+COPY nfl-oracle/config/ ./nfl-oracle/config/
+COPY nfl-oracle/src/ ./nfl-oracle/src/
+
+RUN uv sync --frozen --no-dev --extra serve --package nfl-oracle --no-editable
+RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 /opt/venv/bin/playwright install chromium
+
+FROM python:3.11-slim AS runtime
+
+# Chromium libraries are needed only for the worker's derived-session refresh.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libexpat1 \
+    libgbm1 \
+    libglib2.0-0 \
+    libnspr4 \
+    libnss3 \
+    libpango-1.0-0 \
+    libx11-6 \
+    libxcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    NFL_PIPELINE_ROLE=api \
+    PORT=8000
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /opt/playwright-browsers /opt/playwright-browsers
+COPY --from=builder /workspace/nfl-oracle/config ./config/
+
+WORKDIR /app/nfl-oracle
+COPY nfl-oracle/src/ ./src/
+
+RUN useradd --create-home --uid 10001 oracle \
+    && mkdir -p /app/nfl-oracle \
+    && chown -R oracle:oracle /app /opt/venv /opt/playwright-browsers
+USER oracle
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/health', timeout=4)"]
+
+# API is the safe default. Railway's worker service overrides this command with
+# `nfl-pipeline worker`; migration is an explicit one-shot service command.
+CMD ["sh", "-c", "exec nfl-pipeline serve --host 0.0.0.0 --port ${PORT:-8000}"]
