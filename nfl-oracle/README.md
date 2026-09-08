@@ -122,6 +122,8 @@ Offline baselines (no network, no contest entry):
 
 - `global_mean`: historical mean Real value from earlier seasons
 - `position_mean` / `position_median`: per-position priors with global fallback
+- optional `player_mean` / `feature_ridge`: player priors or leakage-safe ridge on
+  live_ok prior features (stdlib only; not in the default method set)
 
 Walk-forward evaluation is season-based: train on seasons strictly earlier than
 the held-out season, then score MAE / RMSE / bias on the held-out anchors.
@@ -136,7 +138,14 @@ uv run --package nfl-oracle nfl-value-baselines \
 
 # local Corpus G raw root (gitignored payloads; operator machine only)
 uv run --package nfl-oracle nfl-value-baselines --json
+
+# baselines vs feature_ridge eval report → artifacts/ (sample checked in)
+make -C nfl-oracle walk-forward-report
+# or: uv run --package nfl-oracle nfl-walk-forward-report
 ```
+
+See [`artifacts/walk_forward_fixture_sample.md`](artifacts/walk_forward_fixture_sample.md)
+for a small fixture-scale comparison (observation only; not contest decision value).
 
 ## Local commands
 
@@ -144,7 +153,17 @@ uv run --package nfl-oracle nfl-value-baselines --json
 make test
 make lint
 make typecheck
+make research-smoke          # offline TestClient research suite subset
+make research-smoke SMOKE_ARGS=--json
 ```
+
+`make research-smoke` runs `scripts/research_client_smoke.py` against
+`tests/fixtures/offline_research` via FastAPI TestClient (no network). It asserts
+schema/catalog/coverage/schedule/identity routes, shadow preview + rank-orderings,
+and **hard-deny** entry gates (`package_submit_hard_deny` + unverified provider
+contract). Strip live DB/redis env like `make test`. Observation only — never
+enables contest entry.
+
 
 From monorepo root:
 
@@ -154,6 +173,21 @@ make check-applications
 make check-boundaries
 ```
 
+
+
+## Data / strategy / feature scaffolds (observation only)
+
+- `nfl_oracle.data` — catalog / coverage / paths helpers
+- `nfl_oracle.strategy` — pre-lock clock gates, five-card structural checks, shadow snapshots
+- `nfl_oracle.features` — FeatureSpec registry (`nfl_oracle.features.schema`)
+- `make strategy-schema` / `uv run --package nfl-oracle nfl-strategy-schema --schema-only`
+- Research HTTP scaffold: `nfl_oracle.service.create_app` / `nfl-research-serve`
+  (`make research-serve`; schemas incl. scoring, catalog, coverage + schedule
+  summary/census, identity density, shadow preview + rank-orderings, entry
+  gates, live-ok features, provider rules-offline, status; contest entry always false)
+- Strategy helpers: 120 five-card orderings + readiness→posture mapping
+- Railway: **no** in-repo `railway.toml`/`Dockerfile`; staging project names only
+  in STATUS (do not deploy from this package)
 
 ## Codespace daily ops (planned)
 

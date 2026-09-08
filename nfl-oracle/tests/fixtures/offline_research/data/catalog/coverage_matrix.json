@@ -1,0 +1,218 @@
+{
+  "gaps": [
+    {
+      "reason": "sparse_seed_only",
+      "season": 2024
+    },
+    {
+      "reason": "auth_missing_fixture",
+      "season": 2025
+    }
+  ],
+  "generated_at": "2026-09-06T07:40:00+00:00",
+  "seasons": {
+    "2012": {
+      "games": {
+        "1201": {
+          "game_id": 1201
+        },
+        "1202": {
+          "game_id": 1202
+        },
+        "1203": {
+          "game_id": 1203
+        },
+        "1204": {
+          "game_id": 1204
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2013": {
+      "games": {
+        "1301": {
+          "game_id": 1301
+        },
+        "1302": {
+          "game_id": 1302
+        },
+        "1303": {
+          "game_id": 1303
+        },
+        "1304": {
+          "game_id": 1304
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2014": {
+      "games": {
+        "1401": {
+          "game_id": 1401
+        },
+        "1402": {
+          "game_id": 1402
+        },
+        "1403": {
+          "game_id": 1403
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2015": {
+      "games": {
+        "1501": {
+          "game_id": 1501
+        },
+        "1502": {
+          "game_id": 1502
+        },
+        "1503": {
+          "game_id": 1503
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2016": {
+      "games": {
+        "1601": {
+          "game_id": 1601
+        },
+        "1602": {
+          "game_id": 1602
+        },
+        "1603": {
+          "game_id": 1603
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2017": {
+      "games": {
+        "1701": {
+          "game_id": 1701
+        },
+        "1702": {
+          "game_id": 1702
+        },
+        "1703": {
+          "game_id": 1703
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2018": {
+      "games": {
+        "1801": {
+          "game_id": 1801
+        },
+        "1802": {
+          "game_id": 1802
+        },
+        "1803": {
+          "game_id": 1803
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2019": {
+      "games": {
+        "1901": {
+          "game_id": 1901
+        },
+        "1902": {
+          "game_id": 1902
+        },
+        "1903": {
+          "game_id": 1903
+        },
+        "1904": {
+          "game_id": 1904
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2020": {
+      "games": {
+        "2001": {
+          "game_id": 2001
+        },
+        "2002": {
+          "game_id": 2002
+        },
+        "2003": {
+          "game_id": 2003
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2021": {
+      "games": {
+        "2101": {
+          "game_id": 2101
+        },
+        "2102": {
+          "game_id": 2102
+        },
+        "2103": {
+          "game_id": 2103
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2022": {
+      "games": {
+        "2201": {
+          "game_id": 2201
+        },
+        "2202": {
+          "game_id": 2202
+        },
+        "2203": {
+          "game_id": 2203
+        },
+        "2204": {
+          "game_id": 2204
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2023": {
+      "games": {
+        "2301": {
+          "game_id": 2301
+        },
+        "2302": {
+          "game_id": 2302
+        },
+        "2303": {
+          "game_id": 2303
+        }
+      },
+      "status": "known",
+      "value_note": "fixture Real value present"
+    },
+    "2024": {
+      "games": {},
+      "status": "unknown",
+      "value_note": "fixture no ingest yet"
+    },
+    "2025": {
+      "blocked_reason": "auth_missing_fixture",
+      "games": {},
+      "status": "blocked",
+      "value_note": "fixture blocked"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 # Status
 
-Last verified: 2026-09-05 (daily-shadow scaffold + Mac railway link; Codespace live-wire blocked on gh codespace scope)
+Last verified: 2026-09-06 ~02:30 CT (contest dry-run schedule slate harden;
+172 pytest; local branch only; no push)
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
@@ -8,10 +9,10 @@ treating any row as production truth.
 ## Application state
 
 - Package: `nfl-oracle` workspace member
-- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines
-- Wired into root `make test-nfl` / `lint` / `typecheck` / `build`
-- Not started: Corpus C contests, five-card ranking policy, production services,
-  contest submission, Railway production secret injection
+- Scope live now: Corpus G ingest boundary + season resume CLI + redaction tests + Real `value` label schema + offline walk-forward baselines + observation-only data/strategy/feature/calendar/identity scaffolds + read-only research service routes + **offline contest dry-run** (shadow slate; hard-deny submit)
+- Wired into root `make test-nfl` / `lint` / `typecheck` / `build`; `make -C nfl-oracle strategy-schema`
+- Not started: Corpus C contests, verified five-card provider contract (#91), production deploys,
+  contest submission, Railway production secret injection, in-repo Railway deploy source
 
 ## Auth
 
@@ -52,15 +53,31 @@ treating any row as production truth.
 - Extract: `nfl_oracle.labels.extract` from Corpus G `stats.json` + clocks
 - Baselines: `global_mean`, `position_mean`, `position_median` via
   `nfl_oracle.baselines.walk_forward` (OOS by season)
-- CLI: `nfl-value-baselines` (offline; `--schema-only` / `--root` / `--json`)
+- Optional: `player_mean`, `feature_ridge` (leakage-safe prior-feature ridge)
+- CLI: `nfl-value-baselines` (offline; `--schema-only` / `--root` / `--json` / `--methods`)
+- **Eval report:** `nfl-walk-forward-report` / `make walk-forward-report` — baselines vs
+  `feature_ridge` on fixtures → `artifacts/walk_forward_fixture_sample.{json,md}`
+  ([sample MD](artifacts/walk_forward_fixture_sample.md))
 - Metrics: pooled MAE / RMSE / bias on held-out season anchors
-- Still out of scope: contest submission, live entry, fancy models
+- Still out of scope: contest submission, live entry
+
+
+## Week / slate resolution (2026-09-06 CT)
+
+- `nfl_oracle.calendar.slate` — resolve games + opponents from date or season+week
+  (dense offline schedules; exact gameday or week span; no invented weeks)
+- Research: `GET /research/schedule/slate?season=&week=` or `?date=YYYY-MM-DD` (+ optional `team`)
+- Dry-run optional: `include_schedule_slate` / `--include-schedule-slate` attaches schedule slate
+- **Hardened attach** (`resolve_dry_run_schedule_slate`): priority explicit date → week →
+  label `event_time` → week-1 fallback; `dry_run_attach` meta; optional `schedule_team`
+- Contest entry unchanged (`contest_entry=false`; submit hard-deny intact)
 
 ## Coverage gaps
 
-- Catalog holds anchor game ids (3-5 per season), not a full season schedule
-- Tracked seasons 2002–2025 all have ≥1 ingested Corpus G seed (status `known`)
-- Full-season census / continuous discovery still open for denser coverage
+- Catalog still holds Corpus G **seed anchors** (3-5 ids/season); schedule census is separate
+- Offline nflverse/nfldata schedules now provide **continuous full-season slates**
+  (2002–2025 slim CSV under `data/schedule/schedules.csv`; CC BY 4.0)
+- Tracked seasons 2002–2025 still need denser Corpus G ingest beyond seeds
 - Contest-era Corpus C is explicitly deferred
 
 
@@ -82,6 +99,69 @@ Provenance + manifests carry `event_time`, `source_available_at`, `captured_at`,
 and `decision_at` (null on historical backfill). See README train/live section.
 
 
+
+## Data / strategy / feature scaffolds (2026-09-06 CT)
+
+Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest entry):
+
+- `nfl_oracle.data` — seed catalog loader, coverage row vocabulary, data path helpers
+- `nfl_oracle.strategy` — clock gates, five-card structural legality, shadow snapshot + `nfl-strategy-schema` CLI
+- `nfl_oracle.features` — FeatureSpec v1 registry (pre-lock priors vs same-slate finals)
+- `nfl_oracle.calendar` — season label helper (week unresolved without schedule)
+- `nfl_oracle.identity` — Real-primary identity map + Corpus G players hydrate
+- `nfl_oracle.service` — oracle-core FastAPI research routes for schema/catalog JSON only
+- `nfl_oracle.baselines.player_priors` — walk-forward player/position/global prior scaffold
+- `nfl_oracle.strategy.scoring` — observation-only weighted five-card shadow score
+- `nfl_oracle.data.coverage_matrix` — load/save helpers for catalog coverage_matrix.json
+- baselines CLI `--methods` includes optional `player_mean`
+- `nfl_oracle.calendar.schedule` — offline nflverse schedules.csv parser (public data)
+- `scripts/hydrate_identity_fixtures.py` — offline identity summary from fixtures
+- GitHub push from box blocked (PAT Contents write 403); commits local on `codex/nfl-data-schemas-scaffold`
+
+Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Railway deploy source.
+
+
+## Provider stubs (#91) (2026-09-06 CT)
+
+- `nfl_oracle.providers.auth_status.probe_realsports_auth` — presence-only probe (no secret values)
+- `nfl_oracle.providers.five_card.FiveCardProviderStub` — shadow preview / hard-deny submit+inventory
+- CLI: `nfl-provider-status` / `make -C nfl-oracle provider-status`
+- Research: `GET /research/provider/status`
+- Box auth still missing; status expected `auth_missing`
+- GitHub push/MCP write still 403; see `/workspace/codex-nfl/HANDOFF.md`
+
+
+
+## Research service path (2026-09-06 CT)
+
+Runnable offline research HTTP (observation only; no contest entry; no deploy):
+
+- CLI: `nfl-research-serve` / `make -C nfl-oracle research-serve` (needs `--extra serve` / uvicorn)
+- Routes: schemas (labels/strategy/features/**scoring**), catalog, provider status + posture,
+  `POST /research/shadow/preview` (contest algebra + optional best ordering),
+  `POST /research/shadow/rank-orderings` (top-k of 120),
+  `GET /research/gates/entry` (always `contest_entry=false` + package hard-deny),
+  `GET /research/coverage/summary`, `GET /research/features/live-ok`,
+  `GET /research/status` (`include_gates` query; Railway presence flags; auth presence only),
+  `/health` (auth degraded OK)
+- Strategy: contest scoring algebra (`OBSERVED_DEFAULT_SLOT_MULTIPLIERS`),
+  `ordered_five_card_actions` (120) + `best_shadow_ordering` / `rank_shadow_orderings`,
+  entry gates checklist, `posture_from_readiness`
+- Data: `research_data_summary` over season catalog + coverage_matrix
+- Features: `player_prior_mean` + `live_ok_feature_names()`; prior feature rows helper
+- daily_shadow artifact includes provider_status (presence only)
+- Circular-import fix: `posture`/`gates` lazy-import provider stubs (strategy package exports safe)
+- Box verification: pytest **66 passed**; ruff + mypy clean on touched paths
+- **Still deny real submit** — `FiveCardProviderStub.submit` raises; gates never flip `contest_entry`
+
+## Railway config presence (document only; do not deploy)
+
+- **In-repo:** no `nfl-oracle/railway.toml`, no `nfl-oracle/Dockerfile` (unlike wnba-oracle).
+- **External:** Railway project `nfl-oracle-staging` / service `nfl-oracle` exists as
+  offline placeholders (0/1 online by design). No deploy source connected from this package.
+- Research status route reports `railway.in_repo_config=false` and staging names only.
+- Do not create Railway services, inject production secrets, or connect a deploy source
+  from this overnight pass.
 
 ## Codespace live-wire (2026-09-05 CT)
 
@@ -117,6 +197,19 @@ PR #92 `chat/89-nfl-real-corpus` branch confirmed:
   not stale local CLI state.
 - No contest entry code or credentials staged.
 
+## Box Real Sports auth (2026-09-06 CT)
+
+Executor box `/workspace/sports` on branch `codex/nfl-data-schemas-scaffold`:
+
+- [x] Offline `scripts/auth-check nfl-oracle --offline` passed
+- [ ] No `REALSPORTS_STORAGE_STATE_B64GZ` / path env on box
+- [ ] No `nfl-oracle/.secrets/*.sops.env` or age private key on box
+- [ ] No registered local machines via ListMachines for pulling scraper state
+- Live Corpus G backfill blocked until Ben seeds storage_state (SOPS decrypt via
+  `scripts/with-secrets wnba-oracle -- …`, Codespaces secret, or local
+  `nfl-oracle/scraper/storage_state.json` mode 0600)
+- Never print token / storage_state values
+
 ## Codespace daily ops (planned)
 
 **HOLD** until Ben confirms Codespaces secret `RAILWAY_TOKEN` is set for
@@ -141,3 +234,275 @@ Checklist (execute only after HOLD clears):
 - [ ] Record run timestamps + clock fields (`event_time`, `source_available_at`,
       `captured_at`, `decision_at`) on artifacts / strategy notes
 - [ ] Optional parallel: denser Corpus G census only when Ben picks it up
+
+## Codespace secret inventory (2026-09-06 CT)
+
+- Codespaces secret `RAILWAY_TOKEN` is present (name-only check via `gh secret list --app codespaces`).
+- No Real Sports storage-state secrets in repo or Codespaces secret lists.
+- Repo secrets include Railway workspace token and DB-related keys (WNBA); none are NFL storage_state.
+
+## GitHub publish blocker (2026-09-06 CT)
+
+- Branch `codex/nfl-data-schemas-scaffold` is local-only (ahead of `main`; push 403).
+- Tracking: GitHub issue #94. Box PAT lacks Contents:Write.
+- Codespace has `/tmp/nfl-schemas.bundle` + `/tmp/cs-push-bundle.sh` (cp OK); SSH from box hangs — run push inside CS.
+- No Railway deploy; nfl-oracle has no railway.toml.
+
+
+## Overnight research hardening (2026-09-06 01:18 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Verified contest scoring algebra scaffold: `nfl_oracle.strategy.algebra`
+  (`score = value * (slot_multiplier + multiplierBonus)` non-negative branch;
+  observed defaults `[2, 1.8, 1.6, 1.4, 1.2]`; negative branch refused)
+- Entry gates: `nfl_oracle.strategy.gates.evaluate_entry_gates` — checklist always
+  keeps `contest_entry=False`; `FiveCardProviderStub.submit` still hard-denies
+- Research API: `GET /research/schemas/scoring`, `GET /research/gates/entry`,
+  `POST /research/shadow/rank-orderings`; shadow preview gains contest algebra +
+  best ordering; `/research/status` includes entry_gates + auth presence
+- Features: `week`, `prior_n_games`, `card_boost_post_settlement` (live_ok=false);
+  `nfl_oracle.features.rows` walk-forward prior feature rows
+- Box state (honest): Real Sports auth missing; GitHub Contents write 403; no
+  in-repo Railway Dockerfile/railway.toml; staging names only; no deploy
+- Verification: pytest **66 passed**; ruff + mypy clean on `nfl-oracle/src`
+
+
+## Identity / coverage density + research integration (2026-09-06 ~01:23 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Offline density helpers: `nfl_oracle.identity.density`, `nfl_oracle.data.density`
+- Dense fixtures: `tests/fixtures/identity/dense_players.json`,
+  `tests/fixtures/coverage/dense_{catalog,matrix}.json`,
+  `tests/fixtures/offline_research/data/catalog/*` for research TestClient roots
+- Identity hydrate composes `firstName`+`lastName`; `hydrate_identity_fixtures` emits density
+- `research_data_summary` includes `density` block (seed means + matrix status ratios)
+- Integration: `tests/integration/test_research_routes.py` (full route surface, dense coverage,
+  shadow/rank, gates hard-deny, validation 422s)
+- Box verification: pytest **78 passed**; ruff + mypy clean on `nfl-oracle/src`
+- **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403
+
+## Denser fixtures + draft readiness honesty (2026-09-06 ~01:30 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Denser offline fixtures: 8 seasons / 36 catalog seeds; coverage matrix 6 known / 1 unknown / 1 blocked (18 matrix games); identity ~41 players (≥36 complete)
+- Offline research root now includes `data/identity/players.json`
+- Extra value_labels fixtures: 2022/1002, 2025/5001
+- Research API: `GET /research/identity/density`; `/research/status` adds `identity` + `draft_readiness` (submit_hard_denied, railway_deploy_ready=false, deny_by_default_entry_gates)
+- `research_data_summary` includes `identity` block
+- Integration tests cover denser coverage/identity, draft_readiness honesty, provider submit/inventory hard-deny
+- Entry gates: `package_submit_hard_deny` remains ok=False; `contest_entry` never flips
+- Box verification: pytest **81 passed**; ruff + mypy clean on `nfl-oracle` paths
+- **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403; no Railway Dockerfile/railway.toml
+
+
+## Strategy posture vocabulary (2026-09-06 CT)
+
+Observation-only `nfl_oracle.strategy.schema.Posture` / `posture_from_readiness`:
+
+| Posture | When | Contest entry |
+|---------|------|---------------|
+| `blocked` | Real auth missing, or defensive if readiness ever claims `contest_entry=true` | never |
+| `shadow_only` | Provider stub status with auth present | never |
+| `ready_pending_contract` | Auth present, contract still `#91` unverified | never |
+| `capture_only` | Contract marked verified; package still denies submit | never |
+
+Box / CI default without storage_state → `blocked` via `auth_missing`.
+`evaluate_entry_gates` always keeps `contest_entry=false`; `package_submit_hard_deny` stays `ok=false`.
+Research `/research/status` and `/research/provider/status` expose posture for honesty only.
+
+## Schedule + denser coverage fixtures (2026-09-06 ~01:40 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Schedule helpers: `summarize_schedule_density`, `load_schedules_csv`, `week_for_gameday`,
+  `catalog_vs_schedule_density`; `season_week_for_date(..., schedule=)` resolves week offline
+- Fixture: `tests/fixtures/schedule/dense_schedules.csv` (3 seasons / ≥24 games / ≥8 week-slots)
+- Coverage denser: 10 seasons / 45 catalog seeds; matrix 8 known / 1 unknown / 1 blocked (26 matrix games)
+- Offline research root mirrors denser catalog/matrix
+- Script: `scripts/research_client_smoke.py` / `make -C nfl-oracle research-smoke` (TestClient offline)
+- STATUS posture table above documents deny-by-default strategy posture
+- Box verification: pytest **94 passed**; ruff + mypy clean on `nfl-oracle` paths
+- **Still deny real submit**; Real Sports auth missing on box; GitHub Contents write 403; no Railway Dockerfile/railway.toml
+
+## Draft readiness densify (2026-09-06 ~01:50 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Coverage denser: **12 seasons / 56 catalog seeds**; matrix **10 known / 1 unknown / 1 blocked** (32 matrix games); known_ratio ≈ 0.833
+- Identity denser: **~57 players** (≥50 complete) mirrored into offline research root
+- Schedule denser: **4 seasons / ≥36 games / ≥12 week-slots** (`tests/fixtures/schedule/dense_schedules.csv`)
+- Research API tests expanded (`tests/unit/test_research_api_draft_edges.py`); smoke hits GET routes + shadow preview + rank-orderings via TestClient (`scripts/research_client_smoke.py` / `make research-smoke`)
+- Box verification: pytest **103 passed**; ruff + mypy clean on `nfl-oracle` paths
+- **Still deny real submit** — `FiveCardProviderStub.submit` raises; entry gates `package_submit_hard_deny` ok=false; `contest_entry` never flips
+- Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`); GitHub Contents write 403; branch local-only; no Railway Dockerfile/railway.toml
+
+## Research-smoke polish + denser matrix (2026-09-06 ~01:40 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Coverage denser: **14 seasons / 70 catalog seeds**; matrix **12 known / 1 unknown / 1 blocked** (40 matrix games); known_ratio ≈ 0.857
+- Offline research root mirrors denser catalog/matrix (`tests/fixtures/coverage/dense_{catalog,matrix}.json`)
+- `make research-smoke` polish: strip `DATABASE_URL`/`REDIS_URL` like `make test`; `SMOKE_ARGS` passthrough; smoke asserts density floors + `package_submit_hard_deny`
+- **Still deny real submit** — entry gates hard-deny; `contest_entry` never flips
+- Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`); GitHub Contents write 403; branch local-only; no Railway Dockerfile/railway.toml
+
+## Offline census + identity aliases + feature depth (2026-09-06 ~01:45 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- **Schedule/coverage census:** denser offline schedules (8 seasons / ≥120 games /
+  ≥60 week-slots; 2023–2025 full weeks 1–18). Helpers: `try_load_schedules_csv`,
+  `resolve_schedule_csv_path`, `build_gameday_week_index`, `season_week_census`,
+  `coverage_schedule_census`, `research_schedule_summary`. Research routes:
+  `GET /research/schedule/summary`; coverage summary embeds schedule + census.
+- **Identity aliases:** `identity.aliases` (`upsert_with_aliases`,
+  `apply_alias_table`, `reconcile_alias_collisions`); density tracks
+  `n_with_external_alias` / `alias_ratio`. Fixture ~89 players with gsis/espn
+  aliases + intentional display-name collision pair.
+- **Feature registry depth:** pre-lock live_ok features expanded (calendar /
+  matchup / identity / prior tiers incl. median + team prior + days_rest +
+  kickoff_slot); `features_document` reports group/live counts.
+- **research-smoke:** documented in README; TestClient subset asserts schedule
+  census floors + `provider_contract_verified` ok=false + package hard-deny.
+- **Still deny real submit** — entry gates hard-deny; `UNKNOWN_PROVIDER_RULES`
+  unchanged (offline notes only for slot weights / negative branch).
+- Box verification: pytest **116 passed**; ruff + mypy clean; research-smoke OK
+- Honest gaps: Real Sports auth missing (posture `blocked`); GitHub Contents
+  write 403; branch local-only; no Railway Dockerfile/railway.toml; Claude gap #3 feature_ridge landed (optional); #91 live contract still open.
+
+## Claude gap #1 — full-season schedule census (2026-09-06 ~01:55 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Public **nflverse/nfldata** `games.csv` cached/slimmed (CC BY 4.0; see `DATA_ATTRIBUTION.md`)
+- Committed continuous slates: `data/schedule/schedules.csv` — **24 seasons / 6499 games**
+  (REG+post); fixture `tests/fixtures/schedule/dense_schedules.csv` — **8 seasons / 2227 games**
+- Loaders: `resolve_schedule_csv_path`, `try_load_schedules_csv`, `summarize_season_slate`,
+  `season_week_census`, `coverage_schedule_census`, `research_schedule_summary`
+- Continuous REG discovery: weeks 1..17 (legacy) / 1..18 (modern) without holes;
+  smoke reports `schedule_seasons=24 schedule_games=6499`
+- Refresh: `scripts/cache_nflverse_schedules.py` / `make cache-schedules`
+- Research: `GET /research/schedule/summary` + coverage summary embeds schedule census
+- **Still deny real submit**; Real Sports auth optional/missing; no GitHub push
+
+## Claude gaps #2 / #4 / #5 offline (2026-09-06 ~02:15 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- **Gap #4 identity:** `normalize_display_name` / `name_match_keys` / soft
+  nickname bridges beyond first+last; `suggest_dedup_candidates` (never
+  auto-merges). Fixtures ~115 players with Jr/III collisions, nickname soft
+  keys, intentional shared-gsis alias collision. Tests cover collisions.
+- **Gap #5 features:** injury / weather / pace / opponent-adjusted
+  FeatureSpecs with `offline_stub=True` and clear live_ok flags;
+  `offline_stub_feature_row` emits null/false placeholders;
+  `live_ok_feature_names()` ≥24 including injury/weather/pace/opp-adj.
+- **Gap #2 provider rules:** `OFFLINE_RULE_NOTES` now covers all 7
+  `UNKNOWN_PROVIDER_RULES` (best-effort public/playbook notes). Notes do
+  **not** remove keys or enable submit. Research:
+  `GET /research/provider/rules-offline`; docs
+  `src/nfl_oracle/providers/RULES_OFFLINE.md`.
+- **Still deny real submit** — entry gates hard-deny; `submit()` raises;
+  `provider_contract_verified=false`.
+- Box verification: pytest **122 passed**; ruff + mypy clean; research-smoke OK
+- Honest gaps unchanged: Real Sports auth missing; GitHub Contents write 403;
+  no Railway Dockerfile; value model beyond mean/median still deferred; #91 live
+  contract still open.
+
+
+## Claude gap #3 — feature-driven value model (2026-09-06 ~02:05 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Built on peer HEAD `a802bc5` (gaps #2/#4/#5). Optional walk-forward method
+  **`feature_ridge`**: stdlib ridge on live_ok prior features
+  (`player_prior_mean`, position mean/median, global/team priors,
+  `prior_n_games`, position one-hots). No numpy/sklearn required.
+- Modules: `nfl_oracle.baselines.ridge`, `nfl_oracle.baselines.value_model`,
+  `nfl_oracle.strategy.value_preds` (shadow `values_by_player` wiring)
+- CLI: `nfl-value-baselines --methods feature_ridge` (optional). **Default**
+  path unchanged: `global_mean` / `position_mean` / `position_median` only.
+- Leakage proofs: train seasons strictly earlier than test; design matrix never
+  includes label/`same_slate_*`; mutating held-out y does not change OOS preds.
+- Box verification: pytest **132 passed**; ruff + mypy clean on touched paths
+- **Still deny real submit**; Real Sports auth optional/missing; no GitHub push
+
+
+## Shadow value-model flag (2026-09-06 ~02:10 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Wired optional **`feature_ridge`** into research shadow preview / rank-orderings
+  via request flag **`use_feature_value_model`** (default **`False`** = offline-safe
+  explicit `values_by_player` path; no model fit unless opted in).
+- Opt-in requires `player_positions`, `decision_season`, and inline `train_labels`
+  (seasons strictly earlier than decision). Response includes `value_model` meta
+  (`value_source` = `explicit` | `feature_ridge`).
+- Status exposes `value_model.shadow_flag` / `shadow_flag_default=false`.
+- E2E TestClient: schedule summary + shadow rank (explicit + flag) + provider
+  rules-offline (`tests/integration/test_research_routes.py`).
+- `make research-smoke` remains the offline smoke entry (hard-deny; strips DB/redis).
+- Box verification: pytest **136 passed**; ruff + mypy clean on touched paths;
+  `research-smoke` OK.
+- **Still deny real submit** — entry gates hard-deny; `submit()` raises;
+  `provider_contract_verified=false`.
+- Honest gaps unchanged: Real Sports auth missing on box (posture `blocked`);
+  GitHub Contents write 403; branch local-only / unpushed; no Railway
+  Dockerfile/railway.toml; draft readiness gates deny by default; #91 live
+  contract still open.
+
+## Research OpenAPI tags + readiness score (2026-09-06 CT)
+
+- OpenAPI tags split: `research-schemas`, `research-provider`, `research-shadow`,
+  `research-data`, `research-status` (legacy flat `research` tag removed)
+- `GET /research/health/readiness-score` — 0–100 observation-only density score
+  (`nfl_oracle.strategy.readiness_score`); also optional on `/research/status`
+- High score does **not** authorize contest entry; auth missing expected on box
+- pytest: 144; branch still local-only (push 403)
+
+
+## Offline contest dry-run (2026-09-06 ~02:10 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- `nfl_oracle.strategy.dry_run` — builds a five-card shadow slate from offline
+  value-label fixtures (`tests/fixtures/value_labels`); default values =
+  walk-forward player/position priors; optional **`feature_ridge`**
+- Labels: `mode=dry_run`, `dry_run=true`, `observation_only=true`,
+  `contest_entry=false`; `submit_proof` calls stub.submit and records hard deny
+- CLI: `nfl-contest-dry-run` / `make -C nfl-oracle contest-dry-run`
+- Research: `GET /research/shadow/contest-dry-run` (`use_feature_ridge`,
+  `decision_season`, `top_k` query params)
+- pytest: **155**; still **no push**; real contest entry remains hard-denied
+
+
+## Contest dry-run × week/slate harden (2026-09-06 ~02:30 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- `resolve_dry_run_schedule_slate` — priority: explicit `schedule_date` →
+  `schedule_week` → label `event_time` → week-1 fallback; records `dry_run_attach`
+- Optional `schedule_team` on dry-run CLI / research route for opponent lookup
+- Tests: unit priority + CLI text attach; integration date/auto/422
+- pytest: **172**; gates unchanged (`contest_entry=false`; submit hard-deny)
+
+
+## Walk-forward eval report (2026-09-06 ~02:15 CT)
+
+Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
+
+- Offline **baselines vs `feature_ridge`** walk-forward report on fixture labels
+- Modules: `nfl_oracle.baselines.eval_report` + CLI `nfl-walk-forward-report`
+- Make: `make -C nfl-oracle walk-forward-report`
+- Checked-in sample: [`artifacts/walk_forward_fixture_sample.md`](artifacts/walk_forward_fixture_sample.md)
+  (+ `.json`); generated `walk_forward_latest.*` gitignored
+- Tests: `tests/unit/test_eval_report.py`
+- **Dry-run / submit gates unchanged** — `contest_entry=false`; hard-deny intact
+- Fixture-scale ranking (illustrative): `position_mean` best MAE; `feature_ridge`
+  does not beat classical priors on the tiny fixture set
+- Box verification: pytest **160 passed**; ruff + mypy clean on baselines eval paths
+- Still **no push**; Real Sports auth optional/missing
+

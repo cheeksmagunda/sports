@@ -58,3 +58,16 @@ coverage_samples/
 
 # Daily shadow status artifacts (local/CS only; may summarize coverage)
 data/artifacts/
+
+# nflverse public schedule cache (full CSV); slim copy lives in data/schedule/
+data/cache/*
+!data/cache/.gitkeep
+!data/cache/README.md
+
+# Walk-forward eval reports (keep small checked-in sample)
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/README.md
+!artifacts/walk_forward_fixture_sample.json
+!artifacts/walk_forward_fixture_sample.md
+

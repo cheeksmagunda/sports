@@ -26,11 +26,20 @@ dev = [
     "respx>=0.21,<1.0",
     "ruff>=0.7,<1.0",
     "mypy>=1.13,<2.0",
+    "uvicorn[standard]>=0.32,<1.0",
+]
+serve = [
+    "uvicorn[standard]>=0.32,<1.0",
 ]
 
 [project.scripts]
 nfl-corpus-g-backfill = "nfl_oracle.ingest.backfill:main"
 nfl-value-baselines = "nfl_oracle.baselines.cli:main"
+nfl-strategy-schema = "nfl_oracle.strategy.cli:main"
+nfl-research-serve = "nfl_oracle.service.cli:main"
+nfl-provider-status = "nfl_oracle.providers.cli:main"
+nfl-contest-dry-run = "nfl_oracle.strategy.dry_run_cli:main"
+nfl-walk-forward-report = "nfl_oracle.baselines.eval_cli:main"
 
 [build-system]
 requires = ["hatchling"]
