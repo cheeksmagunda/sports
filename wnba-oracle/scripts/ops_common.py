@@ -230,7 +230,7 @@ class RailwayClient:
 
     def __init__(self, token: str, *, timeout: float = 25.0) -> None:
         if not token.strip():
-            raise ValueError("RAILWAY_WORKSPACE_TOKEN is missing")
+            raise ValueError("RAILWAY_TOKEN is missing")
         self._token = token
         self._timeout = timeout
 

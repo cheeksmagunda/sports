@@ -66,7 +66,7 @@ def check_railway_cli() -> int:
 
 
 def check_railway_graphql() -> int:
-    token = os.environ.get("RAILWAY_WORKSPACE_TOKEN", "").strip()
+    token = os.environ.get("RAILWAY_TOKEN", "").strip()
     if not token:
         report("railway GraphQL", "not configured")
         return 0

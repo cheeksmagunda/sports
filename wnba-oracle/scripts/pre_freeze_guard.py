@@ -205,13 +205,13 @@ def main() -> int:
     api_base = args.api_base.rstrip("/")
     checks, health_failed = _api_checks(api_base, args.slate_date, window=window)
     if args.repair:
-        token = os.environ.get("RAILWAY_WORKSPACE_TOKEN", "")
+        token = os.environ.get("RAILWAY_TOKEN", "")
         if not token:
             checks.append(
                 Check(
                     "Allowlisted repair",
                     "alert",
-                    "RAILWAY_WORKSPACE_TOKEN is missing for the requested repair.",
+                    "RAILWAY_TOKEN is missing for the requested repair.",
                 )
             )
         else:

@@ -265,7 +265,7 @@ CONNECTORS: Final[tuple[ConnectorSpec, ...]] = (
         credential_class="native_or_scoped_identity",
         criticality="runtime",
         affects_decision=False,
-        credential_env_vars=("RAILWAY_TOKEN", "RAILWAY_WORKSPACE_TOKEN"),
+        credential_env_vars=("RAILWAY_TOKEN",),
         configuration_env_vars=(
             "WNBA_RAILWAY_PROJECT_ID",
             "WNBA_RAILWAY_ENVIRONMENT_ID",

@@ -334,7 +334,7 @@ def test_railway_graphql_output_redacts_environment_and_variable_secrets(
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setenv("RAILWAY_WORKSPACE_TOKEN", "environment-sentinel")
+    monkeypatch.setenv("RAILWAY_TOKEN", "environment-sentinel")
     variables = {"password": "variable-sentinel"}
     redactions = module.collect_redactions(variables)
     body = json.dumps(

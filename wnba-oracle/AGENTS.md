@@ -132,10 +132,11 @@ handling. WNBA-specific:
   arguments, or place them in a URL visible to logs or process listings.
 - Real Sports derived storage state is a secret. Write
   `scraper/storage_state.json` atomically with mode `0600`; never commit it.
-- Standard `gh` and Railway CLI logins are valid ordinary interfaces. The
-  Railway GraphQL helper uses `RAILWAY_WORKSPACE_TOKEN` from the environment.
-  Never copy that workspace value into `RAILWAY_TOKEN`. A deliberately scoped
-  Railway project token may use `RAILWAY_TOKEN` for this application.
+- Standard `gh` and Railway CLI logins are valid ordinary interfaces. Railway
+  CLI, GraphQL, and repair operations all read the same `RAILWAY_TOKEN`
+  environment variable (the previously separate `RAILWAY_WORKSPACE_TOKEN` name
+  was retired in #113). Provision `RAILWAY_TOKEN` with the narrowest scope
+  that still lets these operations succeed. Never print or persist its value.
 
 ## Providers
 

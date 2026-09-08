@@ -76,7 +76,7 @@ jobs:
       - name: Deploy the exact commit to the isolated one-shot service
         id: deploy
         env:
-          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           TARGET_SHA: ${{ inputs.commit_sha }}
         run: |
           trigger_query='query BackfillTriggers($environmentId: String!) { environment(id: $environmentId) { deploymentTriggers { edges { node { serviceId } } } } }'
@@ -110,7 +110,7 @@ jobs:
       - name: Wait for terminal Railway success
         env:
           DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
-          RAILWAY_WORKSPACE_TOKEN: ${{ secrets.RAILWAY_WORKSPACE_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           query='query BackfillDeployment($id: String!) { deployment(id: $id) { status } }'
           for attempt in $(seq 1 120); do

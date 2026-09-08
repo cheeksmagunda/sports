@@ -87,9 +87,9 @@ def main() -> int:
     if not query:
         print("rwgql: GraphQL query is required", file=sys.stderr)
         return 64
-    token = os.environ.get("RAILWAY_WORKSPACE_TOKEN", "").strip()
+    token = os.environ.get("RAILWAY_TOKEN", "").strip()
     if not token:
-        print("rwgql: RAILWAY_WORKSPACE_TOKEN is missing", file=sys.stderr)
+        print("rwgql: RAILWAY_TOKEN is missing", file=sys.stderr)
         return 78
 
     variables: object = {}
