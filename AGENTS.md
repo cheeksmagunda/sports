@@ -33,6 +33,12 @@ commands, but cannot weaken this contract.
    acceptance check. Link the branch, every commit, and the PR to that issue.
     The acting agent handles this bookkeeping. Every work item requires an issue;
     follow `CONTRIBUTING.md` for the repository contribution process.
+6. Before material work, declare the acting environment and prove the write
+   path. Run `make write-path-check` from the repository root. It reports the
+   host, checkout, remote, and branch, then confirms this session can push to
+   `origin`. If the push is denied, stop and report the block on the issue.
+   Do not mint a per-agent credential and do not keep building behind a
+   credential that cannot land the work.
 
 ## Portfolio boundaries
 
@@ -162,6 +168,11 @@ with git. Nothing else is authoritative.
 
 Only call work portfolio-current after the relevant commit is on live `main`.
 A dirty or unpushed Codespace is local state, not portfolio state.
+
+Never hold more than five unpushed commits. Push the branch or open a draft
+pull request first. An agent that cannot push has no working credential and
+must stop and report rather than accumulate history that only one machine
+holds. `make write-path-check` enforces both the push proof and the ceiling.
 
 **Static-copy entry points** (may be stale; fetch live before acting):
 - Claude, Codex, Copilot, and Grok cloud projects or chats that use uploaded

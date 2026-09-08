@@ -94,6 +94,9 @@ build:
 codespaces-smoke:
 	sh scripts/codespaces-smoke.sh
 
+write-path-check:
+	sh scripts/write-path-check
+
 check-boundaries:
 	python3 scripts/check_import_boundaries.py
 
