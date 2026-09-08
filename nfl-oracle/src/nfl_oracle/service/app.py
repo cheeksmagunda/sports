@@ -531,11 +531,21 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
         entry = evaluate_entry_gates(stub=stub)
         railway = {
             "in_repo_config": False,
-            "dockerfile": False,
+            "dockerfile": False,  # no Railway deploy Dockerfile; local research Docker is separate
             "staging_project_name": "nfl-oracle-staging",
             "staging_service_name": "nfl-oracle",
             "deploy_source_connected": False,
             "note": "external staging placeholders only; do not deploy from this package",
+        }
+        local_research_docker = {
+            "available": True,
+            "image": "nfl-oracle-local",
+            "dockerfile": "nfl-oracle/Dockerfile",
+            "compose": "nfl-oracle/docker-compose.yml",
+            "observation_only": True,
+            "secrets_required": False,
+            "railway_deploy": False,
+            "make_target": "make -C nfl-oracle docker-research-smoke",
         }
         payload: dict[str, Any] = {
             "app": "nfl-oracle",
@@ -557,6 +567,7 @@ def create_app(*, project_root: Path | None = None) -> FastAPI:
                 "default_offline_safe": True,
             },
             "railway": railway,
+            "local_research_docker": local_research_docker,
             "auth": {
                 "usable": ready.auth.usable,
                 "status": ready.status.value,

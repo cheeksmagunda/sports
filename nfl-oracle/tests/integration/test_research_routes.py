@@ -94,6 +94,9 @@ def test_status_railway_gates_and_draft_readiness_honesty() -> None:
     assert status["contest_entry"] is False
     assert status["railway"]["in_repo_config"] is False
     assert status["railway"]["dockerfile"] is False
+    assert status["local_research_docker"]["available"] is True
+    assert status["local_research_docker"]["secrets_required"] is False
+    assert status["local_research_docker"]["railway_deploy"] is False
     assert status["railway"]["deploy_source_connected"] is False
     assert status["entry_gates"]["contest_entry"] is False
     assert status["data"]["density"]["catalog_seed_game_count"] == 70
