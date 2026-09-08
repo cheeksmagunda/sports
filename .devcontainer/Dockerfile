@@ -10,6 +10,6 @@ ENV UV_LINK_MODE=copy
 RUN rm -f /etc/apt/sources.list.d/yarn.list \
 	&& apt-get update \
 	&& export DEBIAN_FRONTEND=noninteractive \
-	&& apt-get install -y --no-install-recommends postgresql-client redis-tools \
+	&& apt-get install -y --no-install-recommends postgresql-client redis-tools git-lfs \
 	&& apt-get clean \
 	&& rm -rf /var/lib/apt/lists/*
