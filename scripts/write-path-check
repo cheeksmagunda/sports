@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+# Prove the write path before material work.
+# Reports the acting environment, confirms this session can push to the remote,
+# and fails when unpushed history has grown past the ceiling.
+# Never prints credential values.
+
+remote="${1:-origin}"
+ceiling="${SPORTS_UNPUSHED_CEILING:-5}"
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+echo "Acting environment"
+echo "  host: $(hostname)"
+echo "  checkout: $(pwd)"
+if [ "${CODESPACES:-false}" = "true" ]; then
+    echo "  codespace: ${CODESPACE_NAME:-unnamed}"
+else
+    echo "  codespace: no (not the canonical environment)"
+fi
+echo "  remote: $(git remote get-url "$remote")"
+echo "  branch: ${branch}"
+
+echo "Checking write path"
+if git push --dry-run "$remote" "HEAD:refs/heads/preflight/write-path-check" >/dev/null 2>&1; then
+    echo "  push: allowed"
+else
+    echo "  push: denied to ${remote}" >&2
+    echo "  Stop here. Report the block on the issue before writing code." >&2
+    echo "  Do not mint a per-agent credential and do not build behind a wall." >&2
+    exit 1
+fi
+
+echo "Checking unpushed backlog"
+if git rev-parse --verify --quiet "${remote}/${branch}" >/dev/null 2>&1; then
+    base="${remote}/${branch}"
+else
+    base="${remote}/main"
+fi
+ahead="$(git rev-list --count "${base}..HEAD")"
+echo "  unpushed commits vs ${base}: ${ahead} (ceiling ${ceiling})"
+if [ "${ahead}" -gt "${ceiling}" ]; then
+    echo "  Push the branch or open a draft pull request before continuing." >&2
+    exit 1
+fi
+
+echo "Write path check passed"
