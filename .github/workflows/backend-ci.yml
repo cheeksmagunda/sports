@@ -204,6 +204,11 @@ jobs:
       - name: Build the Codespaces environment and run post-create setup
         run: npx --yes --package @devcontainers/cli@0.88.0 devcontainer up --workspace-folder . --frozen-lockfile
 
+      - name: Verify repository contracts in the devcontainer
+        run: >-
+          npx --yes --package @devcontainers/cli@0.88.0 devcontainer exec
+          --workspace-folder . make codespaces-smoke
+
       - name: Verify portable services and migrations in the devcontainer
         run: >-
           npx --yes --package @devcontainers/cli@0.88.0 devcontainer exec

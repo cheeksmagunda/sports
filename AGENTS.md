@@ -215,7 +215,8 @@ Command compatibility across entry points:
 
 ```sh
 # All entry points support these from /workspaces/sports root:
-make setup                      # Install locked dependencies
+make setup                      # Install locked dependencies only
+make codespaces-smoke           # Verify contracts, lint, and types
 make test                       # Run offline tests
 make test-core                  # Core-only tests
 make test-app APP=wnba-oracle   # WNBA-only tests
@@ -233,6 +234,11 @@ cd wnba-oracle && make test     # Run wnba-oracle tests only
 cd nba-oracle && make test      # Run nba-oracle tests only
 cd nhl-oracle && make test      # Run nhl-oracle tests only
 ```
+
+`make setup` provisions and `make codespaces-smoke` verifies. They are
+deliberately separate: environment creation must never depend on the working
+branch being lint-clean, or a single style error leaves the canonical
+environment unbuildable exactly when it is needed most.
 
 Never act on remembered or cached copies of sync-critical files when a
 live copy is reachable.
