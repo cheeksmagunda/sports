@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules contest-dry-run walk-forward-report
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules contest-dry-run walk-forward-report docker-research-build docker-research-smoke
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -22,6 +22,7 @@ help:
 	@echo "  make research-smoke - offline TestClient smoke (hard-deny; SMOKE_ARGS=--json)"
 	@echo "  make contest-dry-run - offline five-card shadow slate (dry_run; hard-deny submit)"
 	@echo "  make walk-forward-report - baselines vs feature_ridge eval report (fixtures → artifacts/)"
+	@echo "  make docker-research-smoke - build nfl-oracle-local research image if docker available (skip ok)"
 
 setup:
 	$(MAKE) -C .. setup
@@ -77,3 +78,18 @@ contest-dry-run:
 
 walk-forward-report:
 	$(UV_RUN) nfl-walk-forward-report
+
+# Local research Docker (observation-only). Skips cleanly when docker is absent.
+# Does not touch WNBA Railway configs. No secrets required.
+docker-research-build:
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "docker not available; skip nfl-oracle-local research build"; \
+		exit 0; \
+	fi
+	docker compose -f docker-compose.yml build
+
+docker-research-smoke: docker-research-build
+	@if ! command -v docker >/dev/null 2>&1; then \
+		exit 0; \
+	fi
+	@echo "nfl-oracle-local research image build OK (observation-only; no secrets)"

@@ -1,5 +1,5 @@
-# Root-context builds are deny-first. Add a path here only when the WNBA
-# backend Dockerfile copies it into the image.
+# Root-context builds are deny-first. Allow paths only when a Dockerfile
+# (WNBA backend or nfl-oracle local research) copies them into an image.
 **
 
 !pyproject.toml
@@ -40,6 +40,23 @@ wnba-oracle/**
 !wnba-oracle/models/picker_e2ced9ec_1780873338.pkl
 !wnba-oracle/models/picker_e2ced9ec_1780873338.sha256
 
+# nfl-oracle local research image (observation-only; not Railway).
+!nfl-oracle/
+nfl-oracle/**
+!nfl-oracle/Dockerfile
+!nfl-oracle/docker-compose.yml
+!nfl-oracle/pyproject.toml
+!nfl-oracle/README.md
+!nfl-oracle/src/
+!nfl-oracle/src/**
+!nfl-oracle/data/
+!nfl-oracle/data/catalog/
+!nfl-oracle/data/catalog/**
+!nfl-oracle/data/schedule/
+!nfl-oracle/data/schedule/**
+!nfl-oracle/data/raw/
+!nfl-oracle/data/raw/.gitkeep
+
 # The deny-first rule above also excludes these local and sensitive paths.
 # They are listed to make the build boundary auditable.
 .git/
@@ -58,3 +75,10 @@ wnba-oracle/frontend/
 wnba-oracle/tests/
 wnba-oracle/data/backups/
 wnba-oracle/data/snapshot/
+
+nfl-oracle/tests/
+nfl-oracle/scraper/
+nfl-oracle/.secrets/
+nfl-oracle/data/artifacts/
+nfl-oracle/data/cache/
+nfl-oracle/data/raw/corpus_g/
