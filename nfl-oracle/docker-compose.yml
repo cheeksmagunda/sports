@@ -1,6 +1,6 @@
 # Local observation-only nfl-oracle research API.
 # Image/service name: nfl-oracle-local
-# No secrets / env_file. Not Railway. Do not deploy to production.
+# No secrets, no environment-file directive. Not Railway. Do not deploy to production.
 #
 #   make -C nfl-oracle docker-research-smoke
 #   docker compose -f nfl-oracle/docker-compose.yml up --build
@@ -19,7 +19,7 @@ services:
     environment:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       NFL_ORACLE_MODE: research_local
-    # Intentionally no env_file and no secret mounts (scraper/storage_state excluded).
+    # Intentionally no environment-file directive and no secret mounts (the scraper auth session file is excluded).
     healthcheck:
       test:
         [

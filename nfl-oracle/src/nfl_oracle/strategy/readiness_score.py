@@ -104,14 +104,10 @@ def compute_research_readiness_score(
     catalog_unit = _clamp01(seed_game_count / TARGET_SEED_GAMES)
     coverage_unit = _clamp01(known_ratio / TARGET_KNOWN_RATIO)
     schedule_games_unit = _clamp01(schedule_game_count / TARGET_SCHEDULE_GAMES)
-    continuous_unit = _clamp01(
-        continuous_regular_season_count / TARGET_CONTINUOUS_SEASONS
-    )
+    continuous_unit = _clamp01(continuous_regular_season_count / TARGET_CONTINUOUS_SEASONS)
     schedule_unit = 0.6 * schedule_games_unit + 0.4 * continuous_unit
     identity_n_unit = _clamp01(identity_n / TARGET_IDENTITY_N)
-    identity_complete_unit = _clamp01(
-        identity_complete_ratio / TARGET_IDENTITY_COMPLETE_RATIO
-    )
+    identity_complete_unit = _clamp01(identity_complete_ratio / TARGET_IDENTITY_COMPLETE_RATIO)
     identity_unit = 0.5 * identity_n_unit + 0.5 * identity_complete_unit
     features_unit = _clamp01(live_ok_feature_count / TARGET_LIVE_OK_FEATURES)
     if unknown_provider_rule_count <= 0:
@@ -148,8 +144,7 @@ def compute_research_readiness_score(
             weight=15.0,
             unit_score=identity_unit,
             detail=(
-                f"n={identity_n}/{TARGET_IDENTITY_N};"
-                f" complete_ratio={identity_complete_ratio:.3f}"
+                f"n={identity_n}/{TARGET_IDENTITY_N}; complete_ratio={identity_complete_ratio:.3f}"
             ),
         ),
         ReadinessComponent(
@@ -162,10 +157,7 @@ def compute_research_readiness_score(
             key="provider_rules_offline",
             weight=15.0,
             unit_score=rules_unit,
-            detail=(
-                f"offline_notes={offline_rule_note_count}/"
-                f"{unknown_provider_rule_count}"
-            ),
+            detail=(f"offline_notes={offline_rule_note_count}/{unknown_provider_rule_count}"),
         ),
         ReadinessComponent(
             key="realsports_auth",
@@ -201,14 +193,8 @@ def readiness_score_from_summaries(
     id_density = identity.get("density") or {}
 
     known_ratio = float(density.get("known_ratio") or 0.0)
-    seed_count = int(
-        catalog.get("seed_game_count")
-        or density.get("catalog_seed_game_count")
-        or 0
-    )
-    schedule_games = int(
-        schedule_density.get("game_count") or schedule.get("game_count") or 0
-    )
+    seed_count = int(catalog.get("seed_game_count") or density.get("catalog_seed_game_count") or 0)
+    schedule_games = int(schedule_density.get("game_count") or schedule.get("game_count") or 0)
     continuous = int(schedule.get("continuous_regular_season_count") or 0)
     identity_n = int(identity.get("n_identities") or 0)
     complete_ratio = float(id_density.get("complete_ratio") or 0.0) if id_density else 0.0

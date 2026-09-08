@@ -370,10 +370,7 @@ def test_openapi_research_tags_are_split() -> None:
     assert "research" not in path_tags  # legacy single-tag bucket removed
     assert "research-schemas" in schema["paths"]["/research/schemas/labels"]["get"]["tags"]
     assert "research-shadow" in schema["paths"]["/research/shadow/preview"]["post"]["tags"]
-    assert (
-        "research-status"
-        in schema["paths"]["/research/health/readiness-score"]["get"]["tags"]
-    )
+    assert "research-status" in schema["paths"]["/research/health/readiness-score"]["get"]["tags"]
 
 
 def test_health_readiness_score_endpoint_offline() -> None:

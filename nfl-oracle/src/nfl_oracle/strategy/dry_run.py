@@ -148,7 +148,6 @@ def prove_submit_hard_denied(action: FiveCardAction) -> dict[str, Any]:
     }
 
 
-
 def _parse_event_date(raw: str | None) -> date | None:
     """Parse ISO / RFC3339 event_time to a calendar date (UTC date component)."""
 

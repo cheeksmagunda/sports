@@ -284,10 +284,6 @@ def run_smoke(*, fixture_root: Path, base_url: str | None) -> dict[str, Any]:
     return results
 
 
-
-
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
