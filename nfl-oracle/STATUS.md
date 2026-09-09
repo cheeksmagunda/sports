@@ -1,16 +1,19 @@
 # Status
 
-Last verified: 2026-09-08, local development checkpoint for issue #115.
+Last verified: 2026-09-08 20:40 CT, Codespace cleanup checkpoint for issue #115.
 
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
 
 ## Current operational readiness
 
-- GitHub `main` was verified at `66955746f76af3a024489606e37620bd43f0d5ac`.
-  The recommendation pipeline and frontend are unfinished branch work on
-  `chat/115-nfl-live-pipeline`, not a production deployment. The local Mac
-  write-path check passed. Railway runtime state was not rechecked during wrap-up.
+- GitHub `main` remains `66955746f76af3a024489606e37620bd43f0d5ac`.
+  The recommendation pipeline and frontend are branch work on
+  `chat/115-nfl-live-pipeline`, not a production deployment. The canonical
+  Codespace `orange-system-4jx77wj6jvg6cq4gq` is on that branch, clean after
+  cleanup commit `31968386d7488b1252ada04534be730efdf60c8b`, and
+  `make write-path-check` passed there. The Mac Copilot worktree is synced to
+  the same commit.
 - The service scope is five recommended players with committed slot order for
   the operator to enter manually. Contest submission remains hard-denied.
 - The controlling objective is expected Total Value:
@@ -23,18 +26,20 @@ treating any row as production truth.
   to a fresh provider lock/kickoff check. Correctness takes precedence over
   that first slate.
 - The latest saved slate was captured `2026-09-08T22:46:23.045249Z`: 161
-  observed candidates, one game, and all observed boosts zero. These are
-  observations, not proof of complete eligibility or final boost values.
+  observed candidates, one game, and all observed boosts zero. The branch now
+  fails closed if a freeze sees a partial candidate pool or a boost-regime
+  declaration that does not match the candidate boost table.
 - The local Corpus G loader yields 37,710 player-games from 570 validated
   games across 2024 and 2025, excluding 98 preseason games and one missing
   value. These ignored local artifacts are not transported by a git checkout.
 - Saved historical daily-contest evidence is one finalized contest, `870`
   (September 15, 2025), with 20 saved leaders out of 20,841 reported entrants.
   Full Corpus C collection and audit remain incomplete.
-- Release blockers include unsafe context identity fallbacks, incomplete
-  final pool/boost/context refresh, missing calibrated media/role evidence,
-  incomplete contest evaluation, and active-artifact/readiness API checks.
-  Passing unit tests alone does not resolve these operational risks.
+- Release blockers include unsafe context identity fallbacks, incomplete final
+  context refresh, missing calibrated media/role evidence, incomplete
+  contest-level decision evaluation, active-artifact/readiness API checks, and
+  no Railway deployment yet. Passing unit tests alone does not resolve these
+  operational risks.
 - The full session requirements, strategy decisions, audit findings, artifact
   paths, validation results, and continuation instructions are maintained in
   [issue #115](https://github.com/cheeksmagunda/sports/issues/115).
@@ -801,12 +806,32 @@ Emmanwori). The boost watcher launched this session
 2026-09-09T23:40:00Z`, still running) has logged all-zero every 15 minutes
 since 22:46 UTC.
 
-### Still not done, plainly
+### Cleanup checkpoint after failed subagents
 
-Projection for the 161-candidate pool (turning the decoded value model
-above into an actual five-name, slot-ordered recommendation for 2026-09-09),
-the two confirmed freeze-path gate gaps (pool completeness, boost-regime
-declaration), and a frontend simplification pass were all in progress in
-parallel subagents at the time of this entry and are not yet landed or
-committed. No claim of a finished, tested T-40 freeze path should be made
-until those land and are verified against a real dry run.
+Commit `31968386d7488b1252ada04534be730efdf60c8b` on
+`chat/115-nfl-live-pipeline` closes the two concrete freeze-path gaps found
+above: `Slate.assert_prelock()` now refuses incomplete pools, and every slate
+declares `zero_boost` or `provider_boosts_present` with checked counts and max
+boost. `NFLReader.collect()` passes those declarations from the provider
+capture, and regression tests cover complete, partial, zero-boost, and boosted
+slates.
+
+The branch also adds small, explicit research helpers for the failed projection
+and backtest subagents: `nfl_oracle.valuelaw.project` projects candidates from
+Real-id Corpus G history and returns zero-boost slot recommendations in
+descending projected value; `nfl_oracle.replay.backtest` replays zero-boost
+games from prior player history and reports capture ratio summaries. These are
+not a claim of a calibrated production edge. They are executable scaffolds for
+the one-game week-1 decision path and for honest historical capture reporting.
+
+Frontend status after `7b208f8`: the served page renders five cards in slot
+order as player name plus team, position, and opponent. It intentionally omits
+numeric projections and repeats that entries are never submitted
+automatically.
+
+Checks run in the canonical Codespace after `3196838`: `make write-path-check`,
+`make test-app APP=nfl-oracle` (257 passed, 1 skipped), `make -C nfl-oracle
+lint`, `make -C nfl-oracle typecheck`, `make check-boundaries`, and `make
+codespaces-smoke`. Docker is not installed in that Codespace, so the Docker
+smoke targets skip there by design. The Mac Docker production smoke passed
+after `.dockerignore` was updated to include `nfl-oracle/config/`.
