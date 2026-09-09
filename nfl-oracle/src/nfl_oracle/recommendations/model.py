@@ -145,9 +145,7 @@ def drop_ambiguous_identity_rows(
     for row in rows:
         if row.external_id:
             external_ids_by_player.setdefault(row.player_id, set()).add(row.external_id)
-    ambiguous = {
-        player_id for player_id, ids in external_ids_by_player.items() if len(ids) > 1
-    }
+    ambiguous = {player_id for player_id, ids in external_ids_by_player.items() if len(ids) > 1}
     if not ambiguous:
         return tuple(rows), {"ambiguous_identity_players": 0, "ambiguous_identity_rows": 0}
     kept = tuple(row for row in rows if row.player_id not in ambiguous)

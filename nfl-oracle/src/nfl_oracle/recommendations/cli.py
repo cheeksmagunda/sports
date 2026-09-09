@@ -265,9 +265,7 @@ def _freeze_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]
     )
     freeze.add_argument("--boost-watch-path", default=None)
     freeze.add_argument("--out-dir", default=None)
-    freeze.add_argument(
-        "--max-input-age-seconds", type=int, default=900, help="G2 policy, 60-900"
-    )
+    freeze.add_argument("--max-input-age-seconds", type=int, default=900, help="G2 policy, 60-900")
     freeze.add_argument("--max-model-age-days", type=int, default=8, help="G6 policy, 1-30")
     freeze.add_argument(
         "--dry-run",

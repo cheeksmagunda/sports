@@ -399,8 +399,7 @@ def freeze_dry_run(
                     key="freeze_window",
                     ok=False,
                     detail=(
-                        f"now={now.isoformat()} not in "
-                        f"[{due.isoformat()}, {cutoff.isoformat()})"
+                        f"now={now.isoformat()} not in [{due.isoformat()}, {cutoff.isoformat()})"
                     ),
                 )
             )
