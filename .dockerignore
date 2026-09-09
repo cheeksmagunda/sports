@@ -52,6 +52,8 @@ nfl-oracle/**
 !nfl-oracle/src/**
 !nfl-oracle/frontend/
 !nfl-oracle/frontend/**
+!nfl-oracle/config/
+!nfl-oracle/config/**
 !nfl-oracle/data/
 !nfl-oracle/data/catalog/
 !nfl-oracle/data/catalog/**

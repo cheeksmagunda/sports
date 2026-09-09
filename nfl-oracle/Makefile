@@ -84,27 +84,28 @@ walk-forward-report:
 # Local research Docker (observation-only). Skips cleanly when docker is absent.
 # Does not touch WNBA Railway configs. No secrets required.
 docker-research-build:
-	@if ! command -v docker >/dev/null 2>&1; then \
+	@if ! docker --version >/dev/null 2>&1; then \
 		echo "docker not available; skip nfl-oracle-local research build"; \
-		exit 0; \
+	else \
+		docker compose -f docker-compose.yml build; \
 	fi
-	docker compose -f docker-compose.yml build
 
 docker-research-smoke: docker-research-build
-	@if ! command -v docker >/dev/null 2>&1; then \
+	@if ! docker --version >/dev/null 2>&1; then \
 		exit 0; \
+	else \
+		echo "nfl-oracle-local research image build OK (observation-only; no secrets)"; \
 	fi
-	@echo "nfl-oracle-local research image build OK (observation-only; no secrets)"
 
 # Production image smoke. This builds locally and invokes only --help, so it
 # never needs a database, provider session, or Railway credentials.
 docker-production-smoke:
-	@if ! command -v docker >/dev/null 2>&1; then \
+	@if ! docker --version >/dev/null 2>&1; then \
 		echo "docker not available; skip nfl-oracle production image smoke"; \
-		exit 0; \
+	else \
+		docker build -f Dockerfile.production -t nfl-oracle:production-smoke ..; \
+		docker run --rm nfl-oracle:production-smoke nfl-pipeline --help; \
 	fi
-	docker build -f Dockerfile.production -t nfl-oracle:production-smoke ..
-	docker run --rm nfl-oracle:production-smoke nfl-pipeline --help
 
 postgres-store-smoke:
 	$(UV_RUN) python scripts/postgres_store_smoke.py

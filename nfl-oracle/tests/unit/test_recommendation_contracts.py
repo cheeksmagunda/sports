@@ -82,6 +82,51 @@ def test_unknown_lock_is_not_promoted_to_provider_fact() -> None:
     assert slate.cutoff() == min(g.kickoff_at for g in slate.games)
 
 
+def test_slate_declares_complete_pool_and_boost_regime() -> None:
+    complete = sample_slate()
+    assert complete.pool_complete is True
+    assert complete.boost_regime == "zero_boost"
+    assert complete.boost_nonzero_count == 0
+    assert complete.boost_max == 0.0
+
+    boosted_data = complete.model_dump(mode="json")
+    boosted_data["candidates"][0]["card_boost"] = 0.5
+    boosted_data["boost_regime"] = "provider_boosts_present"
+    boosted_data["boost_nonzero_count"] = 1
+    boosted_data["boost_max"] = 0.5
+    boosted = Slate.model_validate(boosted_data)
+    assert boosted.boost_regime == "provider_boosts_present"
+    assert boosted.boost_nonzero_count == 1
+    assert boosted.boost_max == 0.5
+
+    with pytest.raises(ValidationError, match="boost_regime_declaration_mismatch"):
+        Slate.model_validate(
+            {
+                **boosted_data,
+                "boost_regime": "zero_boost",
+                "boost_nonzero_count": 1,
+                "boost_max": 0.5,
+            }
+        )
+
+
+def test_incomplete_pool_fails_prelock_gate() -> None:
+    slate = sample_slate()
+    partial = Slate.model_validate(
+        {
+            **slate.model_dump(mode="json"),
+            "candidates": slate.model_dump(mode="json")["candidates"][:6],
+            "pool_roster_count": 7,
+            "pool_search_matched_count": 6,
+            "pool_unmatched_ids": [7],
+            "pool_complete": False,
+        }
+    )
+    assert partial.pool_complete is False
+    with pytest.raises(ValueError, match="incomplete_player_pool"):
+        partial.assert_prelock(NOW)
+
+
 def test_identity_and_nonfinite_values_rejected() -> None:
     data = sample_slate().model_dump()
     data["candidates"] = [data["candidates"][0]] * 5

@@ -292,6 +292,9 @@ class NFLReader:
             )
         # Refresh lock after the sweep, preserving each player's actual capture.
         contest = await self.contest(contest_id)
+        boosts = [candidate.card_boost for candidate in candidates]
+        nonzero_boosts = sum(1 for boost in boosts if boost > 0)
+        unmatched = tuple(sorted(set(roster) - set(rated)))
         return Slate(
             contest=contest,
             games=games,
@@ -300,5 +303,9 @@ class NFLReader:
             source_hashes=tuple(self.hashes),
             pool_roster_count=len(roster),
             pool_search_matched_count=len(rated),
-            pool_unmatched_ids=tuple(sorted(set(roster) - set(rated))),
+            pool_unmatched_ids=unmatched,
+            pool_complete=len(roster) == len(rated) and not unmatched,
+            boost_regime="zero_boost" if nonzero_boosts == 0 else "provider_boosts_present",
+            boost_nonzero_count=nonzero_boosts,
+            boost_max=max(boosts) if boosts else 0.0,
         )
