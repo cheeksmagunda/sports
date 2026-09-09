@@ -225,8 +225,9 @@ def test_api_frontend_is_safe_and_exposes_empty_error_states(tmp_path: Path) -> 
     assert "createElement" in script.text
     for state in ("No slate today", "Picks are not ready", "Picks are unavailable"):
         assert state in script.text
-    assert "Predicted score" in script.text
-    assert "Expected slot total" in script.text
+    # Player identity rendered without numeric projections (removed by design)
+    assert "pick.name" in script.text
+    assert "pick.position" in script.text
     assert "Entries are never submitted automatically" in page.text
     assert "Player 1" not in page.text + script.text
     assert client.get("/style.css").status_code == 200

@@ -643,3 +643,170 @@ Local-only on `codex/nfl-data-schemas-scaffold` (push blocked; do not retry):
   does not beat classical priors on the tiny fixture set
 - Box verification: pytest **160 passed**; ruff + mypy clean on baselines eval paths
 - Still **no push**; Real Sports auth optional/missing
+
+## Value law decoded and replay harness verified (2026-09-09 ~00:50 UTC)
+
+Local, uncommitted at time of writing, on `chat/115-nfl-live-pipeline`. New
+package `nfl_oracle.valuelaw` and new package `nfl_oracle.replay`, both with
+unit tests; full suite green (**251 passed, 1 skipped**, up from 240; ruff and
+mypy --strict clean on every new module).
+
+### The Real `value` label is not a pure function of the box score, but is close
+
+Across 47,209 finalized Corpus G player-games, 2,246 distinct (position, exact
+stat line) groups occur more than once; only 430 have an identical `value` in
+every occurrence, 1,816 differ. So `value` carries roughly 5% variance the box
+score cannot explain (`nfl_oracle.valuelaw.boxstats`'s `purity` check:
+`unexplained_variance_share` 0.0496 on 47,206 labelled rows, 17,810 groups,
+2,246 with more than one row). The remaining ~95% is recoverable: a plain
+ridge fit (`nfl_oracle.valuelaw.model.fit_all`, alpha 1e-6, effectively OLS)
+trained on season 2024 and tested out-of-sample on season 2025, per position,
+regular season only:
+
+| pos | train | test | OOS R2 | OOS MAE | position-mean MAE | lift |
+|-----|-------|------|--------|---------|--------------------|------|
+| QB  |  732  |  723 | 0.965  | 0.233   | 1.603              | 85.5% |
+| RB  | 1698  | 1743 | 0.989  | 0.084   | 1.489              | 94.4% |
+| WR  | 2599  | 2677 | 0.985  | 0.077   | 1.146              | 93.3% |
+| TE  | 1282  | 1350 | 0.983  | 0.056   | 0.795              | 92.9% |
+| DL  | 3410  | 3446 | 0.903  | 0.138   | 0.666              | 79.3% |
+| LB  | 3162  | 3385 | 0.920  | 0.120   | 0.797              | 85.0% |
+| DB  | 4236  | 4362 | 0.949  | 0.084   | 0.763              | 89.0% |
+| K   |  571  |  569 | 0.918  | 0.328   | 1.465              | 77.6% |
+| P   |  551  |  559 | 0.965  | 0.078   | 0.537              | 85.5% |
+
+OL and LS both fit R2 ~0 (near-constant near-zero label: OL mean 0.028,
+91.6% exact zero; LS mean 0.047, 93.8% exact zero) -- they are correctly
+near-undraftable, not a modelling failure. Recovered defensive coefficients
+read like clean rules: solo tackle ~0.20, forced fumble ~0.4-0.6, sack
+~0.7-0.8, interception ~2.0, fumble recovery ~1.9, consistent across DL/LB/DB.
+Persisted fit: `nfl-oracle/data/artifacts/valuelaw/value_model.json`.
+Modules: `nfl_oracle.valuelaw.boxstats` (dataset + label characterisation,
+`nfl-oracle/data/artifacts/valuelaw/box_stats.jsonl` + `_schema.json` +
+`_label_report.json`), `nfl_oracle.valuelaw.model` (fit/predict/persist),
+`nfl_oracle.valuelaw.candidates` (live slate load, Corpus G history join,
+live re-collect, slate diff -- already exercised against the real contest
+2141 slate, see below).
+
+**Honest caveat on the achievable ceiling.** The box-score-to-value map being
+solved does not mean *projecting the box score* is solved. A walk-forward
+replay over all 668 games (prior-game EWMA per player, decay 0.9, minimum 3
+games, falling back to position mean) predicting the next game, then scoring
+a single expected-value-maximizing 5-card lineup under the verified law:
+mean capture of the legal hindsight-best lineup is **61.1%**, median 63.4%
+(decile spread 35%/48%/63%/76%/84%). Kicker value is NOT predictable from a
+kicker's own history (player EWMA MAE 1.53 worse than position-mean MAE
+1.48) -- it is opportunity-driven, not skill-driven, and must be projected
+from team context, not the kicker's own line. Defenders are only marginally
+more predictable than their position mean. This 61% single-entry figure is
+not in tension with the archive's 79.9%/97.5% winner-capture numbers below --
+those are the **argmax of 12,000-62,000 entries**, not the expectation of
+one entry. Conflating the two would overstate what a single recommended
+lineup is likely to achieve.
+
+### Replay harness: STATUS.md's own headline claims are now code-derivable
+
+New `nfl_oracle.replay` package (`harness.py`, tests in
+`tests/unit/test_replay_harness.py`) replays all 91 finalized Corpus C
+contests via the already-existing, already-verified
+`nfl_oracle.contests.parse.iter_contests`. It does not re-parse or
+re-verify the scoring law; it consumes `ParsedContest` records directly.
+
+Running it over the real archive today reproduces the "Corpus C landed"
+section above almost exactly, independently, in code:
+
+| slice | contests | optimal-order rate | mean slot regret | mean winner capture |
+|-------|----------|---------------------|-------------------|----------------------|
+| overall | 91 | 3.19% | 1.452 | 79.9% |
+| zero-boost | 4 | 6.25% | 0.443 | 97.5% |
+
+(STATUS.md's prose above says 3.2% / 6.2%, 1.45 / 0.44, 79.9% / 97.5% --
+matches to the stated precision.) 6 of 91 finalized contests fail the
+additive scoring-law check (5, 851, 880, 892, 893, 979) -- these are already
+surfaced by `iter_contests`'s `law_verified` flag and excluded from any
+"law reconciles" claim; they are not silently averaged in here either.
+
+**Bug found and fixed during this build, worth recording:** the first
+version of `hindsight_best_lineup` selected the top-k players by raw
+finalized value and only applied boosts when scoring the total. That is
+correct only when every boost is equal (e.g. the zero-boost regime), and it
+produced impossible results in boosted contests (some `winner_capture_ratio`
+values above 1.0, i.e. the visible rank-1 entry scoring higher than the
+computed "hindsight best", which is a contradiction). The fix: because the
+score decomposes into an order-invariant `sum(value*boost)` term and a
+rearrangement term `sum(value*slot)` that for any FIXED five players is
+maximized by descending-value slot assignment (rearrangement inequality)
+regardless of boost, selecting the optimal five reduces to a linear-time
+DP over the value-sorted pool (`hindsight_best_lineup` in
+`nfl_oracle/replay/harness.py`). After the fix, max observed capture ratio
+across all 91 contests is 0.999, as it must be by construction, and the
+zero-boost numbers were unaffected (boost is uniform there, so naive
+selection was already exact) -- confirming the bug did not touch the number
+that matters for tomorrow's zero-boost slate, but would have corrupted any
+general-regime claim if left in.
+
+### Freeze-path audit: the pipeline is further along than earlier entries assumed
+
+A read-only audit of `nfl_oracle.recommendations` and `nfl_oracle.strategy`
+found most of the seven required T-40 gates already enforced, contrary to
+this file's earlier "release blockers" note:
+
+- **Already enforced:** locked/finalized contest refusal
+  (`recommendations/schema.py:140`), per-source clock freshness via
+  `assert_prelock(max_age_seconds=900)` (`schema.py:138-153`), player identity
+  by exact provider id with no name-based fallback (`provider.py:233-270`),
+  model staleness and training-fingerprint validation
+  (`pipeline.py:54-60,110-112`), contest-lock-refresh consistency
+  (`validate_lock_refresh`, `pipeline.py:81-87`), and a structural submit
+  hard-deny (`FiveCardProviderStub.submit()` unconditionally raises,
+  `providers/five_card.py:185-189`; recommendations code never calls it).
+- **Real gaps, confirmed, not yet closed:** (1) pool completeness --
+  `pool_roster_count`/`pool_unmatched_ids` are recorded
+  (`schema.py:111-113`) but nothing gates on `pool_unmatched_ids == ()`; a
+  partial pool would currently pass silently. (2) boost-regime declaration --
+  `nfl_oracle.contests.boosts.BoostObservation.all_zero` exists and is
+  correct but is never imported by `recommendations/`; the optimizer accepts
+  whatever `card_boost` values a candidate carries with no explicit
+  zero_boost-vs-published classification recorded on the frozen artifact.
+- Store backend is SQLite-or-Postgres via `NFL_DATABASE_URL`
+  (`recommendations/store.py`, `cli.py:48-58`); a `sqlite:///...` URL works
+  fully locally, append-only enforced by a BEFORE UPDATE/DELETE trigger on
+  both backends. No Postgres requirement blocks a local T-40 run.
+- Entry point is `nfl-pipeline {serve,migrate,train,worker}`
+  (`recommendations/cli.py`); `worker` runs collect -> context -> model ->
+  `pipeline.prepare()` -> `pipeline.publish()` end to end, waiting for T-40
+  internally.
+- The optimizer (`recommendations/optimizer.py:38-46`) implements
+  `score = value * (slot + boost)` exactly and uses `scipy.optimize.milp`
+  exact search when available (bounded beam search fallback otherwise), but
+  does not emit a rearrangement-inequality proof alongside its output --
+  the *result* is provably optimal by construction whenever milp runs, but
+  the artifact does not say so.
+
+### Slate truth for contest 2141, confirmed twice independently
+
+Two independent live reads tonight (this session's manual check at
+00:16 UTC, and a live re-collect via `nfl_oracle.valuelaw.candidates`
+saved to `data/artifacts/slate_2141_live_20260909T002548Z.json` at
+00:25:48 UTC) agree exactly: 161 candidates, pool method
+`roster_exact_id_search` with `pool_roster_count == pool_search_matched_count
+== 161` and `pool_unmatched_ids == []` (a legitimate, stated-denominator
+completeness proof), all 161 `card_boost` values 0.0, contest not locked or
+finalized. 141 Active, 18 Out (including both listed backfield starters:
+TreVeyon Henderson for NE and Zach Charbonnet for SEA -- NE's clear starter
+is now Rhamondre Stevenson, SEA's backfield has no clear starter among
+Holani/Jones/Wilson/Wright/Price), 2 Questionable (Tory Horton, Nick
+Emmanwori). The boost watcher launched this session
+(`nfl-boost-watch --contest-id 2141 --day 2026-09-09 --interval 900 --until
+2026-09-09T23:40:00Z`, still running) has logged all-zero every 15 minutes
+since 22:46 UTC.
+
+### Still not done, plainly
+
+Projection for the 161-candidate pool (turning the decoded value model
+above into an actual five-name, slot-ordered recommendation for 2026-09-09),
+the two confirmed freeze-path gate gaps (pool completeness, boost-regime
+declaration), and a frontend simplification pass were all in progress in
+parallel subagents at the time of this entry and are not yet landed or
+committed. No claim of a finished, tested T-40 freeze path should be made
+until those land and are verified against a real dry run.

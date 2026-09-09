@@ -10,7 +10,6 @@ let receivedAt = 0;
 let serverOffset = 0;
 const text = (id, value) => { byId(id).textContent = value; };
 const time = value => new Date(value).toLocaleString([], {timeZoneName: "short"});
-const number = value => typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : null;
 function state() {
   if (!latest) return;
   const now = Date.now() + serverOffset;
@@ -41,13 +40,7 @@ function render(payload) {
     const name = document.createElement("div"); name.className = "name"; name.textContent = pick.name;
     const meta = document.createElement("div"); meta.className = "meta"; meta.textContent = `${pick.position} · ${pick.team} vs ${pick.opponent}`;
     identity.append(name, meta);
-    const projection = document.createElement("div"); projection.className = "projection";
-    const projected = number(pick.projected_value);
-    const slotTotal = projected === null ? number(pick.projected_score) : number(
-      pick.projected_value * (pick.slot_multiplier + pick.card_boost)
-    );
-    projection.textContent = `${projected === null ? "Predicted score unavailable" : `Predicted score ${projected}`} · ${slotTotal === null ? "Expected slot total unavailable" : `Expected slot total ${slotTotal}`} · Slot ${pick.slot_multiplier}× · Card +${pick.card_boost}`;
-    card.append(slot, identity, projection); byId("picks").append(card);
+    card.append(slot, identity); byId("picks").append(card);
   }
   text("provenance", payload.lineup ? `Saved version ${payload.sequence}. Decision ${payload.digest.slice(0, 12)}.` : "");
   state();
