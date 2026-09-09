@@ -230,6 +230,27 @@ async def _worker_once(
         return await pipeline.publish(day, reader)
 
 
+def _record_worker_failure(
+    store: RecommendationStore, day: date, *, status: str, detail_code: str
+) -> None:
+    """Keep the poll loop alive when its failure audit store is unavailable."""
+    try:
+        store.record_run(day, status=status, detail_code=detail_code)
+    except Exception as error:
+        # A transient database outage can cause both the poll and this audit
+        # write to fail. Never let the second failure stop future retries or
+        # print connection details from the database exception.
+        print(
+            json.dumps(
+                {
+                    "status": "error",
+                    "detail_code": "worker_run_record_failed",
+                    "error_type": type(error).__name__,
+                }
+            )
+        )
+
+
 async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None) -> int:
     project = _project_root()
     engine = _engine()
@@ -250,11 +271,13 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
                 print(json.dumps({"status": "waiting_or_locked"}))
         except NoSlate as error:
             day = requested_day or datetime.now(UTC).date()
-            store.record_run(day, status="no_slate", detail_code=str(error))
+            _record_worker_failure(store, day, status="no_slate", detail_code=str(error))
             print(json.dumps({"status": "no_slate"}))
         except Exception as error:
             day = requested_day or datetime.now(UTC).date()
-            store.record_run(day, status="error", detail_code=type(error).__name__.lower())
+            _record_worker_failure(
+                store, day, status="error", detail_code=type(error).__name__.lower()
+            )
             print(json.dumps({"status": "error", "error_type": type(error).__name__}))
             if once:
                 return 1
