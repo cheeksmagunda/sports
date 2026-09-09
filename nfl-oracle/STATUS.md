@@ -871,3 +871,71 @@ falls through to a headless re-derivation from `storage_state.json` alone, so
 no further interactive step should be needed before T-40, provided the
 underlying Real Sports session is still valid (not verified with a live call
 as of this note).
+
+## T-40 rehearsal, two worker bugs found and fixed, real picks produced (2026-09-09 daytime CT)
+
+Two bugs in the `nfl-pipeline worker` path (identical code on `main` and this
+branch) were found and fixed while rehearsing tonight's freeze, both of which
+would have silently produced nothing at T-40:
+
+1. **Clock-ordering bug in `_worker_once`.** `now` was captured before
+   `reader.collect()`, then reused as `decision_at` for `_load_context` /
+   `_ensure_model` / `build_context`. Every per-candidate and context clock
+   `collect()` produces is stamped with real wall-clock time at or after that
+   point, so `EvidenceClock.assert_available(decision_at)` always saw its own
+   freshly collected evidence as being from the future and raised
+   `future_evidence` -- every single worker poll, forever. Fixed by
+   re-reading the clock after `collect()` completes
+   (`cli.py`, commit `241201a`).
+2. **Same-name identity-crosswalk collision blocked all training.**
+   `fit_model`'s `_validate_identity_links` correctly refuses to train when
+   one internal `player_id` maps to more than one external id across games.
+   Confirmed against the real Corpus G dataset: exactly one `player_id` (18
+   of 37,710 rows, alternating between gsis ids `00-0031557` and
+   `00-0040175`, both DL) exhibits this -- almost certainly two different
+   real players sharing a display name in the identity crosswalk. Rather
+   than weaken the check, `drop_ambiguous_identity_rows` (`model.py`) removes
+   just that player's rows before training and records what was dropped in
+   the model bundle's audit trail. A small, focused PR carrying both fixes
+   plus regression tests is up against `main` (#128, refs #124); this
+   branch carries the same fixes directly.
+
+**Verified end to end against real data tonight:** live storage_state auth
+still works (a fresh, unprompted, non-interactive re-collect succeeded via
+`headers_or_capture()`'s headless fallback, confirming the 2026-09-08 23:47
+capture is still valid); local training against the real Corpus G tree
+succeeds (37,692 rows, 7,125 holdout) where it previously raised on every
+attempt; a `nfl-pipeline freeze --dry-run` run against a live-recollected
+slate for contest 2141 passed all seven gates (G1 pool completeness, G2
+clock freshness, G3 identity/eligibility, G4 boost regime, G5 contest state,
+G6 model freshness, G7 no-submission-path) and produced five real,
+slot-ordered picks with strictly descending projected value (the
+rearrangement-inequality-optimal order): Jaxon Smith-Njigba (WR, SEA, slot
+1), Sam Darnold (QB, SEA, slot 2), Drake Maye (QB, NE, slot 3), Jason Myers
+(K, SEA, slot 4), Rhamondre Stevenson (RB, NE, slot 5) -- matching the
+Corpus C archive's own described winning archetype (both starting QBs, top
+skill producer, kicker, healthy starting RB).
+
+**Architecture for tonight's actual freeze, and why:** the Railway
+`nfl-oracle-worker` service remains deliberately dormant (per the entry
+above) -- it has no `NFL_RECOMMENDATIONS_ENABLED`, no Real Sports session,
+and `Dockerfile.production` never ships `data/raw/corpus_g` or
+`data/artifacts/context` (correctly, per this file's own container-boundary
+rule; that data belongs on the worker's private runtime mount, which was not
+provisioned this session). The already-online `nfl-oracle` (API/serve) role
+on Railway is healthy (`/health` reports `recommendation_database: ok`,
+already migrated) and is what the frontend actually talks to. Rather than
+attempt to make the Railway worker self-sufficient blind, hours before
+kickoff, tonight's freeze runs `nfl-pipeline worker` **locally**, against
+the same production Postgres via `railway connect Postgres --ssh
+--tunnel-only`, so the already-deployed frontend/API serves whatever it
+writes. `nfl-oracle/scripts/run_t40_worker.sh` wraps this (tunnel with a
+watchdog that restarts it if it drops during the multi-hour unattended
+window, then the worker loop under `caffeinate`) and must be launched by the
+operator, not an agent, since it is a live write to production. The worker
+self-gates on `due <= now < cutoff`, so launching it any time before T-40 is
+safe.
+
+Not yet confirmed as of this entry: the operator has not yet launched
+`run_t40_worker.sh`; the real (non-rehearsal) freeze against production
+Postgres has therefore not yet happened.
