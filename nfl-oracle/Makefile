@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules contest-dry-run walk-forward-report docker-research-build docker-research-smoke
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules contest-dry-run walk-forward-report docker-research-build docker-research-smoke docker-production-smoke postgres-store-smoke
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -23,6 +23,8 @@ help:
 	@echo "  make contest-dry-run - offline five-card shadow slate (dry_run; hard-deny submit)"
 	@echo "  make walk-forward-report - baselines vs feature_ridge eval report (fixtures → artifacts/)"
 	@echo "  make docker-research-smoke - build nfl-oracle-local research image if docker available (skip ok)"
+	@echo "  make docker-production-smoke - build production image and verify CLI entrypoint (skip ok)"
+	@echo "  make postgres-store-smoke - exercise migration, append-only, and backup on temporary PostgreSQL"
 
 setup:
 	$(MAKE) -C .. setup
@@ -82,14 +84,28 @@ walk-forward-report:
 # Local research Docker (observation-only). Skips cleanly when docker is absent.
 # Does not touch WNBA Railway configs. No secrets required.
 docker-research-build:
-	@if ! command -v docker >/dev/null 2>&1; then \
+	@if ! docker --version >/dev/null 2>&1; then \
 		echo "docker not available; skip nfl-oracle-local research build"; \
-		exit 0; \
+	else \
+		docker compose -f docker-compose.yml build; \
 	fi
-	docker compose -f docker-compose.yml build
 
 docker-research-smoke: docker-research-build
-	@if ! command -v docker >/dev/null 2>&1; then \
+	@if ! docker --version >/dev/null 2>&1; then \
 		exit 0; \
+	else \
+		echo "nfl-oracle-local research image build OK (observation-only; no secrets)"; \
 	fi
-	@echo "nfl-oracle-local research image build OK (observation-only; no secrets)"
+
+# Production image smoke. This builds locally and invokes only --help, so it
+# never needs a database, provider session, or Railway credentials.
+docker-production-smoke:
+	@if ! docker --version >/dev/null 2>&1; then \
+		echo "docker not available; skip nfl-oracle production image smoke"; \
+	else \
+		docker build -f Dockerfile.production -t nfl-oracle:production-smoke ..; \
+		docker run --rm nfl-oracle:production-smoke nfl-pipeline --help; \
+	fi
+
+postgres-store-smoke:
+	$(UV_RUN) python scripts/postgres_store_smoke.py

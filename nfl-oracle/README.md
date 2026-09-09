@@ -161,7 +161,7 @@ make research-smoke SMOKE_ARGS=--json
 `tests/fixtures/offline_research` via FastAPI TestClient (no network). It asserts
 schema/catalog/coverage/schedule/identity routes, shadow preview + rank-orderings,
 and **hard-deny** entry gates (`package_submit_hard_deny` + unverified provider
-contract). Strip live DB/redis env like `make test`. Observation only — never
+contract). Strip live DB/redis env like `make test`. Observation only: never
 enables contest entry.
 
 
@@ -177,17 +177,50 @@ make check-boundaries
 
 ## Data / strategy / feature scaffolds (observation only)
 
-- `nfl_oracle.data` — catalog / coverage / paths helpers
-- `nfl_oracle.strategy` — pre-lock clock gates, five-card structural checks, shadow snapshots
-- `nfl_oracle.features` — FeatureSpec registry (`nfl_oracle.features.schema`)
+- `nfl_oracle.data`: catalog / coverage / paths helpers
+- `nfl_oracle.strategy`: pre-lock clock gates, five-card structural checks, shadow snapshots
+- `nfl_oracle.features`: FeatureSpec registry (`nfl_oracle.features.schema`)
 - `make strategy-schema` / `uv run --package nfl-oracle nfl-strategy-schema --schema-only`
 - Research HTTP scaffold: `nfl_oracle.service.create_app` / `nfl-research-serve`
   (`make research-serve`; schemas incl. scoring, catalog, coverage + schedule
   summary/census, identity density, shadow preview + rank-orderings, entry
   gates, live-ok features, provider rules-offline, status; contest entry always false)
 - Strategy helpers: 120 five-card orderings + readiness→posture mapping
-- Railway: **no** in-repo `railway.toml`/`Dockerfile`; staging project names only
-  in STATUS (do not deploy from this package)
+- Production container: `Dockerfile.production` builds one NFL image for the
+  read-only API and the write-capable worker. `railway.toml` only selects the
+  Docker build; it does not create services or change Railway state.
+
+## Production container runbook
+
+Build from the monorepo root with `docker build -f
+nfl-oracle/Dockerfile.production -t nfl-oracle:production .`. The image has
+the Playwright Chromium runtime needed for the worker's derived-session refresh,
+but it contains no provider session, local data, or credentials.
+
+Run the API service with:
+
+```sh
+nfl-pipeline serve --host 0.0.0.0 --port "${PORT:-8000}"
+```
+
+The API process uses `NFL_DATABASE_URL` in a PostgreSQL read-only session and
+does not run migrations. Its health endpoint is `/health`. Run the worker as a
+separate service with `nfl-pipeline worker`; only that role receives the
+write-capable database credentials and provider session environment. Run
+`nfl-pipeline migrate` as an explicit one-shot release step before either
+service starts. A worker restart is bounded by the worker command's retry and
+backoff policy, and failure must leave the prior frozen recommendation intact.
+
+The repeatable local image check is `make -C nfl-oracle
+docker-production-smoke`. It builds the image and invokes `nfl-pipeline
+--help` without a database or secret. No command in this runbook submits a
+contest entry.
+
+The PostgreSQL storage check is `make -C nfl-oracle postgres-store-smoke`. It
+starts a temporary local `postgres:16-alpine` container on a random host port,
+runs the explicit migration, verifies the append-only trigger, exports and
+restores freezes, run records, and artifacts, then removes the temporary
+container. It does not connect to Railway or any other database.
 
 ## Codespace daily ops (planned)
 
