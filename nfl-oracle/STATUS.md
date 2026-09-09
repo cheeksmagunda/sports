@@ -5,6 +5,50 @@ Last verified: 2026-09-08 20:40 CT, Codespace cleanup checkpoint for issue #115.
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
 
+## Hosted provisioning and retry recovery (2026-09-09, issue #129)
+
+This checkpoint supersedes the provisioning blocker recorded below. The
+operator applied `sleep infinity`; the hosted container is accessible and
+recommendations remain disabled while preflight runs. The operator has since
+authorized making Railway the primary worker for tonight, without the Mac
+fallback, provided only one worker is active.
+
+The local worker exited around 18:07 UTC after a PostgreSQL tunnel connection
+failure. Its tunnel and watchdog processes remained, but the worker did not.
+The operator was informed; no local process or tunnel was restarted by the
+agent. A failed operator restart attempt did not restore the worker. Do not
+continue claiming the local fallback is active without a fresh process and log
+check.
+
+The mounted Corpus G upload is verified byte-for-byte: 3,342 files,
+513,980,989 bytes, directory digest
+`3d7ccfa2eb237b376fc9e5dd27f849ee1fa8a4657e0806ccde6b55178427da63`
+(SHA256 over sorted relative paths, NUL, file SHA256, newline). The latest
+context snapshot listed below also matches its local SHA256. Only that latest
+snapshot was uploaded, avoiding old snapshots being chosen by upload time.
+Volume runtime directories are owned by UID 10001, and the worker user can
+write data and read `/app/nfl-oracle/config/NFLconfigvenues.json` in the hosted
+image. This verifies the venue path correction from PR #130 at runtime.
+
+`REALSPORTS_STORAGE_STATE_B64GZ` is verified sealed on the worker only. A
+read-only hosted authentication check, executed as UID 10001, successfully
+derived fresh headers. The value was sent through native CLI JSON stdin,
+never command arguments or logs. Configuration read-back confirmed
+`isSealed=true`, `sleep infinity`, and recommendations disabled.
+
+The worker now tolerates a second database failure while recording a failed
+poll. It emits only the audit-failure code and exception type, then continues
+its bounded polling delay. It preserves nonzero failure for `worker --once`.
+Regression tests cover recovery after ordinary poll errors and no-slate
+errors when the audit database is also unavailable, plus one-shot failure
+and secret-free logging. Three focused tests, lint, and types pass. The full
+local suite reports 266 passed, one skipped, and one Docker smoke failure
+because the Docker daemon is unavailable.
+
+A hosted rehearsal using an isolated in-memory SQLite store is in progress;
+production Postgres is not used by that rehearsal. Primary activation and a
+real T-40 freeze remain pending verified rehearsal and single-worker checks.
+
 ## Railway worker continuation (2026-09-09, issue #129)
 
 Verified from the operator Mac using the native Railway CLI. The local
