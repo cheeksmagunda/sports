@@ -18,17 +18,22 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from oracle_core.artifacts import atomic_write_json
 from oracle_core.storage import PoolOptions, create_postgres_engine
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
+from nfl_oracle.contests.boosts import BoostObservation
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
 from nfl_oracle.recommendations.pipeline import (
     ModelBundle,
     PipelinePolicy,
     RecommendationPipeline,
+    freeze_dry_run,
 )
 from nfl_oracle.recommendations.provider import NFLReader, NoSlate, ObservationStore, parse_game
+from nfl_oracle.recommendations.schema import Contest, Slate, fingerprint
 from nfl_oracle.recommendations.sources import (
     ContextSnapshot,
     add_weather_for_slate,
@@ -56,6 +61,28 @@ def _engine() -> Any:
         pool=PoolOptions(pool_size=3, max_overflow=2, pool_timeout=5),
         connect_args={"connect_timeout": 5},
     )
+
+
+def _freeze_engine(project: Path) -> Engine:
+    """The ``freeze`` command's store backend: explicit Postgres if configured,
+    otherwise a private local sqlite file so a laptop with no database
+    configured can still run it end to end.
+
+    An explicitly configured ``NFL_DATABASE_URL`` (Postgres or sqlite) is
+    never auto-migrated here; the operator runs ``nfl-pipeline migrate`` for
+    that, matching every other role in this file. The sqlite fallback is a
+    scratch file this command itself owns, so creating its schema on first
+    use is not the production migration step this file otherwise keeps
+    explicit.
+    """
+    configured = os.environ.get("NFL_DATABASE_URL", "").strip()
+    if configured:
+        return _engine()  # type: ignore[no-any-return]
+    fallback = project / "data" / "nfl_pipeline_freeze.sqlite3"
+    fallback.parent.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(f"sqlite:///{fallback}")
+    migrate(engine)
+    return engine
 
 
 def _day(value: str | None) -> date | None:
@@ -161,6 +188,183 @@ def _policy() -> PipelinePolicy:
     return PipelinePolicy(recommendations_enabled=enabled)
 
 
+def _empty_boost_observation(contest_id: int, *, captured_at: str) -> BoostObservation:
+    return BoostObservation(
+        contest_id=contest_id,
+        captured_at=captured_at,
+        n_players=0,
+        n_nonzero=0,
+        max_boost=0.0,
+        distinct_boosts=(),
+        published=False,
+    )
+
+
+def _latest_boost_observation(path: Path, contest_id: int, *, now: datetime) -> BoostObservation:
+    """The most recent ``nfl-boost-watch`` observation for this contest.
+
+    Absent a series file, or with no row for this contest, this returns an
+    explicit ``n_players=0`` observation, which G4 (``gate_boost_regime``)
+    reports as an ``undetermined`` regime rather than a passing one -- an
+    unread series is never silently treated as a published or zero table.
+    """
+    if not path.is_file():
+        return _empty_boost_observation(contest_id, captured_at=now.isoformat())
+    latest: dict[str, Any] | None = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        row = json.loads(stripped)
+        if row.get("contest_id") == contest_id:
+            latest = row
+    if latest is None:
+        return _empty_boost_observation(contest_id, captured_at=now.isoformat())
+    return BoostObservation(
+        contest_id=int(latest["contest_id"]),
+        captured_at=str(latest["captured_at"]),
+        n_players=int(latest["n_players"]),
+        n_nonzero=int(latest["n_nonzero"]),
+        max_boost=float(latest["max_boost"]),
+        distinct_boosts=tuple(float(v) for v in latest.get("distinct_boosts", ())),
+        published=bool(latest["published"]),
+        source=str(latest.get("source", "prelock_rating_search")),
+    )
+
+
+def _freeze_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    freeze = commands.add_parser(
+        "freeze",
+        help="run G1-G7 and either print five picks in committed slot order, or refuse",
+    )
+    freeze.add_argument("--contest-id", type=int, required=True)
+    freeze.add_argument(
+        "--slate-path", required=True, help="path to a captured Slate JSON artifact"
+    )
+    freeze.add_argument(
+        "--recheck-slate-path",
+        default=None,
+        help=(
+            "path to an independently re-captured Slate JSON artifact for G5's "
+            "contest-state recheck; omit to have G5 refuse explicitly rather "
+            "than assume the original capture's contest state still holds"
+        ),
+    )
+    freeze.add_argument("--boost-watch-path", default=None)
+    freeze.add_argument("--out-dir", default=None)
+    freeze.add_argument(
+        "--max-input-age-seconds", type=int, default=900, help="G2 policy, 60-900"
+    )
+    freeze.add_argument("--max-model-age-days", type=int, default=8, help="G6 policy, 1-30")
+    freeze.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="skip the T-40 freeze-window check; every other gate still applies",
+    )
+
+
+def _freeze(args: argparse.Namespace) -> int:
+    project = _project_root()
+    now = datetime.now(UTC)
+
+    slate_path = Path(args.slate_path).expanduser()
+    if not slate_path.is_file():
+        print(
+            json.dumps(
+                {"status": "refused", "reason": "slate_path_missing", "path": str(slate_path)}
+            )
+        )
+        return 1
+    slate = Slate.model_validate(json.loads(slate_path.read_text(encoding="utf-8")))
+    if slate.contest.contest_id != args.contest_id:
+        print(
+            json.dumps(
+                {
+                    "status": "refused",
+                    "reason": "slate_contest_id_mismatch",
+                    "expected_contest_id": args.contest_id,
+                    "slate_contest_id": slate.contest.contest_id,
+                }
+            )
+        )
+        return 1
+
+    current_contest: Contest | None = None
+    refetch_error: str | None = None
+    if args.recheck_slate_path:
+        recheck_path = Path(args.recheck_slate_path).expanduser()
+        if not recheck_path.is_file():
+            refetch_error = "recheck_slate_path_missing"
+        else:
+            try:
+                recheck_slate = Slate.model_validate(
+                    json.loads(recheck_path.read_text(encoding="utf-8"))
+                )
+                current_contest = recheck_slate.contest
+            except (json.JSONDecodeError, ValueError) as error:
+                refetch_error = f"recheck_slate_invalid:{type(error).__name__}"
+    else:
+        refetch_error = "no_recheck_slate_path_given"
+
+    default_boost_path = project / "data" / "artifacts" / "boost_watch.jsonl"
+    boost_path = Path(args.boost_watch_path or default_boost_path)
+    observation = _latest_boost_observation(boost_path, args.contest_id, now=now)
+
+    engine = _freeze_engine(project)
+    store = RecommendationStore(engine, writable=True)
+    policy = PipelinePolicy(
+        recommendations_enabled=True,
+        input_max_age_seconds=args.max_input_age_seconds,
+        model_max_age_days=args.max_model_age_days,
+    )
+    pipeline = RecommendationPipeline(store, policy=policy, clock=lambda: datetime.now(UTC))
+
+    try:
+        snapshot = _load_context(project, slate, now)
+        _ensure_model(project, store, pipeline, snapshot, now)
+        context = build_context(slate, snapshot, now)
+    except Exception as error:  # noqa: BLE001 - reported as a labeled, value-free refusal
+        print(
+            json.dumps(
+                {
+                    "status": "refused",
+                    "reason": "context_or_model_preparation_failed",
+                    "error_type": type(error).__name__,
+                    "detail": str(error),
+                }
+            )
+        )
+        return 1
+
+    outcome = freeze_dry_run(
+        pipeline,
+        slate=slate,
+        context=context,
+        boost_observation=observation,
+        current_contest=current_contest,
+        refetch_error=refetch_error,
+        now=now,
+        require_freeze_window=not args.dry_run,
+    )
+
+    if outcome.artifact is None:
+        refusal = {"status": "refused", **outcome.gate_report.to_json_obj()}
+        print(json.dumps(refusal, sort_keys=True))
+        return 1
+
+    out_dir = Path(args.out_dir).expanduser() if args.out_dir else project / "data" / "artifacts"
+    digest = fingerprint(outcome.artifact)
+    out_path = out_dir / f"freeze_{args.contest_id}_{digest}.json"
+    if not out_path.exists():
+        atomic_write_json(out_path, outcome.artifact, mode=0o600)
+    print(
+        json.dumps(
+            {"status": "ready", "artifact_path": str(out_path), **outcome.artifact}, sort_keys=True
+        )
+    )
+    return 0
+
+
 async def _worker_once(
     project: Path,
     store: RecommendationStore,
@@ -204,9 +408,15 @@ async def _worker_once(
             store.record_run(day, status="blocked", detail_code="contest_unavailable")
             return None
         slate = await reader.collect(day, contest_id=contest_ids[0])
-        snapshot = _load_context(project, slate, now)
-        _ensure_model(project, store, pipeline, snapshot, now)
-        context = build_context(slate, snapshot, now)
+        # Collection is a live network round trip; every per-candidate and
+        # context clock it produces is stamped with real wall-clock time at or
+        # after this point. Re-read the clock here rather than reusing the
+        # pre-collection `now` above, or `assert_available` sees its own
+        # freshly collected evidence as being from the future and refuses.
+        decision_at = datetime.now(UTC)
+        snapshot = _load_context(project, slate, decision_at)
+        _ensure_model(project, store, pipeline, snapshot, decision_at)
+        context = build_context(slate, snapshot, decision_at)
         pipeline.prepare(slate, context)
         return await pipeline.publish(day, reader)
 
@@ -296,6 +506,7 @@ def _parser() -> argparse.ArgumentParser:
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--poll-seconds", type=int, default=30)
     worker.add_argument("--day")
+    _freeze_parser(commands)
     return parser
 
 
@@ -309,6 +520,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "train":
         return _train()
+    if args.command == "freeze":
+        return _freeze(args)
     requested_day = _day(args.day or os.environ.get("NFL_SLATE_DATE"))
     return asyncio.run(_run_worker(args.once, args.poll_seconds, requested_day))
 

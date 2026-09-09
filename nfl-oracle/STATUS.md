@@ -835,3 +835,39 @@ lint`, `make -C nfl-oracle typecheck`, `make check-boundaries`, and `make
 codespaces-smoke`. Docker is not installed in that Codespace, so the Docker
 smoke targets skip there by design. The Mac Docker production smoke passed
 after `.dockerignore` was updated to include `nfl-oracle/config/`.
+
+### Railway worker service now exists, unstarted by design
+
+A separate Railway service `nfl-oracle-worker` (id
+`a4e05931-fd02-4dd0-b998-d8ecfdbcc355`) was created in the
+`nfl-oracle-staging` / `production` environment, sourced from
+`cheeksmagunda/sports` on `main`. Its build/deploy config was set via the
+Railway GraphQL API to match the intended worker role:
+`dockerfilePath=nfl-oracle/Dockerfile.production`,
+`startCommand=sh -c 'exec nfl-pipeline worker'`, `restartPolicyType=ON_FAILURE`
+with `restartPolicyMaxRetries=3`, `numReplicas=1`, no HTTP healthcheck (the
+worker is not an HTTP service, unlike `nfl-oracle`). Non-secret variables
+`NFL_DATABASE_URL` (referencing `${{Postgres.DATABASE_URL}}`), `NFL_DEVICE_NAME`,
+`NFL_DEVICE_UUID`, `NFL_REALSPORTS_DEVICE_NAME`, and `NFL_REALSPORTS_DEVICE_UUID`
+were set to mirror the API service's values (device UUIDs are still the
+literal placeholder `PLACEHOLDER`, unchanged from the API service's own
+values -- neither has been assigned a real device UUID yet).
+
+Railway auto-triggered one deploy attempt immediately after service creation,
+before this config was applied; it failed (`FAILED`, `deploymentStopped:
+true`) and is not retrying. No further deploy has been triggered
+intentionally. The worker is not running and should not be started until:
+(1) a private Real Sports session (`REALSPORTS_STORAGE_STATE_B64GZ`) is
+sealed onto this service only, and (2) model/context runtime artifacts exist
+under the paths `nfl-pipeline worker` expects. Starting it before then would
+only produce a predictable auth/artifact crash loop. The capture helper
+(`nfl-oracle/scripts/capture_storage_state.py`, merged to `main` in PRs #120
+and #121) requires the operator to sign in themselves, interactively, in a
+real browser window it opens. The operator completed that capture at
+2026-09-08 23:47 CT: `nfl-oracle/scraper/storage_state.json` and
+`request_token_cache.json` both exist locally (mode 0600). The 30-minute
+cached request-token will be stale by kickoff, but `headers_or_capture()`
+falls through to a headless re-derivation from `storage_state.json` alone, so
+no further interactive step should be needed before T-40, provided the
+underlying Real Sports session is still valid (not verified with a live call
+as of this note).
