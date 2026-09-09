@@ -25,7 +25,9 @@ The API and Postgres services report Online in Railway; this is a service
 status observation, not a new database health or freeze-content check.
 
 `nfl-oracle-worker-volume` (`9cb6374a-f47b-4401-ba35-b6131f9d30e5`) is attached
-at `/app/nfl-oracle/data`. The worker reports Crashed with a build in progress.
+at `/app/nfl-oracle/data`. Deployment
+`c7c08dcf-564b-40f5-b677-77dc4e6d79a5` reports Crashed after completing its
+build; runtime logs confirm `recommendations_disabled` on each startup.
 Volume listing fails with an SFTP initialization timeout. A native CLI
 start-command edit to `sleep infinity` returned without applying a change;
 a subsequent attempt explicitly reported `No changes to apply`, and read-back
