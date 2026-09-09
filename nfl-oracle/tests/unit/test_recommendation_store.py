@@ -9,6 +9,7 @@ from sqlalchemy.exc import DatabaseError
 
 import nfl_oracle.recommendations.app as recommendation_app
 from nfl_oracle.recommendations.app import create_app
+from nfl_oracle.recommendations.cli import main as pipeline_main
 from nfl_oracle.recommendations.schema import fingerprint
 from nfl_oracle.recommendations.store import RecommendationStore, migrate
 from tests.unit.test_recommendation_contracts import NOW, sample_slate
@@ -169,6 +170,31 @@ def test_artifacts_are_content_addressed_and_restart_durable(tmp_path: Path) -> 
     with pytest.raises(DatabaseError, match="append_only"):
         with writer.engine.begin() as conn:
             conn.execute(text("DELETE FROM nfl_recommendation_artifacts"))
+
+
+def test_cli_backup_export_restore_round_trip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = setup_store(tmp_path)
+    save(source)
+    source.put_artifact("model", {"schema_version": 1, "rows": [{"player_id": 12}]})
+
+    monkeypatch.setenv("NFL_DATABASE_URL", f"sqlite:///{tmp_path / 'decisions.db'}")
+    assert pipeline_main(["backup-export"]) == 0
+    exported = capsys.readouterr().out
+
+    restore_path = tmp_path / "restore.json"
+    restore_path.write_text(exported, encoding="utf-8")
+    monkeypatch.setenv("NFL_DATABASE_URL", f"sqlite:///{tmp_path / 'restored.db'}")
+    assert pipeline_main(["backup-restore", "--migrate", "--file", str(restore_path)]) == 0
+    assert capsys.readouterr().out
+
+    restored = RecommendationStore(create_engine(f"sqlite:///{tmp_path / 'restored.db'}"))
+    assert restored.latest(NOW.date()) is not None
+    assert restored.latest_artifact("model")["payload"] == {
+        "schema_version": 1,
+        "rows": [{"player_id": 12}],
+    }
 
 
 def test_concurrent_artifact_puts_are_idempotent(tmp_path: Path) -> None:
