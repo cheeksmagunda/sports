@@ -128,6 +128,35 @@ def _validate_identity_links(rows: Sequence[HistoricalPerformance]) -> None:
         real_player_stable[row.player_id] = row.external_id
 
 
+def drop_ambiguous_identity_rows(
+    rows: Sequence[HistoricalPerformance],
+) -> tuple[tuple[HistoricalPerformance, ...], dict[str, Any]]:
+    """Remove every row for a real-id player_id that maps to more than one
+    external_id across the history set.
+
+    This is a genuine data ambiguity (typically two different real players
+    sharing a same-name identity crosswalk collision), not a code defect --
+    ``_validate_identity_links`` is right to refuse training on it. Rather
+    than weaken that check, drop the affected player_id's rows entirely (we
+    cannot trust which external_id, if either, is correct for them) and
+    report exactly what was dropped so it is auditable, not silent.
+    """
+    external_ids_by_player: dict[int, set[str]] = {}
+    for row in rows:
+        if row.external_id:
+            external_ids_by_player.setdefault(row.player_id, set()).add(row.external_id)
+    ambiguous = {player_id for player_id, ids in external_ids_by_player.items() if len(ids) > 1}
+    if not ambiguous:
+        return tuple(rows), {"ambiguous_identity_players": 0, "ambiguous_identity_rows": 0}
+    kept = tuple(row for row in rows if row.player_id not in ambiguous)
+    dropped_rows = len(rows) - len(kept)
+    return kept, {
+        "ambiguous_identity_players": len(ambiguous),
+        "ambiguous_identity_rows": dropped_rows,
+        "ambiguous_identity_player_ids": sorted(ambiguous),
+    }
+
+
 def attach_enrichment(
     history: Iterable[HistoricalPerformance], enrichment: Any
 ) -> tuple[HistoricalPerformance, ...]:

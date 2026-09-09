@@ -117,9 +117,21 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         raise RuntimeError("historical_training_rows_insufficient")
     metadata = load_history_metadata(root, rows)
     enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
-    from nfl_oracle.recommendations.model import attach_enrichment, fit_model
+    from nfl_oracle.recommendations.model import (
+        attach_enrichment,
+        drop_ambiguous_identity_rows,
+        fit_model,
+    )
 
     enriched = attach_enrichment(rows, enrichment)
+    # A same-name identity-crosswalk collision (one internal player_id maps to
+    # two different real players' external ids across games) is a genuine
+    # data ambiguity that fit_model's own _validate_identity_links correctly
+    # refuses to train on. Drop just the affected player_id(s) rather than
+    # weakening that check; both `enriched` (stored below) and what fit_model
+    # sees must be the same filtered set, or the training fingerprint the
+    # model records will not match the history this bundle persists.
+    enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
     model = fit_model(enriched, trained_at=now)
     return ModelBundle(
         model=model,
@@ -133,6 +145,7 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
             "context_excluded": enrichment.excluded,
             "context_evidence_mode": enrichment.evidence_mode,
             "contest_entry": False,
+            **identity_audit,
         },
     )
 
@@ -204,9 +217,15 @@ async def _worker_once(
             store.record_run(day, status="blocked", detail_code="contest_unavailable")
             return None
         slate = await reader.collect(day, contest_id=contest_ids[0])
-        snapshot = _load_context(project, slate, now)
-        _ensure_model(project, store, pipeline, snapshot, now)
-        context = build_context(slate, snapshot, now)
+        # Collection is a live network round trip; every per-candidate and
+        # context clock it produces is stamped with real wall-clock time at or
+        # after this point. Re-read the clock here rather than reusing the
+        # pre-collection `now` above, or `assert_available` sees its own
+        # freshly collected evidence as being from the future and refuses.
+        decision_at = datetime.now(UTC)
+        snapshot = _load_context(project, slate, decision_at)
+        _ensure_model(project, store, pipeline, snapshot, decision_at)
+        context = build_context(slate, snapshot, decision_at)
         pipeline.prepare(slate, context)
         return await pipeline.publish(day, reader)
 
