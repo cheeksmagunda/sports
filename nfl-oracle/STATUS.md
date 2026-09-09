@@ -39,6 +39,110 @@ treating any row as production truth.
   paths, validation results, and continuation instructions are maintained in
   [issue #115](https://github.com/cheeksmagunda/sports/issues/115).
 
+## Corpus C landed: the historical contest archive (2026-09-09 UTC)
+
+The daily-draft contest archive now exists. `nfl-contest-backfill` walked the
+global `playerratingcontest` id space 1-2141 and saved every NFL contest it
+found. Read-only; the package has no submit path.
+
+- **92 NFL contests saved, 91 finalized**, spanning **2024-11-24 to 2026-02-08**,
+  plus the live pregame contest 2141. Fields run 12,049 to 62,457 entrants
+  (median 23,380).
+- Each finalized contest yields the top-20 human lineups with per-card slot,
+  boost, Real value, score and finalized value rank; a 45-row `draftStats`
+  block with per-player boosts and draft counts; the payout table; and the Rax
+  side-pool terms.
+- `/entries` serves **at most 20 rows and exposes no pagination parameter**
+  (page/offset/limit/cursor all return the same 20). Every field statistic is
+  therefore conditioned on reaching the visible top twenty. The median entry is
+  never observed and must not be claimed.
+
+### Scoring law, verified not assumed
+
+`score = value * (slot_multiplier + card_boost)` reconciles on every card of
+every saved entry across all 91 finalized contests. `parse_entries` checks the
+decomposition per row and refuses a payload that fails it, so a rule-era change
+surfaces instead of being averaged in. `payoutinfo.entryPayoutText` describes a
+different, rank-distance game and contradicts the leaderboard; the arithmetic
+is authoritative over that copy.
+
+### Card boosts are provider-assigned and absent in week 1
+
+Boosts are set by the provider from the player's pre-game Real ranking, never
+chosen by the entrant. They are **absent for the whole of NFL week 1** and
+switch on at week 2 Thursday:
+
+| Contest | Day | Boost table |
+| --- | --- | --- |
+| 839 | 2025-09-04 (W1 Thu) | all 0.0 |
+| 843 | 2025-09-05 (W1 Fri) | all 0.0 |
+| 849 | 2025-09-07 (W1 Sun) | all 0.0 |
+| 851 | 2025-09-08 (W1 Mon) | all 0.0 |
+| 857 | 2025-09-11 (W2 Thu) | full 0.1-3.0 spread |
+
+Contest 2141 (2026-09-09) reads all-zero live, consistent with the same rule.
+An all-zero table is shape-identical to a real one, and an optimizer fed zeros
+silently degenerates into "take the five highest projected values", discarding
+the leverage dimension. `observe_boosts` detects the state explicitly and
+`nfl-boost-watch` records the publication clock; a zero-boost slate must be
+gated as a deliberate regime, never optimized as if boosts were merely small.
+
+### What the archive says about winning
+
+Pooled over 91 finalized contests, conditioned on the visible top twenty:
+
+- Winners captured a mean **79.9%** of the hindsight-best legal lineup.
+- Only **3.2%** of visible top-20 lineups committed their five cards in the
+  optimal slot order (median 0%). Mean slot regret **1.45** points.
+- Winners averaged **3.4 of 5** cards inside the finalized Real-value top ten.
+
+In the four **zero-boost week-1 contests**, which are the exact rule analog for
+2026-09-09, the picture sharpens:
+
+- Winners captured **97.5%** of hindsight best. Without boosts there is little
+  leverage variance left, so the ceiling is nearly reachable.
+- Visible lineups averaged **4.59 of 5** cards inside the Real-value top ten;
+  59 of 80 had all five.
+- Ordering optimality was still only **6.2%**, mean regret 0.44.
+- Contest 839 is the clearest case: 23,880 entrants, all twenty visible lineups
+  drafted the **identical five players**, and 1st (30.27) beat 20th (29.98) by
+  **0.29 points** on slot order alone.
+
+The operational reading for a zero-boost single-game slate: player selection
+converges across the serious field and is table stakes, while committed slot
+order is a free deterministic lever that roughly 94% of the visible field fails
+to take. Total score decomposes into an order-invariant part and a
+rearrangement part, so the optimal commitment is strictly descending projected
+value. The edge is projection accuracy at the margin, expressed through order.
+
+Recurring winning archetype on single-game zero-boost slates: **both starting
+quarterbacks, the top skill producers, and the kicker.** 843 (KC at LAC) ran
+Herbert, Mahomes, Johnston, Allen, Kelce. 851 (MIN at CHI) ran McCarthy,
+Williams, Jones, Jefferson, Reichard. This is a described pattern from four
+contests, not a fitted or validated policy.
+
+### Payout structure, stated plainly
+
+Leaderboard prizes are 100/80/60/40/20 Rax for ranks 1-5 and 10 Rax for 6-10.
+Against a field of 20,000-plus that is a negligible expected return. The
+material payouts are the optional Rax side pools: top 50% pays 1.7x, top 20%
+pays 3.5x, top 10% pays 7x on a 100 Rax wager, tiebreak by earliest entry.
+Maximising expected Total Value is the objective the operator set and is what
+the optimizer maximises; it is not the same objective as maximising
+`P(top 10%)`. Both are exposed, the difference is documented, and no claim of a
+validated winning edge is made from either.
+
+### Commands
+
+```sh
+uv run --package nfl-oracle nfl-contest-backfill --start 1 --end 2141 --descending
+uv run --package nfl-oracle nfl-boost-watch --contest-id 2141 --day 2026-09-09 --once
+```
+
+Payloads land under `data/raw/corpus_c/` (gitignored, redacted, sha256
+provenance sidecars, mode 0600) with the resume cursor in
+`data/catalog/corpus_c_cursor.json`.
+
 ## Historical application baseline (September 6, 2026)
 
 - Package: `nfl-oracle` workspace member
