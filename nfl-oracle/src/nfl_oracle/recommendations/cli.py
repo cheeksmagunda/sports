@@ -267,6 +267,33 @@ def _train() -> int:
     return 0
 
 
+def _read_json_payload(path: str) -> dict[str, Any]:
+    if path == "-":
+        payload = json.load(sys.stdin)
+    else:
+        with Path(path).expanduser().open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise RuntimeError("json_object_required")
+    return payload
+
+
+def _backup_export() -> int:
+    store = RecommendationStore(_engine())
+    print(json.dumps(store.export_backup(), sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+def _backup_restore(path: str, *, migrate_first: bool) -> int:
+    engine = _engine()
+    if migrate_first:
+        migrate(engine)
+    store = RecommendationStore(engine, writable=True)
+    store.restore_backup(_read_json_payload(path))
+    print(json.dumps({"status": "restored", "contest_entry": False}))
+    return 0
+
+
 def _serve(host: str, port: int) -> int:
     try:
         import uvicorn
@@ -292,6 +319,10 @@ def _parser() -> argparse.ArgumentParser:
     migrate_command = commands.add_parser("migrate")
     migrate_command.set_defaults()
     commands.add_parser("train")
+    commands.add_parser("backup-export")
+    restore = commands.add_parser("backup-restore")
+    restore.add_argument("--file", default="-")
+    restore.add_argument("--migrate", action="store_true")
     worker = commands.add_parser("worker")
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--poll-seconds", type=int, default=30)
@@ -309,6 +340,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "train":
         return _train()
+    if args.command == "backup-export":
+        return _backup_export()
+    if args.command == "backup-restore":
+        return _backup_restore(args.file, migrate_first=args.migrate)
     requested_day = _day(args.day or os.environ.get("NFL_SLATE_DATE"))
     return asyncio.run(_run_worker(args.once, args.poll_seconds, requested_day))
 
