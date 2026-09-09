@@ -11,7 +11,7 @@
 # session will not do unattended):
 #   bash nfl-oracle/scripts/run_t40_worker.sh
 #
-# Stop it any time with: kill $(cat /tmp/nfl_t40_worker.pid)
+# Stop it any time with: kill $(cat /tmp/nfl_t40_worker.pid) $(cat /tmp/nfl_t40_tunnel_watchdog.pid)
 # Tail progress with:    tail -f /tmp/nfl_t40_worker.log
 
 set -euo pipefail
@@ -21,6 +21,12 @@ SECRET_FILE=".secrets/local_tunnel_db_url"
 TUNNEL_PORT=15433
 LOG_FILE="/tmp/nfl_t40_worker.log"
 PID_FILE="/tmp/nfl_t40_worker.pid"
+WATCHDOG_PID_FILE="/tmp/nfl_t40_tunnel_watchdog.pid"
+
+if [ ! -f "$SECRET_FILE" ]; then
+  echo "Missing $SECRET_FILE -- expected the tunnel DB URL to already be written there." >&2
+  exit 1
+fi
 
 if ! nc -z 127.0.0.1 "$TUNNEL_PORT" 2>/dev/null; then
   echo "Postgres tunnel not up on :$TUNNEL_PORT -- starting it."
@@ -30,10 +36,25 @@ if ! nc -z 127.0.0.1 "$TUNNEL_PORT" 2>/dev/null; then
   sleep 4
 fi
 
-if [ ! -f "$SECRET_FILE" ]; then
-  echo "Missing $SECRET_FILE -- writing tunnel URL." >&2
-  exit 1
-fi
+# The SSH tunnel has been observed to drop unattended (Railway bastion route
+# issue). The worker runs for hours before T-40; a dead tunnel with nobody
+# watching would silently error every poll and never freeze. Keep a watchdog
+# alive alongside the worker that restarts the tunnel if the port ever stops
+# accepting connections.
+(
+  while true; do
+    if ! nc -z 127.0.0.1 "$TUNNEL_PORT" 2>/dev/null; then
+      echo "$(date -u +%FT%TZ) tunnel down, restarting" >> /tmp/nfl_pg_tunnel.log
+      railway connect Postgres --ssh --tunnel-only --port "$TUNNEL_PORT" \
+        >> /tmp/nfl_pg_tunnel.log 2>&1 &
+      sleep 5
+    fi
+    sleep 60
+  done
+) &
+echo $! > "$WATCHDOG_PID_FILE"
+disown
+echo "Tunnel watchdog running as PID $(cat "$WATCHDOG_PID_FILE")."
 
 echo "Starting worker (logs: $LOG_FILE) ..."
 NFL_DATABASE_URL="$(cat "$SECRET_FILE")" NFL_RECOMMENDATIONS_ENABLED=1 \
