@@ -98,7 +98,7 @@ def storage_state_path() -> Path:
         os.environ.get("REALSPORTS_STORAGE_STATE_PATH", "").strip()
         or os.environ.get("NFL_REALSPORTS_STORAGE_STATE", "").strip()
     )
-    if override:
+    if override and not _placeholder_secret(override) and not override.startswith("{"):
         return Path(override).expanduser()
     local = scraper_dir() / "storage_state.json"
     if local.exists():
@@ -121,17 +121,49 @@ def token_cache_path() -> Path:
     return scraper_dir() / "request_token_cache.json"
 
 
+def _placeholder_secret(value: str) -> bool:
+    return value.strip().lower() in {
+        "placeholder",
+        "change-me",
+        "changeme",
+        "todo",
+        "unused",
+        "not-set",
+        "not_set",
+    }
+
+
+def _storage_state_from_text(value: str) -> dict[str, Any]:
+    if value.startswith("{"):
+        payload = json.loads(value)
+    else:
+        payload = json.loads(gzip.decompress(base64.b64decode(value, validate=True)))
+    if not isinstance(payload, dict) or not isinstance(payload.get("origins"), list):
+        raise ValueError("invalid storage-state structure")
+    return payload
+
+
 def materialize_storage_state_from_env() -> Path | None:
-    b64 = os.environ.get("REALSPORTS_STORAGE_STATE_B64GZ", "").strip()
-    if not b64:
+    values = (
+        ("REALSPORTS_STORAGE_STATE_B64GZ", os.environ.get("REALSPORTS_STORAGE_STATE_B64GZ", "")),
+        ("NFL_REALSPORTS_STORAGE_STATE", os.environ.get("NFL_REALSPORTS_STORAGE_STATE", "")),
+    )
+    configured = [(key, value.strip()) for key, value in values if value.strip()]
+    if not configured:
         return None
-    try:
-        raw = gzip.decompress(base64.b64decode(b64, validate=True))
-        payload = json.loads(raw)
-        if not isinstance(payload, dict) or not isinstance(payload.get("origins"), list):
-            raise ValueError("invalid storage-state structure")
-    except (ValueError, OSError, json.JSONDecodeError) as exc:
-        raise StorageStateMissing("REALSPORTS_STORAGE_STATE_B64GZ is set but invalid") from exc
+    for key, value in configured:
+        if _placeholder_secret(value):
+            continue
+        if key == "NFL_REALSPORTS_STORAGE_STATE" and not value.startswith("{"):
+            continue
+        try:
+            payload = _storage_state_from_text(value)
+            break
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            raise StorageStateMissing(f"{key} is set but invalid") from exc
+    else:
+        return None
+    raw = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode()
     target = scraper_dir() / "storage_state.json"
     import tempfile
 
