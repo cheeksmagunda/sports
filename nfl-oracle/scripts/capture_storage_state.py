@@ -18,9 +18,10 @@ from nfl_oracle.ingest.realsports import _ensure_private_directory
 
 
 async def capture() -> Path:
-    target = Path(
-        os.environ.get("NFL_ORACLE_SCRAPER_DIR", "scraper")
-    ).expanduser().resolve() / "storage_state.json"
+    target = (
+        Path(os.environ.get("NFL_ORACLE_SCRAPER_DIR", "scraper")).expanduser().resolve()
+        / "storage_state.json"
+    )
     _ensure_private_directory(target.parent)
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=False)
