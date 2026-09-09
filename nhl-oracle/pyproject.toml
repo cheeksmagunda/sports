@@ -18,7 +18,7 @@ oracle-core = { workspace = true }
 dev = [
     "pytest>=9.0.3,<10.0",
     "ruff>=0.7,<1.0",
-    "mypy>=1.13,<2.0",
+    "mypy>=1.13,<3.0",
 ]
 
 [build-system]
