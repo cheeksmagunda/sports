@@ -1,7 +1,96 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>NFL Oracle</title><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Hanken+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
-<body><main><header><p class="eyebrow">SPORTS ORACLE</p><h1>NFL Oracle</h1><p>Five picks. Your call.</p></header>
-<form id="day-form"><label for="day">Slate date (Central time)</label><div class="controls"><input id="day" type="date" required><button type="submit">View picks</button><button id="refresh" type="button">Refresh</button></div></form>
-<section aria-live="polite" aria-atomic="true"><h2 id="status">Loading picks</h2><p id="message">Checking the latest saved lineup.</p><p id="timing"></p></section>
-<ol id="picks" aria-label="Five recommended picks"></ol><p id="provenance"></p>
-<footer>Recommendations only. Entries are never submitted automatically. Pick order reflects the saved slot multipliers.</footer></main></body></html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#061b1d">
+    <title>NFL Oracle · The Five</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Hanken+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#lineup">Skip to lineup</a>
+    <div class="app">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="NFL Oracle home">
+          <span class="brand-mark" aria-hidden="true">N</span>
+          <span>NFL <em>Oracle</em></span>
+        </a>
+        <div class="header-meta">
+          <span>Today&rsquo;s slate</span>
+          <strong id="header-date">—</strong>
+        </div>
+        <div class="header-actions">
+          <span class="header-meta frozen-meta">
+            <span>Frozen</span>
+            <strong id="header-frozen">—</strong>
+          </span>
+          <button class="header-link" id="history" type="button">History</button>
+          <button class="header-link" id="system" type="button" aria-label="Show system status">
+            <span class="watchdog-dot" aria-hidden="true"></span>
+            System
+          </button>
+          <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">◐</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="slate-band" aria-label="Slate summary">
+          <div>
+            <p class="caption" id="slate-caption">Today&rsquo;s five</p>
+            <h1>The Five<span>.</span></h1>
+            <p class="editorial">Model-ranked picks for today. Review the order, then make the call yourself.</p>
+            <div class="chips">
+              <span class="chip" id="recommendation">Waiting for freeze</span>
+              <span class="chip chip-muted" id="entry-policy">Manual entry only</span>
+            </div>
+          </div>
+          <div class="band-stats">
+            <div><span>Projected total</span><strong id="projected-total">—</strong></div>
+            <div class="stat-divider"></div>
+            <div><span>Games</span><strong id="game-count">—</strong></div>
+          </div>
+        </section>
+
+        <section class="content" id="lineup" aria-label="Frozen NFL lineup" aria-live="polite">
+          <div class="state-panel">
+            <div class="state-copy">
+              <p class="state-kicker">Recommendation status</p>
+              <h2 id="status">Loading picks</h2>
+              <p id="message">Checking the latest saved lineup.</p>
+              <p class="timing" id="timing"></p>
+            </div>
+            <div class="loader-mark" id="loader-mark" aria-hidden="true"></div>
+          </div>
+
+          <div class="toolbar">
+            <form id="day-form">
+              <label for="day">Slate date</label>
+              <input id="day" type="date" required>
+            </form>
+            <button class="button button-primary" id="refresh" type="button">Refresh picks</button>
+          </div>
+
+          <ol class="slip" id="picks" aria-label="Five recommended picks"></ol>
+          <p class="provenance" id="provenance"></p>
+        </section>
+
+        <aside class="drawer" id="drawer" hidden aria-live="polite">
+          <div class="drawer-head">
+            <h2 id="drawer-title">System</h2>
+            <button class="close-button" id="drawer-close" type="button" aria-label="Close panel">×</button>
+          </div>
+          <div id="drawer-content"></div>
+        </aside>
+      </main>
+
+      <footer class="site-footer">
+        <span>Recommendations only. Entries are never submitted automatically.</span>
+        <span class="footer-right">NFL Oracle · no-submit by design</span>
+      </footer>
+    </div>
+  </body>
+</html>
