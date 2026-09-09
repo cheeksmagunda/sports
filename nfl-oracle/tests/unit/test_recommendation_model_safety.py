@@ -5,7 +5,12 @@ from statistics import mean
 
 import pytest
 
-from nfl_oracle.recommendations.model import HistoricalPerformance, fit_model, predict
+from nfl_oracle.recommendations.model import (
+    HistoricalPerformance,
+    drop_ambiguous_identity_rows,
+    fit_model,
+    predict,
+)
 from nfl_oracle.recommendations.schema import Candidate, Contest, EvidenceClock, Game, Slate
 
 BASE = datetime(2025, 9, 1, 12, tzinfo=UTC)
@@ -130,3 +135,32 @@ def test_real_identity_switching_stable_ids_fails_closed() -> None:
     history[0] = history[0].model_copy(update={"external_id": "other-stable"})
     with pytest.raises(ValueError, match="conflicting_external_identity"):
         fit_model(history, trained_at=BASE + timedelta(days=10))
+
+
+def test_drop_ambiguous_identity_rows_isolates_only_the_colliding_player() -> None:
+    """A same-name external-id crosswalk collision (one internal player_id
+    alternating between two real external ids, e.g. two different real
+    players sharing a name) must not block training on every other player --
+    only that player's rows are dropped, and fit_model then succeeds."""
+    history = rows()
+    history[0] = history[0].model_copy(update={"external_id": "other-stable"})
+    ambiguous_player_id = history[0].player_id
+    dropped_row_count = sum(1 for row in history if row.player_id == ambiguous_player_id)
+
+    kept, audit = drop_ambiguous_identity_rows(history)
+
+    assert audit["ambiguous_identity_players"] == 1
+    assert audit["ambiguous_identity_rows"] == dropped_row_count
+    assert audit["ambiguous_identity_player_ids"] == [ambiguous_player_id]
+    assert all(row.player_id != ambiguous_player_id for row in kept)
+    assert len(kept) == len(history) - dropped_row_count
+
+    model = fit_model(kept, trained_at=BASE + timedelta(days=10))
+    assert model.training_rows == len(kept)
+
+
+def test_drop_ambiguous_identity_rows_is_a_no_op_when_identities_are_clean() -> None:
+    history = rows()
+    kept, audit = drop_ambiguous_identity_rows(history)
+    assert kept == tuple(history)
+    assert audit == {"ambiguous_identity_players": 0, "ambiguous_identity_rows": 0}
