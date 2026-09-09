@@ -63,6 +63,26 @@ Seed from `REALSPORTS_STORAGE_STATE_B64GZ`:
 uv run --package nfl-oracle python nfl-oracle/scripts/seed_storage_state.py
 ```
 
+To create the private state on an operator machine, open a headed browser and
+sign in normally (password manager/autofill is fine):
+
+```sh
+uv run --package nfl-oracle python nfl-oracle/scripts/capture_storage_state.py
+```
+
+Press Enter in the terminal after the page is visibly signed in. The helper
+writes `nfl-oracle/scraper/storage_state.json` with mode `0600`; it never prints
+or uploads the session. The resulting file can be compressed and base64
+encoded for a sealed Railway variable:
+
+```sh
+gzip -c nfl-oracle/scraper/storage_state.json | base64 | pbcopy
+```
+
+Paste that clipboard value into Railway's sealed
+`REALSPORTS_STORAGE_STATE_B64GZ` variable for the worker service only. Do not
+paste it into chat, commit it, or set it on the read-only API service.
+
 ## Train vs live clock / config boundaries
 
 Per the NFL strategy playbook (training/live clocks and leakage blacklist):
