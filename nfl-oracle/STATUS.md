@@ -5,6 +5,59 @@ Last verified: 2026-09-08 20:40 CT, Codespace cleanup checkpoint for issue #115.
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
 
+## Railway worker activated as sole primary writer (2026-09-09 18:55 UTC, issue #129)
+
+This checkpoint supersedes the two sections below for tonight's live status.
+Per operator direction ("get it to run for real, without needing the local
+fallback"), the hosted `nfl-oracle-worker` service is now the sole writer for
+the 2026-09-09 SEA at NE slate (contest 2141, kickoff 2026-09-10T00:20:00Z,
+T-40 2026-09-09T23:40:00Z). The local `run_t40_worker.sh` process crashed
+around 18:07 UTC (PostgreSQL tunnel drop cascading into the audit-write
+failure this checkpoint's retry fix addresses) and was not restarted; the
+operator was told not to restart it, to avoid a double-writer race.
+
+Sequence, each step independently verified:
+
+1. PR #131 (`_record_worker_failure`, the retry-crash fix, plus
+   `test_worker_retry.py`) merged to main at `f12c150`. Required CI green
+   (secret-scan, devcontainer-smoke, test-and-quality, integration-and-container).
+2. `nfl-oracle-worker` auto-rebuilt from `f12c150`; confirmed via SSH
+   (`$RAILWAY_GIT_COMMIT_SHA`) that the running container is that exact
+   commit, not an older cached image.
+3. Corpus G (3,342 files, 513,980,989 bytes) and the one context snapshot
+   confirmed present post-rebuild via a fresh SSH read, matching the prior
+   upload counts exactly.
+4. A read-only `SELECT 1` against `NFL_DATABASE_URL` from inside the worker
+   container confirmed the private-network path to production Postgres works;
+   this path had never been exercised by any prior worker deployment (every
+   earlier run exited at the `recommendations_disabled` gate).
+5. `NFL_RECOMMENDATIONS_ENABLED` set to `1` via `railway variable set
+   --skip-deploys` (the `railway environment edit --service-config` dot-path
+   form no-ops on this field specifically, for both this value and
+   `deploy.startCommand`, regardless of target value; the working path for
+   `startCommand` remains the Railway dashboard).
+6. The operator applied the dashboard change restoring
+   `deploy.startCommand` to `sh -c 'exec nfl-pipeline worker'`. Deployment
+   `ebb4c9d1` went live at 18:55:25 UTC.
+7. First log line: `[INFO] status="waiting_or_locked"` at 18:55:25 UTC. In
+   `_worker_once`, `store.record_run(day, status="waiting", ...)` commits to
+   Postgres before this line prints, so it proves auth derivation, live
+   provider read, and a committed production write in one signal.
+8. Independently confirmed via the local read-only tunnel: production table
+   `nfl_recommendation_runs` rows 71 and 72, `checked_at` 18:55:24.97Z and
+   18:55:55.47Z (30s apart, matching `--poll-seconds 30`), both
+   `{"status": "waiting", "detail_code": "waiting_for_t40", "details":
+   {"next_freeze": "2026-09-09T23:40:00+00:00", "cutoff_at":
+   "2026-09-10T00:20:00+00:00"}}`. Rows 68-70 (checked_at 18:05-18:06Z) are
+   the local worker's last writes before its crash; no writer was polling
+   between roughly 18:07 and 18:55 UTC, but no freeze was due in that window.
+
+Remaining to verify before this is closed out: the worker keeps polling
+`waiting_or_locked` without crashing through T-40 (23:40 UTC), then actually
+executes `publish()`/freeze against production Postgres at T-40, producing
+the correct five-pick, descending-slot-order lineup with no contest
+submission, through kickoff (00:20 UTC 2026-09-10).
+
 ## Hosted provisioning and retry recovery (2026-09-09, issue #129)
 
 This checkpoint supersedes the provisioning blocker recorded below. The
