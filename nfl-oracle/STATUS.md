@@ -5,6 +5,58 @@ Last verified: 2026-09-08 20:40 CT, Codespace cleanup checkpoint for issue #115.
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
 
+## Railway worker continuation (2026-09-09, issue #129)
+
+Verified from the operator Mac using the native Railway CLI. The local
+`run_t40_worker.sh` process remains the active path for tonight's freeze;
+`/tmp/nfl_t40_worker.log` was updating with `waiting_or_locked` during this
+checkpoint. Its process, SSH tunnel, and production database were not modified.
+Kickoff supplied for contest 2141 is `2026-09-10T00:20:00Z`, with T-40 at
+18:40 America/Chicago on September 9. A completed production freeze has not
+yet been verified.
+
+The hosted worker service `a4e05931-fd02-4dd0-b998-d8ecfdbcc355` in project
+`dc2d3b51-2551-4df1-981e-c2c1440dc992`, environment
+`21c8b1a2-6648-4535-8a26-b65da96d8ed1`, had
+`NFL_RECOMMENDATIONS_ENABLED=1` when inspected. It has been set to `0` and
+read back as `0` to avoid enabling a second writer before the local freeze.
+`NFL_DATABASE_URL` is present; `REALSPORTS_STORAGE_STATE_B64GZ` is absent.
+The API and Postgres services report Online in Railway; this is a service
+status observation, not a new database health or freeze-content check.
+
+`nfl-oracle-worker-volume` (`9cb6374a-f47b-4401-ba35-b6131f9d30e5`) is attached
+at `/app/nfl-oracle/data`. Deployment
+`c7c08dcf-564b-40f5-b677-77dc4e6d79a5` reports Crashed after completing its
+build; runtime logs confirm `recommendations_disabled` on each startup.
+Volume listing fails with an SFTP initialization timeout. A native CLI
+start-command edit to `sleep infinity` returned without applying a change;
+a subsequent attempt explicitly reported `No changes to apply`, and read-back
+still showed `sh -c 'exec nfl-pipeline worker'`. The operator was asked to
+set the temporary start command and deploy through the dashboard. No data or
+session upload has been completed in this continuation.
+
+The local inputs exist: Corpus G is approximately 500 MB, and seven context
+JSON snapshots total approximately 1.1 GB. The latest snapshot is
+`f70ae53d793d2dc84a9e967dc3509fb4c1ca61c90c2addbb1c0728fd2384334e.json`,
+file SHA256 `85569b590ee476c04a3b5effcd40c8a6d1609b9dada0596ffa8fadd38590fa80`.
+The local session is structurally valid JSON with mode `0600`; this is not
+proof of hosted authentication.
+
+The production Dockerfile now copies venue configuration explicitly to
+`/app/nfl-oracle/config/`, matching the worker's default lookup. Previously
+it copied to `/config/` before setting the runtime working directory, which
+would leave the default worker lookup missing its venue file. Local image
+verification could not run because the Docker daemon socket was unavailable.
+
+Remaining acceptance: obtain a running provisioning container, upload and
+verify Corpus G and context on the volume, seal the worker-only session,
+verify runtime paths and permissions, restore the worker start command, and
+only enable recommendations after confirming tonight's local freeze. A
+natural subsequent slate must demonstrate hosted refresh, model preparation,
+T-40 waiting, and a five-player freeze before claiming weekly self-sufficiency.
+Rollback during provisioning is recommendations disabled with the local
+runner left intact. References: issues #129 and #124.
+
 ## Current operational readiness
 
 - GitHub `main` remains `66955746f76af3a024489606e37620bd43f0d5ac`.

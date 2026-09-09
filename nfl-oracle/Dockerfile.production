@@ -73,7 +73,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/playwright-browsers /opt/playwright-browsers
-COPY --from=builder /workspace/nfl-oracle/config ./config/
+COPY --from=builder /workspace/nfl-oracle/config /app/nfl-oracle/config/
 
 WORKDIR /app/nfl-oracle
 COPY nfl-oracle/src/ ./src/
