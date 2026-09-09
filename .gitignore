@@ -35,3 +35,6 @@
 drive/corpus_g_coverage_samples/
 **/storage_state.json
 **/request_token_cache.json
+
+# Stray root-level browser-session capture state (belongs under nfl-oracle/scraper/)
+/scraper/

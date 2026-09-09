@@ -144,9 +144,21 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         raise RuntimeError("historical_training_rows_insufficient")
     metadata = load_history_metadata(root, rows)
     enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
-    from nfl_oracle.recommendations.model import attach_enrichment, fit_model
+    from nfl_oracle.recommendations.model import (
+        attach_enrichment,
+        drop_ambiguous_identity_rows,
+        fit_model,
+    )
 
     enriched = attach_enrichment(rows, enrichment)
+    # A same-name identity-crosswalk collision (one internal player_id maps to
+    # two different real players' external ids across games) is a genuine
+    # data ambiguity that fit_model's own _validate_identity_links correctly
+    # refuses to train on. Drop just the affected player_id(s) rather than
+    # weakening that check; both `enriched` (stored below) and what fit_model
+    # sees must be the same filtered set, or the training fingerprint the
+    # model records will not match the history this bundle persists.
+    enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
     model = fit_model(enriched, trained_at=now)
     return ModelBundle(
         model=model,
@@ -160,6 +172,7 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
             "context_excluded": enrichment.excluded,
             "context_evidence_mode": enrichment.evidence_mode,
             "contest_entry": False,
+            **identity_audit,
         },
     )
 
