@@ -1,0 +1,117 @@
+name: nfl-dayclose
+
+on:
+  schedule:
+    # 10:00 UTC: at least 1h past the latest observed NFL contest finalization
+    # in the local Corpus C archive (a Monday-night slate finalizing ~08:50
+    # UTC), and far enough from wnba-dayclose-verify's 07:00 UTC / corpus
+    # backup's 06:00-06:43 UTC window that the two applications' scheduled
+    # jobs never overlap.
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+    inputs:
+      day:
+        description: Slate date (YYYY-MM-DD) to grade; default is yesterday in US/Eastern
+        required: false
+        type: string
+      catchup_window_days:
+        description: How many days back to sweep for an ungraded frozen lineup
+        required: false
+        type: string
+        default: "7"
+
+permissions:
+  contents: read
+
+env:
+  RESULTS_LABEL: nfl-ops-results
+  GUARD_LABEL: nfl-ops-guard
+
+concurrency:
+  group: nfl-dayclose
+  cancel-in-progress: false
+
+jobs:
+  dayclose:
+    permissions:
+      contents: read
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Run day-close grading
+        id: dayclose
+        continue-on-error: true
+        env:
+          NFL_DATABASE_URL: ${{ secrets.NFL_DAYCLOSE_DATABASE_URL }}
+          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.NFL_REALSPORTS_STORAGE_STATE_B64GZ }}
+        run: |
+          if [ -z "$NFL_DATABASE_URL" ] || [ -z "$REALSPORTS_STORAGE_STATE_B64GZ" ]; then
+            echo "not_configured: NFL_DAYCLOSE_DATABASE_URL and/or NFL_REALSPORTS_STORAGE_STATE_B64GZ secrets are unset" | tee "$RUNNER_TEMP/dayclose-report.md"
+            exit 1
+          fi
+          DAY_ARG=""
+          if [ -n "${{ inputs.day }}" ]; then
+            DAY_ARG="--day ${{ inputs.day }}"
+          fi
+          uv run --frozen --package nfl-oracle nfl-pipeline \
+            dayclose $DAY_ARG --catchup-window-days "${{ inputs.catchup_window_days || '7' }}" \
+            | tee "$RUNNER_TEMP/dayclose-output.json"
+
+      - name: Build results digest
+        if: always()
+        run: |
+          {
+            echo "# NFL day-close ($(date -u +%Y-%m-%dT%H:%MZ))"
+            echo
+            if [ -s "$RUNNER_TEMP/dayclose-output.json" ]; then
+              echo '```json'
+              cat "$RUNNER_TEMP/dayclose-output.json"
+              echo '```'
+            else
+              echo "ALERT: day-close produced no output."
+              cat "$RUNNER_TEMP/dayclose-report.md" 2>/dev/null || true
+            fi
+          } > "$RUNNER_TEMP/dayclose-report.md"
+
+      - name: Append results digest
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$RESULTS_LABEL" --color 1D76DB --description "NFL results ledger" 2>/dev/null || true
+          number=$(gh issue list --label "$RESULTS_LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/dayclose-report.md"
+          else
+            gh issue create \
+              --label "$RESULTS_LABEL" \
+              --title "NFL results ledger" \
+              --body-file "$RUNNER_TEMP/dayclose-report.md"
+          fi
+
+      - name: Escalate day-close failure
+        if: always() && steps.dayclose.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$GUARD_LABEL" --color B60205 --description "NFL production operations" 2>/dev/null || true
+          number=$(gh issue list --label "$GUARD_LABEL" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$RUNNER_TEMP/dayclose-report.md"
+          else
+            gh issue create \
+              --label "$GUARD_LABEL" \
+              --title "NFL production operations" \
+              --body-file "$RUNNER_TEMP/dayclose-report.md"
+          fi
+
+      - name: Fail the workflow after escalation
+        if: always() && steps.dayclose.outcome != 'success'
+        run: exit 1

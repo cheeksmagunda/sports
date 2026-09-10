@@ -1,0 +1,145 @@
+name: nfl-corpus-backup
+
+on:
+  schedule:
+    # 11:30 UTC: after nfl-dayclose's 10:00 UTC run has had time to finish and
+    # land its grade in Postgres, and offset from wnba's corpus-backup.yml
+    # (06:43 UTC) so the two workflows never race a push to the shared
+    # `backups` branch.
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+    inputs:
+      confirm_backup:
+        description: Confirm that this manual run may write the backups branch
+        required: true
+        type: boolean
+        default: false
+      allow_regression:
+        description: Allow an intentional row-count regression
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nfl-corpus-backup
+  cancel-in-progress: false
+
+jobs:
+  export:
+    permissions:
+      contents: read
+    if: github.event_name == 'schedule' || inputs.confirm_backup == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Prepare TLS certificate
+        env:
+          PG_SSL_ROOT_CERT: ${{ secrets.PG_SSL_ROOT_CERT }}
+        run: |
+          umask 077
+          printf '%s' "$PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
+
+      - name: Load previous backup baseline
+        env:
+          PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
+        run: |
+          if git show-ref --verify --quiet refs/remotes/origin/backups; then
+            git show origin/backups:nfl-oracle/data/backups/manifest.json > "$PREVIOUS_MANIFEST" 2>/dev/null || true
+          fi
+
+      - name: Export corpus snapshot
+        env:
+          CORPUS_BACKUP_ALLOW_REGRESSION: ${{ inputs.allow_regression || false }}
+          CORPUS_BACKUP_DIR: ${{ runner.temp }}/corpus-backup
+          CORPUS_PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
+          NFL_BACKUP_DATABASE_URL: ${{ secrets.NFL_BACKUP_DATABASE_URL }}
+          PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
+        run: |
+          if [ -z "$NFL_BACKUP_DATABASE_URL" ]; then
+            echo "::error::NFL_BACKUP_DATABASE_URL secret is not configured"
+            exit 1
+          fi
+          uv run --frozen --package nfl-oracle python nfl-oracle/scripts/backup_corpus.py
+
+      - name: Verify snapshot manifest and hashes
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
+        run: uv run --frozen --package nfl-oracle python nfl-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+
+      - name: Transfer verified snapshot without database credentials
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nfl-corpus-backup-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/corpus-backup/frozen_lineups.csv
+            ${{ runner.temp }}/corpus-backup/prepared_decisions.csv
+            ${{ runner.temp }}/corpus-backup/dayclose_grades.csv
+            ${{ runner.temp }}/corpus-backup/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: export
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Download verified snapshot
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: nfl-corpus-backup-${{ github.run_id }}
+          path: ${{ runner.temp }}/corpus-backup
+
+      - name: Reverify transferred snapshot before repository write
+        env:
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
+        run: uv run --frozen --package nfl-oracle python nfl-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
+
+      - name: Commit snapshot to backups branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
+        run: |
+          gh auth setup-git
+          git config user.name "nfl-oracle-bot"
+          git config user.email "noreply@github.com"
+          if git ls-remote --exit-code --heads origin backups >/dev/null 2>&1; then
+            git fetch origin backups
+            git switch --force-create backups origin/backups
+          else
+            git switch --orphan backups
+            git rm -r --cached . || true
+          fi
+          mkdir -p nfl-oracle/data/backups
+          cp "$SNAPSHOT_DIR/frozen_lineups.csv" nfl-oracle/data/backups/
+          cp "$SNAPSHOT_DIR/prepared_decisions.csv" nfl-oracle/data/backups/
+          cp "$SNAPSHOT_DIR/dayclose_grades.csv" nfl-oracle/data/backups/
+          cp "$SNAPSHOT_DIR/manifest.json" nfl-oracle/data/backups/
+          git add -f nfl-oracle/data/backups/frozen_lineups.csv
+          git add -f nfl-oracle/data/backups/prepared_decisions.csv
+          git add -f nfl-oracle/data/backups/dayclose_grades.csv
+          git add -f nfl-oracle/data/backups/manifest.json
+          if git diff --cached --quiet; then
+            echo "no corpus changes; skipping commit"
+          else
+            git commit -m "backup: nfl corpus snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin backups
+          fi
