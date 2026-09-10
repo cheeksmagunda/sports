@@ -320,6 +320,21 @@ def _read_json_payload(path: str) -> dict[str, Any]:
     return payload
 
 
+def _dayclose(day_arg: str | None, *, catchup_window_days: int) -> int:
+    from nfl_oracle.recommendations.dayclose import run as run_dayclose
+
+    store = RecommendationStore(_engine(), writable=True)
+    target_day = _day(day_arg)
+    result = run_dayclose(
+        store,
+        project_root=_project_root(),
+        target_day=target_day,
+        catchup_window_days=catchup_window_days,
+    )
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 1 if result["status"] == "failed" else 0
+
+
 def _backup_export() -> int:
     store = RecommendationStore(_engine())
     print(json.dumps(store.export_backup(), sort_keys=True, separators=(",", ":")))
@@ -361,6 +376,9 @@ def _parser() -> argparse.ArgumentParser:
     migrate_command = commands.add_parser("migrate")
     migrate_command.set_defaults()
     commands.add_parser("train")
+    dayclose = commands.add_parser("dayclose")
+    dayclose.add_argument("--day")
+    dayclose.add_argument("--catchup-window-days", type=int, default=7)
     commands.add_parser("backup-export")
     restore = commands.add_parser("backup-restore")
     restore.add_argument("--file", default="-")
@@ -382,6 +400,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.command == "train":
         return _train()
+    if args.command == "dayclose":
+        return _dayclose(args.day, catchup_window_days=args.catchup_window_days)
     if args.command == "backup-export":
         return _backup_export()
     if args.command == "backup-restore":

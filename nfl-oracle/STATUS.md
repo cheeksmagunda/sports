@@ -5,6 +5,26 @@ Last verified: 2026-09-08 20:40 CT, Codespace cleanup checkpoint for issue #115.
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
 
+## Day-close grading and CSV historical backup added, not yet live (issue #140)
+
+New, purely additive capability: `nfl-pipeline dayclose` grades a frozen
+lineup against finalized Corpus C/G results once a contest finalizes (append-
+only `dayclose_grade:{day}` artifact via the existing `RecommendationStore`,
+no schema migration), and `nfl-oracle/scripts/backup_corpus.py` exports
+frozen lineups, prepared decisions, and dayclose grades to CSV on the shared
+`backups` branch, mirroring wnba-oracle's corpus-backup pattern. Two new
+scheduled GitHub Actions workflows: `nfl-dayclose.yml` (`0 10 * * *` UTC) and
+`nfl-corpus-backup.yml` (`30 11 * * *` UTC). Neither touches `pipeline.py`,
+`model.py`, `optimizer.py`, or the worker loop.
+
+**Not yet live.** Both workflows are inert until the operator provisions
+three GitHub Actions secrets: `NFL_DAYCLOSE_DATABASE_URL` (write-capable
+Postgres), `NFL_REALSPORTS_STORAGE_STATE_B64GZ` (the derived Real Sports
+session, base64+gzip), and `NFL_BACKUP_DATABASE_URL` (read-only Postgres).
+Until then, `nfl-dayclose.yml` fails cleanly with a `not_configured` message
+and posts nothing beyond that to the results ledger; `nfl-corpus-backup.yml`
+errors before touching the database. No credential was created by this work.
+
 ## Railway worker activated as sole primary writer (2026-09-09 18:55 UTC, issue #129)
 
 This checkpoint supersedes the two sections below for tonight's live status.
