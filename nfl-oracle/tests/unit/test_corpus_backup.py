@@ -147,6 +147,19 @@ def test_regression_guard_rejects_a_shrinking_corpus(tmp_path: Path) -> None:
     common.assert_no_regression(shrunk, previous, allow_regression=True)
 
 
+def test_regression_guard_treats_an_empty_file_as_no_previous_manifest(tmp_path: Path) -> None:
+    # `git show origin/backups:<path> > file` still creates `file` (empty)
+    # when <path> does not exist upstream -- the very first backup ever, for
+    # example. That must read as "nothing to compare against", not a
+    # corrupt manifest.
+    common = _import("nfl_corpus_backup_common")
+    empty = tmp_path / "previous-manifest.json"
+    empty.write_text("", encoding="utf-8")
+    current = {"tables": {"frozen_lineups": {"rows": 0}}}
+
+    common.assert_no_regression(current, empty, allow_regression=False)
+
+
 def test_restore_cli_validates_a_real_snapshot(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

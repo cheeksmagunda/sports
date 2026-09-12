@@ -174,6 +174,11 @@ def assert_no_regression(
 
     if previous_manifest_path is None or not previous_manifest_path.is_file():
         return
+    # An empty file (the caller's `git show ... > path` target when the path
+    # did not exist upstream) means "no previous manifest", not "corrupt
+    # manifest" -- distinguishing these matters on the very first backup.
+    if previous_manifest_path.stat().st_size == 0:
+        return
     try:
         previous = json.loads(previous_manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

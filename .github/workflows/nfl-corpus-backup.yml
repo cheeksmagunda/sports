@@ -70,8 +70,16 @@ jobs:
         env:
           PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
         run: |
-          if git show-ref --verify --quiet refs/remotes/origin/backups; then
-            git show origin/backups:nfl-oracle/data/backups/manifest.json > "$PREVIOUS_MANIFEST" 2>/dev/null || true
+          # Only write PREVIOUS_MANIFEST when nfl-oracle's own manifest
+          # actually exists in the backups branch. The `backups` branch can
+          # exist (another sport's backup created it) without ever holding
+          # nfl-oracle/data/backups/manifest.json; `git show` on a missing
+          # path still lets the `>` redirect truncate the target to an
+          # empty file, which reads as a corrupt (not absent) manifest and
+          # false-fails the regression check on NFL's very first backup.
+          if git show-ref --verify --quiet refs/remotes/origin/backups \
+            && git cat-file -e origin/backups:nfl-oracle/data/backups/manifest.json 2>/dev/null; then
+            git show origin/backups:nfl-oracle/data/backups/manifest.json > "$PREVIOUS_MANIFEST"
           fi
 
       - name: Export corpus snapshot
