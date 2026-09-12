@@ -166,6 +166,43 @@ application checks. Each application defines its own serving dependencies,
 scheduled jobs, data authority, backup boundaries, and rollback requirements in
 its child documentation.
 
+## Day-close and historical backup pattern
+
+Every sport application eventually needs a day-close job: grade a frozen
+decision against finalized real-world results once a provider's contest
+settles, then keep a bounded catch-up window so a later-finalizing contest,
+a missed run, or an earlier outage still gets graded on a subsequent day.
+That orchestration shape - attempt a target day, isolate one day's failure,
+retry a bounded window of earlier ungraded days, aggregate to a job result -
+is provider-neutral and lives in `oracle_core.dayclose.run_sweep`. What
+"graded" means, what provider data to refresh, and which outcomes are
+terminal versus worth flagging stay entirely in the owning application's
+`close_one_day` callback; `oracle-core` never imports a sport package.
+
+`nfl-oracle` is the first application built on this pattern
+(`nfl_oracle.recommendations.dayclose`, scheduled by `.github/workflows/
+nfl-dayclose.yml` and `nfl-corpus-backup.yml`). Both scheduled workflows gate
+on a cheap, session-free public-schedule check
+(`nfl-oracle/scripts/nfl_dayclose_gate.py`) for whether the sweep's own
+catch-up window contains any slate, so an off-season day costs nothing; a
+manual `workflow_dispatch` run always bypasses the gate. The shared
+ledger-post/escalate mechanics live in the
+`.github/actions/dayclose-ledger` composite action.
+
+`wnba-oracle`'s existing day-close job (a Railway cron, verified from GitHub
+Actions by `wnba-dayclose-verify.yml`) predates this pattern and is
+structurally different. It is not migrated onto `oracle_core.dayclose`
+retroactively; only new sport day-close jobs are expected to build on it.
+
+All sport day-close jobs that need a Real Sports session share one
+operator-captured session end to end: the operator captures it locally
+(`scraper/storage_state.json`), it is stored as a single repository secret,
+`REALSPORTS_STORAGE_STATE_B64GZ` (base64+gzip, unprefixed - not per sport),
+and every sport's day-close workflow reads that same secret. Database
+credentials stay per-sport and prefixed (for example
+`NFL_DAYCLOSE_DATABASE_URL`), since each application owns a separate
+database.
+
 ## Local backend authentication
 
 Normal commands run directly. They use exported environment values, deployment

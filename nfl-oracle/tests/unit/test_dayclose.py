@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import create_engine
 
 from nfl_oracle.contests.collector import ContestOutcome
+from nfl_oracle.contests.store import ContestStore
 from nfl_oracle.ingest.corpus_g import CorpusGStore
 from nfl_oracle.recommendations import dayclose
 from nfl_oracle.recommendations.store import RecommendationStore, migrate
@@ -117,7 +118,13 @@ def test_grades_a_finalized_day(tmp_path: Path) -> None:
     corpus_store = _write_corpus_g_game(tmp_path / "nfl-oracle", values=values)
     refresh = _FakeRefresh(corpus_store)
 
-    result = dayclose.run(store, target_day=DAY, refresh=refresh, catchup_window_days=1)
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        target_day=DAY,
+        refresh=refresh,
+        catchup_window_days=1,
+    )
 
     assert result["status"] == "success"
     assert result["outcomes"][DAY.isoformat()] == "graded"
@@ -131,6 +138,9 @@ def test_grades_a_finalized_day(tmp_path: Path) -> None:
         5.2 * 2.0 + 0.2 * 1.8 + 3.5 * 1.6 + 0.7 * 1.4 + 3.3 * 1.2
     )
     assert artifact["payload"]["field_size"] == 100
+    # No Corpus C contest was ever written for this test, so full-field
+    # capture degrades to None rather than raising.
+    assert artifact["payload"]["slate_results"] is None
 
 
 def test_not_finalized_degrades_without_writing_artifact(tmp_path: Path) -> None:
@@ -138,7 +148,13 @@ def test_not_finalized_degrades_without_writing_artifact(tmp_path: Path) -> None
     _freeze_five(store)
     refresh = _FakeRefresh(CorpusGStore(tmp_path / "nfl-oracle"), is_finalized=False)
 
-    result = dayclose.run(store, target_day=DAY, refresh=refresh, catchup_window_days=1)
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        target_day=DAY,
+        refresh=refresh,
+        catchup_window_days=1,
+    )
 
     assert result["status"] == "degraded"
     assert result["outcomes"][DAY.isoformat()] == "not_finalized"
@@ -150,7 +166,13 @@ def test_no_freeze_for_day_is_not_an_error(tmp_path: Path) -> None:
     store = _setup_store(tmp_path)
     refresh = _FakeRefresh(CorpusGStore(tmp_path / "nfl-oracle"))
 
-    result = dayclose.run(store, target_day=DAY, refresh=refresh, catchup_window_days=1)
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        target_day=DAY,
+        refresh=refresh,
+        catchup_window_days=1,
+    )
 
     assert result["status"] == "success"
     assert result["outcomes"][DAY.isoformat()] == "no_freeze"
@@ -162,7 +184,13 @@ def test_already_graded_day_is_skipped_without_touching_the_network(tmp_path: Pa
     store.put_artifact(dayclose.dayclose_grade_kind(DAY), {"already": True})
     refresh = _RaisingRefresh(CorpusGStore(tmp_path / "nfl-oracle"))
 
-    result = dayclose.run(store, target_day=DAY, refresh=refresh, catchup_window_days=1)
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        target_day=DAY,
+        refresh=refresh,
+        catchup_window_days=1,
+    )
 
     assert result["outcomes"][DAY.isoformat()] == "already_graded"
     assert result["status"] == "success"
@@ -173,7 +201,13 @@ def test_error_on_one_day_is_isolated_and_reported(tmp_path: Path) -> None:
     _freeze_five(store)
     refresh = _RaisingRefresh(CorpusGStore(tmp_path / "nfl-oracle"))
 
-    result = dayclose.run(store, target_day=DAY, refresh=refresh, catchup_window_days=1)
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        target_day=DAY,
+        refresh=refresh,
+        catchup_window_days=1,
+    )
 
     assert result["status"] == "failed"
     assert result["outcomes"][DAY.isoformat()] == "error"
@@ -188,7 +222,13 @@ def test_catchup_window_regrades_an_earlier_missed_day(tmp_path: Path) -> None:
     refresh = _FakeRefresh(corpus_store)
 
     later_target = DAY + timedelta(days=2)
-    result = dayclose.run(store, target_day=later_target, refresh=refresh, catchup_window_days=5)
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        target_day=later_target,
+        refresh=refresh,
+        catchup_window_days=5,
+    )
 
     assert result["outcomes"][later_target.isoformat()] == "no_freeze"
     assert result["outcomes"][DAY.isoformat()] == "graded"
@@ -202,6 +242,120 @@ def test_default_day_uses_eastern_yesterday_not_utc(tmp_path: Path) -> None:
     refresh = _FakeRefresh(CorpusGStore(tmp_path / "nfl-oracle"))
     now = datetime(2026, 9, 10, 2, 0, tzinfo=UTC)
 
-    result = dayclose.run(store, now=now, refresh=refresh, catchup_window_days=1)
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        now=now,
+        refresh=refresh,
+        catchup_window_days=1,
+    )
 
     assert result["processed_day"] == "2026-09-08"
+
+
+def test_slate_results_capture_the_whole_field_not_just_our_picks(tmp_path: Path) -> None:
+    store = _setup_store(tmp_path)
+    _freeze_five(store)
+    values = {1: 5.2, 2: 0.2, 3: 3.5, 4: 0.7, 5: 3.3}
+    corpus_store = _write_corpus_g_game(tmp_path / "nfl-oracle", values=values)
+    refresh = _FakeRefresh(corpus_store, entrants=20841)
+
+    contest_store = ContestStore(project=tmp_path / "nfl-oracle")
+    contest_store.write_route(
+        2141,
+        "meta",
+        {
+            "info": {
+                "isLocked": True,
+                "contest": {
+                    "id": 2141,
+                    "sport": "nfl",
+                    "day": "2026-09-09",
+                    "endDay": "2026-09-09",
+                    "season": 2026,
+                    "numBrawlers": 20841,
+                    "isFinalized": True,
+                    "additionalInfo": {"lineupSize": 5},
+                },
+            }
+        },
+        source_url="test",
+        http_status=200,
+        captured_at=NOW,
+    )
+    contest_store.write_route(
+        2141,
+        "entries",
+        {
+            "entries": [
+                {
+                    "id": 1,
+                    "rank": 1,
+                    "score": "10.0",
+                    "payout": 0,
+                    "wager": 0,
+                    "type": "general",
+                    "additionalInfo": {
+                        "lineup": [
+                            {
+                                "playerId": 1,
+                                "id": 1,
+                                "order": 0,
+                                "multiplier": 2.0,
+                                "multiplierBonus": 0.0,
+                                "value": "5.0",
+                                "score": "10.0",
+                            }
+                        ]
+                    },
+                }
+            ]
+        },
+        source_url="test",
+        http_status=200,
+        captured_at=NOW,
+    )
+    contest_store.write_route(
+        2141,
+        "stats",
+        {
+            "draftStats": [
+                {
+                    "sectionName": "mostDrafted",
+                    "players": [
+                        {
+                            "playerId": 99,
+                            "multiplierBonus": 0.0,
+                            "value": "12.5",
+                            "count": 4102,
+                            "player": {"id": 99, "firstName": "Not", "lastName": "Picked"},
+                        }
+                    ],
+                }
+            ]
+        },
+        source_url="test",
+        http_status=200,
+        captured_at=NOW,
+    )
+
+    result = dayclose.run(
+        store,
+        project_root=tmp_path / "nfl-oracle",
+        target_day=DAY,
+        refresh=refresh,
+        catchup_window_days=1,
+    )
+
+    assert result["outcomes"][DAY.isoformat()] == "graded"
+    artifact = store.latest_artifact(dayclose.dayclose_grade_kind(DAY))
+    assert artifact is not None
+    slate_results = artifact["payload"]["slate_results"]
+    assert slate_results is not None
+    assert slate_results["contest"]["entrants"] == 20841
+    assert slate_results["law_verified"] is True
+    # A player nobody on our 5-card lineup picked still shows up: this is
+    # the whole field, not just our own picks.
+    stat_player_ids = {row["player_id"] for row in slate_results["player_draft_stats"]}
+    assert stat_player_ids == {99}
+    assert slate_results["top_entries"][0]["entry_id"] == 1

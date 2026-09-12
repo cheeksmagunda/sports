@@ -5,25 +5,45 @@ Last verified: 2026-09-08 20:40 CT, Codespace cleanup checkpoint for issue #115.
 This file records application state only. Re-verify auth and coverage before
 treating any row as production truth.
 
-## Day-close grading and CSV historical backup added, not yet live (issue #140)
+## Day-close infrastructure generalized to oracle-core; full-field capture added (issue #146)
 
-New, purely additive capability: `nfl-pipeline dayclose` grades a frozen
-lineup against finalized Corpus C/G results once a contest finalizes (append-
-only `dayclose_grade:{day}` artifact via the existing `RecommendationStore`,
-no schema migration), and `nfl-oracle/scripts/backup_corpus.py` exports
-frozen lineups, prepared decisions, and dayclose grades to CSV on the shared
-`backups` branch, mirroring wnba-oracle's corpus-backup pattern. Two new
-scheduled GitHub Actions workflows: `nfl-dayclose.yml` (`0 10 * * *` UTC) and
-`nfl-corpus-backup.yml` (`30 11 * * *` UTC). Neither touches `pipeline.py`,
-`model.py`, `optimizer.py`, or the worker loop.
+Builds on issue #140. Three changes:
 
-**Not yet live.** Both workflows are inert until the operator provisions
-three GitHub Actions secrets: `NFL_DAYCLOSE_DATABASE_URL` (write-capable
-Postgres), `NFL_REALSPORTS_STORAGE_STATE_B64GZ` (the derived Real Sports
-session, base64+gzip), and `NFL_BACKUP_DATABASE_URL` (read-only Postgres).
-Until then, `nfl-dayclose.yml` fails cleanly with a `not_configured` message
-and posts nothing beyond that to the results ledger; `nfl-corpus-backup.yml`
-errors before touching the database. No credential was created by this work.
+- The catch-up sweep (grade a target day, retry a bounded window of earlier
+  ungraded days, isolate one day's failure from the rest) is now generic
+  orchestration in `oracle_core.dayclose.run_sweep`, shared by every future
+  sport's day-close job. `nfl_oracle.recommendations.dayclose.run` supplies
+  only the NFL-specific `close_one_day` callback; its top-level JSON stdout
+  keys and CLI exit-code mapping (only `"failed"` is non-zero) are unchanged.
+  One real behavior change: `outcomes` now lists every day the sweep visited
+  in the catch-up window, not only days that had a freeze - a normal run now
+  shows several `"no_freeze"` entries alongside the graded day.
+- Both `nfl-dayclose.yml` and `nfl-corpus-backup.yml` now gate on
+  `nfl-oracle/scripts/nfl_dayclose_gate.py`, a session-free public-nflverse
+  check for whether the day-close sweep window contains any slate. A day
+  with no slate anywhere in that window (not just "yesterday") skips real
+  work silently and posts nothing to the results ledger; `workflow_dispatch`
+  always bypasses the gate. Ledger-post/escalate boilerplate is now the
+  shared `.github/actions/dayclose-ledger` composite action.
+- The `dayclose_grade` artifact (schema_version 2) now also captures the
+  whole field, not just our five picks: contest-level facts, the visible
+  leaderboard, and every player's draft stats for the entire slate, via the
+  existing `contests.parse.load_contest`. `backup_corpus.py` gains a fourth
+  CSV table, `player_results.csv`, derived from the same artifacts (no
+  Postgres schema change).
+
+**Still not yet live.** Both workflows remain inert until the operator
+provisions `NFL_DAYCLOSE_DATABASE_URL` (write-capable Postgres),
+`REALSPORTS_STORAGE_STATE_B64GZ` (the derived Real Sports session, shared
+across every sport's day-close workflow, base64+gzip), and
+`NFL_BACKUP_DATABASE_URL` (read-only Postgres). This secret name changed
+from the prefixed `NFL_REALSPORTS_STORAGE_STATE_B64GZ` used at #140's merge
+to the unprefixed, portfolio-shared `REALSPORTS_STORAGE_STATE_B64GZ` - see
+root `README.md`. Nothing needed migrating: neither workflow had ever run
+with the secret configured. Until secrets exist, `nfl-dayclose.yml` fails
+cleanly with a `not_configured` message and posts nothing beyond that to the
+results ledger; `nfl-corpus-backup.yml` errors before touching the database.
+No credential was created by this work.
 
 ## Railway worker activated as sole primary writer (2026-09-09 18:55 UTC, issue #129)
 

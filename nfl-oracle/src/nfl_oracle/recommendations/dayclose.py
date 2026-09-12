@@ -16,23 +16,31 @@ contest and its games after they may have finalized since an earlier,
 pregame capture. Both refreshes below call the underlying single-item fetch
 directly (ContestScanner.collect, ingest_game) instead of the cursor-aware
 wrappers, so a day-close run always sees current data.
+
+The catch-up sweep itself (attempt a day, isolate one day's failure, retry a
+bounded window of earlier ungraded days) is provider-neutral orchestration
+shared with every other sport application; that shape lives in
+oracle_core.dayclose.run_sweep. This module supplies only the NFL-specific
+`close_one_day` callback and the NFL-specific default target day.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
-from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
+from oracle_core.dayclose import DayCloseOutcome, default_target_day, run_sweep
+from oracle_core.jobs import JobStatus
 
 from nfl_oracle.calendar.season import season_label_for_date
 from nfl_oracle.common.paths import resolve_project_root
 from nfl_oracle.contests.collector import ContestOutcome, ContestScanner
+from nfl_oracle.contests.parse import load_contest
 from nfl_oracle.contests.store import ContestStore
 from nfl_oracle.ingest.corpus_g import CorpusGStore, ingest_game
 from nfl_oracle.ingest.realsports import capture_live_headers, headers_or_capture
@@ -43,6 +51,12 @@ from nfl_oracle.recommendations.store import RecommendationStore
 DAYCLOSE_GRADE_KIND_PREFIX = "dayclose_grade"
 DEFAULT_CATCHUP_WINDOW_DAYS = 7
 EASTERN = ZoneInfo("America/New_York")
+
+# grade_day's steady-state outcomes: a successful grade, or an idempotent
+# no-decision case, neither of which should make a sweep report "degraded".
+# "not_finalized", "contest_unresolved", and "no_performances" are left out
+# on purpose -- each means a day that still needs attention.
+SETTLED_STATUSES = frozenset({"graded", "already_graded", "no_freeze", "no_game_ids"})
 
 
 def dayclose_grade_kind(day: date) -> str:
@@ -61,11 +75,25 @@ def frozen_game_ids(frozen: dict[str, Any]) -> list[int]:
     return sorted(ids)
 
 
-@dataclass(frozen=True)
-class DaycloseResult:
-    day: date
-    status: str
-    detail: str = ""
+def _slate_results(contest_store: ContestStore, contest_id: int) -> dict[str, Any] | None:
+    """Full-field results for the whole contest: leaderboard and every
+    player's draft stats, not just our own five picks.
+
+    Built entirely from the existing, tested contests.parse.load_contest,
+    which already parses and law-verifies the same entries.json/stats.json
+    routes RealSportsRefresh.refresh_contest just wrote to disk.
+    """
+
+    parsed = load_contest(contest_store, contest_id)
+    if parsed is None:
+        return None
+    return {
+        "contest": parsed.contest.model_dump(mode="json"),
+        "top_entries": [entry.model_dump(mode="json") for entry in parsed.entries],
+        "player_draft_stats": [row.model_dump(mode="json") for row in parsed.draft_stats],
+        "law_verified": parsed.law_verified,
+        "missing_routes": list(parsed.missing_routes),
+    }
 
 
 class RealSportsRefresh:
@@ -102,26 +130,27 @@ def grade_day(
     day: date,
     *,
     season: int,
-) -> DaycloseResult:
+    project_root: Path,
+) -> DayCloseOutcome:
     """Grade one day's frozen lineup against finalized results, if ready."""
 
     if store.latest_artifact(dayclose_grade_kind(day)) is not None:
-        return DaycloseResult(day, "already_graded")
+        return DayCloseOutcome(day, "already_graded")
 
     frozen = store.latest(day)
     if frozen is None:
-        return DaycloseResult(day, "no_freeze")
+        return DayCloseOutcome(day, "no_freeze")
 
     contest_id = int(frozen["contest_id"])
     outcome = asyncio.run(refresh.refresh_contest(contest_id))
     if outcome.kind != "nfl":
-        return DaycloseResult(day, "contest_unresolved", detail=outcome.kind)
+        return DayCloseOutcome(day, "contest_unresolved", detail=outcome.kind)
     if not outcome.is_finalized:
-        return DaycloseResult(day, "not_finalized")
+        return DayCloseOutcome(day, "not_finalized")
 
     game_ids = frozen_game_ids(frozen)
     if not game_ids:
-        return DaycloseResult(day, "no_game_ids")
+        return DayCloseOutcome(day, "no_game_ids")
 
     asyncio.run(refresh.refresh_games(game_ids, season=season))
 
@@ -129,18 +158,19 @@ def grade_day(
     wanted = set(game_ids)
     performances = [row for row in rows if row.game_id in wanted]
     if not performances:
-        return DaycloseResult(day, "no_performances", detail=str(excluded))
+        return DayCloseOutcome(day, "no_performances", detail=str(excluded))
 
     report = grade_frozen_lineup(frozen, performances)
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "day": day.isoformat(),
         "contest_id": contest_id,
         "field_size": outcome.entrants,
         "grade": report.model_dump(mode="json"),
+        "slate_results": _slate_results(ContestStore(project=project_root), contest_id),
     }
     store.put_artifact(dayclose_grade_kind(day), payload)
-    return DaycloseResult(day, "graded", detail=report.status)
+    return DayCloseOutcome(day, "graded", detail=report.status)
 
 
 def run(
@@ -155,55 +185,42 @@ def run(
     """Grade `target_day` (default: yesterday in US/Eastern), then sweep a
     bounded catch-up window for recent days with a freeze but no grade yet.
 
-    Never raises for an individual day's incomplete or unready data; a day
-    that cannot be graded is reported in `outcomes`, not a failure of the
-    whole run. Only an unexpected exception in a single day's grading is
-    caught and reported as that day's "error" outcome, so one bad day cannot
-    prevent the catch-up sweep from covering the rest of the window.
+    Delegates the sweep shape to oracle_core.dayclose.run_sweep; only the
+    exit-code mapping below is NFL-owned. run_sweep's JobResult.exit_code
+    maps DEGRADED to a non-zero code, which is right for a generic job
+    runner but wrong here: a day that is not finalized yet and will be
+    retried tomorrow is not an incident. The CLI checks this dict's
+    "status" string directly rather than JobResult.exit_code, so only
+    "failed" (an uncaught exception in a single day's grading) is
+    non-zero.
     """
 
     root = project_root or resolve_project_root(__file__)
     live = refresh or RealSportsRefresh(project_root=root)
     current = now or datetime.now(UTC)
-    eastern_today = current.astimezone(EASTERN).date()
-    day = target_day or (eastern_today - timedelta(days=1))
+    day = target_day or default_target_day(current, EASTERN)
 
-    outcomes: dict[str, str] = {}
-    details: dict[str, str] = {}
+    def close_one_day(target: date) -> DayCloseOutcome:
+        return grade_day(
+            store, live, target, season=season_label_for_date(target), project_root=root
+        )
 
-    def attempt(target: date) -> None:
-        try:
-            result = grade_day(store, live, target, season=season_label_for_date(target))
-        except Exception as error:  # noqa: BLE001 - degrade, never fail the whole run
-            outcomes[target.isoformat()] = "error"
-            details[target.isoformat()] = type(error).__name__
-            return
-        outcomes[target.isoformat()] = result.status
-        if result.detail:
-            details[target.isoformat()] = result.detail
+    job_result = run_sweep(
+        target_day=day,
+        close_one_day=close_one_day,
+        catchup_window_days=catchup_window_days,
+        settled_statuses=SETTLED_STATUSES,
+    )
 
-    attempt(day)
-    for offset in range(1, catchup_window_days):
-        candidate = day - timedelta(days=offset)
-        if candidate.isoformat() in outcomes:
-            continue
-        if store.latest(candidate) is None:
-            continue
-        if store.latest_artifact(dayclose_grade_kind(candidate)) is not None:
-            continue
-        attempt(candidate)
-
-    settled = {"graded", "already_graded", "no_freeze", "no_game_ids"}
-    failed_days = [d for d, s in outcomes.items() if s == "error"]
-    if failed_days:
+    if job_result.status == JobStatus.FAILED:
         status = "failed"
-    elif any(s not in settled for s in outcomes.values()):
+    elif job_result.status == JobStatus.DEGRADED:
         status = "degraded"
     else:
         status = "success"
     return {
         "status": status,
-        "processed_day": day.isoformat(),
-        "outcomes": outcomes,
-        "details": details,
+        "processed_day": job_result.details["processed_day"],
+        "outcomes": job_result.details["outcomes"],
+        "details": job_result.details["details"],
     }

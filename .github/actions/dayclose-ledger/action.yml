@@ -1,0 +1,66 @@
+name: dayclose-ledger
+description: >
+  Post a day-close (or backup) results digest to a results ledger issue, and
+  escalate to a guard issue and fail the workflow when the caller says so.
+  Mechanical GitHub plumbing only: the caller decides what counts as failure.
+
+inputs:
+  results_label:
+    description: Label for the always-appended results ledger issue.
+    required: true
+  results_title:
+    description: Title used if the results ledger issue does not exist yet.
+    required: true
+  guard_label:
+    description: Label for the failure-escalation issue.
+    required: true
+  guard_title:
+    description: Title used if the guard issue does not exist yet.
+    required: true
+  report_path:
+    description: Path to a markdown report file to post to both issues.
+    required: true
+  should_escalate:
+    description: "'true' to also post to the guard issue and fail the workflow."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Append results digest
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPORT_PATH: ${{ inputs.report_path }}
+        RESULTS_LABEL: ${{ inputs.results_label }}
+        RESULTS_TITLE: ${{ inputs.results_title }}
+      run: |
+        gh label create "$RESULTS_LABEL" --color 1D76DB --description "Results ledger" 2>/dev/null || true
+        number=$(gh issue list --label "$RESULTS_LABEL" --state open --json number --jq '.[0].number // empty')
+        if [ -n "$number" ]; then
+          gh issue comment "$number" --body-file "$REPORT_PATH"
+        else
+          gh issue create --label "$RESULTS_LABEL" --title "$RESULTS_TITLE" --body-file "$REPORT_PATH"
+        fi
+
+    - name: Escalate failure
+      if: inputs.should_escalate == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPORT_PATH: ${{ inputs.report_path }}
+        GUARD_LABEL: ${{ inputs.guard_label }}
+        GUARD_TITLE: ${{ inputs.guard_title }}
+      run: |
+        gh label create "$GUARD_LABEL" --color B60205 --description "Production operations" 2>/dev/null || true
+        number=$(gh issue list --label "$GUARD_LABEL" --state open --json number --jq '.[0].number // empty')
+        if [ -n "$number" ]; then
+          gh issue comment "$number" --body-file "$REPORT_PATH"
+        else
+          gh issue create --label "$GUARD_LABEL" --title "$GUARD_TITLE" --body-file "$REPORT_PATH"
+        fi
+
+    - name: Fail the workflow after escalation
+      if: inputs.should_escalate == 'true'
+      shell: bash
+      run: exit 1

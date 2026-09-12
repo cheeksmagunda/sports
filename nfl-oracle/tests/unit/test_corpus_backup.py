@@ -39,7 +39,32 @@ def _seeded_engine(tmp_path: Path):
     )
     store.put_artifact(
         f"dayclose_grade:{NOW.date().isoformat()}",
-        {"schema_version": 1, "day": NOW.date().isoformat(), "grade": {"status": "complete"}},
+        {
+            "schema_version": 2,
+            "day": NOW.date().isoformat(),
+            "contest_id": 2141,
+            "grade": {"status": "complete"},
+            "slate_results": {
+                "contest": {"entrants": 20841},
+                "top_entries": [],
+                "player_draft_stats": [
+                    {
+                        "player_id": 99,
+                        "display_name": "P. NinetyNine",
+                        "team_id": 5,
+                        "section": "mostDrafted",
+                        "value": 12.5,
+                        "draft_count": 4102,
+                        "card_boost": 0.0,
+                        "avg_effective_multiplier": 1.6,
+                        "avg_score": 20.0,
+                        "highest_score": 25.0,
+                    }
+                ],
+                "law_verified": True,
+                "missing_routes": [],
+            },
+        },
     )
     # A reproducible artifact kind that must NOT appear in the CSV export.
     store.put_artifact("model_bundle", {"schema_version": 1, "trained_at": NOW.isoformat()})
@@ -53,18 +78,32 @@ def test_export_corpus_writes_only_irreplaceable_tables(tmp_path: Path) -> None:
 
     manifest = backup_corpus.export_corpus(engine, out_dir)
 
-    assert set(manifest["tables"]) == {"frozen_lineups", "prepared_decisions", "dayclose_grades"}
+    assert set(manifest["tables"]) == {
+        "frozen_lineups",
+        "prepared_decisions",
+        "dayclose_grades",
+        "player_results",
+    }
     assert manifest["tables"]["frozen_lineups"]["rows"] == 1
     assert manifest["tables"]["prepared_decisions"]["rows"] == 1
     assert manifest["tables"]["dayclose_grades"]["rows"] == 1
+    assert manifest["tables"]["player_results"]["rows"] == 1
 
     frozen_csv = (out_dir / "frozen_lineups.csv").read_text(encoding="utf-8")
     assert "contest_id" in frozen_csv.splitlines()[0]
     assert "2141" in frozen_csv
     grades_csv = (out_dir / "dayclose_grades.csv").read_text(encoding="utf-8")
     assert NOW.date().isoformat() in grades_csv
+    player_results_csv = (out_dir / "player_results.csv").read_text(encoding="utf-8")
+    assert "99" in player_results_csv
+    assert "mostDrafted" in player_results_csv
     # model_bundle is reproducible from Corpus G and must not be exported.
-    for name in ("frozen_lineups.csv", "prepared_decisions.csv", "dayclose_grades.csv"):
+    for name in (
+        "frozen_lineups.csv",
+        "prepared_decisions.csv",
+        "dayclose_grades.csv",
+        "player_results.csv",
+    ):
         assert "model_bundle" not in (out_dir / name).read_text(encoding="utf-8")
 
 
