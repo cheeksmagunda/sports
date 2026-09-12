@@ -57,6 +57,14 @@ jobs:
             --window-days "${{ inputs.catchup_window_days || '7' }}" \
             --github-output "$GITHUB_OUTPUT"
 
+      - name: Prepare TLS certificate
+        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        env:
+          NFL_PG_SSL_ROOT_CERT: ${{ secrets.NFL_PG_SSL_ROOT_CERT }}
+        run: |
+          umask 077
+          printf '%s' "$NFL_PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/nfl_pg_root.crt"
+
       - name: Run day-close grading
         id: dayclose
         if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
@@ -64,7 +72,9 @@ jobs:
         env:
           NFL_DATABASE_URL: ${{ secrets.NFL_DAYCLOSE_DATABASE_URL }}
           REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.REALSPORTS_STORAGE_STATE_B64GZ }}
+          PGSSLROOTCERT: ${{ runner.temp }}/nfl_pg_root.crt
         run: |
+          set -o pipefail
           if [ -z "$NFL_DATABASE_URL" ] || [ -z "$REALSPORTS_STORAGE_STATE_B64GZ" ]; then
             echo "not_configured: NFL_DAYCLOSE_DATABASE_URL and/or REALSPORTS_STORAGE_STATE_B64GZ secrets are unset" | tee "$RUNNER_TEMP/dayclose-report.md"
             exit 1
