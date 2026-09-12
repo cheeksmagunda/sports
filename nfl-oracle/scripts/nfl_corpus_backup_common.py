@@ -5,7 +5,7 @@ discipline (manifest schema, SHA-256 hashing, snapshot verification). Not a
 shared import: sport applications must not import one another. This module
 uses oracle_core.storage.normalize_postgres_url (provider-neutral) instead of
 any WNBA-specific wrapper, and stdlib csv instead of pandas, since nfl-oracle
-does not carry that dependency and does not need it for three small tables.
+does not carry that dependency and does not need it for four small tables.
 """
 
 from __future__ import annotations
@@ -45,6 +45,24 @@ TABLE_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
     "prepared_decisions": ("day", "sha256", "created_at", "payload_json"),
     "dayclose_grades": ("day", "sha256", "created_at", "payload_json"),
+    # One row per player per finalized contest, across the whole field (not
+    # just our five picks) - sourced from the dayclose_grades artifacts'
+    # embedded slate_results.player_draft_stats, so no Postgres schema change
+    # is needed for this table either.
+    "player_results": (
+        "day",
+        "contest_id",
+        "player_id",
+        "display_name",
+        "team_id",
+        "section",
+        "value",
+        "draft_count",
+        "card_boost",
+        "avg_effective_multiplier",
+        "avg_score",
+        "highest_score",
+    ),
 }
 
 

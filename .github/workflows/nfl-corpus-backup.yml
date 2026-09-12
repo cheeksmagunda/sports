@@ -34,6 +34,8 @@ jobs:
     if: github.event_name == 'schedule' || inputs.confirm_backup == true
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      has_slate: ${{ steps.gate.outputs.has_slate }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -42,7 +44,18 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
+      - name: Check for a slate inside the day-close catch-up window
+        id: gate
+        # Fail open: a gate that cannot reach the public nflverse schedule
+        # must never silently skip a real backup. An unset has_slate output
+        # below is treated the same as "true".
+        continue-on-error: true
+        run: |
+          uv run --frozen --package nfl-oracle python nfl-oracle/scripts/nfl_dayclose_gate.py \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Prepare TLS certificate
+        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
         env:
           PG_SSL_ROOT_CERT: ${{ secrets.PG_SSL_ROOT_CERT }}
         run: |
@@ -50,6 +63,7 @@ jobs:
           printf '%s' "$PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
 
       - name: Load previous backup baseline
+        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
         env:
           PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
         run: |
@@ -58,6 +72,7 @@ jobs:
           fi
 
       - name: Export corpus snapshot
+        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
         env:
           CORPUS_BACKUP_ALLOW_REGRESSION: ${{ inputs.allow_regression || false }}
           CORPUS_BACKUP_DIR: ${{ runner.temp }}/corpus-backup
@@ -72,11 +87,13 @@ jobs:
           uv run --frozen --package nfl-oracle python nfl-oracle/scripts/backup_corpus.py
 
       - name: Verify snapshot manifest and hashes
+        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
         env:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
         run: uv run --frozen --package nfl-oracle python nfl-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Transfer verified snapshot without database credentials
+        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: nfl-corpus-backup-${{ github.run_id }}
@@ -84,12 +101,14 @@ jobs:
             ${{ runner.temp }}/corpus-backup/frozen_lineups.csv
             ${{ runner.temp }}/corpus-backup/prepared_decisions.csv
             ${{ runner.temp }}/corpus-backup/dayclose_grades.csv
+            ${{ runner.temp }}/corpus-backup/player_results.csv
             ${{ runner.temp }}/corpus-backup/manifest.json
           if-no-files-found: error
           retention-days: 1
 
   publish:
     needs: export
+    if: needs.export.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -132,10 +151,12 @@ jobs:
           cp "$SNAPSHOT_DIR/frozen_lineups.csv" nfl-oracle/data/backups/
           cp "$SNAPSHOT_DIR/prepared_decisions.csv" nfl-oracle/data/backups/
           cp "$SNAPSHOT_DIR/dayclose_grades.csv" nfl-oracle/data/backups/
+          cp "$SNAPSHOT_DIR/player_results.csv" nfl-oracle/data/backups/
           cp "$SNAPSHOT_DIR/manifest.json" nfl-oracle/data/backups/
           git add -f nfl-oracle/data/backups/frozen_lineups.csv
           git add -f nfl-oracle/data/backups/prepared_decisions.csv
           git add -f nfl-oracle/data/backups/dayclose_grades.csv
+          git add -f nfl-oracle/data/backups/player_results.csv
           git add -f nfl-oracle/data/backups/manifest.json
           if git diff --cached --quiet; then
             echo "no corpus changes; skipping commit"

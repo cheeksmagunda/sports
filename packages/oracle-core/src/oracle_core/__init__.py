@@ -22,6 +22,12 @@ from oracle_core.config import (
     get_runtime_config,
     validate_required_env,
 )
+from oracle_core.dayclose import (
+    CloseOneDay,
+    DayCloseOutcome,
+    default_target_day,
+    run_sweep,
+)
 from oracle_core.dossier import (
     CensoringReason,
     Dossier,
@@ -98,6 +104,8 @@ __all__ = [
     "ArtifactInfo",
     "AsyncHttpTransport",
     "CensoringReason",
+    "CloseOneDay",
+    "DayCloseOutcome",
     "Dossier",
     "DossierEntry",
     "EntryKind",
@@ -149,6 +157,7 @@ __all__ = [
     "create_postgres_engine",
     "create_redis_client",
     "create_service",
+    "default_target_day",
     "format_exception_safe",
     "get_logger",
     "get_runtime_config",
@@ -160,6 +169,7 @@ __all__ = [
     "redact_value",
     "request_with_retry",
     "run_health_checks",
+    "run_sweep",
     "sha256_bytes",
     "sha256_file",
     "validate_role",

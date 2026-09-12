@@ -45,15 +45,28 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
+      - name: Check for a slate inside the catch-up window
+        id: gate
+        # Fail open: a gate that cannot reach the public nflverse schedule
+        # (network hiccup, upstream outage) must never silently swallow a
+        # real day-close run. An unset has_slate output below is treated the
+        # same as "true".
+        continue-on-error: true
+        run: |
+          uv run --frozen --package nfl-oracle python nfl-oracle/scripts/nfl_dayclose_gate.py \
+            --window-days "${{ inputs.catchup_window_days || '7' }}" \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Run day-close grading
         id: dayclose
+        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
         env:
           NFL_DATABASE_URL: ${{ secrets.NFL_DAYCLOSE_DATABASE_URL }}
-          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.NFL_REALSPORTS_STORAGE_STATE_B64GZ }}
+          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.REALSPORTS_STORAGE_STATE_B64GZ }}
         run: |
           if [ -z "$NFL_DATABASE_URL" ] || [ -z "$REALSPORTS_STORAGE_STATE_B64GZ" ]; then
-            echo "not_configured: NFL_DAYCLOSE_DATABASE_URL and/or NFL_REALSPORTS_STORAGE_STATE_B64GZ secrets are unset" | tee "$RUNNER_TEMP/dayclose-report.md"
+            echo "not_configured: NFL_DAYCLOSE_DATABASE_URL and/or REALSPORTS_STORAGE_STATE_B64GZ secrets are unset" | tee "$RUNNER_TEMP/dayclose-report.md"
             exit 1
           fi
           DAY_ARG=""
@@ -65,7 +78,7 @@ jobs:
             | tee "$RUNNER_TEMP/dayclose-output.json"
 
       - name: Build results digest
-        if: always()
+        if: always() && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
         run: |
           {
             echo "# NFL day-close ($(date -u +%Y-%m-%dT%H:%MZ))"
@@ -80,38 +93,12 @@ jobs:
             fi
           } > "$RUNNER_TEMP/dayclose-report.md"
 
-      - name: Append results digest
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh label create "$RESULTS_LABEL" --color 1D76DB --description "NFL results ledger" 2>/dev/null || true
-          number=$(gh issue list --label "$RESULTS_LABEL" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$number" ]; then
-            gh issue comment "$number" --body-file "$RUNNER_TEMP/dayclose-report.md"
-          else
-            gh issue create \
-              --label "$RESULTS_LABEL" \
-              --title "NFL results ledger" \
-              --body-file "$RUNNER_TEMP/dayclose-report.md"
-          fi
-
-      - name: Escalate day-close failure
-        if: always() && steps.dayclose.outcome != 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh label create "$GUARD_LABEL" --color B60205 --description "NFL production operations" 2>/dev/null || true
-          number=$(gh issue list --label "$GUARD_LABEL" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$number" ]; then
-            gh issue comment "$number" --body-file "$RUNNER_TEMP/dayclose-report.md"
-          else
-            gh issue create \
-              --label "$GUARD_LABEL" \
-              --title "NFL production operations" \
-              --body-file "$RUNNER_TEMP/dayclose-report.md"
-          fi
-
-      - name: Fail the workflow after escalation
-        if: always() && steps.dayclose.outcome != 'success'
-        run: exit 1
+      - uses: ./.github/actions/dayclose-ledger
+        if: always() && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
+        with:
+          results_label: ${{ env.RESULTS_LABEL }}
+          results_title: "NFL results ledger"
+          guard_label: ${{ env.GUARD_LABEL }}
+          guard_title: "NFL production operations"
+          report_path: ${{ runner.temp }}/dayclose-report.md
+          should_escalate: ${{ steps.dayclose.outcome != 'success' && 'true' || 'false' }}

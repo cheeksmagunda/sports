@@ -1,11 +1,13 @@
 """Off-platform logical backup of the irreplaceable NFL decision corpus.
 
 Exports frozen lineups (what we picked), prepared decisions (the input
-context bundle and output recommendation at decision time), and dayclose
-grades (accuracy vs. real-world actuals) to `data/backups/*.csv` + a
-manifest. model_bundle / active_model artifacts are reproducible from Corpus
-G and are intentionally NOT backed up here, mirroring
-wnba-oracle/scripts/backup_corpus.py's "only the irreplaceable" scope.
+context bundle and output recommendation at decision time), dayclose grades
+(accuracy vs. real-world actuals), and player_results (every player's draft
+stats across the whole field, for every finalized contest we graded, not
+just our five picks) to `data/backups/*.csv` + a manifest. model_bundle /
+active_model artifacts are reproducible from Corpus G and are intentionally
+NOT backed up here, mirroring wnba-oracle/scripts/backup_corpus.py's "only
+the irreplaceable" scope.
 
 Built on the existing, tested RecommendationStore.export_backup() rather than
 raw SQL, so this reuses the same digest-chain verification `nfl-pipeline
@@ -90,6 +92,52 @@ def _artifact_rows(artifacts: list[dict[str, Any]], *, kind_prefix: str) -> list
     return rows
 
 
+def _player_result_rows(artifacts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per player per finalized contest, across the whole field.
+
+    Sourced from dayclose_grades artifacts' embedded
+    slate_results.player_draft_stats (nfl_oracle.contests.schema.DraftStatRow,
+    already parsed and law-verified by contests.parse.load_contest at grade
+    time) - no separate query or Postgres schema change needed.
+    """
+
+    prefix = f"{DAYCLOSE_GRADE_KIND_PREFIX}:"
+    rows: list[dict[str, Any]] = []
+    for artifact in artifacts:
+        kind = artifact.get("kind")
+        if not isinstance(kind, str) or not kind.startswith(prefix):
+            continue
+        payload = artifact.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        slate_results = payload.get("slate_results")
+        if not isinstance(slate_results, dict):
+            continue
+        day = kind[len(prefix) :]
+        contest_id = payload.get("contest_id")
+        for stat in slate_results.get("player_draft_stats") or []:
+            if not isinstance(stat, dict):
+                continue
+            rows.append(
+                {
+                    "day": day,
+                    "contest_id": contest_id,
+                    "player_id": stat.get("player_id"),
+                    "display_name": stat.get("display_name"),
+                    "team_id": stat.get("team_id"),
+                    "section": stat.get("section"),
+                    "value": stat.get("value"),
+                    "draft_count": stat.get("draft_count"),
+                    "card_boost": stat.get("card_boost"),
+                    "avg_effective_multiplier": stat.get("avg_effective_multiplier"),
+                    "avg_score": stat.get("avg_score"),
+                    "highest_score": stat.get("highest_score"),
+                }
+            )
+    rows.sort(key=lambda row: (str(row["day"]), row["player_id"] or 0))
+    return rows
+
+
 def export_corpus(engine: Any, output_dir: pathlib.Path) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     backup = RecommendationStore(engine).export_backup()
@@ -100,6 +148,7 @@ def export_corpus(engine: Any, output_dir: pathlib.Path) -> dict[str, Any]:
         "dayclose_grades": _artifact_rows(
             backup["artifacts"], kind_prefix=DAYCLOSE_GRADE_KIND_PREFIX
         ),
+        "player_results": _player_result_rows(backup["artifacts"]),
     }
     row_counts: dict[str, int] = {}
     for table, rows in tables.items():
