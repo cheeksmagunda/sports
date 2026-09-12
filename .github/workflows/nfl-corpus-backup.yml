@@ -57,10 +57,13 @@ jobs:
       - name: Prepare TLS certificate
         if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
         env:
-          PG_SSL_ROOT_CERT: ${{ secrets.PG_SSL_ROOT_CERT }}
+          # NFL's own Postgres instance's root cert, not WNBA's shared
+          # PG_SSL_ROOT_CERT: Railway issues a distinct self-signed cert
+          # chain per managed Postgres instance, confirmed live (issue #149).
+          NFL_PG_SSL_ROOT_CERT: ${{ secrets.NFL_PG_SSL_ROOT_CERT }}
         run: |
           umask 077
-          printf '%s' "$PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
+          printf '%s' "$NFL_PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
 
       - name: Load previous backup baseline
         if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'

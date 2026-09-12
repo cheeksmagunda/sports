@@ -32,18 +32,41 @@ Builds on issue #140. Three changes:
   CSV table, `player_results.csv`, derived from the same artifacts (no
   Postgres schema change).
 
-**Still not yet live.** Both workflows remain inert until the operator
-provisions `NFL_DAYCLOSE_DATABASE_URL` (write-capable Postgres),
-`REALSPORTS_STORAGE_STATE_B64GZ` (the derived Real Sports session, shared
-across every sport's day-close workflow, base64+gzip), and
-`NFL_BACKUP_DATABASE_URL` (read-only Postgres). This secret name changed
-from the prefixed `NFL_REALSPORTS_STORAGE_STATE_B64GZ` used at #140's merge
-to the unprefixed, portfolio-shared `REALSPORTS_STORAGE_STATE_B64GZ` - see
-root `README.md`. Nothing needed migrating: neither workflow had ever run
-with the secret configured. Until secrets exist, `nfl-dayclose.yml` fails
-cleanly with a `not_configured` message and posts nothing beyond that to the
-results ledger; `nfl-corpus-backup.yml` errors before touching the database.
-No credential was created by this work.
+## Day-close/backup went live; TLS and pipeline exit-code fixes (issue #149)
+
+`NFL_DAYCLOSE_DATABASE_URL`, `NFL_BACKUP_DATABASE_URL`, and
+`REALSPORTS_STORAGE_STATE_B64GZ` are provisioned (2026-09-12), and NFL's
+Postgres now has a public TCP proxy (`altaria.proxy.rlwy.net:45838`),
+matching the pattern WNBA's own working backup already uses. The first live
+`workflow_dispatch` run surfaced two real bugs, both fixed here:
+
+- **TLS.** `sslmode=verify-full` failed for every day with
+  `OperationalError`; Postgres logs showed `could not accept SSL connection:
+  unexpected eof while reading` (a client-side handshake abort). Railway
+  issues a distinct, self-signed certificate chain per managed Postgres
+  instance (root CN=root-ca, leaf CN=localhost) - not one platform-wide CA,
+  so WNBA's `PG_SSL_ROOT_CERT` cannot be reused for NFL's instance, and
+  `verify-full`'s hostname check can never pass against a `CN=localhost`
+  leaf regardless of the root cert. Fixed with a new, NFL-only
+  `NFL_PG_SSL_ROOT_CERT` secret (NFL's own root cert) and `sslmode=verify-ca`
+  (validates the chain, not hostname) in both database URLs.
+  `nfl-dayclose.yml` gained its own "prepare TLS certificate" step (it never
+  had one); `nfl-corpus-backup.yml`'s existing step now points at
+  `NFL_PG_SSL_ROOT_CERT` instead of the shared `PG_SSL_ROOT_CERT`. WNBA's
+  secret and workflows are untouched.
+- **Exit code.** `nfl-pipeline dayclose ... | tee dayclose-output.json` ran
+  under `bash -e` without `pipefail`, so the step's exit code was always
+  `tee`'s (0), never the pipeline's real status - the ops-guard escalation
+  path could never fire from this step regardless of the actual grading
+  result. Confirmed live: a run that printed `"status":"failed"` for every
+  day in the window still reported step and job success end to end. Fixed
+  with `set -o pipefail` before the pipe.
+
+Root `README.md`'s day-close secret convention (one shared
+`REALSPORTS_STORAGE_STATE_B64GZ`, per-sport prefixed database secrets)
+stands; TLS root certs turn out to be per-instance too, so
+`NFL_PG_SSL_ROOT_CERT` follows the same per-sport-prefixed convention as the
+database URLs, not the shared-session pattern.
 
 ## Railway worker activated as sole primary writer (2026-09-09 18:55 UTC, issue #129)
 

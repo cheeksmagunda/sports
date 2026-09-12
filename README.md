@@ -201,7 +201,13 @@ operator-captured session end to end: the operator captures it locally
 and every sport's day-close workflow reads that same secret. Database
 credentials stay per-sport and prefixed (for example
 `NFL_DAYCLOSE_DATABASE_URL`), since each application owns a separate
-database.
+database. TLS root certificates are per-sport and prefixed too, for the same
+reason a database URL is: Railway issues a distinct, self-signed certificate
+chain per managed Postgres instance, not one platform-wide CA, so a working
+cert for one sport's database (for example WNBA's `PG_SSL_ROOT_CERT`) cannot
+be reused for another sport's differently-provisioned instance (confirmed
+live when NFL's own day-close first ran verified TLS - see
+`nfl-oracle/STATUS.md`, issue #149).
 
 ## Local backend authentication
 
