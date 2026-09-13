@@ -462,8 +462,24 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
             print(json.dumps({"status": "no_slate"}))
         except Exception as error:
             day = requested_day or datetime.now(UTC).date()
-            store.record_run(day, status="error", detail_code=type(error).__name__.lower())
-            print(json.dumps({"status": "error", "error_type": type(error).__name__}))
+            # Recording only the exception type leaves a refused freeze
+            # undiagnosable after the fact: every gate failure arrives as a bare
+            # "valueerror" and the slate is gone before anyone can reproduce it.
+            # Gate failures raise ValueError with an internal reason code, which
+            # is safe to keep. Other exception types can carry provider URLs or
+            # query values, so those stay type-only.
+            reason = str(error)[:200] if type(error) is ValueError else ""
+            store.record_run(
+                day,
+                status="error",
+                detail_code=type(error).__name__.lower(),
+                details={"reason": reason} if reason else {},
+            )
+            print(
+                json.dumps(
+                    {"status": "error", "error_type": type(error).__name__, "reason": reason}
+                )
+            )
             if once:
                 return 1
         if once:
