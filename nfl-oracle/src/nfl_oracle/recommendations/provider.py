@@ -224,7 +224,19 @@ class NFLReader:
         contest = await self.contest(contest_id)
         if contest.day != day or contest.end_day != day:
             raise ProviderError("unsupported_multi_day_contest")
-        games = tuple(parse_game(g) for g in content.get("games", []))
+        all_games = tuple(parse_game(g) for g in content.get("games", []))
+        # The provider stops rating a player once their game kicks off, so a
+        # started game contributes a full roster to the denominator and nothing
+        # to the matched pool. Measuring completeness against every game of the
+        # day therefore makes the pool permanently incomplete from the first
+        # kickoff onward, and G1 refuses every later freeze. Only games that are
+        # still ahead of the clock can be drafted, so only those define the pool.
+        # Before the day's first kickoff every game qualifies and this is a
+        # no-op, which is the path a normal T-40 freeze takes.
+        now = self.clock()
+        games = tuple(game for game in all_games if game.kickoff_at > now)
+        if not games:
+            raise ProviderError("no_draftable_games")
         roster: dict[int, tuple[dict[str, Any], Game]] = {}
         for game in games:
             payload = await self.get(f"/games/{game.game_id}/sport/nfl/players")
