@@ -399,12 +399,18 @@ async def _worker_once(
         if not games:
             store.record_run(day, status="no_slate", detail_code="no_games")
             return None
-        cutoff = min(game.kickoff_at for game in games)
         now = datetime.now(UTC)
-        due = cutoff - timedelta(minutes=40)
-        if now >= cutoff:
+        # A Sunday slate has many kickoffs. Gating on min(kickoff) across every
+        # game means the first kickoff of the day locks out every later window,
+        # so an afternoon or night contest could never freeze. Gate on the next
+        # game that has not started yet; the provider's own contest lock state
+        # still refuses a contest whose games are already under way.
+        upcoming = tuple(game for game in games if game.kickoff_at > now)
+        if not upcoming:
             store.record_run(day, status="locked", detail_code="slate_cutoff_passed")
             return None
+        cutoff = min(game.kickoff_at for game in upcoming)
+        due = cutoff - timedelta(minutes=40)
         if now < due:
             store.record_run(
                 day,

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Launches the NFL recommendation worker against the real Railway Postgres,
-# via a local SSH tunnel, for the live 2026-09-09 T-40 freeze (SEA at NE).
+# via a local SSH tunnel, for the live 2026-09-10 T-40 freeze.
 #
 # The worker self-gates on `due <= now < cutoff` (T-40 through kickoff), so
-# starting it any time before 18:40 America/Chicago is safe: it will log
+# starting it any time before 18:55 America/Chicago is safe: it will log
 # "waiting_for_t40" on every poll until the window opens, then attempt the
-# real prepare/publish exactly once inside it.
+# real prepare/publish exactly once inside it. (Per the live API as of this
+# edit: next_freeze 2026-09-10T23:55:00Z, cutoff_at 2026-09-11T00:35:00Z.)
 #
 # Run this yourself (it performs a live production write path, which this
 # session will not do unattended):
@@ -57,13 +58,13 @@ disown
 echo "Tunnel watchdog running as PID $(cat "$WATCHDOG_PID_FILE")."
 
 echo "Starting worker (logs: $LOG_FILE) ..."
-NFL_DATABASE_URL="$(cat "$SECRET_FILE")" NFL_RECOMMENDATIONS_ENABLED=1 \
+NFL_DATABASE_URL="$(cat "$SECRET_FILE")" NFL_RECOMMENDATIONS_ENABLED=1 PYTHONUNBUFFERED=1 \
   caffeinate -is uv run --package nfl-oracle nfl-pipeline worker \
-  --day 2026-09-09 --poll-seconds 30 \
+  --day 2026-09-13 --poll-seconds 30 \
   > "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 disown
 
 echo "Worker running as PID $(cat "$PID_FILE")."
-echo "It will report waiting_for_t40 every ~30s until 2026-09-09 18:40 America/Chicago,"
+echo "It will report waiting_for_t40 every ~30s until 2026-09-10 18:55 America/Chicago,"
 echo "then attempt the real freeze once. Watch it with: tail -f $LOG_FILE"
