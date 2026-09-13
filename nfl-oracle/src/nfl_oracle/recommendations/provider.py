@@ -149,12 +149,17 @@ class NFLReader:
             raise ProviderError("request_budget_exhausted")
         self.requests += 1
         try:
+            # A full Sunday slate needs one rating search per rostered name, so
+            # the provider throttles long before the request budget is reached.
+            # `real_sports_get` already backs off on 429/503; give it enough
+            # attempts to ride out a throttle rather than adding a second retry
+            # layer on top, which multiplies into minutes of sleep per request.
             response = await real_sports_get(
                 self.client,
                 BASE + path,
                 headers=self.headers,
                 params=params,
-                max_attempts=3,
+                max_attempts=6,
                 timeout_s=25,
                 refresh_headers=capture_live_headers,
             )
@@ -268,7 +273,7 @@ class NFLReader:
                     raise ProviderError("missing_prelock_boost")
                 rated[pid] = player
                 observed_at[pid] = self.last_captured_at
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.35)
 
         candidates: list[Candidate] = []
         for pid, player in sorted(rated.items()):
