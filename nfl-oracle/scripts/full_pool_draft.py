@@ -63,6 +63,36 @@ async def _gather(day: dt.date, spacing: float) -> tuple[list[_Row], list[str], 
         upcoming = tuple(g for g in games if g.kickoff_at > now)
         notes.append(f"{len(upcoming)} of {len(games)} games still upcoming")
 
+        # Slot order here is plain descending projected value, which is only the
+        # optimal commitment while every card boost is zero. Boosts are absent
+        # for the whole of NFL week 1 and switch on at week 2, after which
+        # selection has to weigh value against the boost the provider assigned
+        # and this ranking is no longer the right answer. Rosters do not carry
+        # the boost, so sample the rating search and refuse rather than quietly
+        # emit a week-1 answer into a boosted week.
+        contests = content.get("config", {}).get("dailyDraftInfo", {}).get("contests", [])
+        contest_ids = [c.get("id") for c in contests if isinstance(c, dict)]
+        if len(contest_ids) == 1 and isinstance(contest_ids[0], int):
+            probe = await reader.get(
+                "/players/sport/nfl/search",
+                query="",
+                searchType="ratingLineup",
+                day=day.isoformat(),
+                contestId=contest_ids[0],
+                includeNoOneOption="false",
+            )
+            sampled = [p.get("multiplierBonus") for p in probe.get("players") or []]
+            boosted = [b for b in sampled if isinstance(b, int | float) and b > 0]
+            if boosted:
+                raise SystemExit(
+                    f"refusing to draft: {len(boosted)} of {len(sampled)} sampled players carry a "
+                    "non-zero card boost. Descending projected value is only optimal under the "
+                    "zero-boost regime. Use the gated freeze path, which models boosts."
+                )
+            notes.append(f"boost probe: {len(sampled)} sampled, all zero")
+        else:
+            notes.append("boost probe skipped: contest not uniquely resolvable")
+
         index = build_history_index()
         rows: list[_Row] = []
         seen: set[int] = set()
