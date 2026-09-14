@@ -149,12 +149,17 @@ class NFLReader:
             raise ProviderError("request_budget_exhausted")
         self.requests += 1
         try:
+            # A full Sunday slate needs one rating search per rostered name, so
+            # the provider throttles long before the request budget is reached.
+            # `real_sports_get` already backs off on 429/503; give it enough
+            # attempts to ride out a throttle rather than adding a second retry
+            # layer on top, which multiplies into minutes of sleep per request.
             response = await real_sports_get(
                 self.client,
                 BASE + path,
                 headers=self.headers,
                 params=params,
-                max_attempts=3,
+                max_attempts=6,
                 timeout_s=25,
                 refresh_headers=capture_live_headers,
             )
@@ -219,7 +224,19 @@ class NFLReader:
         contest = await self.contest(contest_id)
         if contest.day != day or contest.end_day != day:
             raise ProviderError("unsupported_multi_day_contest")
-        games = tuple(parse_game(g) for g in content.get("games", []))
+        all_games = tuple(parse_game(g) for g in content.get("games", []))
+        # The provider stops rating a player once their game kicks off, so a
+        # started game contributes a full roster to the denominator and nothing
+        # to the matched pool. Measuring completeness against every game of the
+        # day therefore makes the pool permanently incomplete from the first
+        # kickoff onward, and G1 refuses every later freeze. Only games that are
+        # still ahead of the clock can be drafted, so only those define the pool.
+        # Before the day's first kickoff every game qualifies and this is a
+        # no-op, which is the path a normal T-40 freeze takes.
+        now = self.clock()
+        games = tuple(game for game in all_games if game.kickoff_at > now)
+        if not games:
+            raise ProviderError("no_draftable_games")
         roster: dict[int, tuple[dict[str, Any], Game]] = {}
         for game in games:
             payload = await self.get(f"/games/{game.game_id}/sport/nfl/players")
@@ -268,7 +285,7 @@ class NFLReader:
                     raise ProviderError("missing_prelock_boost")
                 rated[pid] = player
                 observed_at[pid] = self.last_captured_at
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.35)
 
         candidates: list[Candidate] = []
         for pid, player in sorted(rated.items()):

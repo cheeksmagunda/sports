@@ -197,12 +197,18 @@ async def _worker_once(
         if not games:
             store.record_run(day, status="no_slate", detail_code="no_games")
             return None
-        cutoff = min(game.kickoff_at for game in games)
         now = datetime.now(UTC)
-        due = cutoff - timedelta(minutes=40)
-        if now >= cutoff:
+        # A Sunday slate has many kickoffs. Gating on min(kickoff) across every
+        # game means the first kickoff of the day locks out every later window,
+        # so an afternoon or night contest could never freeze. Gate on the next
+        # game that has not started yet; the provider's own contest lock state
+        # still refuses a contest whose games are already under way.
+        upcoming = tuple(game for game in games if game.kickoff_at > now)
+        if not upcoming:
             store.record_run(day, status="locked", detail_code="slate_cutoff_passed")
             return None
+        cutoff = min(game.kickoff_at for game in upcoming)
+        due = cutoff - timedelta(minutes=40)
         if now < due:
             store.record_run(
                 day,
@@ -231,11 +237,16 @@ async def _worker_once(
 
 
 def _record_worker_failure(
-    store: RecommendationStore, day: date, *, status: str, detail_code: str
+    store: RecommendationStore,
+    day: date,
+    *,
+    status: str,
+    detail_code: str,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """Keep the poll loop alive when its failure audit store is unavailable."""
     try:
-        store.record_run(day, status=status, detail_code=detail_code)
+        store.record_run(day, status=status, detail_code=detail_code, details=details or {})
     except Exception as error:
         # A transient database outage can cause both the poll and this audit
         # write to fail. Never let the second failure stop future retries or
@@ -275,10 +286,25 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
             print(json.dumps({"status": "no_slate"}))
         except Exception as error:
             day = requested_day or datetime.now(UTC).date()
+            # Recording only the exception type leaves a refused freeze
+            # undiagnosable after the fact: every gate failure arrives as a bare
+            # "valueerror" and the slate is gone before anyone can reproduce it.
+            # Gate failures raise ValueError with an internal reason code, which
+            # is safe to keep. Other exception types can carry provider URLs or
+            # query values, so those stay type-only.
+            reason = str(error)[:200] if type(error) is ValueError else ""
             _record_worker_failure(
-                store, day, status="error", detail_code=type(error).__name__.lower()
+                store,
+                day,
+                status="error",
+                detail_code=type(error).__name__.lower(),
+                details={"reason": reason} if reason else None,
             )
-            print(json.dumps({"status": "error", "error_type": type(error).__name__}))
+            print(
+                json.dumps(
+                    {"status": "error", "error_type": type(error).__name__, "reason": reason}
+                )
+            )
             if once:
                 return 1
         if once:
