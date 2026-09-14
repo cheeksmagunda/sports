@@ -174,6 +174,34 @@ def _policy() -> PipelinePolicy:
     return PipelinePolicy(recommendations_enabled=enabled)
 
 
+def _already_frozen(store: RecommendationStore, day: date) -> bool:
+    """Report whether this slate already has a published lineup.
+
+    The freeze is a decision a person acts on. Once it is on the page the
+    operator may already have entered it, so re-running the pipeline and
+    writing a second, different lineup does not correct anything -- it creates
+    a second truth they never saw. Without this the worker re-collected and
+    re-froze on every poll until kickoff: 19 freezes on 2026-09-09 and 20 on
+    2026-09-10, each one a full provider sweep.
+
+    Deliberately fails open. If the store cannot answer, the freeze proceeds,
+    because a duplicate lineup is a far smaller failure than a missing one.
+    """
+    try:
+        frozen = store.latest(day)
+    except Exception:
+        return False
+    if not frozen:
+        return False
+    try:
+        cutoff = datetime.fromisoformat(frozen["cutoff_at"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    # Past the cutoff the slate is closed and publish() already refuses; let it
+    # take that path so the run record keeps saying "locked" rather than "ready".
+    return datetime.now(UTC) < cutoff
+
+
 async def _worker_once(
     project: Path,
     store: RecommendationStore,
@@ -192,6 +220,9 @@ async def _worker_once(
             ObservationStore(project / "data" / "raw" / "observations"),
         )
         day = requested_day or await reader.next_day()
+        if _already_frozen(store, day):
+            store.record_run(day, status="ready", detail_code="already_frozen_for_slate")
+            return None
         content = await reader.day_content(day)
         games = tuple(parse_game(raw) for raw in content.get("games", []))
         if not games:

@@ -45,6 +45,11 @@ def test_placeholder_b64gz_does_not_mask_raw_storage_state(tmp_path, monkeypatch
 def test_placeholder_storage_state_path_is_ignored(tmp_path, monkeypatch):
     monkeypatch.setenv("NFL_ORACLE_SCRAPER_DIR", str(tmp_path))
     monkeypatch.setenv("NFL_REALSPORTS_STORAGE_STATE", "placeholder")
+    # storage_state_path falls back to a sibling wnba-oracle/scraper session
+    # before giving up. That file exists on an operator's machine and not in
+    # CI, so without pinning the project root this passes remotely and fails
+    # locally -- which teaches everyone to ignore a red suite.
+    monkeypatch.setattr(realsports, "project_root", lambda: tmp_path)
 
     assert realsports.storage_state_path() == tmp_path / "storage_state.json"
 
