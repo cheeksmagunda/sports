@@ -257,7 +257,17 @@ async def capture_live_headers(
     done = asyncio.Event()
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=not headed)
+        # The worker image runs Chromium as a non-root user, and a container's
+        # default /dev/shm is 64MB. Without these two flags the browser dies on
+        # startup instead of failing a navigation, which surfaces as a bare
+        # TargetClosedError rather than the StorageStateStale a real session
+        # problem would raise. Observed in production: the worker logged
+        # TargetClosedError on every poll for twelve hours while the same
+        # session captured cleanly outside a container.
+        browser = await pw.chromium.launch(
+            headless=not headed,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
         ctx = await browser.new_context(
             viewport={"width": 599, "height": 868},
             storage_state=str(state_path),
