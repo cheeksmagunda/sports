@@ -57,6 +57,115 @@ def quantitative_value(
     return node
 
 
+def property_value(
+    *,
+    name: str,
+    value: Any | None = None,
+    property_id: str | None = None,
+    unit_text: str | None = None,
+    value_reference: Mapping[str, Any] | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a schema.org PropertyValue node for a named property."""
+
+    node: dict[str, Any] = {
+        "@type": "PropertyValue",
+        "name": name,
+    }
+    if value is not None:
+        node["value"] = value
+    if property_id is not None:
+        node["propertyID"] = property_id
+    if unit_text is not None:
+        node["unitText"] = unit_text
+    if value_reference is not None:
+        node["valueReference"] = dict(value_reference)
+    if additional:
+        for key, raw in additional.items():
+            node[key if ":" in key or key.startswith("@") else f"oracle:{key}"] = raw
+    return node
+
+
+def observation(
+    *,
+    about: Mapping[str, Any] | Sequence[Mapping[str, Any]],
+    measured_property: str | Mapping[str, Any],
+    value: float | int | Mapping[str, Any] | None = None,
+    unit_text: str | None = None,
+    additional_properties: Sequence[Mapping[str, Any]] | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a schema.org Observation node.
+
+    Numeric values become QuantitativeValue nodes. Callers can supply a
+    structured schema.org value directly when a numeric score is not the
+    appropriate representation.
+    """
+
+    observation_about: Any
+    if isinstance(about, Mapping):
+        observation_about = dict(about)
+    else:
+        observation_about = [dict(subject) for subject in about]
+
+    node: dict[str, Any] = {
+        "@type": "Observation",
+        "observationAbout": observation_about,
+        "measuredProperty": (
+            property_value(name=measured_property)
+            if isinstance(measured_property, str)
+            else dict(measured_property)
+        ),
+    }
+    if isinstance(value, (float, int)) and not isinstance(value, bool):
+        node["value"] = quantitative_value(float(value), unit_text=unit_text)
+    elif isinstance(value, Mapping):
+        node["value"] = dict(value)
+    if additional_properties:
+        node["additionalProperty"] = [
+            dict(property_node) for property_node in additional_properties
+        ]
+    if additional:
+        for key, raw in additional.items():
+            node[key if ":" in key or key.startswith("@") else f"oracle:{key}"] = raw
+    return node
+
+
+def high_tv_label_observation(
+    *,
+    event: Mapping[str, Any],
+    label: str,
+    raw_score: float,
+    athletes: Sequence[Mapping[str, Any]] = (),
+    high_tv_score: float | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build an Observation for a high-TV label and its raw event score.
+
+    The event is always the primary observed subject. Optional athlete Person
+    nodes are additional observed subjects, keeping the contract useful for
+    event-level and athlete-level labels without sport-specific fields.
+    """
+
+    subjects = [dict(event), *(dict(athlete) for athlete in athletes)]
+    properties = [property_value(name="High-TV label", value=label)]
+    if high_tv_score is not None:
+        properties.append(
+            property_value(
+                name="High-TV score",
+                value=quantitative_value(high_tv_score, unit_text="score"),
+            )
+        )
+    return observation(
+        about=subjects,
+        measured_property=property_value(name="Raw score", unit_text="score"),
+        value=raw_score,
+        unit_text="score",
+        additional_properties=properties,
+        additional=additional,
+    )
+
+
 def person_athlete(
     *,
     identifier: str | int,
