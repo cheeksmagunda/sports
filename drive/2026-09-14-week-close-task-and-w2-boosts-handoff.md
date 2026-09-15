@@ -3,8 +3,21 @@
 Status: ready
 Created: 2026-09-14
 Owner: operator (handed off from a Claude Code session; intended for a fresh
-chat/agent session to execute, per the operator's request to design this
-here but implement it elsewhere)
+chat/agent session to execute today, per the operator's request to design
+this here but implement it elsewhere)
+
+## Goal (one combined goal, not a choice)
+
+Every week-close run has to do both jobs at once, not one after the other:
+turn the week that just happened into a concrete set of model AND
+infrastructure improvements before the next week starts. The operator's
+explicit view: one real week is already plenty of signal to act on now, not
+a reason to wait. "We didn't win the draft" this week is not the finding
+that matters; the finding that matters is what a real week's worth of
+outcomes, including the transition into a live boost regime, says should
+change. Treat model-quality findings and infra-reliability findings as one
+punch list produced by one job, not two separate tracks on two different
+timelines.
 
 ## Context: what prompted this
 
@@ -50,6 +63,17 @@ pattern:
   `.github/actions/dayclose-ledger` composite action pattern for
   posting results, and `oracle_core.dayclose.run_sweep`-style catch-up
   semantics (isolate one week's failure from the next) if useful.
+- **Week-close supersedes day-close on the day it fires.** The final slate
+  day of the week (whatever day that actually is) should not also get a
+  separate, redundant day-close run; week-close's full-week view already
+  covers that day's grading. Design the gate/schedule so the two do not both
+  fire for the same day, rather than bolting week-close on top of an
+  unchanged daily job.
+- **The trigger itself must include a fresh, live re-scrape of real
+  results** (box scores, finalized contest data), not an analysis over
+  whatever day-close happened to cache earlier in the week. Ground truth at
+  1-hour-post-final-whistle should be pulled live at that moment, so the
+  week's analysis is built on current data, not stale intermediate captures.
 
 **What the job should produce:** not silent model/code changes. Per this
 repo's own process (root `AGENTS.md`: issue-first, PR review, no unreviewed
@@ -72,11 +96,13 @@ production changes), the job should:
    problem.
 3. Open or update a single tracking issue (do not create a new markdown
    ledger; this repo's convention is "decision rationale belongs in issues,
-   PRs, tests, code comments, or commits") with a prioritized punch list:
-   model-quality findings separated from infra findings, each concrete
-   enough to become its own issue/PR. Treat this as generating the *inputs*
-   to improvement work, not a substitute for the normal issue -> branch ->
-   PR -> review -> merge flow for any actual model or code change.
+   PRs, tests, code comments, or commits") with one prioritized punch list
+   covering both model-quality and infra-reliability findings together, each
+   concrete enough to become its own issue/PR, ranked by what actually
+   matters most for the coming week rather than split into separate tracks.
+   Treat this as generating the *inputs* to improvement work, not a
+   substitute for the normal issue -> branch -> PR -> review -> merge flow
+   for any actual model or code change.
 
 **Known related, still-open acceptance items from issue #156** worth folding
 into this job's design rather than duplicating in a new tracker:
