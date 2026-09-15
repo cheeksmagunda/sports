@@ -17,6 +17,11 @@ let receivedAt = 0;
 let serverOffset = 0;
 
 const text = (id, value) => { byId(id).textContent = value; };
+const setLoaderVisible = (visible) => {
+  const mark = byId("loader-mark");
+  if (mark) mark.hidden = !visible;
+};
+
 const DETAIL_LABELS = {
   no_games: "No slate published for this date",
   contest_unavailable: "Contest feed did not return exactly one contest",
@@ -171,6 +176,7 @@ function render(payload) {
   text("provenance", payload.lineup
     ? `Saved version ${payload.sequence} · decision ${payload.digest.slice(0, 12)}`
     : "");
+  setLoaderVisible(false);
   state();
 }
 
@@ -193,6 +199,7 @@ async function refresh() {
     text("status", "Loading picks");
     text("message", "Checking the latest saved lineup.");
     text("timing", "");
+    setLoaderVisible(true);
   }
   try {
     const response = await fetch(`/lineup/${encodeURIComponent(day)}`, {
@@ -211,6 +218,7 @@ async function refresh() {
       text("status", "Cannot load picks");
       text("message", "The service did not respond. Use Refresh picks to try again.");
     }
+    setLoaderVisible(false);
   } finally {
     clearTimeout(timeout);
   }
