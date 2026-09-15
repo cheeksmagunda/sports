@@ -9,12 +9,11 @@ state contains cookies and must never be committed or pasted into chat.
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-from nfl_oracle.ingest.realsports import DEFAULT_USER_AGENT, _ensure_private_directory
+from nfl_oracle.ingest.realsports import DEFAULT_USER_AGENT, _ensure_private_directory, scraper_dir
 
 # Some Real Sports login attempts are flagged as automated traffic when the
 # browser exposes Playwright's default automation fingerprint (the
@@ -34,18 +33,26 @@ _LAUNCH_ARGS = [
 ]
 
 
+def _capture_scraper_dir() -> Path:
+    """Session dir for capture writes; same order as ingest.realsports.scraper_dir."""
+    return scraper_dir()
+
+
 def _profile_dir() -> Path:
-    override = os.environ.get("NFL_ORACLE_SCRAPER_DIR", "scraper")
-    scraper_dir = Path(override).expanduser().resolve()
-    profile = scraper_dir / "chrome_profile"
-    _ensure_private_directory(scraper_dir)
+    root = _capture_scraper_dir()
+    profile = root / "chrome_profile"
+    _ensure_private_directory(root)
     _ensure_private_directory(profile)
     return profile
 
 
+def capture_target_path() -> Path:
+    """Where storage_state.json will be written (volume-aware)."""
+    return _capture_scraper_dir() / "storage_state.json"
+
+
 async def capture() -> Path:
-    scraper_dir = Path(os.environ.get("NFL_ORACLE_SCRAPER_DIR", "scraper")).expanduser().resolve()
-    target = scraper_dir / "storage_state.json"
+    target = capture_target_path()
     _ensure_private_directory(target.parent)
     profile_dir = _profile_dir()
 
