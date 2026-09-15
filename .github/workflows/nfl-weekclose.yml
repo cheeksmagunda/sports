@@ -241,4 +241,4 @@ jobs:
           guard_label: ${{ env.GUARD_LABEL }}
           guard_title: "NFL production operations"
           report_path: ${{ runner.temp }}/weekclose-report.md
-          should_escalate: ${{ steps.weekclose.outcome != 'success' && 'true' || 'false' }}
+          should_escalate: ${{ (steps.weekclose.outcome != 'success' || steps.punchlist.outcome != 'success') && 'true' || 'false' }}
