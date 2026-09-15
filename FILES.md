@@ -432,6 +432,7 @@ Generated from `git ls-files`. 803 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_service_app.py -- Research service scaffold smoke tests.
 - nfl-oracle/tests/unit/test_service_shadow_edges.py -- Research service edge cases for shadow/gates/status (observation only).
 - nfl-oracle/tests/unit/test_strategy_scaffold.py -- Strategy scaffold: clocks, five-card legality, snapshots.
+- nfl-oracle/tests/unit/test_train_force_flag.py -- train --force must rebuild even when the active model is still young.
 - nfl-oracle/tests/unit/test_value_baselines.py -- Tests for walk-forward Real value baselines (offline).
 - nfl-oracle/tests/unit/test_value_labels.py -- Tests for Real value label schema + Corpus G extraction.
 - nfl-oracle/tests/unit/test_valuelaw_model.py -- Unit tests for nfl_oracle.valuelaw.model.
