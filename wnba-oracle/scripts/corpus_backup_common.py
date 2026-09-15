@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import sys
 import datetime as dt
 import hashlib
 import json
@@ -145,6 +146,10 @@ def build_manifest(
 
 def validate_snapshot(snapshot_dir: pathlib.Path, *, expected_tables: set[str]) -> dict[str, Any]:
     """Validate manifest shape, exact table set, byte counts, and SHA-256 hashes."""
+
+    # lineup jsonb (cast to text) can grow past Python's default 128KiB
+    # CSV field limit; writing has no such cap (same class as NFL #172).
+    csv.field_size_limit(sys.maxsize)
 
     manifest_path = snapshot_dir / "manifest.json"
     try:
