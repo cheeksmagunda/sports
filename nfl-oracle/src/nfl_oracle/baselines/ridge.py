@@ -46,7 +46,12 @@ class RidgeRegressor:
     alpha: float = 1.0
     coefficients: list[float] | None = None
 
-    def fit(self, x: list[list[float]], y: list[float]) -> RidgeRegressor:
+    def fit(
+        self,
+        x: list[list[float]],
+        y: list[float],
+        sample_weight: list[float] | None = None,
+    ) -> RidgeRegressor:
         if len(x) != len(y):
             raise ValueError("x and y length mismatch")
         if not x:
@@ -55,15 +60,25 @@ class RidgeRegressor:
         n_features = len(x[0])
         if any(len(row) != n_features for row in x):
             raise ValueError("ragged feature rows")
-        # XtX and Xt y
+        if sample_weight is None:
+            weights = [1.0] * len(y)
+        else:
+            if len(sample_weight) != len(y):
+                raise ValueError("sample_weight length mismatch")
+            if any(w < 0 for w in sample_weight):
+                raise ValueError("sample_weight_must_be_nonnegative")
+            weights = sample_weight
+        # Weighted XtX and Xt y (issue #185 high-TV emphasis when weights vary).
         xtx = [[0.0] * n_features for _ in range(n_features)]
         xty = [0.0] * n_features
-        for row, yi in zip(x, y, strict=True):
+        for row, yi, wi in zip(x, y, weights, strict=True):
+            if wi == 0.0:
+                continue
             for i in range(n_features):
-                xty[i] += row[i] * yi
+                xty[i] += wi * row[i] * yi
                 xi = row[i]
                 for j in range(n_features):
-                    xtx[i][j] += xi * row[j]
+                    xtx[i][j] += wi * xi * row[j]
         # Penalize all but intercept (index 0) when present.
         for i in range(1, n_features):
             xtx[i][i] += self.alpha

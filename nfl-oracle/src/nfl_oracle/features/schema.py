@@ -307,14 +307,15 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             live_ok=True,
             availability_rule=(
                 "fit_on_seasons_strictly_earlier_than_decision_season;"
-                "offline_stub_until_pace_table_wired"
+                "from_historical_context_team_plays_prior"
             ),
             description=(
-                "Team offensive pace prior (plays/game or Real-value proxy). "
-                "Offline stub until pace table is wired."
+                "Team offensive pace prior (plays/game proxy from earlier "
+                "attempts/carries/sacks). Wired via recommendations.context "
+                "HistoricalContext (#185 enable historical linking)."
             ),
             group="pace",
-            offline_stub=True,
+            offline_stub=False,
         ),
         FeatureSpec(
             name="opponent_pace_prior",
@@ -323,11 +324,14 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             live_ok=True,
             availability_rule=(
                 "fit_on_seasons_strictly_earlier_than_decision_season;"
-                "offline_stub_until_pace_table_wired"
+                "from_historical_context_opponent_plays_prior"
             ),
-            description="Opponent pace prior for matchup context. Offline stub.",
+            description=(
+                "Opponent pace prior for matchup context. Wired via "
+                "recommendations.context HistoricalContext (#185)."
+            ),
             group="pace",
-            offline_stub=True,
+            offline_stub=False,
         ),
         FeatureSpec(
             name="card_boost_post_settlement",

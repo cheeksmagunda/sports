@@ -1,5 +1,42 @@
 # Status
 
+## Anti-chalk high-potential training (issue #185, 2026-09-15 CT)
+
+Operator mandate: stop corpus-appearance chalk; train toward mathematical
+HIGH TOTAL VALUE / Highest-value boards across the FULL archive depth, with
+raw pre-boost Real score as the fallback when an era has no boosts/TV board.
+Shared domain-free contracts live in ``oracle_core.high_tv`` +
+``oracle_core.schemaorg`` (schema.org ItemList / Person / QuantitativeValue /
+SportsEvent). NFL wiring is ``nfl_oracle.recommendations.high_tv``.
+
+### Mechanism found (chalk)
+- ``recommendations.model._PriorBank.vector`` emitted ``prior_log_count`` =
+  ``log1p(appearance_count)``; ridge could reward last-year volume.
+- ``baselines.value_model`` had the same ``prior_n_games`` slot.
+- Valuelaw ``project_candidate`` discarded 1-2 game histories into pure
+  position means, burying high-EV sleepers under chalk-dominated pools.
+
+### Changes landed
+- Neutralize appearance-count features (vector always 0; predict zeros legacy
+  ``prior_log_count`` coefficients).
+- High-TV / high-potential sample weights in ``fit_model`` (per-game top-5
+  value rank; no draft_count).
+- Label ladder: high_total_value_board else raw_highest_score_pre_boost.
+- Valuelaw shrunk EWMA for low-n histories.
+- Enabled already-wired ``team_pace_prior`` / ``opponent_pace_prior`` (cleared
+  offline_stub); historical linking via ``recommendations.context``.
+- Archive depth reporter: catalog seasons 2002-2025 seeds; no year cap.
+  On-disk Corpus G and Corpus C depth vary by environment (see PR body).
+
+### Feature inventory (TNF week-2)
+Enabled this PR: anti-chalk, high-TV weights + ladder, pace priors, low-n
+valuelaw shrink, schema.org board serialization.
+Still off / queued: injury + weather stubs (need live capture), opponent
+defense join stubs, ``use_feature_value_model`` shadow default False,
+recommendations_enabled env gate (ops), LightGBM never.
+Leave ``fix/156-force-retrain`` / PR #160 alone.
+
+
 Last verified: 2026-09-08 20:40 CT, Codespace cleanup checkpoint for issue #115.
 
 This file records application state only. Re-verify auth and coverage before

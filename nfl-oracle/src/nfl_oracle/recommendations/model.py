@@ -12,6 +12,7 @@ from typing import Any, Literal, cast
 from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
+from nfl_oracle.recommendations.high_tv import sample_weights_for_history
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
     Finite,
@@ -95,7 +96,7 @@ class RatingModel(Record):
         "player_mean_shrunk",
         "recent_mean_shrunk",
         "position_mean",
-        "prior_log_count",
+        "prior_log_count",  # neutralized (#185); always 0 at vector/predict
         "prior_stddev",
         "opportunity_trend",
     )
@@ -243,6 +244,18 @@ class _PlayerStats:
         return [value for _, value in sorted(source, key=lambda item: item[0])[-4:]]
 
 
+def _neutral_appearance_count_feature(_count: int) -> float:
+    """Return a constant for the prior_log_count slot (issue #185).
+
+    Historical ridge fits could put positive weight on log(appearance count),
+    which rewards last-year chalk independent of forward value. The feature
+    index remains so serialized coefficient vectors stay aligned; the value is
+    always zero so appearance frequency cannot drive ranking.
+    """
+
+    return 0.0
+
+
 class _PriorBank:
     def __init__(self) -> None:
         self.total = 0.0
@@ -294,7 +307,11 @@ class _PriorBank:
             (stats.sum + 5 * pm) / (stats.count + 5),
             (sum(recent) + 3 * pm) / (len(recent) + 3),
             pm,
-            math.log1p(stats.count),
+            # Issue #185: never encode raw corpus appearance count. Volume chalk
+            # (Mahomes/Walker-style historical frequency) must not outrank a
+            # low-frequency high-EV sleeper when the value features disagree.
+            # Slot kept so coefficient length stays compatible with artifacts.
+            _neutral_appearance_count_feature(stats.count),
             math.sqrt(variance),
             trend,
         ]
@@ -318,11 +335,19 @@ class _PriorBank:
 
 
 def _design(
-    rows: Sequence[HistoricalPerformance], names: Sequence[str] = ()
-) -> tuple[list[list[float]], list[float]]:
-    """Reconstruct source-clock priors; later captures are not prospective proof."""
+    rows: Sequence[HistoricalPerformance],
+    names: Sequence[str] = (),
+    *,
+    row_weights: dict[tuple[int, int], float] | None = None,
+) -> tuple[list[list[float]], list[float], list[float]]:
+    """Reconstruct source-clock priors; later captures are not prospective proof.
+
+    Optional ``row_weights`` (keyed by player_id, game_id) implement issue #185
+    high-Total-Value emphasis without encoding appearance frequency.
+    """
     x: list[list[float]] = []
     y: list[float] = []
+    w: list[float] = []
     available = sorted(rows, key=lambda r: r.available_at)
     bank = _PriorBank()
     cursor = 0
@@ -338,7 +363,11 @@ def _design(
                 + _context_vector(row.context_features, names)
             )
             y.append(row.value)
-    return x, y
+            if row_weights is None:
+                w.append(1.0)
+            else:
+                w.append(float(row_weights.get((row.player_id, row.game_id), 1.0)))
+    return x, y, w
 
 
 def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) -> RatingModel:
@@ -362,12 +391,17 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
     names = tuple(sorted({key for row in train for key in row.context_features}))
-    x, y = _design(train, names)
+    train_weight_list = sample_weights_for_history(train)
+    train_weights = {
+        (row.player_id, row.game_id): weight
+        for row, weight in zip(train, train_weight_list, strict=True)
+    }
+    x, y, sample_w = _design(train, names, row_weights=train_weights)
     if len(x) < 10 or not holdout:
         raise ValueError("insufficient_chronological_evaluation")
-    fitted = RidgeRegressor(alpha=10).fit(x, y)
-    ablation_x, ablation_y = _design(train)
-    ablation_fit = RidgeRegressor(alpha=10).fit(ablation_x, ablation_y)
+    fitted = RidgeRegressor(alpha=10).fit(x, y, sample_weight=sample_w)
+    ablation_x, ablation_y, ablation_w = _design(train, row_weights=train_weights)
+    ablation_fit = RidgeRegressor(alpha=10).fit(ablation_x, ablation_y, sample_weight=ablation_w)
     bank = _PriorBank()
     for record in train:
         bank.add(record)
@@ -413,8 +447,13 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
         EstimatorName,
         min(candidates_mae, key=lambda name: (candidates_mae[name], name != "ridge")),
     )
-    final_x, final_y = _design(ordered, names)
-    final = RidgeRegressor(alpha=10).fit(final_x, final_y)
+    ordered_weight_list = sample_weights_for_history(ordered)
+    ordered_weights = {
+        (row.player_id, row.game_id): weight
+        for row, weight in zip(ordered, ordered_weight_list, strict=True)
+    }
+    final_x, final_y, final_w = _design(ordered, names, row_weights=ordered_weights)
+    final = RidgeRegressor(alpha=10).fit(final_x, final_y, sample_weight=final_w)
     context_width = 2 * len(names)
     if selected_estimator == "ridge":
         selected_coefficients = tuple(final.coefficients or ())
@@ -478,6 +517,8 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
             "global_mean_rmse": math.sqrt(mean(e * e for e in baseline_global)),
             "selected_estimator": selected_estimator,
             "selected_mae": candidates_mae[selected_estimator],
+            "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
+            "training_target": "high_total_value_full_archive_not_win_chalk",
             "context_evidence_disclosure": (
                 "retrospective_reconstructed_context_included"
                 if retrospective_rows
@@ -521,6 +562,15 @@ def predict(
     # Center residual draws by their arithmetic mean so the empirical sample
     # distribution has mean exactly equal to the conditional projection.
     residual_center = mean(model.residuals)
+    # Issue #185: neutralize appearance-count weight on any loaded artifact,
+    # including models trained before this change.
+    coefficients = list(model.coefficients)
+    try:
+        chalk_index = model.feature_names.index("prior_log_count")
+    except ValueError:
+        chalk_index = -1
+    if 0 <= chalk_index < len(coefficients):
+        coefficients[chalk_index] = 0.0
     result = []
     for player in slate.candidates:
         adjustment = (context or {}).get(player.player_id)
@@ -530,7 +580,7 @@ def predict(
         features = bank.vector(player.player_id, player.position, external_id) + _context_vector(
             adjustment.features if adjustment else {}, model.context_feature_names
         )
-        conditional = sum(a * b for a, b in zip(model.coefficients, features, strict=True))
+        conditional = sum(a * b for a, b in zip(coefficients, features, strict=True))
         historical_probability = bank.player_availability(player.player_id, external_id)
         probability = (
             min(historical_probability, adjustment.availability_probability)
