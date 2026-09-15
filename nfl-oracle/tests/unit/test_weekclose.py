@@ -264,3 +264,15 @@ def test_cli_weekclose_prints_punch_list_json(tmp_path: Path, monkeypatch, capsy
     assert printed["week"] == WEEK
     assert isinstance(printed["punch_list"], list)
     assert printed["gamedays"] == [NO_FREEZE_DAY.isoformat(), DAY.isoformat()]
+
+
+def test_punch_list_includes_schema_org_item_list(tmp_path: Path) -> None:
+    store = _setup_store(tmp_path)
+    _freeze_five(store)
+    result = weekclose.build_week_punch_list(store, _week_games(), season=SEASON, week=WEEK)
+    assert result["resolved"] is True
+    assert "schema_org" in result
+    doc = result["schema_org"]
+    assert doc["@type"] == "ItemList"
+    assert doc["oracle:kind"] == "punch_list"
+    assert len(doc["itemListElement"]) == len(result["punch_list"])

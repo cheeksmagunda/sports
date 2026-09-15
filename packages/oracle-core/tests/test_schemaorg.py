@@ -9,6 +9,7 @@ from oracle_core.schemaorg import (
     observation,
     person_athlete,
     property_value,
+    punch_list_item_list,
     quantitative_value,
     sports_event,
     sports_team,
@@ -87,3 +88,31 @@ def test_high_tv_label_observation_covers_event_and_athlete() -> None:
             value=quantitative_value(9.25, unit_text="score"),
         ),
     ]
+
+
+def test_punch_list_item_list_links_priority_and_category() -> None:
+    doc = punch_list_item_list(
+        [
+            {
+                "priority": 1,
+                "category": "infra",
+                "title": "No freeze recorded for 2026-09-13",
+                "detail": "Scheduled slate without a frozen lineup.",
+                "evidence": {"day": "2026-09-13"},
+            }
+        ],
+        name="NFL week 2026-W01 punch list",
+        season=2026,
+        week=1,
+    )
+    assert doc["@type"] == "ItemList"
+    assert doc["@context"]["@vocab"] == SCHEMA_ORG
+    assert doc["oracle:kind"] == "punch_list"
+    assert doc["oracle:season"] == 2026
+    assert doc["numberOfItems"] == 1
+    item = doc["itemListElement"][0]["item"]
+    assert item["@type"] == "CreativeWork"
+    assert item["name"].startswith("No freeze")
+    props = {p["name"]: p["value"] for p in item["additionalProperty"]}
+    assert props["priority"] == 1
+    assert props["category"] == "infra"

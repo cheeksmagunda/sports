@@ -1,5 +1,27 @@
 # Status
 
+## Week-close hands-off follow-up (issue #165, 2026-09-15 CT)
+
+After the punch-list producer (#195):
+
+- Offline schedule cache default `--season-max` is 2026; `data/schedule/schedules.csv`
+  refreshed from public nflverse/nfldata (CC BY 4.0) so `nfl-pipeline weekclose`
+  resolves 2026 season weeks without inventing games.
+- `nfl-weekclose.yml` opens or updates one tracking issue when the punch list is
+  non-empty (idempotent by title), using the same digest body already posted to
+  the results ledger. Missing token/jq/empty list surfaces as ALERT / skipped
+  outputs rather than silent success.
+- Punch list JSON remains the primary array; an additive `schema_org` ItemList
+  (via `oracle_core.schemaorg.punch_list_item_list`) is included for linkable
+  consumers. No model training or silent prod model changes.
+- Whistle-time proxy unchanged: live nflverse scores/result plus
+  `kickoff + 3h + 1h` floor (`calendar.week_close`); exact whistle is not in
+  the public feed.
+
+Still open on #165 (not this slice): week-wide Real Sports re-scrape beyond the
+final-gameday dayclose path; Railway/ledger infra-incident fold-in. Leave #160
+alone.
+
 ## Corpus C tv_board_coverage in data.summary (issue #192, 2026-09-15 CT)
 
 Offline `research_data_summary` now scans on-disk Corpus C (when present) via
@@ -10,6 +32,7 @@ an explicit upgrade path. Live densify / session ops for #192 are tracked on
 the issue; this note is the code follow-on only.
 
 Leave #160 alone. No LightGBM.
+
 
 ## Week-close punch-list producer + CLI (issue #165, 2026-09-15 CT)
 
@@ -43,12 +66,9 @@ model change; this is read-only audit tooling.
   `gh issue create` automatically is left for a follow-up; this slice emits
   the ready-to-post text instead of blocking on new `gh` permissions.
 
-### Known gap
-- The CLI resolves the week from the checked-in offline fixture at
-  `data/schedule/schedules.csv`, which currently ends at the 2025 season
-  (through Super Bowl weekend). It will report `resolved: false` for any
-  2026-season season/week until that fixture is refreshed from a live
-  nflverse download; no code path invents games to route around this.
+### Schedule fixture
+- Offline `data/schedule/schedules.csv` covers through the 2026 season after
+  the hands-off follow-up refresh (public nflverse; no invented games).
 
 ### Verification
 `uv run --frozen --package nfl-oracle pytest nfl-oracle/tests/unit/test_weekclose.py`

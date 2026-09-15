@@ -5,7 +5,8 @@ name: nfl-weekclose
 # 1h buffer, then runs. On the final-slate day, day-close skips (supersede),
 # so this workflow grades the final slate day via the existing dayclose path,
 # then runs the audit-only weekclose punch-list producer (issue #165) and
-# folds its findings into the same digest posted below.
+# folds its findings into the same digest posted below, then opens or
+# updates one tracking issue when the punch list is non-empty.
 
 on:
   schedule:
@@ -164,12 +165,73 @@ jobs:
               cat "$RUNNER_TEMP/weekclose-punchlist.json"
               echo '```'
               echo
-              echo "Suggested tracking issue title: \`NFL week ${{ steps.gate.outputs.season || '-' }}-W${{ steps.gate.outputs.week || '-' }} punch list\`"
-              echo "Suggested body: paste the punch_list entries above; findings are inputs to the issue/PR flow and do not change models on their own."
+              echo "Tracking issue: opened or updated by the following step when punch_list is non-empty (idempotent by title)."
+              echo "Findings are inputs to the issue/PR flow and do not change models on their own."
             else
               echo "ALERT: week punch list producer did not run or produced no output."
             fi
           } > "$RUNNER_TEMP/weekclose-report.md"
+
+
+      - name: Open or update week punch-list tracking issue
+        id: tracking_issue
+        if: always() && steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PUNCH="$RUNNER_TEMP/weekclose-punchlist.json"
+          REPORT="$RUNNER_TEMP/weekclose-report.md"
+          if [ ! -s "$PUNCH" ]; then
+            echo "ALERT: no punch list JSON; skipping tracking issue"
+            echo "tracking_issue=skipped_no_punchlist" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "ALERT: jq missing; cannot parse punch list for tracking issue"
+            echo "tracking_issue=skipped_no_jq" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          COUNT=$(jq '.punch_list | length' "$PUNCH" 2>/dev/null || echo 0)
+          RESOLVED=$(jq -r '.resolved // false' "$PUNCH" 2>/dev/null || echo false)
+          SEASON="${{ steps.gate.outputs.season }}"
+          WEEK="${{ steps.gate.outputs.week }}"
+          TITLE="NFL week ${SEASON}-W${WEEK} punch list"
+          if [ "$RESOLVED" != "true" ] || [ "$COUNT" = "0" ]; then
+            echo "punch list empty or unresolved; skipping tracking issue create"
+            echo "tracking_issue=skipped_empty" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Idempotent: reuse an open issue with the same title when present.
+          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title --jq ".[] | select(.title==\"$TITLE\") | .number" | head -n 1)
+          BODY_FILE="$RUNNER_TEMP/weekclose-tracking-body.md"
+          {
+            echo "## NFL week ${SEASON}-W${WEEK} punch list"
+            echo
+            echo "Auto-opened by nfl-weekclose (Refs #165). Findings are inputs to the"
+            echo "issue/PR flow; this job never trains, retrains, or changes models."
+            echo
+            echo "Whistle-time proxy: nflverse scores/result + kickoff+3h+1h floor"
+            echo "(exact whistle time is not in the public schedule feed)."
+            echo
+            if [ -s "$REPORT" ]; then
+              cat "$REPORT"
+            else
+              echo '```json'
+              cat "$PUNCH"
+              echo '```'
+            fi
+          } > "$BODY_FILE"
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body-file "$BODY_FILE"
+            echo "tracking_issue=commented:$EXISTING" >> "$GITHUB_OUTPUT"
+            echo "Updated existing tracking issue #$EXISTING"
+          else
+            URL=$(gh issue create --title "$TITLE" --body-file "$BODY_FILE")
+            echo "tracking_issue=created:$URL" >> "$GITHUB_OUTPUT"
+            echo "Opened tracking issue: $URL"
+          fi
 
       - uses: ./.github/actions/dayclose-ledger
         if: always() && steps.gate.outputs.should_run == 'true'
