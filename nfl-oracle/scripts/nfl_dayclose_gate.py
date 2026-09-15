@@ -16,7 +16,10 @@ grade until the next game day. Gating on the window instead only ever skips
 a real gap - the off-season, or a multi-week bye in the schedule - which is
 exactly when skipping is correct.
 
-Attribution: CC BY 4.0 (nflverse / nfldata).
+Week-close supersede (issue #165): when `target_day` is the final gameday of
+its NFL week, day-close must not also run. Week-close owns that day's grading
+as part of the full-week job. This gate emits `skip_for_weekclose=true` in
+that case so the workflow can no-op without treating it as "no slate".
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from nfl_oracle.calendar.schedule import NFLVERSE_SCHEDULE_URL_ALIASES
+from nfl_oracle.calendar.week_close import parse_week_games, target_day_is_week_final
 
 EASTERN = ZoneInfo("America/New_York")
 DEFAULT_WINDOW_DAYS = 7
@@ -83,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--github-output",
         default=os.environ.get("GITHUB_OUTPUT"),
-        help="Path to append 'has_slate=true|false' to (GITHUB_OUTPUT in Actions)",
+        help="Path to append gate outputs to (GITHUB_OUTPUT in Actions)",
     )
     args = parser.parse_args(argv)
 
@@ -92,16 +96,21 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     target_day = date.fromisoformat(args.day) if args.day else default_target_day()
-    days = game_days(_download(NFLVERSE_SCHEDULE_URL_ALIASES))
+    raw = _download(NFLVERSE_SCHEDULE_URL_ALIASES)
+    days = game_days(raw)
     found = has_slate_in_window(days, target_day=target_day, window_days=args.window_days)
+    week_games = parse_week_games(raw)
+    skip_weekclose = target_day_is_week_final(week_games, target_day=target_day)
 
     print(
-        f"has_slate={str(found).lower()} target_day={target_day.isoformat()} "
-        f"window_days={args.window_days}"
+        f"has_slate={str(found).lower()} skip_for_weekclose={str(skip_weekclose).lower()} "
+        f"target_day={target_day.isoformat()} window_days={args.window_days}"
     )
     if args.github_output:
         with open(args.github_output, "a", encoding="utf-8") as handle:
             handle.write(f"has_slate={str(found).lower()}\n")
+            handle.write(f"skip_for_weekclose={str(skip_weekclose).lower()}\n")
+            handle.write(f"target_day={target_day.isoformat()}\n")
     return 0
 
 
