@@ -200,7 +200,7 @@ def main() -> int:
     try:
         manifest = export_corpus(engine, OUT)
     except Exception as exc:
-        print(f"ERROR: corpus backup failed ({type(exc).__name__})", file=sys.stderr)
+        print(f"ERROR: corpus backup failed ({type(exc).__name__}): {exc}", file=sys.stderr)
         return 1
     finally:
         engine.dispose()
