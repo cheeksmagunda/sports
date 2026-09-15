@@ -175,8 +175,16 @@ def export_corpus(engine: Any, output_dir: pathlib.Path) -> dict[str, Any]:
 def main() -> int:
     url = os.environ.get("NFL_BACKUP_DATABASE_URL") or os.environ.get("NFL_DATABASE_URL")
     if not url:
-        print("ERROR: set NFL_BACKUP_DATABASE_URL or NFL_DATABASE_URL", file=sys.stderr)
-        return 1
+        # Exit 2 = ops not_configured (distinct from runtime/export failure).
+        # Production CI must set NFL_BACKUP_DATABASE_URL; NFL_DATABASE_URL is
+        # a local/dev fallback only. Refs issue #172.
+        print(
+            "ERROR: not_configured: set NFL_BACKUP_DATABASE_URL "
+            "(repo secret for nfl-corpus-backup.yml) or NFL_DATABASE_URL "
+            "for local runs. See issue #172.",
+            file=sys.stderr,
+        )
+        return 2
     if url.startswith("sqlite:"):
         engine = create_engine(url)
     else:

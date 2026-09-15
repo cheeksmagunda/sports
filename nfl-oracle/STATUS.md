@@ -32,6 +32,18 @@ Builds on issue #140. Three changes:
   CSV table, `player_results.csv`, derived from the same artifacts (no
   Postgres schema change).
 
+## Corpus backup secret currently unconfigured (issue #172)
+
+`NFL_DAYCLOSE_DATABASE_URL` works (day-close ledger posts succeed).
+`NFL_BACKUP_DATABASE_URL` is **not** currently set as a repo secret: recent
+`nfl-corpus-backup.yml` runs fail closed with an explicit `not_configured`
+signal, and `origin/backups` has never received an `nfl-oracle/data/backups/`
+snapshot. The 2026-09-12 checkpoint below overstated backup readiness; treat
+day-close as live and corpus backup as blocked on ops provisioning (#172).
+Once the secret is provisioned (same read-only pattern as day-close),
+re-run `nfl-corpus-backup.yml` via `workflow_dispatch` and confirm an
+`nfl-oracle/data/backups/*.csv` commit lands on `backups`.
+
 ## Day-close/backup went live; TLS and pipeline exit-code fixes (issue #149)
 
 `NFL_DAYCLOSE_DATABASE_URL`, `NFL_BACKUP_DATABASE_URL`, and
