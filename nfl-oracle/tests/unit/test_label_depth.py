@@ -33,11 +33,11 @@ from nfl_oracle.ingest.backfill import (
     _summarize_season_block,
 )
 from nfl_oracle.recommendations.high_tv import (
+    TvBoardCoverage,
     nfl_label_depth_report,
     nfl_season_for_day,
     report_nfl_archive_season_depth,
     tv_board_coverage_from_contests,
-    TvBoardCoverage,
 )
 
 
@@ -330,19 +330,17 @@ def test_research_data_summary_keeps_raw_rung_without_corpus_c(tmp_path: Path) -
 
 
 def test_research_data_summary_upgrades_raw_to_high_tv_via_coverage_arg(tmp_path: Path) -> None:
-    from nfl_oracle.data.coverage_matrix import CoverageMatrixDocument
-    from nfl_oracle.data.summary import research_data_summary
     from oracle_core.artifacts import atomic_write_json
+
+    from nfl_oracle.data.summary import research_data_summary
 
     matrix = _matrix()
     mat_path = tmp_path / "coverage_matrix.json"
-    atomic_write_json(mat_path, {"generated_at": "2026-09-15T00:00:00Z", "seasons": matrix.seasons, "gaps": []})
+    atomic_write_json(
+        mat_path, {"generated_at": "2026-09-15T00:00:00Z", "seasons": matrix.seasons, "gaps": []}
+    )
     coverage = tv_board_coverage_from_contests(
-        [
-            _parsed_contest(
-                contest_id=870, day=date(2024, 9, 8), game_id=18790, boosts=(0.5, 0.0)
-            )
-        ]
+        [_parsed_contest(contest_id=870, day=date(2024, 9, 8), game_id=18790, boosts=(0.5, 0.0))]
     )
     summary = research_data_summary(
         project_root=tmp_path,

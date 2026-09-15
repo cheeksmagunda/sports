@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nfl_oracle.calendar.schedule import research_schedule_summary
 from nfl_oracle.data.catalog import SeasonGameCatalog, load_season_game_catalog
