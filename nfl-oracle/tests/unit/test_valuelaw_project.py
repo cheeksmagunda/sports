@@ -11,7 +11,7 @@ from nfl_oracle.valuelaw.project import ewma, project_candidates, recommend_slot
 NOW = datetime(2026, 9, 9, 20, tzinfo=UTC)
 
 
-def _candidate(player_id: int, *, status: str | None = "Active") -> Candidate:
+def _candidate(player_id: int, *, status: str | None = "Active", boost: float = 0.0) -> Candidate:
     clock = EvidenceClock(source_available_at=NOW, captured_at=NOW)
     return Candidate(
         player_id=player_id,
@@ -22,7 +22,7 @@ def _candidate(player_id: int, *, status: str | None = "Active") -> Candidate:
         team="SEA",
         opponent="NE",
         injury_status=status,
-        card_boost=0.0,
+        card_boost=boost,
         clock=clock,
     )
 
@@ -45,7 +45,46 @@ def test_ewma_weights_recent_values_more() -> None:
     assert ewma((1.0, 3.0), decay=0.5) == pytest.approx((3.0 + 0.5) / 1.5)
 
 
-def test_project_candidates_and_zero_boost_slot_order() -> None:
+def test_out_player_is_zeroed() -> None:
+    rows = (
+        CandidateRow(candidate=_candidate(1, status="Out"), history=_history(1, (9.0, 9.0, 9.0))),
+        *tuple(
+            CandidateRow(candidate=_candidate(i), history=_history(i, (float(i),) * 3))
+            for i in range(2, 7)
+        ),
+    )
+    projected = project_candidates(rows)
+    assert next(item for item in projected if item.player_id == 1).projected_value == 0.0
+
+
+def test_recommend_slots_prefers_boosted_player_over_slightly_higher_raw_value() -> None:
+    """Selection must weigh boost, not just raw value: mirrors the replay-harness bug fix.
+
+    Naive top-5-by-value is {2, 3, 4, 5, 6}. Player 7 has slightly lower
+    projected value than player 6 but carries a boost of 3.0. The true
+    optimum swaps 6 out for 7 because the order-invariant boost term it adds
+    outweighs the rearrangement term it gives up.
+    """
+    rows = tuple(
+        CandidateRow(candidate=_candidate(pid, boost=boost), history=_history(pid, (value,) * 3))
+        for pid, value, boost in [
+            (2, 10.0, 0.0),
+            (3, 9.0, 0.0),
+            (4, 8.0, 0.0),
+            (5, 7.0, 0.0),
+            (6, 6.0, 0.0),
+            (7, 5.9, 3.0),
+        ]
+    )
+    projected = project_candidates(rows)
+    recommendations = recommend_slots(projected)
+    chosen = {item.projection.player_id for item in recommendations}
+    assert 7 in chosen
+    assert 6 not in chosen
+    assert chosen != {2, 3, 4, 5, 6}
+
+
+def test_recommend_slots_matches_descending_value_when_boosts_are_uniform() -> None:
     rows = tuple(
         CandidateRow(candidate=_candidate(player_id), history=_history(player_id, values))
         for player_id, values in {
@@ -61,18 +100,3 @@ def test_project_candidates_and_zero_boost_slot_order() -> None:
     recommendations = recommend_slots(projections)
     assert tuple(item.projection.player_id for item in recommendations) == (6, 5, 4, 3, 2)
     assert tuple(item.slot_multiplier for item in recommendations) == (2.0, 1.8, 1.6, 1.4, 1.2)
-
-
-def test_out_player_is_zeroed_and_boosted_slate_refuses_zero_boost_helper() -> None:
-    rows = (
-        CandidateRow(candidate=_candidate(1, status="Out"), history=_history(1, (9.0, 9.0, 9.0))),
-        *tuple(
-            CandidateRow(candidate=_candidate(i), history=_history(i, (float(i),) * 3))
-            for i in range(2, 7)
-        ),
-    )
-    projected = project_candidates(rows)
-    assert next(item for item in projected if item.player_id == 1).projected_value == 0.0
-    boosted = projected[1].__class__(**{**projected[1].__dict__, "card_boost": 0.5})
-    with pytest.raises(ValueError, match="zero_boost"):
-        recommend_slots((projected[0], boosted, *projected[2:]))
