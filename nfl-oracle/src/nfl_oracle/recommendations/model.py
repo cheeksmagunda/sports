@@ -76,6 +76,8 @@ class Projection(Record):
     prior_games: int = Field(ge=0)
     samples: tuple[Finite, ...]
     provenance: tuple[str, ...]
+    # Offline/agent why-this-pick: largest coef x feature terms. Not a UI contract.
+    feature_contributions: tuple[dict[str, float | str], ...] = ()
 
 
 class RatingModel(Record):
@@ -109,6 +111,47 @@ class RatingModel(Record):
 
 def _context_vector(values: Mapping[str, float], names: Sequence[str]) -> list[float]:
     return [v for name in names for v in (values.get(name, 0.0), float(name not in values))]
+
+
+def feature_contribution_rows(
+    model: RatingModel,
+    feature_values: Sequence[float],
+    *,
+    top_n: int = 12,
+) -> list[dict[str, float | str]]:
+    """Coef x feature attribution for agent/offline audit (not a user UI).
+
+    Emits the largest-magnitude linear contributions from core priors and
+    wired context features so a pick can be explained without name frequency.
+    """
+    coefficients = list(model.coefficients)
+    try:
+        chalk_index = model.feature_names.index("prior_log_count")
+    except ValueError:
+        chalk_index = -1
+    if 0 <= chalk_index < len(coefficients):
+        coefficients[chalk_index] = 0.0
+    if len(coefficients) != len(feature_values):
+        raise ValueError("feature_coefficient_length_mismatch")
+    labels: list[str] = list(model.feature_names)
+    for name in model.context_feature_names:
+        labels.append(name)
+        labels.append(f"{name}__missing")
+    rows: list[dict[str, float | str]] = []
+    for label, coef, value in zip(labels, coefficients, feature_values, strict=True):
+        contribution = coef * value
+        if contribution == 0.0 and coef == 0.0:
+            continue
+        rows.append(
+            {
+                "feature": label,
+                "coefficient": coef,
+                "value": value,
+                "contribution": contribution,
+            }
+        )
+    rows.sort(key=lambda row: abs(float(row["contribution"])), reverse=True)
+    return rows[: max(1, top_n)]
 
 
 def _validate_identity_links(rows: Sequence[HistoricalPerformance]) -> None:
@@ -450,13 +493,17 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     activation_candidates = {
         name: mae for name, mae in candidates_mae.items() if name != "player_prior"
     }
-    selected_estimator = cast(
+    holdout_winner = cast(
         EstimatorName,
         min(
             activation_candidates,
             key=lambda name: (activation_candidates[name], name != "ridge"),
         ),
     )
+    # Issue #212: when context features are wired, keep every pathway live.
+    # position_mean / global_mean also zero context coefficients; only ridge
+    # preserves pace/defense/matchup/depth for v2 TNF.
+    selected_estimator: EstimatorName = "ridge" if names else holdout_winner
     ordered_weight_list = sample_weights_for_history(ordered)
     ordered_weights = {
         (row.player_id, row.game_id): weight
@@ -527,6 +574,9 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
             "global_mean_rmse": math.sqrt(mean(e * e for e in baseline_global)),
             "selected_estimator": selected_estimator,
             "selected_mae": candidates_mae[selected_estimator],
+            "holdout_winner": holdout_winner,
+            "holdout_winner_mae": candidates_mae[holdout_winner],
+            "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
             "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
             "training_target": "high_total_value_full_archive_not_win_chalk",
             "context_evidence_disclosure": (
@@ -605,6 +655,7 @@ def predict(
         uncertainty *= math.sqrt(1 + 5 / (n + 1))
         samples = tuple(conditional + (e - residual_center) * uncertainty for e in model.residuals)
         conditional_variance = pstdev(samples) ** 2
+        contributions = feature_contribution_rows(model, features)
         result.append(
             Projection(
                 player_id=player.player_id,
@@ -624,6 +675,7 @@ def predict(
                     "cold_start_uncertainty_estimate",
                 )
                 + (adjustment.provenance if adjustment else ("context_unavailable",)),
+                feature_contributions=tuple(contributions),
             )
         )
     return tuple(result)
