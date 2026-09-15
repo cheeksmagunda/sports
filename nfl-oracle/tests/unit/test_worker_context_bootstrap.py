@@ -11,7 +11,6 @@ from nfl_oracle.recommendations import cli as worker_cli
 from nfl_oracle.recommendations.schema import Candidate, Contest, EvidenceClock, Game, Slate
 from nfl_oracle.recommendations.sources import ContextSnapshot, capture_rows
 
-
 NOW = datetime(2026, 9, 17, 20, tzinfo=UTC)
 
 
@@ -94,7 +93,9 @@ def _snapshot_with_schedule(*, include_tnf: bool) -> ContextSnapshot:
     )
 
 
-def test_latest_context_returns_none_when_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_latest_context_returns_none_when_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.delenv("NFL_CONTEXT_SNAPSHOT", raising=False)
     assert worker_cli._latest_context(tmp_path) is None
 
