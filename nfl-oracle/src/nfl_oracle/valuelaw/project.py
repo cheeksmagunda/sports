@@ -4,6 +4,8 @@ This module is deliberately small and auditable. It turns the validated live
 candidate pool plus Real-id history join into slot-ordered projected values
 without provider writes. Slot selection is boost-aware: it holds under both
 the zero-boost week-1 regime and the live card-boost table from week 2 on.
+Appearance count is never a ranking bonus (#185); low-n history shrinks
+toward the position prior instead of being discarded.
 """
 
 from __future__ import annotations
@@ -84,8 +86,22 @@ def project_candidate(
             method="injury_zero",
             uncertainty=0.0,
         )
-    if row.history is not None and row.history.games >= min_player_games:
+    fallback = priors.get(row.candidate.position, 0.0)
+    if row.history is not None and row.history.games >= 1:
         values = row.history.recent_values
+        player_est = ewma(values, decay=decay)
+        n = float(row.history.games)
+        if row.history.games >= min_player_games:
+            projected = player_est
+            method = "player_ewma"
+        else:
+            # Issue #185: low-frequency high-EV sleepers must keep a value
+            # signal. Pure position-mean fallback buries a 1-game outlier
+            # under corpus chalk that dominates the position pool. Shrink
+            # toward the position prior instead of discarding the observation.
+            k = float(min_player_games)
+            projected = (n * player_est + k * fallback) / (n + k)
+            method = "player_ewma_shrunk"
         return CandidateProjection(
             player_id=row.player_id,
             name=row.candidate.name,
@@ -93,12 +109,11 @@ def project_candidate(
             position=row.candidate.position,
             injury_status=row.candidate.injury_status,
             card_boost=row.candidate.card_boost,
-            projected_value=ewma(values, decay=decay),
+            projected_value=projected,
             prior_games=row.history.games,
-            method="player_ewma",
+            method=method,
             uncertainty=pstdev(values) if len(values) > 1 else 0.0,
         )
-    fallback = priors.get(row.candidate.position, 0.0)
     return CandidateProjection(
         player_id=row.player_id,
         name=row.candidate.name,

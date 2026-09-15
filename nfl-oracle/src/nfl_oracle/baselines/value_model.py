@@ -10,7 +10,6 @@ light. Observation / research only; no contest entry.
 
 from __future__ import annotations
 
-import math
 import statistics
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
@@ -100,10 +99,8 @@ def _vector_from_bank(row: ValueLabel, bank: _PriorBank) -> list[float]:
     pos_med = bank.position_median.get(row.position, bank.global_mean)
     if row.player_id in bank.player_mean:
         player_prior = bank.player_mean[row.player_id]
-        n_games = float(bank.player_n.get(row.player_id, 0))
     else:
         player_prior = pos_mean
-        n_games = 0.0
     if row.team_id is not None and row.team_id in bank.team_mean:
         team_prior = bank.team_mean[row.team_id]
     else:
@@ -116,7 +113,9 @@ def _vector_from_bank(row: ValueLabel, bank: _PriorBank) -> list[float]:
         float(pos_med),
         float(bank.global_mean),
         float(team_prior),
-        math.log1p(n_games),
+        # Issue #185: prior_n_games slot stays for schema alignment but is always
+        # zero so corpus appearance frequency cannot drive feature_ridge chalk.
+        0.0,
         *one_hot,
     ]
 

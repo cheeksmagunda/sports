@@ -79,4 +79,8 @@ def test_offline_stub_feature_row_nulls() -> None:
     assert row["injury_status_available"] is False
     assert row["weather_available"] is False
     assert row["opponent_adjusted_prior"] is None
-    assert row["team_pace_prior"] is None
+    # team_pace_prior / opponent_pace_prior enabled via HistoricalContext (#185);
+    # they are no longer offline stubs and must not appear in stub rows.
+    assert "team_pace_prior" not in row
+    assert "opponent_pace_prior" not in row
+    assert "team_pace_prior" not in row["stub_features"]
