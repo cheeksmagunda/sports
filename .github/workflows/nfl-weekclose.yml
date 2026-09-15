@@ -1,0 +1,80 @@
+name: nfl-weekclose
+
+# Scaffold sibling to nfl-dayclose.yml. The gate always reports should_run=false
+# until live finalization + 1h buffer logic lands. Cron polls a plausible
+# late-slate window so the workflow is ready once the gate flips true.
+# Week-close will supersede day-close on the final-slate day; day-close.yml is
+# intentionally untouched in this scaffold (coordination lands with the live gate).
+
+on:
+  schedule:
+    # Every 30 minutes during a plausible MNF / late-slate end window (UTC).
+    # Exact whistle time varies; the gate decides whether to run.
+    - cron: "*/30 0-8 * * 1,2"
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: Eastern calendar day (YYYY-MM-DD) to evaluate; default today Eastern
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RESULTS_LABEL: nfl-ops-results
+  GUARD_LABEL: nfl-ops-guard
+
+concurrency:
+  group: nfl-weekclose
+  cancel-in-progress: false
+
+jobs:
+  weekclose:
+    permissions:
+      contents: read
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Week-close gate (schedule-derived; scaffold no-op)
+        id: gate
+        # Fail open for network/schedule download issues: an unset should_run
+        # is treated as false below, so a broken gate never starts work.
+        continue-on-error: true
+        run: |
+          AS_OF_ARG=""
+          if [ -n "${{ inputs.as_of }}" ]; then
+            AS_OF_ARG="--as-of ${{ inputs.as_of }}"
+          fi
+          uv run --frozen --package nfl-oracle python nfl-oracle/scripts/nfl_weekclose_gate.py \
+            $AS_OF_ARG \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: No-op until live finalization gate is ready
+        if: steps.gate.outputs.should_run != 'true'
+        run: |
+          {
+            echo "# NFL week-close scaffold no-op ($(date -u +%Y-%m-%dT%H:%MZ))"
+            echo
+            echo "- should_run: \`${{ steps.gate.outputs.should_run || 'false' }}\`"
+            echo "- reason: \`${{ steps.gate.outputs.reason || 'unset' }}\`"
+            echo "- as_of: \`${{ steps.gate.outputs.as_of || '-' }}\`"
+            echo "- is_final_slate_day: \`${{ steps.gate.outputs.is_final_slate_day || '-' }}\`"
+            echo "- season/week: \`${{ steps.gate.outputs.season || '-' }}\` / \`${{ steps.gate.outputs.week || '-' }}\`"
+            echo "- final_gameday: \`${{ steps.gate.outputs.final_gameday || '-' }}\`"
+            echo
+            echo "Scaffold only: no live re-scrape, no punch list, no day-close supersede yet."
+          } | tee "$RUNNER_TEMP/weekclose-report.md"
+
+      - name: Placeholder for live week-close body
+        if: steps.gate.outputs.should_run == 'true'
+        run: |
+          echo "ALERT: scaffold gate unexpectedly set should_run=true; refusing to run." >&2
+          exit 1
