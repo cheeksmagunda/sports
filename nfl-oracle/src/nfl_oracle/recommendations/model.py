@@ -448,9 +448,7 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     # forbid. Prefer ridge (high-TV weighted, full context features); fall back
     # to position_mean / global_mean archetypes when ridge loses holdout MAE.
     activation_candidates = {
-        name: mae
-        for name, mae in candidates_mae.items()
-        if name != "player_prior"
+        name: mae for name, mae in candidates_mae.items() if name != "player_prior"
     }
     selected_estimator = cast(
         EstimatorName,
