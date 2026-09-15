@@ -147,7 +147,7 @@ def test_chronological_model_has_hash_holdout_baselines_and_role_features() -> N
     assert "position_mean_mae" in model.evaluation
     assert "player_prior_mae" in model.evaluation
     assert model.training_fingerprint
-    assert model.selected_estimator in {"ridge", "player_prior", "position_mean", "global_mean"}
+    assert model.selected_estimator in {"ridge", "position_mean", "global_mean"}
     assert model.evaluation["selected_estimator"] == model.selected_estimator
 
 
