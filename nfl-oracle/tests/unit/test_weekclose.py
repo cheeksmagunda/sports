@@ -226,7 +226,7 @@ def test_producer_never_imports_training_or_pipeline_modules() -> None:
 def test_no_em_dash_in_producer_or_cli_additions() -> None:
     for module in (weekclose, cli):
         source = inspect.getsource(module)
-        assert "—" not in source
+        assert "\u2014" not in source
 
 
 def test_cli_weekclose_prints_punch_list_json(tmp_path: Path, monkeypatch, capsys) -> None:
