@@ -269,6 +269,68 @@ def item_list(
     return node
 
 
+def punch_list_item_list(
+    items: Sequence[Mapping[str, Any]],
+    *,
+    name: str | None = None,
+    season: int | None = None,
+    week: int | None = None,
+) -> dict[str, Any]:
+    """Represent a prioritized audit punch list as schema.org ItemList.
+
+    Each entry becomes a CreativeWork ListItem with priority/category as
+    PropertyValue additionalProperty nodes so consumers can link without a
+    sport-specific schema. Existing plain punch_list arrays remain the
+    primary API; this shape is additive for JSON-LD linking.
+    """
+
+    elements: list[dict[str, Any]] = []
+    for raw in items:
+        item = dict(raw)
+        additional_properties: list[dict[str, Any]] = []
+        if "priority" in item:
+            additional_properties.append(
+                property_value(
+                    name="priority",
+                    value=item["priority"],
+                    property_id="oracle:priority",
+                )
+            )
+        if "category" in item:
+            additional_properties.append(
+                property_value(
+                    name="category",
+                    value=item["category"],
+                    property_id="oracle:category",
+                )
+            )
+        node: dict[str, Any] = {
+            "@type": "CreativeWork",
+            "name": str(item.get("title") or "punch item"),
+            "description": str(item.get("detail") or ""),
+        }
+        if additional_properties:
+            node["additionalProperty"] = additional_properties
+        evidence = item.get("evidence")
+        if isinstance(evidence, Mapping) and evidence:
+            node["oracle:evidence"] = dict(evidence)
+        elements.append(node)
+
+    additional: dict[str, Any] = {"oracle:kind": "punch_list"}
+    if season is not None:
+        additional["oracle:season"] = season
+    if week is not None:
+        additional["oracle:week"] = week
+    return with_context(
+        item_list(
+            elements,
+            name=name or "Audit punch list",
+            list_order="ItemListOrderAscending",
+            additional=additional,
+        )
+    )
+
+
 def with_context(node: Mapping[str, Any]) -> dict[str, Any]:
     """Return a JSON-LD document with the shared schema.org @context."""
 

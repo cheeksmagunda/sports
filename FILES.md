@@ -270,6 +270,7 @@ Generated from `git ls-files`. 800 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/recommendations/cli.py -- Production roles for the NFL recommendation service.
 - nfl-oracle/src/nfl_oracle/recommendations/context.py -- Time-filtered NFL role, matchup and environment features.
 - nfl-oracle/src/nfl_oracle/recommendations/dayclose.py -- Day-close grading: score a frozen NFL lineup against finalized real-world
+- nfl-oracle/src/nfl_oracle/recommendations/weekclose.py -- Week-close punch-list producer: audit freezes/grades/on-disk contests for one NFL week (audit-only; never trains).
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
@@ -435,6 +436,7 @@ Generated from `git ls-files`. 800 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_value_labels.py -- Tests for Real value label schema + Corpus G extraction.
 - nfl-oracle/tests/unit/test_valuelaw_model.py -- Unit tests for nfl_oracle.valuelaw.model.
 - nfl-oracle/tests/unit/test_valuelaw_project.py
+- nfl-oracle/tests/unit/test_weekclose.py
 - nfl-oracle/tests/unit/test_weekclose_gate.py
 - nfl-oracle/tests/unit/test_worker_retry.py
 - nfl-oracle/tests/unit/test_worker_terminal_state.py -- A published slate is terminal: freeze once, then stop.

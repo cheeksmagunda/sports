@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from oracle_core.schemaorg import punch_list_item_list
+
 from nfl_oracle.calendar.schedule import ScheduledGame
 from nfl_oracle.calendar.slate import SlateResolution, resolve_slate
 from nfl_oracle.contests.parse import load_contest
@@ -198,6 +200,7 @@ def build_week_punch_list(
     rows = [_gameday_row(store, contest_store, day) for day in gamedays]
     punch_list = _punch_list_for_rows(rows)
 
+    punch_dicts = [item.to_dict() for item in punch_list]
     return {
         "contest_entry": False,
         "resolved": True,
@@ -205,7 +208,13 @@ def build_week_punch_list(
         "week": slate.week,
         "gamedays": [day.isoformat() for day in gamedays],
         "rows": rows,
-        "punch_list": [item.to_dict() for item in punch_list],
+        "punch_list": punch_dicts,
+        "schema_org": punch_list_item_list(
+            punch_dicts,
+            name=f"NFL week {slate.season}-W{slate.week:02d} punch list",
+            season=slate.season,
+            week=slate.week,
+        ),
         "note": (
             "Findings are inputs to the issue/PR flow; this producer never trains, "
             "retrains, or otherwise changes models."

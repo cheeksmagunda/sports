@@ -65,7 +65,7 @@ def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--season-min", type=int, default=2002)
-    parser.add_argument("--season-max", type=int, default=2025)
+    parser.add_argument("--season-max", type=int, default=2026)
     parser.add_argument(
         "--project-root",
         type=Path,
