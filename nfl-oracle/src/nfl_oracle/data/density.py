@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from nfl_oracle.data.catalog import SeasonGameCatalog
 from nfl_oracle.data.coverage_matrix import CoverageMatrixDocument
+from nfl_oracle.data.label_depth import LABEL_KIND_HIGH_TV, LABEL_KIND_RAW, NO_LABEL
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,14 @@ class CoverageDensity:
     known_ratio: float
     matrix_game_id_count: int
     seasons_with_zero_matrix_games: int
+    # #185/#189 ladder: which rung each classified season can train on. No
+    # year cap is applied; an old season with only raw pre-boost Real score
+    # is still fit-eligible.
+    label_kind_counts: dict[str, int] = field(default_factory=dict)
+    seasons_with_total_value_board: list[int] = field(default_factory=list)
+    seasons_with_raw_score_only: list[int] = field(default_factory=list)
+    seasons_without_labels: list[int] = field(default_factory=list)
+    fit_eligible_season_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -43,6 +52,14 @@ def summarize_coverage_density(
 
     rows = matrix.season_rows()
     status_counts: dict[str, int] = {"known": 0, "unknown": 0, "blocked": 0}
+    label_counts: dict[str, int] = {
+        LABEL_KIND_HIGH_TV: 0,
+        LABEL_KIND_RAW: 0,
+        NO_LABEL: 0,
+    }
+    high_tv: list[int] = []
+    raw_only: list[int] = []
+    unlabeled: list[int] = []
     matrix_games = 0
     zero_games = 0
     for row in rows:
@@ -50,6 +67,14 @@ def summarize_coverage_density(
         matrix_games += len(row.game_ids)
         if not row.game_ids:
             zero_games += 1
+        kind = row.label_kind or NO_LABEL
+        label_counts[kind] = label_counts.get(kind, 0) + 1
+        if kind == LABEL_KIND_HIGH_TV:
+            high_tv.append(row.season)
+        elif kind == LABEL_KIND_RAW:
+            raw_only.append(row.season)
+        else:
+            unlabeled.append(row.season)
     row_count = len(rows)
     known_ratio = (status_counts["known"] / row_count) if row_count else 0.0
     return CoverageDensity(
@@ -63,4 +88,9 @@ def summarize_coverage_density(
         known_ratio=known_ratio,
         matrix_game_id_count=matrix_games,
         seasons_with_zero_matrix_games=zero_games,
+        label_kind_counts=label_counts,
+        seasons_with_total_value_board=sorted(high_tv),
+        seasons_with_raw_score_only=sorted(raw_only),
+        seasons_without_labels=sorted(unlabeled),
+        fit_eligible_season_count=len(high_tv) + len(raw_only),
     )

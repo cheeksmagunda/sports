@@ -9,6 +9,7 @@ from nfl_oracle.calendar.schedule import research_schedule_summary
 from nfl_oracle.data.catalog import SeasonGameCatalog, load_season_game_catalog
 from nfl_oracle.data.coverage_matrix import catalog_matrix_alignment, load_coverage_matrix_doc
 from nfl_oracle.data.density import summarize_coverage_density
+from nfl_oracle.data.label_depth import label_depth_report
 from nfl_oracle.data.paths import resolve_data_paths
 
 
@@ -50,6 +51,10 @@ def research_data_summary(
         status_counts[row.status] = status_counts.get(row.status, 0) + 1
 
     density = summarize_coverage_density(catalog=catalog, matrix=matrix)
+    # Corpus C boards are not read here, so every labeled season reports the
+    # raw pre-boost rung until a contest scan upgrades it. Catalog seasons the
+    # matrix has not reached are listed unlabeled; no year cap is applied.
+    depth = label_depth_report(matrix, catalog_seasons=sorted(catalog.seasons) if catalog else ())
     alignment = catalog_matrix_alignment(catalog_seasons=seasons, matrix=matrix)
     schedule = research_schedule_summary(
         project_root=project_root,
@@ -85,5 +90,6 @@ def research_data_summary(
         },
         "schedule": schedule,
         "density": density.to_dict(),
+        "label_depth": depth,
         "identity": identity,
     }

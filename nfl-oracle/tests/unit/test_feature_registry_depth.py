@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from nfl_oracle.features import stubs as stubs_module
 from nfl_oracle.features.schema import (
     feature_registry,
     features_by_group,
@@ -54,10 +57,22 @@ def test_feature_registry_pre_lock_depth() -> None:
     assert "opponent_adjusted_prior" in live
     assert "same_slate_final_value" not in live
     assert len(live) >= 24
+    # #189 wired the last dormant groups (divisional join, opponent-defense
+    # Real-value-allowed prior, Real card injuryStatus, NWS weather), so no
+    # spec is a placeholder any more.
     stubs = offline_stub_feature_names()
-    assert "injury_status" in stubs
-    assert "opponent_adjusted_prior" in stubs
-    assert len(stubs) >= 8
+    assert stubs == ()
+    for name in (
+        "injury_status",
+        "injury_status_available",
+        "opponent_adjusted_prior",
+        "opp_def_value_allowed_prior",
+        "is_divisional",
+        "weather_temp_f",
+        "weather_available",
+    ):
+        assert specs[name].offline_stub is False
+        assert "offline_stub_until" not in specs[name].availability_rule
     doc = features_document()
     assert doc["feature_count"] == len(specs)
     assert doc["live_ok_count"] == len(live)
@@ -71,16 +86,40 @@ def test_feature_registry_pre_lock_depth() -> None:
     assert len(features_by_group("calendar")) >= 3
 
 
-def test_offline_stub_feature_row_nulls() -> None:
+def test_offline_stub_feature_row_is_empty_once_every_spec_is_wired() -> None:
     row = offline_stub_feature_row(player_id=1, season=2024, week=1)
     assert row["contest_entry"] is False
+    assert row["observation_only"] is True
+    # Nothing is a placeholder after #189, so the row carries no stub values.
+    assert row["values_are_stubs"] is False
+    assert row["stub_features"] == []
+    for name in (
+        "injury_status",
+        "injury_status_available",
+        "weather_available",
+        "opponent_adjusted_prior",
+        "opp_def_value_allowed_prior",
+        "is_divisional",
+        "team_pace_prior",
+        "opponent_pace_prior",
+    ):
+        assert name not in row
+    assert row["player_id"] == 1
+    assert row["season"] == 2024
+    assert row["week"] == 1
+
+
+def test_offline_stub_row_still_nulls_a_spec_that_is_marked_stub(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The helper reports the live registry, not a frozen list."""
+
+    monkeypatch.setattr(
+        stubs_module,
+        "offline_stub_feature_names",
+        lambda: ("future_signal", "future_signal_available"),
+    )
+    row = stubs_module.offline_stub_feature_row(player_id=7)
     assert row["values_are_stubs"] is True
-    assert row["injury_status"] is None
-    assert row["injury_status_available"] is False
-    assert row["weather_available"] is False
-    assert row["opponent_adjusted_prior"] is None
-    # team_pace_prior / opponent_pace_prior enabled via HistoricalContext (#185);
-    # they are no longer offline stubs and must not appear in stub rows.
-    assert "team_pace_prior" not in row
-    assert "opponent_pace_prior" not in row
-    assert "team_pace_prior" not in row["stub_features"]
+    assert row["future_signal"] is None
+    assert row["future_signal_available"] is False

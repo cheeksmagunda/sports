@@ -17,6 +17,18 @@ from statistics import fmean
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from nfl_oracle.features.live import (
+    injury_category,
+    injury_indicator_features,
+    weather_availability_flag,
+)
+from nfl_oracle.features.matchup import is_divisional_matchup
+from nfl_oracle.features.opponent_defense import (
+    RealValueHistoryIndex,
+    observations_from_history,
+    opponent_adjusted_prior,
+    opponent_defense_factor,
+)
 from nfl_oracle.recommendations.schema import EvidenceClock, Record, Slate, utc
 from nfl_oracle.recommendations.sources import ContextSnapshot, Row, forecast_features
 
@@ -242,7 +254,12 @@ class HistoricalContext:
     historical downloads as retrospective when evaluating historical decisions.
     """
 
-    def __init__(self, snapshot: ContextSnapshot) -> None:
+    def __init__(self, snapshot: ContextSnapshot, *, value_history: Iterable[Any] = ()) -> None:
+        # ``value_history`` is finalized Corpus G box rows. They are the only
+        # source of Real value allowed by a defense; nflverse team_stats carry
+        # yards, not Real value. Priors built from them are walk-forward, so a
+        # row never contributes to its own game (see opponent_defense).
+        self.value_history = RealValueHistoryIndex(observations_from_history(value_history))
         schedules = snapshot.sources.get("schedules")
         self.schedule = {str(r["game_id"]): r for r in schedules.rows} if schedules else {}
         self.players: dict[str, list[Row]] = {}
@@ -314,6 +331,40 @@ class HistoricalContext:
             eligible[game_id] = (kickoff, row)
         return [r for _, r in sorted(eligible.values(), key=lambda item: item[0])[-limit:]]
 
+    def _opponent_defense_features(
+        self,
+        before: datetime,
+        kickoff: datetime,
+        *,
+        player_id: int | None,
+        opponent_team_id: int | None,
+        position: str | None,
+    ) -> dict[str, float]:
+        """Real-value-allowed defense prior and the adjusted player prior.
+
+        Emitted only on real support: no history index, no opponent id, or a
+        thin sample leaves both keys absent rather than emitting a zero a
+        model would read as a measurement.
+        """
+
+        if not self.value_history or opponent_team_id is None:
+            return {}
+        allowed = self.value_history.opponent_allowed_prior(
+            opponent_team_id, before, until=kickoff, position=position
+        )
+        if not allowed.usable or allowed.mean is None:
+            return {}
+        out: dict[str, float] = {"opp_def_value_allowed_prior": allowed.mean}
+        league = self.value_history.league_allowed_prior(before, until=kickoff, position=position)
+        factor = opponent_defense_factor(allowed, league)
+        player = self.value_history.player_prior(player_id, before, until=kickoff)
+        if not player.usable:
+            player = self.value_history.position_prior(position, before, until=kickoff)
+        adjusted = opponent_adjusted_prior(player, factor)
+        if adjusted is not None:
+            out["opponent_adjusted_prior"] = adjusted
+        return out
+
     def features(
         self,
         gsis_id: str | None,
@@ -323,6 +374,9 @@ class HistoricalContext:
         kickoff: datetime,
         *,
         season: int | None = None,
+        player_id: int | None = None,
+        opponent_team_id: int | None = None,
+        position: str | None = None,
     ) -> dict[str, float]:
         rows = self.prior_rows(self.players.get(gsis_id or "", []), before, until=kickoff)
         result = {"history_game_count": float(len(rows))}
@@ -350,6 +404,18 @@ class HistoricalContext:
             finite = [v for v in values if v is not None]
             if finite:
                 result[f"opponent_{field}_allowed_prior"] = fmean(finite)
+        divisional = is_divisional_matchup(team, opponent)
+        if divisional is not None:
+            result["is_divisional"] = float(divisional)
+        result.update(
+            self._opponent_defense_features(
+                before,
+                kickoff,
+                player_id=player_id,
+                opponent_team_id=opponent_team_id,
+                position=position,
+            )
+        )
         prior_games = []
         for game in self.schedule.values():
             game_season = _integer(game.get("season"))
@@ -378,6 +444,7 @@ def enrich_historical_rows(
     snapshot: ContextSnapshot,
     *,
     metadata: Mapping[tuple[int, int], Mapping[str, Any]],
+    value_history: Iterable[Any] | None = None,
 ) -> HistoricalEnrichment:
     """Join finalized Corpus G rows to retrospective nflverse context.
 
@@ -391,8 +458,15 @@ def enrich_historical_rows(
     when it is after the target kickoff. Consumers may use these rows for
     retrospective reconstruction only and must not relabel the clock as live
     evidence.
+
+    ``value_history`` supplies the Real-value-allowed defense table. It
+    defaults to ``rows`` themselves, which is the finalized Corpus G archive;
+    the walk-forward cutoff keeps a row out of its own prior.
     """
-    history = HistoricalContext(snapshot)
+    rows = tuple(rows)
+    history = HistoricalContext(
+        snapshot, value_history=rows if value_history is None else value_history
+    )
     hashes = tuple(source.sha256 for source in snapshot.sources.values())
     captured = max(
         (source.clock.captured_at for source in snapshot.sources.values()),
@@ -428,6 +502,9 @@ def enrich_historical_rows(
                 kickoff,
                 kickoff,
                 season=season,
+                player_id=player_id,
+                opponent_team_id=_integer(getattr(row, "opponent_team_id", None)),
+                position=position,
             )
             if depth is not None:
                 depth_rank, depth_conflict = history.latest_depth(external_id, team, kickoff)
@@ -463,38 +540,26 @@ def _number(value: Any) -> float | None:
     return float(value) if math.isfinite(value) else None
 
 
-def _injury_category(value: str | None) -> str:
-    """Keep provider availability categories categorical and probability-free."""
-    normalized = re.sub(r"[^a-z]", "", (value or "").lower())
-    aliases = {
-        "q": "questionable",
-        "questionable": "questionable",
-        "d": "doubtful",
-        "doubtful": "doubtful",
-        "o": "out",
-        "out": "out",
-        "active": "active",
-        "available": "active",
-        "inactive": "inactive",
-        "ir": "ir",
-        "injuredreserve": "ir",
-        "suspended": "suspended",
-        "limited": "limited",
-        "dnp": "dnp",
-        "didnotparticipate": "dnp",
-        "full": "full",
-        "fullparticipation": "full",
-    }
-    return aliases.get(normalized, "unknown")
+def build_context(
+    slate: Slate,
+    snapshot: ContextSnapshot,
+    decision_at: datetime,
+    *,
+    value_history: Iterable[Any] = (),
+) -> ContextBundle:
+    """Pre-lock context for one slate.
 
+    ``value_history`` is the finalized Real-value archive (the active model
+    bundle's history). It powers ``opp_def_value_allowed_prior`` and
+    ``opponent_adjusted_prior``; omit it and those keys are simply absent.
+    """
 
-def build_context(slate: Slate, snapshot: ContextSnapshot, decision_at: datetime) -> ContextBundle:
     now = utc(decision_at)
     # Reject future captures as a group. Historical use must call the explicit
     # historical-only helper, which never sees live status, depth or forecasts.
     for source in snapshot.sources.values():
         source.clock.assert_available(now)
-    history = HistoricalContext(snapshot)
+    history = HistoricalContext(snapshot, value_history=value_history)
     games = {g.game_id: g for g in slate.games}
     features: dict[int, dict[str, float]] = {}
     clocks: dict[int, EvidenceClock] = {}
@@ -533,6 +598,11 @@ def build_context(slate: Slate, snapshot: ContextSnapshot, decision_at: datetime
                 identities[player.player_id] = gsis_id
             except ValueError as error:
                 gaps.append(str(error))
+        opponent_team_id: int | None = None
+        if player.team_id == game.home_team_id:
+            opponent_team_id = game.away_team_id
+        elif player.team_id == game.away_team_id:
+            opponent_team_id = game.home_team_id
         vector = history.features(
             gsis_id,
             player.team,
@@ -540,24 +610,15 @@ def build_context(slate: Slate, snapshot: ContextSnapshot, decision_at: datetime
             now,
             game.kickoff_at,
             season=game.season,
+            player_id=player.player_id,
+            opponent_team_id=opponent_team_id,
+            position=player.position,
         )
         vector["is_home"] = float(player.team_id == game.home_team_id)
-        status = _injury_category(player.injury_status)
-        for category in (
-            "active",
-            "questionable",
-            "doubtful",
-            "out",
-            "inactive",
-            "ir",
-            "suspended",
-            "limited",
-            "dnp",
-            "full",
-            "unknown",
-        ):
-            vector[f"injury_{category}"] = float(status == category)
-        if status == "unknown":
+        # Real cards carry injuryStatus; the availability flag records whether
+        # the field was observed, not whether the category is recognized.
+        vector.update(injury_indicator_features(player.injury_status))
+        if injury_category(player.injury_status) == "unknown":
             gaps.append("injury_status_unknown")
         if depth and gsis_id:
             depth_rank, depth_conflict = history.latest_depth(gsis_id, player.team, now)
@@ -573,6 +634,7 @@ def build_context(slate: Slate, snapshot: ContextSnapshot, decision_at: datetime
         )
         if weather:
             vector.update(forecast_features(weather, game.kickoff_at, now))
+        vector["weather_available"] = weather_availability_flag(vector)
         if "weather_temp_f" not in vector:
             gaps.append(
                 "weather_indoor" if weather and weather.status == "indoor" else "weather_missing"

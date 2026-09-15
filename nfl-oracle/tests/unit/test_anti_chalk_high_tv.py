@@ -117,9 +117,14 @@ def test_pace_priors_are_no_longer_offline_stubs() -> None:
     stubs = set(offline_stub_feature_names())
     assert "team_pace_prior" not in stubs
     assert "opponent_pace_prior" not in stubs
-    # Still queued / not enabled for TNF week-2 without live capture:
-    assert "injury_status" in stubs
-    assert "weather_temp_f" in stubs
+    # #189 wired the remaining groups onto evidence already in tree: Real card
+    # injuryStatus, the NWS forecast capture, the static division map, and the
+    # Corpus G Real-value-allowed opponent-defense join.
+    assert "injury_status" not in stubs
+    assert "weather_temp_f" not in stubs
+    assert "is_divisional" not in stubs
+    assert "opp_def_value_allowed_prior" not in stubs
+    assert stubs == set()
 
 
 def test_archive_depth_report_uses_catalog_without_year_cap() -> None:

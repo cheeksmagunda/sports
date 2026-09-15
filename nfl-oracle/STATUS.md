@@ -1,5 +1,75 @@
 # Status
 
+## Max-depth label kinds + dormant feature wiring (issue #189, 2026-09-15 CT)
+
+Follow-on to #188 / #185. Two things landed: archive-wide label-kind
+classification, and the last dormant FeatureSpec groups wired onto evidence
+already in tree. No year cap anywhere; no injury or weather magnitude is
+invented.
+
+### Label depth across the full catalog
+- `nfl_oracle.data.label_depth` classifies every season by ladder rung:
+  `high_total_value_board` when a Corpus C board reconstructs, else
+  `raw_highest_score_pre_boost` when finalized Real value exists, else
+  unlabeled. Catalog seasons the coverage matrix has not reached are listed
+  as unlabeled instead of being dropped, so the report spans 2002 to 2025.
+- Ingest records the rung it can actually prove. `CoverageCell.label_kind`
+  and the season block only ever claim the raw rung from Corpus G, because
+  box scores carry Real value but no draft-context multiplier. The high-TV
+  upgrade happens at report time from parsed Corpus C contests via
+  `recommendations.high_tv.tv_board_coverage_from_contests`.
+- `report_nfl_archive_season_depth` now fills
+  `seasons_with_total_value_board` / `seasons_with_raw_score_only`.
+  `data.density` and `data.summary` carry the same split, and
+  `catalog_matrix_alignment` reports label-kind counts.
+- Coverage matrices written before this change are still readable: the
+  season row derives its rung from the game cells when no `label_kind` key
+  is present.
+
+### FeatureSpec stubs cleared (offline_stub list is now empty)
+- `is_divisional`: static 2002+ division map in `features.matchup`, joined in
+  `recommendations.context`. Relocations (OAK to LV, SD to LAC, STL to LAR)
+  resolve to the current franchise code; none of them changed division, so
+  the map is era-stable for the whole catalog.
+- `opp_def_value_allowed_prior` and `opponent_adjusted_prior`: real
+  Real-value-allowed join, not a yards proxy. `features.opponent_defense`
+  indexes finalized Corpus G rows by `opponent_team_id` and applies the same
+  24 hour walk-forward buffer the rest of the context uses, so a row never
+  enters its own prior. The defense factor is clamped and both keys stay
+  absent on thin support rather than emitting a zero.
+- `injury_status` / `injury_status_available`: from the Real card
+  `injuryStatus` the provider already parses. Availability records whether
+  the field was observed, not whether its category is recognized.
+- `weather_temp_f` / `weather_wind_mph` / `weather_precip_prob` /
+  `weather_available`: from the existing NWS capture and `forecast_features`.
+  Indoor venues and uncaptured forecasts stay null with availability False.
+- Live wiring point: the worker passes the active model bundle's finalized
+  history into `build_context` as `value_history`.
+
+### Blocked / not done here
+- No live densify or historical re-scrape ran. `storage_state` is absent in
+  this environment, so `nfl-corpus-g-backfill` cannot reach Real Sports from
+  here. The code path and offline fixtures landed instead; no credential was
+  minted. Run the backfill from an authenticated surface to populate
+  `data/catalog/coverage_matrix.json`, after which the label-depth report
+  stops reporting every season as unlabeled.
+- No Corpus C contest scan is wired into `data.summary` yet, so the offline
+  research summary reports the raw rung for every valued season until a
+  caller passes `tv_board_coverage`.
+- `oracle_core.schemaorg` was deliberately not widened. Observation and
+  measured-property helpers are Codex's lane on #189;
+  `label_depth_schemaorg` uses the existing ItemList / QuantitativeValue /
+  SportsEvent helpers and carries a TODO pointing at that follow-up.
+- Unchanged: `NFL_RECOMMENDATIONS_ENABLED` still off,
+  `use_feature_value_model` default still False, no LightGBM, and
+  `fix/156-force-retrain` / PR #160 untouched.
+
+### Verification
+`make lint`, `make typecheck`, `make test` (371 passed) from `nfl-oracle`,
+plus `make test-core` and `make check-boundaries` from the repository root.
+One pre-existing environmental failure: `test_local_research_docker` cannot
+reach a Docker daemon on this laptop.
+
 ## Anti-chalk high-potential training (issue #185, 2026-09-15 CT)
 
 Operator mandate: stop corpus-appearance chalk; train toward mathematical

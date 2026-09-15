@@ -262,7 +262,11 @@ async def _worker_once(
         decision_at = datetime.now(UTC)
         snapshot = _load_context(project, slate, decision_at)
         _ensure_model(project, store, pipeline, snapshot, decision_at)
-        context = build_context(slate, snapshot, decision_at)
+        # The active bundle's finalized history is the Real-value archive the
+        # opponent-defense priors join against. Reuse it rather than re-reading
+        # Corpus G; the walk-forward cutoff keeps same-slate finals out.
+        _, active = pipeline.active_model()
+        context = build_context(slate, snapshot, decision_at, value_history=active.history)
         pipeline.prepare(slate, context)
         return await pipeline.publish(day, reader)
 
