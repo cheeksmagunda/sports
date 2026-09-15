@@ -69,7 +69,11 @@ def _day(value: str | None) -> date | None:
     return None
 
 
-def _latest_context(project: Path) -> Path:
+def _latest_context(project: Path) -> Path | None:
+    """Return the newest on-disk context snapshot path, or None if absent.
+
+    Explicit NFL_CONTEXT_SNAPSHOT still fails closed when set but missing.
+    """
     explicit = os.environ.get("NFL_CONTEXT_SNAPSHOT", "").strip()
     if explicit:
         path = Path(explicit).expanduser()
@@ -80,12 +84,70 @@ def _latest_context(project: Path) -> Path:
     paths.extend((project / "data" / "artifacts" / "context").glob("**/*.json"))
     unique = {path.resolve(): path for path in paths if path.is_file()}
     if not unique:
-        raise RuntimeError("context_snapshot_missing")
+        return None
     return max(unique.values(), key=lambda path: path.stat().st_mtime)
 
 
+def _context_seasons(now: datetime) -> list[int]:
+    """Seasons to pull for a cold-start nflverse context bootstrap."""
+    year = now.astimezone(UTC).year
+    return [year - 2, year - 1, year]
+
+
+def _season_match(raw: Any, season: int) -> bool:
+    try:
+        return int(raw) == int(season)
+    except (TypeError, ValueError):
+        return False
+
+
+def _schedules_cover_slate(snapshot: ContextSnapshot, slate: Any) -> bool:
+    """True when schedules can join every slate game by season/gameday/teams."""
+    from zoneinfo import ZoneInfo
+
+    schedules = snapshot.sources.get("schedules")
+    if schedules is None or not schedules.rows:
+        return False
+    eastern = ZoneInfo("America/New_York")
+    for game in slate.games:
+        gameday = game.kickoff_at.astimezone(eastern).date().isoformat()
+        hits = [
+            row
+            for row in schedules.rows
+            if _season_match(row.get("season"), game.season)
+            and str(row.get("gameday")) == gameday
+            and str(row.get("home_team")) == game.home_team
+            and str(row.get("away_team")) == game.away_team
+        ]
+        if len(hits) != 1:
+            return False
+    return True
+
+
+def _bootstrap_context(project: Path, now: datetime) -> ContextSnapshot:
+    """Cold-start nflverse context when the volume has no snapshot yet.
+
+    Week-2 / TNF freezes fail hard on context_snapshot_missing if the worker
+    image has no baked-in artifacts and the volume was wiped or never seeded.
+    Public nflverse schedules/rosters/stats need no Real Sports auth.
+    """
+    from nfl_oracle.recommendations.sources import collect_nflverse
+
+    snapshot = collect_nflverse(_context_seasons(now), clock=lambda: now)
+    snapshot.save(project / "data" / "artifacts")
+    return snapshot
+
+
 def _load_context(project: Path, slate: Any, now: datetime) -> ContextSnapshot:
-    snapshot = ContextSnapshot.load(_latest_context(project))
+    path = _latest_context(project)
+    if path is None:
+        snapshot = _bootstrap_context(project, now)
+    else:
+        snapshot = ContextSnapshot.load(path)
+        # Stale snapshots collected before the 2026 schedule published cannot
+        # join TNF/Sunday stadium weather. Refresh nflverse sources in place.
+        if not _schedules_cover_slate(snapshot, slate):
+            snapshot = _bootstrap_context(project, now)
     venues_path = Path(
         os.environ.get("NFL_VENUE_CONFIG", str(project / "config" / "NFLconfigvenues.json"))
     )
@@ -350,7 +412,11 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
 def _train() -> int:
     project = _project_root()
     now = datetime.now(UTC)
-    snapshot = ContextSnapshot.load(_latest_context(project))
+    context_path = _latest_context(project)
+    if context_path is None:
+        snapshot = _bootstrap_context(project, now)
+    else:
+        snapshot = ContextSnapshot.load(context_path)
     store = RecommendationStore(_engine(), writable=True)
     pipeline = RecommendationPipeline(store, policy=_policy())
     digest = _ensure_model(project, store, pipeline, snapshot, now)
