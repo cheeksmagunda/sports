@@ -52,6 +52,15 @@ commands, but cannot weaken this contract.
 - Shared code is domain-free technical infrastructure: configuration,
   redaction, logging, HTTP transport, persistence primitives, job execution,
   service scaffolding, artifact handling, and test helpers.
+- Prefer schema.org types and properties at root / `oracle-core` and other
+  shared portfolio contracts for entity linking and JSON-LD interchange
+  (`Person`, `SportsTeam`, `SportsOrganization`, `SportsEvent`, `Place`,
+  `Role`/`OrganizationRole`, `identifier`/`PropertyValue`, `sameAs`,
+  `Observation`, `QuantitativeValue`, `ItemList`). Use IPTC Sport Schema only
+  where schema.org is weak for sport-specific participation or statistics.
+  Use PROV-O when claims need source/time/process provenance. Never assert
+  `sameAs` from a fuzzy name+team match. Sport-specific scoring, contest
+  value algebra, and provider payload parsing stay in the owning app.
 - Models, features, strategies, scoring, league schemas, calendars, provider
   implementations, provider payloads, and domain endpoints stay in the owning
   application unless a later, explicit portfolio decision promotes a proven

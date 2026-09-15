@@ -15,7 +15,11 @@ The public package includes:
 - dossier entry and gap schema for contest analysis;
 - atomic artifact persistence, integrity checks, and deterministic test fakes;
 - day-close sweep orchestration (`oracle_core.dayclose`): grade a target day,
-  then retry a bounded catch-up window for anything still ungraded.
+  then retry a bounded catch-up window for anything still ungraded;
+- schema.org / JSON-LD entity helpers (`oracle_core.schemaorg`) for Person,
+  SportsTeam, SportsOrganization, SportsEvent, Place, OrganizationRole,
+  identifier/PropertyValue, sameAs, Observation, QuantitativeValue, ItemList,
+  plus optional PROV-O attribution; high-TV boards in `oracle_core.high_tv`.
 
 Applications retain ownership of their settings extensions, database schema,
 migrations, routes, jobs, schedules, provider adapters, and domain behavior.
