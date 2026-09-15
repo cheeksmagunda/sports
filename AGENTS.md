@@ -185,11 +185,14 @@ holds. `make write-path-check` enforces both the push proof and the ceiling.
 
 Claude, Codex, Copilot, and Grok cloud projects may contain uploaded static
 copies of the root instructions and application documents. The canonical
-snapshot bundle is root `AGENTS.md`, root `README.md`, root `Makefile`, root
-`pyproject.toml`, `.devcontainer/`, `.github/workflows/`, and each
-application's `AGENTS.md`, `README.md`, and `STATUS.md`. The root of this
-repository has no `STATUS.md`; mutable state belongs to application
-`STATUS.md` files. Static copies drift. Before acting on any of them:
+snapshot bundle is root `AGENTS.md`, root `README.md`, root `OVERVIEW.md`, root
+`FILES.md`, root `Makefile`, root `pyproject.toml`, `.devcontainer/`,
+`.github/workflows/`, and each application's `AGENTS.md`, `README.md`, and
+`STATUS.md`. `OVERVIEW.md` is curated structural context. `FILES.md` is
+generated with `scripts/generate_file_manifest.py` and must be regenerated when
+the tracked tree changes. The root of this repository has no `STATUS.md`;
+mutable state belongs to application `STATUS.md` files. Static copies drift.
+Before acting on any of them:
 
 1. Fetch the live version from the repository through the GitHub connector
 2. Treat the live file as authoritative
