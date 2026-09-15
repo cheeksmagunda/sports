@@ -1,5 +1,17 @@
 # Status
 
+## Corpus C tv_board_coverage in data.summary (issue #192, 2026-09-15 CT)
+
+Offline `research_data_summary` now scans on-disk Corpus C (when present) via
+`ContestStore` + `iter_contests` and applies `tv_board_coverage_from_contests`
+to the label-depth report, so valued seasons upgrade raw -> high-TV without a
+manual arg. Missing corpus_c keeps the raw rung. Tests cover empty coverage and
+an explicit upgrade path. Live densify / session ops for #192 are tracked on
+the issue; this note is the code follow-on only.
+
+Leave #160 alone. No LightGBM.
+
+
 ## Max-depth label kinds + dormant feature wiring (issue #189, 2026-09-15 CT)
 
 Follow-on to #188 / #185. Two things landed: archive-wide label-kind

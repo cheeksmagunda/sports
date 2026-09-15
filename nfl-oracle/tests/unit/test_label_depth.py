@@ -37,6 +37,7 @@ from nfl_oracle.recommendations.high_tv import (
     nfl_season_for_day,
     report_nfl_archive_season_depth,
     tv_board_coverage_from_contests,
+    TvBoardCoverage,
 )
 
 
@@ -308,3 +309,47 @@ def test_in_repo_label_depth_report_covers_every_cataloged_season() -> None:
     assert report["max_season"] >= 2025
     assert report["season_count"] >= 24
     assert report["year_cap"] is None
+
+
+# --- data.summary auto-applies Corpus C coverage (#192) ---------------------
+
+
+def test_research_data_summary_keeps_raw_rung_without_corpus_c(tmp_path: Path) -> None:
+    from nfl_oracle.data.summary import research_data_summary
+
+    # Empty project root: no corpus_c, no matrix games beyond defaults.
+    summary = research_data_summary(
+        project_root=tmp_path,
+        catalog_path=tmp_path / "missing_catalog.json",
+        matrix_path=tmp_path / "missing_matrix.json",
+        tv_board_coverage=TvBoardCoverage(),
+    )
+    assert summary["contest_entry"] is False
+    assert summary["tv_board_coverage"] == {"seasons": [], "game_ids": [], "contest_ids": []}
+    assert summary["label_depth"]["seasons_with_total_value_board"] == []
+
+
+def test_research_data_summary_upgrades_raw_to_high_tv_via_coverage_arg(tmp_path: Path) -> None:
+    from nfl_oracle.data.coverage_matrix import CoverageMatrixDocument
+    from nfl_oracle.data.summary import research_data_summary
+    from oracle_core.artifacts import atomic_write_json
+
+    matrix = _matrix()
+    mat_path = tmp_path / "coverage_matrix.json"
+    atomic_write_json(mat_path, {"generated_at": "2026-09-15T00:00:00Z", "seasons": matrix.seasons, "gaps": []})
+    coverage = tv_board_coverage_from_contests(
+        [
+            _parsed_contest(
+                contest_id=870, day=date(2024, 9, 8), game_id=18790, boosts=(0.5, 0.0)
+            )
+        ]
+    )
+    summary = research_data_summary(
+        project_root=tmp_path,
+        catalog_path=tmp_path / "missing_catalog.json",
+        matrix_path=mat_path,
+        tv_board_coverage=coverage,
+    )
+    assert 2024 in summary["label_depth"]["seasons_with_total_value_board"]
+    assert summary["tv_board_coverage"]["seasons"] == [2024]
+    assert summary["tv_board_coverage"]["game_ids"] == [18790]
