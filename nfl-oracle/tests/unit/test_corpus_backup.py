@@ -35,7 +35,8 @@ def _seeded_engine(tmp_path: Path):
         decision_at=NOW,
     )
     store.put_artifact(
-        f"prepared:{NOW.date().isoformat()}", {"schema_version": 1, "context": "input-snapshot"}
+        f"prepared:{NOW.date().isoformat()}",
+        {"schema_version": 1, "context": "input-snapshot"},
     )
     store.put_artifact(
         f"dayclose_grade:{NOW.date().isoformat()}",
@@ -147,7 +148,9 @@ def test_regression_guard_rejects_a_shrinking_corpus(tmp_path: Path) -> None:
     common.assert_no_regression(shrunk, previous, allow_regression=True)
 
 
-def test_regression_guard_treats_an_empty_file_as_no_previous_manifest(tmp_path: Path) -> None:
+def test_regression_guard_treats_an_empty_file_as_no_previous_manifest(
+    tmp_path: Path,
+) -> None:
     # `git show origin/backups:<path> > file` still creates `file` (empty)
     # when <path> does not exist upstream -- the very first backup ever, for
     # example. That must read as "nothing to compare against", not a
@@ -204,4 +207,3 @@ def test_backup_main_reports_not_configured_without_database_url(
     assert "not_configured" in err
     assert "NFL_BACKUP_DATABASE_URL" in err
     assert "#172" in err
-
