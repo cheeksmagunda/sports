@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 805 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 806 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -425,6 +425,7 @@ Generated from `git ls-files`. 805 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_research_api_draft_edges.py -- Additional research API + fixture honesty edges for draft readiness.
 - nfl-oracle/tests/unit/test_research_client_smoke.py -- Offline research_client_smoke script.
 - nfl-oracle/tests/unit/test_research_path_extras.py -- Extra research/service/strategy scaffolding tests.
+- nfl-oracle/tests/unit/test_schedule_bootstrap_215.py -- Image bootstrap schedules survive an empty volume remount (#215).
 - nfl-oracle/tests/unit/test_schedule_census_and_aliases.py -- Identity alias reconciliation + schedule helper smoke (offline).
 - nfl-oracle/tests/unit/test_schedule_coverage_edges.py -- Edge cases: schedule density, empty coverage, posture, algebra override.
 - nfl-oracle/tests/unit/test_schedule_parse.py -- Offline nflverse schedule CSV parse + density.
