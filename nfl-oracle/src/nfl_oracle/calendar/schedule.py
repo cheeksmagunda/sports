@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import shutil
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
@@ -152,16 +154,70 @@ def try_load_schedules_csv(
         return []
 
 
-def resolve_schedule_csv_path(data_root: Path | None = None) -> Path | None:
-    """Return first existing offline schedule CSV under a data root, else None."""
+# Image-baked bootstrap (outside Railway volume mount). Remounts wipe
+# /app/nfl-oracle/data but leave /opt/nfl-oracle/bootstrap intact (#215).
+DEFAULT_BOOTSTRAP_SCHEDULE_DIR = Path("/opt/nfl-oracle/bootstrap/schedule")
+BOOTSTRAP_SCHEDULE_ENV = "NFL_SCHEDULE_BOOTSTRAP_DIR"
+
+
+def bootstrap_schedule_dir() -> Path:
+    """Return the image/env bootstrap directory for schedules.csv."""
+
+    override = os.environ.get(BOOTSTRAP_SCHEDULE_ENV, "").strip()
+    return Path(override) if override else DEFAULT_BOOTSTRAP_SCHEDULE_DIR
+
+
+def bootstrap_schedule_csv_path() -> Path | None:
+    """Return bootstrap schedules.csv when present on disk."""
+
+    candidate = bootstrap_schedule_dir() / "schedules.csv"
+    return candidate if candidate.is_file() else None
+
+
+def ensure_offline_schedules(data_root: Path | None) -> Path | None:
+    """Copy image bootstrap schedules into the data volume when missing.
+
+    Never overwrites an existing volume copy (even if older). Returns the
+    volume path when present/created, else None.
+    """
 
     if data_root is None:
         return None
-    for rel in SCHEDULE_RELATIVE_CANDIDATES:
-        candidate = data_root / rel
-        if candidate.is_file():
-            return candidate
+    dest_dir = data_root / "schedule"
+    dest = dest_dir / "schedules.csv"
+    if dest.is_file():
+        return dest
+    source = bootstrap_schedule_csv_path()
+    if source is None:
+        return None
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, dest)
+    readme_src = source.parent / "README.md"
+    readme_dest = dest_dir / "README.md"
+    if readme_src.is_file() and not readme_dest.is_file():
+        shutil.copy2(readme_src, readme_dest)
+    return dest if dest.is_file() else None
+
+
+def resolve_schedule_csv_path(data_root: Path | None = None) -> Path | None:
+    """Return first existing offline schedule CSV under a data root, else None.
+
+    When ``data_root`` is set, materialize the image bootstrap schedule into the
+    volume if the volume copy is missing (#215). Bootstrap path is also a last
+    resort so discovery survives a remount before the copy runs.
+    """
+
+    if data_root is not None:
+        ensure_offline_schedules(data_root)
+        for rel in SCHEDULE_RELATIVE_CANDIDATES:
+            candidate = data_root / rel
+            if candidate.is_file():
+                return candidate
+    boot = bootstrap_schedule_csv_path()
+    if boot is not None:
+        return boot
     return None
+
 
 
 def weeks_for_season(games: Iterable[ScheduledGame]) -> list[int]:

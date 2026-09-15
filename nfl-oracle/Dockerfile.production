@@ -74,13 +74,17 @@ ENV PATH="/opt/venv/bin:$PATH" \
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/playwright-browsers /opt/playwright-browsers
 COPY --from=builder /workspace/nfl-oracle/config /app/nfl-oracle/config/
+# Schedule bootstrap lives outside the Railway volume mount so W2 slate
+# discovery survives an empty remount of /app/nfl-oracle/data (#215).
+COPY nfl-oracle/data/schedule/schedules.csv nfl-oracle/data/schedule/README.md /opt/nfl-oracle/bootstrap/schedule/
 
 WORKDIR /app/nfl-oracle
 COPY nfl-oracle/src/ ./src/
 
 RUN useradd --create-home --uid 10001 oracle \
     && mkdir -p /app/nfl-oracle \
-    && chown -R oracle:oracle /app /opt/venv /opt/playwright-browsers
+    && mkdir -p /opt/nfl-oracle/bootstrap/schedule \
+    && chown -R oracle:oracle /app /opt/venv /opt/playwright-browsers /opt/nfl-oracle
 USER oracle
 
 EXPOSE 8000
