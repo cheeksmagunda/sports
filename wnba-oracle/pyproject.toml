@@ -12,7 +12,7 @@ dependencies = [
     # Web + serving
     "fastapi>=0.120,<0.142",
     "starlette>=0.49.1,<1.0",
-    "uvicorn[standard]>=0.32,<0.36",
+    "uvicorn[standard]>=0.32,<0.53",
     "pydantic>=2.9,<3.0",
     "pydantic-settings>=2.6,<3.0",
     # Storage
