@@ -17,11 +17,21 @@ def _import(name: str):
         sys.path.remove(str(SCRIPTS))
 
 
-CSV_HEADER = "season,week,game_id,gameday,home_team,away_team,game_type\n"
+CSV_HEADER = (
+    "season,week,game_id,gameday,gametime,home_team,away_team,"
+    "home_score,away_score,result,game_type\n"
+)
 
 
-def _row(gameday: str, *, game_type: str = "REG") -> str:
-    return f"2026,1,2026_01_TEST,{gameday},AAA,BBB,{game_type}\n"
+def _row(
+    gameday: str,
+    *,
+    week: int = 1,
+    game_type: str = "REG",
+    gametime: str = "13:00",
+    game_id: str = "2026_01_TEST",
+) -> str:
+    return f"2026,{week},{game_id},{gameday},{gametime},AAA,BBB,,,,{game_type}\n"
 
 
 def test_game_days_excludes_preseason_and_tolerates_bad_rows() -> None:
@@ -53,7 +63,10 @@ def test_main_writes_github_output(tmp_path, monkeypatch) -> None:
     )
 
     assert exit_code == 0
-    assert output_file.read_text(encoding="utf-8") == "has_slate=true\n"
+    text = output_file.read_text(encoding="utf-8")
+    assert "has_slate=true\n" in text
+    assert "skip_for_weekclose=false\n" in text
+    assert "target_day=2026-09-09\n" in text
 
 
 def test_main_reports_no_slate_outside_the_window(tmp_path, monkeypatch) -> None:
@@ -66,7 +79,33 @@ def test_main_reports_no_slate_outside_the_window(tmp_path, monkeypatch) -> None
     )
 
     assert exit_code == 0
-    assert output_file.read_text(encoding="utf-8") == "has_slate=false\n"
+    text = output_file.read_text(encoding="utf-8")
+    assert "has_slate=false\n" in text
+    assert "skip_for_weekclose=false\n" in text
+
+
+def test_main_skips_when_target_is_week_final_slate_day(tmp_path, monkeypatch) -> None:
+    gate = _import("nfl_dayclose_gate")
+    monkeypatch.setattr(
+        gate,
+        "_download",
+        lambda urls: (
+            CSV_HEADER
+            + _row("2026-09-14", gametime="13:00", game_id="sun")
+            + _row("2026-09-15", gametime="20:15", game_id="mnf")
+        ),
+    )
+    output_file = tmp_path / "github_output"
+
+    exit_code = gate.main(
+        ["--day", "2026-09-15", "--window-days", "7", "--github-output", str(output_file)]
+    )
+
+    assert exit_code == 0
+    text = output_file.read_text(encoding="utf-8")
+    assert "has_slate=true\n" in text
+    assert "skip_for_weekclose=true\n" in text
+    assert "target_day=2026-09-15\n" in text
 
 
 def test_main_rejects_a_non_positive_window() -> None:

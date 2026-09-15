@@ -50,15 +50,34 @@ jobs:
         # Fail open: a gate that cannot reach the public nflverse schedule
         # (network hiccup, upstream outage) must never silently swallow a
         # real day-close run. An unset has_slate output below is treated the
-        # same as "true".
+        # same as "true". skip_for_weekclose unset is treated as "false".
         continue-on-error: true
         run: |
+          DAY_ARG=""
+          if [ -n "${{ inputs.day }}" ]; then
+            DAY_ARG="--day ${{ inputs.day }}"
+          fi
           uv run --frozen --package nfl-oracle python nfl-oracle/scripts/nfl_dayclose_gate.py \
+            $DAY_ARG \
             --window-days "${{ inputs.catchup_window_days || '7' }}" \
             --github-output "$GITHUB_OUTPUT"
 
+      - name: Superseded by week-close on final slate day
+        if: steps.gate.outputs.skip_for_weekclose == 'true' && github.event_name != 'workflow_dispatch'
+        run: |
+          {
+            echo "# NFL day-close superseded by week-close ($(date -u +%Y-%m-%dT%H:%MZ))"
+            echo
+            echo "- target_day: \`${{ steps.gate.outputs.target_day || '-' }}\`"
+            echo "- skip_for_weekclose: true"
+            echo
+            echo "Final slate day of the NFL week is owned by nfl-weekclose (issue #165)."
+          } | tee "$RUNNER_TEMP/dayclose-report.md"
+
       - name: Prepare TLS certificate
-        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        if: >-
+          steps.gate.outputs.skip_for_weekclose != 'true'
+          && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
         env:
           NFL_PG_SSL_ROOT_CERT: ${{ secrets.NFL_PG_SSL_ROOT_CERT }}
         run: |
@@ -67,7 +86,9 @@ jobs:
 
       - name: Run day-close grading
         id: dayclose
-        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        if: >-
+          steps.gate.outputs.skip_for_weekclose != 'true'
+          && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
         continue-on-error: true
         env:
           NFL_DATABASE_URL: ${{ secrets.NFL_DAYCLOSE_DATABASE_URL }}
@@ -88,7 +109,10 @@ jobs:
             | tee "$RUNNER_TEMP/dayclose-output.json"
 
       - name: Build results digest
-        if: always() && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
+        if: >-
+          always()
+          && steps.gate.outputs.skip_for_weekclose != 'true'
+          && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
         run: |
           {
             echo "# NFL day-close ($(date -u +%Y-%m-%dT%H:%MZ))"
@@ -104,7 +128,10 @@ jobs:
           } > "$RUNNER_TEMP/dayclose-report.md"
 
       - uses: ./.github/actions/dayclose-ledger
-        if: always() && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
+        if: >-
+          always()
+          && steps.gate.outputs.skip_for_weekclose != 'true'
+          && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
         with:
           results_label: ${{ env.RESULTS_LABEL }}
           results_title: "NFL results ledger"
