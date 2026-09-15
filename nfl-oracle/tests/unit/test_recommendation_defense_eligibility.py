@@ -21,7 +21,9 @@ POSITIONS = ("QB", "RB", "WR", "TE", "K", "DL", "LB", "DB")
 DEFENSE = frozenset({"DL", "LB", "DB"})
 
 
-def _history(players: int, *, defense_value: float, other_value: float) -> list[HistoricalPerformance]:
+def _history(
+    players: int, *, defense_value: float, other_value: float
+) -> list[HistoricalPerformance]:
     rows: list[HistoricalPerformance] = []
     for week in range(6):
         kickoff = BASE + timedelta(days=week)
