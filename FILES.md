@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 800 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 802 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -281,6 +281,7 @@ Generated from `git ls-files`. 800 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/recommendations/schema.py -- Validated recommendation inputs. Research and submission gates remain separate.
 - nfl-oracle/src/nfl_oracle/recommendations/sources.py -- Public NFL context captures with immutable, honest observation clocks.
 - nfl-oracle/src/nfl_oracle/recommendations/store.py -- NFL-owned append-only decisions on the shared transaction infrastructure.
+- nfl-oracle/src/nfl_oracle/recommendations/weekclose.py -- Week-close punch-list producer: audit a full NFL week's freezes, grades,
 
 ## nfl-oracle/src/nfl_oracle/replay/
 - nfl-oracle/src/nfl_oracle/replay/__init__.py -- Replay the saved Corpus C contest archive against the verified scoring law.

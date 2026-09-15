@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from nfl_oracle.calendar.schedule import research_schedule_summary
 from nfl_oracle.data.catalog import SeasonGameCatalog, load_season_game_catalog
@@ -11,6 +11,33 @@ from nfl_oracle.data.coverage_matrix import catalog_matrix_alignment, load_cover
 from nfl_oracle.data.density import summarize_coverage_density
 from nfl_oracle.data.label_depth import label_depth_report
 from nfl_oracle.data.paths import resolve_data_paths
+
+if TYPE_CHECKING:
+    from nfl_oracle.recommendations.high_tv import TvBoardCoverage
+
+
+def _tv_board_coverage_from_disk(*, project_root: Path | None) -> TvBoardCoverage:
+    """Scan on-disk Corpus C for reconstructable high Total-Value boards.
+
+    Missing or empty corpus_c yields an empty coverage object so the summary
+    stays on the raw rung. Parse errors on individual contests are skipped by
+    ``iter_contests``; store/root failures also degrade to empty coverage.
+
+    Imports are local to avoid data <-> contests <-> recommendations cycles.
+    """
+
+    from nfl_oracle.recommendations.high_tv import TvBoardCoverage, tv_board_coverage_from_contests
+
+    try:
+        from nfl_oracle.contests.parse import iter_contests
+        from nfl_oracle.contests.store import ContestStore
+
+        store = ContestStore(project=project_root) if project_root is not None else ContestStore()
+        if not store.root.exists():
+            return TvBoardCoverage()
+        return tv_board_coverage_from_contests(iter_contests(store, finalized_only=True))
+    except (OSError, TypeError, ValueError):
+        return TvBoardCoverage()
 
 
 def research_data_summary(
@@ -20,6 +47,7 @@ def research_data_summary(
     matrix_path: Path | None = None,
     identity_players_path: Path | None = None,
     schedule_path: Path | None = None,
+    tv_board_coverage: TvBoardCoverage | None = None,
 ) -> dict[str, Any]:
     """Offline JSON summary for research service / daily-shadow artifacts."""
 
@@ -51,10 +79,21 @@ def research_data_summary(
         status_counts[row.status] = status_counts.get(row.status, 0) + 1
 
     density = summarize_coverage_density(catalog=catalog, matrix=matrix)
-    # Corpus C boards are not read here, so every labeled season reports the
-    # raw pre-boost rung until a contest scan upgrades it. Catalog seasons the
-    # matrix has not reached are listed unlabeled; no year cap is applied.
-    depth = label_depth_report(matrix, catalog_seasons=sorted(catalog.seasons) if catalog else ())
+    # Prefer an explicit coverage arg (tests); otherwise scan on-disk Corpus C
+    # so offline summary upgrades raw -> high-TV without a manual arg. Missing
+    # corpus_c keeps the raw rung. Catalog seasons the matrix has not reached
+    # are listed unlabeled; no year cap is applied.
+    coverage = (
+        tv_board_coverage
+        if tv_board_coverage is not None
+        else _tv_board_coverage_from_disk(project_root=project_root)
+    )
+    depth = label_depth_report(
+        matrix,
+        catalog_seasons=sorted(catalog.seasons) if catalog else (),
+        tv_board_game_ids=coverage.game_ids,
+        tv_board_seasons=coverage.seasons,
+    )
     alignment = catalog_matrix_alignment(catalog_seasons=seasons, matrix=matrix)
     schedule = research_schedule_summary(
         project_root=project_root,
@@ -91,5 +130,6 @@ def research_data_summary(
         "schedule": schedule,
         "density": density.to_dict(),
         "label_depth": depth,
+        "tv_board_coverage": coverage.to_dict(),
         "identity": identity,
     }
