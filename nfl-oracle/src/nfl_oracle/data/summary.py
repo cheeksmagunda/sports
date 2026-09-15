@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from nfl_oracle.recommendations.high_tv import TvBoardCoverage
 
 
-def _tv_board_coverage_from_disk(*, project_root: Path | None):
+def _tv_board_coverage_from_disk(*, project_root: Path | None) -> TvBoardCoverage:
     """Scan on-disk Corpus C for reconstructable high Total-Value boards.
 
     Missing or empty corpus_c yields an empty coverage object so the summary
