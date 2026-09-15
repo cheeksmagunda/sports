@@ -1,4 +1,4 @@
-.PHONY: setup install test test-core test-portfolio test-app test-wnba test-nfl test-nba test-nhl test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries
+.PHONY: setup install test test-core test-portfolio test-app test-wnba test-nfl test-nba test-nhl test-integration test-contract security lint typecheck build codespaces-smoke check-applications check-boundaries check-files-manifest
 
 UV_RUN = uv run --frozen
 
@@ -14,7 +14,7 @@ test: test-core test-portfolio test-wnba test-nfl test-nba test-nhl
 test-core:
 	$(UV_RUN) --package oracle-core --extra dev python -m pytest packages/oracle-core/tests -q
 
-test-portfolio:
+test-portfolio: check-files-manifest
 	$(UV_RUN) --package oracle-core --extra dev python -m pytest scripts/tests -q
 
 test-app:
@@ -98,6 +98,9 @@ write-path-check:
 
 check-boundaries:
 	python3 scripts/check_import_boundaries.py
+
+check-files-manifest:
+	python3 scripts/generate_file_manifest.py --check
 
 check-applications:
 	python3 scripts/check_applications.py

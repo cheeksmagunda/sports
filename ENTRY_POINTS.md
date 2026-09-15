@@ -99,10 +99,11 @@ Use Grok against the GitHub repository or Codespace when that connector is avail
 Use this for Claude projects, Codex projects, Copilot reusable chat/project context, Grok knowledge bases, and mobile chats that cannot read the live repository directly.
 
 1. Create or refresh the project with the canonical snapshot bundle:
-   - Root `AGENTS.md`, `README.md`, `Makefile`, and `pyproject.toml`
+   - Root `AGENTS.md`, `README.md`, curated `OVERVIEW.md`, generated `FILES.md`, `Makefile`, and `pyproject.toml`
    - `.devcontainer/` and `.github/workflows/`
    - Each application's `AGENTS.md`, `README.md`, and `STATUS.md`
    - Do not upload a root `STATUS.md`; the root has none
+   - Regenerate `FILES.md` with `scripts/generate_file_manifest.py` whenever the tracked tree changes
 
 2. When starting work:
    - Ask the agent to fetch the live repository version from GitHub
@@ -208,10 +209,10 @@ Merge autonomy: when checks are green and work is in scope, agents merge directl
 
 **When do snapshots need updating?**
 
-A scheduled workflow flags changes to sync-critical files (any `AGENTS.md`,
-`README.md`, application `STATUS.md`, `Makefile`, `pyproject.toml`,
-`.devcontainer/`, `.github/workflows/`). When flagged, the operator re-uploads
-snapshots to any configured static project:
+A workflow flags changes to sync-critical files (any `AGENTS.md`, `README.md`,
+application `STATUS.md`, root `OVERVIEW.md`, generated `FILES.md`, `Makefile`,
+`pyproject.toml`, `.devcontainer/`, `.github/workflows/`). When flagged, the
+operator re-uploads snapshots to any configured static project:
 
 - Claude projects and chats
 - Codex projects and chats

@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 800 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -16,7 +16,9 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
+- OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - README.md -- Sports Oracle
 - pyproject.toml -- Package/tool configuration
 - uv.lock -- Locked dependency graph
@@ -52,6 +54,7 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - .github/workflows/model-research-benchmark.yml -- GitHub Actions workflow
 - .github/workflows/nfl-corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/nfl-dayclose.yml -- GitHub Actions workflow
+- .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
 - .github/workflows/watchdog-monitor.yml -- GitHub Actions workflow
 - .github/workflows/wnba-backfill-enrichment.yml -- GitHub Actions workflow
 - .github/workflows/wnba-dayclose-verify.yml -- GitHub Actions workflow
@@ -69,6 +72,9 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - drive/2026-09-06-nfl-overnight-morning-brief.md -- Morning brief — nfl-oracle overnight (2026-09-06)
 - drive/2026-09-08-nfl-91-verification-handoff.md -- NFL #91 live contract verification - handoff to new session
 - drive/2026-09-08-nfl-closeout-handoff.md -- NFL close-out handoff (Parts A-E)
+- drive/2026-09-14-nfl-v2-overnight-handoff.md -- NFL Oracle v2: overnight build handoff (for ChatGPT)
+- drive/2026-09-14-week-close-task-and-w2-boosts-handoff.md -- NFL week-close task design + week-2 boost handling
+- drive/2026-09-14-week1-operator-retro.md -- Week 1 retro: operator observations
 - drive/NFL-ORACLE Data Science Resources, Strategy, Research, and more.txt
 - drive/README.md -- Document Drive
 - drive/discover_nfl_contest.py -- Ad-hoc headless Playwright sniff for the active NFL playerratingcontest id.
@@ -161,10 +167,11 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/scripts/cache_nflverse_schedules.py -- Download public nflverse/nfldata games.csv and slim into offline schedule cache.
 - nfl-oracle/scripts/capture_storage_state.py -- Capture a private Playwright session for operator-authorized Real Sports calls.
 - nfl-oracle/scripts/daily_shadow.py -- Minimal daily-shadow scaffold (observation only; no contest entry).
-- nfl-oracle/scripts/full_pool_draft.py -- Rank the complete eligible pool for the remaining games of a slate.
+- nfl-oracle/scripts/full_pool_draft.py -- Rank the complete eligible pool for the remaining games of a slate, and
 - nfl-oracle/scripts/hydrate_identity_fixtures.py -- Offline: build an IdentityMap summary from Corpus G / value_labels fixtures.
 - nfl-oracle/scripts/nfl_corpus_backup_common.py -- Integrity helpers shared by the NFL corpus backup and restore entry points.
 - nfl-oracle/scripts/nfl_dayclose_gate.py -- Session-free gate: is there an NFL slate inside the day-close sweep window?
+- nfl-oracle/scripts/nfl_weekclose_gate.py -- Session-free gate: should the NFL week-close job run now?
 - nfl-oracle/scripts/postgres_store_smoke.py -- Exercise NFL recommendation storage against a temporary local PostgreSQL.
 - nfl-oracle/scripts/production_container_smoke.py -- Build and smoke-test the NFL production image without secrets or a database.
 - nfl-oracle/scripts/research_client_smoke.py -- Offline research FastAPI client smoke (observation only; no contest entry).
@@ -191,6 +198,7 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/calendar/schedule.py -- Public nflverse / nfldata schedule helpers (no Real Sports auth).
 - nfl-oracle/src/nfl_oracle/calendar/season.py -- Minimal NFL season/week helpers (domain-owned; not a provider adapter).
 - nfl-oracle/src/nfl_oracle/calendar/slate.py -- Week / slate resolution over dense offline schedules (observation only).
+- nfl-oracle/src/nfl_oracle/calendar/week_close.py -- Week-close gate helpers: final slate identity, live finalization, buffer.
 
 ## nfl-oracle/src/nfl_oracle/common/
 - nfl-oracle/src/nfl_oracle/common/__init__.py -- Shared NFL Oracle helpers.
@@ -214,14 +222,18 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/data/coverage.py -- Coverage matrix row schema (STATUS vocabulary).
 - nfl-oracle/src/nfl_oracle/data/coverage_matrix.py -- Coverage matrix load/save helpers (STATUS vocabulary).
 - nfl-oracle/src/nfl_oracle/data/density.py -- Offline coverage / catalog density summaries (observation only).
+- nfl-oracle/src/nfl_oracle/data/label_depth.py -- Classify archive depth by which training-label rung each season supports.
 - nfl-oracle/src/nfl_oracle/data/paths.py -- Filesystem layout helpers for nfl-oracle data roots (no secrets).
 - nfl-oracle/src/nfl_oracle/data/summary.py -- Read-only research summaries over catalog + coverage matrix + schedule.
 
 ## nfl-oracle/src/nfl_oracle/features/
 - nfl-oracle/src/nfl_oracle/features/__init__.py -- Feature schema scaffolding for nfl-oracle.
+- nfl-oracle/src/nfl_oracle/features/live.py -- Map captured pre-lock evidence onto FeatureSpec names.
+- nfl-oracle/src/nfl_oracle/features/matchup.py -- Static NFL division membership for the ``is_divisional`` FeatureSpec.
+- nfl-oracle/src/nfl_oracle/features/opponent_defense.py -- Walk-forward Real-value-allowed priors for the opponent defense.
 - nfl-oracle/src/nfl_oracle/features/rows.py -- Build observation-only feature rows from walk-forward priors.
-- nfl-oracle/src/nfl_oracle/features/schema.py -- FeatureSpec v1 — availability clocks + train/live flags.
-- nfl-oracle/src/nfl_oracle/features/stubs.py -- Offline stub feature values for pre-lock FeatureSpecs (observation only).
+- nfl-oracle/src/nfl_oracle/features/schema.py -- FeatureSpec v1: availability clocks + train/live flags.
+- nfl-oracle/src/nfl_oracle/features/stubs.py -- Offline placeholder values for any FeatureSpec still marked ``offline_stub``.
 
 ## nfl-oracle/src/nfl_oracle/identity/
 - nfl-oracle/src/nfl_oracle/identity/__init__.py -- Player identity scaffolding (Real Sports id primary).
@@ -259,6 +271,7 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/recommendations/context.py -- Time-filtered NFL role, matchup and environment features.
 - nfl-oracle/src/nfl_oracle/recommendations/dayclose.py -- Day-close grading: score a frozen NFL lineup against finalized real-world
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
+- nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
@@ -359,11 +372,15 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 
 ## nfl-oracle/tests/integration/
 - nfl-oracle/tests/integration/__init__.py -- Integration tests for nfl-oracle research paths (offline).
+- nfl-oracle/tests/integration/test_boost_regime_pick_path.py -- Integration coverage for issue #166: the live pick path under real boosts.
 - nfl-oracle/tests/integration/test_research_routes.py -- Integration coverage for research FastAPI routes (offline fixtures).
 
 ## nfl-oracle/tests/unit/
 - nfl-oracle/tests/unit/__init__.py
+- nfl-oracle/tests/unit/test_anti_chalk_high_tv.py -- Anti-chalk + high-potential label path pins for issue #185.
+- nfl-oracle/tests/unit/test_auth_presence_check.py -- auth_presence_check must see volume-backed Real Sports session files.
 - nfl-oracle/tests/unit/test_backfill_cursor.py -- Tests for season backfill cursor resume.
+- nfl-oracle/tests/unit/test_capture_storage_state_paths.py -- capture_storage_state must write under volume-aware scraper_dir.
 - nfl-oracle/tests/unit/test_clocks.py -- Tests for train/live Corpus G clock helpers.
 - nfl-oracle/tests/unit/test_contest_algebra_and_gates.py -- Contest scoring algebra + entry gates (observation only).
 - nfl-oracle/tests/unit/test_contest_corpus.py -- Corpus C: scoring-law verification, boost recovery, and censoring honesty.
@@ -378,9 +395,11 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_eval_report.py -- Tests for offline walk-forward eval report (baselines vs feature_ridge).
 - nfl-oracle/tests/unit/test_feature_registry_depth.py -- Feature registry depth for pre-lock decisioning.
 - nfl-oracle/tests/unit/test_feature_value_model.py -- Leakage-safe feature_ridge value model + strategy wiring.
+- nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
+- nfl-oracle/tests/unit/test_label_depth.py -- Max-season label-kind depth across the catalog (issue #189).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
 - nfl-oracle/tests/unit/test_player_mean_and_coverage_matrix.py -- player_mean baseline + coverage matrix document helpers.
 - nfl-oracle/tests/unit/test_player_priors_scoring.py -- Player priors + shadow scoring scaffolds.
@@ -390,6 +409,7 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_realsports_auth_bootstrap.py
 - nfl-oracle/tests/unit/test_recommendation_context_sources.py
 - nfl-oracle/tests/unit/test_recommendation_contracts.py
+- nfl-oracle/tests/unit/test_recommendation_defense_eligibility.py -- Defense eligibility: pool and optimizer must not silently exclude DL/LB/DB.
 - nfl-oracle/tests/unit/test_recommendation_grading.py
 - nfl-oracle/tests/unit/test_recommendation_model_optimizer.py
 - nfl-oracle/tests/unit/test_recommendation_model_safety.py
@@ -415,6 +435,7 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_value_labels.py -- Tests for Real value label schema + Corpus G extraction.
 - nfl-oracle/tests/unit/test_valuelaw_model.py -- Unit tests for nfl_oracle.valuelaw.model.
 - nfl-oracle/tests/unit/test_valuelaw_project.py
+- nfl-oracle/tests/unit/test_weekclose_gate.py
 - nfl-oracle/tests/unit/test_worker_retry.py
 - nfl-oracle/tests/unit/test_worker_terminal_state.py -- A published slate is terminal: freeze once, then stop.
 
@@ -468,11 +489,13 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Provider-neutral dossier entry and gap schema for contest analysis.
+- packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
 - packages/oracle-core/src/oracle_core/jobs.py -- Generic job registration, lifecycle, role validation, and execution.
 - packages/oracle-core/src/oracle_core/logging.py -- Structured, redacted logging primitives for application adapters.
 - packages/oracle-core/src/oracle_core/py.typed
 - packages/oracle-core/src/oracle_core/redaction.py -- Secret redaction helpers for logs, diagnostics, and HTTP URLs.
+- packages/oracle-core/src/oracle_core/schemaorg.py -- schema.org vocabulary helpers for shared Oracle data contracts.
 - packages/oracle-core/src/oracle_core/service.py -- Generic FastAPI service metadata and health behavior.
 - packages/oracle-core/src/oracle_core/storage.py -- Provider-neutral PostgreSQL transactions and Redis-backed stores.
 - packages/oracle-core/src/oracle_core/testing.py -- Deterministic fakes and log capture helpers for application tests.
@@ -481,9 +504,11 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/tests/test_artifacts.py
 - packages/oracle-core/tests/test_config.py
 - packages/oracle-core/tests/test_dayclose.py
+- packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
 - packages/oracle-core/tests/test_jobs.py
 - packages/oracle-core/tests/test_redaction_logging.py
+- packages/oracle-core/tests/test_schemaorg.py -- schema.org contract helpers.
 - packages/oracle-core/tests/test_service.py
 - packages/oracle-core/tests/test_storage_cache.py
 - packages/oracle-core/tests/test_testing.py
@@ -495,6 +520,7 @@ Generated from `git ls-files`. 774 tracked files. Regenerate with `scripts/gener
 - scripts/check_import_boundaries.py -- Enforce the workspace dependency direction with static import checks.
 - scripts/check_issue_link.py -- Enforce issue linkage for material pull request work.
 - scripts/codespaces-smoke.sh -- Shell script
+- scripts/generate_file_manifest.py -- Regenerate FILES.md: a one-line-per-file manifest of every tracked file.
 - scripts/with-secrets
 - scripts/write-path-check
 
