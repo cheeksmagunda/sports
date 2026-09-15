@@ -283,11 +283,14 @@ def test_api_frontend_is_safe_and_exposes_empty_error_states(tmp_path: Path) -> 
     assert page.status_code == 200
     assert "text/html" in page.headers["content-type"]
     assert 'id="picks"' in page.text
+    assert 'id="loader-mark"' in page.text
     assert 'aria-live="polite"' in page.text
     script = client.get("/app.js")
     assert script.status_code == 200
     assert "innerHTML" not in script.text
     assert "createElement" in script.text
+    assert "loader-mark" in script.text
+    assert "setLoaderVisible" in script.text
     for state in ("No slate today", "Picks are not ready", "Picks are unavailable"):
         assert state in script.text
     # Player identity rendered without numeric projections (removed by design)
