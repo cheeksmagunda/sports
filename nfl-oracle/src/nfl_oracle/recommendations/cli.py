@@ -21,6 +21,8 @@ import httpx
 from oracle_core.storage import PoolOptions, create_postgres_engine
 from sqlalchemy import create_engine
 
+from nfl_oracle.calendar.schedule import ensure_offline_schedules
+from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
 from nfl_oracle.recommendations.pipeline import (
@@ -361,6 +363,7 @@ def _record_worker_failure(
 
 async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None) -> int:
     project = _project_root()
+    ensure_offline_schedules(resolve_data_paths(project).root)
     engine = _engine()
     store = RecommendationStore(engine, writable=True)
     policy = _policy()
@@ -411,6 +414,7 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
 
 def _train(*, force: bool = False) -> int:
     project = _project_root()
+    ensure_offline_schedules(resolve_data_paths(project).root)
     now = datetime.now(UTC)
     context_path = _latest_context(project)
     if context_path is None:
@@ -524,16 +528,16 @@ def _weekclose(
 ) -> int:
     from nfl_oracle.calendar.schedule import resolve_schedule_csv_path, try_load_schedules_csv
     from nfl_oracle.contests.store import ContestStore
-    from nfl_oracle.data.paths import resolve_data_paths
     from nfl_oracle.recommendations.weekclose import (
         build_and_persist_week_punch_list,
         resolve_week_gamedays,
     )
 
     project = _project_root()
+    paths = resolve_data_paths(project)
+    ensure_offline_schedules(paths.root)
     as_of = _day(as_of_arg)
     store = RecommendationStore(_engine(), writable=True)
-    paths = resolve_data_paths(project)
     games = try_load_schedules_csv(resolve_schedule_csv_path(paths.root))
 
     if with_dayclose:

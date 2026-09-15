@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import shutil
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
@@ -33,6 +35,8 @@ SCHEDULE_RELATIVE_CANDIDATES = (
     Path("cache") / "nflverse_games.csv",
     Path("catalog") / "schedules.csv",
 )
+
+DEFAULT_SCHEDULE_BOOTSTRAP_DIR = Path("/opt/nfl-oracle/bootstrap/schedule")
 
 REGULAR_GAME_TYPES = frozenset({"REG", ""})
 POSTSEASON_GAME_TYPES = frozenset({"WC", "DIV", "CON", "SB", "POST"})
@@ -152,16 +156,49 @@ def try_load_schedules_csv(
         return []
 
 
-def resolve_schedule_csv_path(data_root: Path | None = None) -> Path | None:
-    """Return first existing offline schedule CSV under a data root, else None."""
+def schedule_bootstrap_dir() -> Path:
+    """Return the image-baked schedule directory, with a test override."""
 
-    if data_root is None:
+    configured = os.environ.get("NFL_SCHEDULE_BOOTSTRAP_DIR", "").strip()
+    return Path(configured).expanduser() if configured else DEFAULT_SCHEDULE_BOOTSTRAP_DIR
+
+
+def ensure_offline_schedules(data_root: Path) -> Path | None:
+    """Copy the baked schedule into a writable data volume when it is absent.
+
+    A mounted volume is authoritative: an existing destination is never
+    replaced. ``open(..., "xb")`` makes the no-overwrite guarantee hold even
+    if multiple worker processes reach an empty volume concurrently.
+    """
+
+    destination = data_root / "schedule" / "schedules.csv"
+    if destination.exists():
+        return destination if destination.is_file() else None
+
+    source = schedule_bootstrap_dir() / "schedules.csv"
+    if not source.is_file():
         return None
-    for rel in SCHEDULE_RELATIVE_CANDIDATES:
-        candidate = data_root / rel
-        if candidate.is_file():
-            return candidate
-    return None
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with source.open("rb") as source_file, destination.open("xb") as destination_file:
+            shutil.copyfileobj(source_file, destination_file)
+    except FileExistsError:
+        return destination if destination.is_file() else None
+
+    return destination
+
+
+def resolve_schedule_csv_path(data_root: Path | None = None) -> Path | None:
+    """Return an offline schedule from the data root, then the image bootstrap."""
+
+    if data_root is not None:
+        for rel in SCHEDULE_RELATIVE_CANDIDATES:
+            candidate = data_root / rel
+            if candidate.is_file():
+                return candidate
+    bootstrap = schedule_bootstrap_dir() / "schedules.csv"
+    return bootstrap if bootstrap.is_file() else None
 
 
 def weeks_for_season(games: Iterable[ScheduledGame]) -> list[int]:

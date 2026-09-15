@@ -74,13 +74,15 @@ ENV PATH="/opt/venv/bin:$PATH" \
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/playwright-browsers /opt/playwright-browsers
 COPY --from=builder /workspace/nfl-oracle/config /app/nfl-oracle/config/
+COPY nfl-oracle/data/schedule/schedules.csv /opt/nfl-oracle/bootstrap/schedule/schedules.csv
+COPY nfl-oracle/data/schedule/README.md /opt/nfl-oracle/bootstrap/schedule/README.md
 
 WORKDIR /app/nfl-oracle
 COPY nfl-oracle/src/ ./src/
 
 RUN useradd --create-home --uid 10001 oracle \
     && mkdir -p /app/nfl-oracle \
-    && chown -R oracle:oracle /app /opt/venv /opt/playwright-browsers
+    && chown -R oracle:oracle /app /opt/nfl-oracle /opt/venv /opt/playwright-browsers
 USER oracle
 
 EXPOSE 8000
