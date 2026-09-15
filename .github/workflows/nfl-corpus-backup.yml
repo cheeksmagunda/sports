@@ -195,3 +195,8 @@ jobs:
             git commit -m "backup: nfl corpus snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
             git push origin backups
           fi
+          # The orphan `backups` branch has no .github/actions tree. Composite
+          # action post steps (setup-python-uv) resolve that path from the
+          # worktree and fail the job even after a successful push. Return to
+          # the triggering ref before the job ends (refs #172).
+          git switch --detach "$GITHUB_SHA"
