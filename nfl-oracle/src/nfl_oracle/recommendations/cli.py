@@ -409,7 +409,7 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
         await asyncio.sleep(max(10, min(poll_seconds, 60)))
 
 
-def _train() -> int:
+def _train(*, force: bool = False) -> int:
     project = _project_root()
     now = datetime.now(UTC)
     context_path = _latest_context(project)
@@ -419,13 +419,32 @@ def _train() -> int:
         snapshot = ContextSnapshot.load(context_path)
     store = RecommendationStore(_engine(), writable=True)
     pipeline = RecommendationPipeline(store, policy=_policy())
-    digest = _ensure_model(project, store, pipeline, snapshot, now)
+    if force:
+        # `_ensure_model` returns the active model untouched whenever it is
+        # still inside `model_max_age_days`, which is the right behaviour for
+        # the worker but makes a weekly retrain a no-op: the model only gets
+        # rebuilt once it has already expired, which is precisely the freeze it
+        # would otherwise refuse. A scheduled retrain has to be able to say
+        # "rebuild now" and reset the staleness clock ahead of the deadline.
+        bundle = _model_bundle(project, snapshot, now)
+        digest = pipeline.activate_model(bundle)
+        retrained = True
+    else:
+        previous = None
+        try:
+            previous = pipeline.active_model()[0]
+        except ValueError:
+            previous = None
+        digest = _ensure_model(project, store, pipeline, snapshot, now)
+        retrained = digest != previous
     model = pipeline.active_model()[1].model
     print(
         json.dumps(
             {
-                "status": "trained",
+                "status": "trained" if retrained else "reused_active_model",
+                "retrained": retrained,
                 "model_sha256": digest,
+                "trained_at": model.trained_at.isoformat(),
                 "selected_estimator": model.selected_estimator,
                 "training_rows": model.training_rows,
                 "holdout_rows": model.evaluation.get("holdout_rows"),
@@ -576,7 +595,18 @@ def _parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8000")))
     migrate_command = commands.add_parser("migrate")
     migrate_command.set_defaults()
-    commands.add_parser("train")
+    train = commands.add_parser(
+        "train", help="ensure an active model exists, or rebuild one with --force"
+    )
+    train.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "retrain and activate even when the active model is still inside "
+            "its age limit, resetting the staleness clock; this is what a "
+            "weekly scheduled retrain needs"
+        ),
+    )
     dayclose = commands.add_parser("dayclose")
     dayclose.add_argument("--day")
     dayclose.add_argument("--catchup-window-days", type=int, default=7)
@@ -606,7 +636,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"status": "migrated", "contest_entry": False}))
         return 0
     if args.command == "train":
-        return _train()
+        return _train(force=args.force)
     if args.command == "dayclose":
         return _dayclose(args.day, catchup_window_days=args.catchup_window_days)
     if args.command == "weekclose":
