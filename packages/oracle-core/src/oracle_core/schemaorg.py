@@ -302,11 +302,7 @@ def item_list(
     return _apply_additional(node, additional)
 
 
-
-
-def _apply_additional(
-    node: dict[str, Any], additional: Mapping[str, Any] | None
-) -> dict[str, Any]:
+def _apply_additional(node: dict[str, Any], additional: Mapping[str, Any] | None) -> dict[str, Any]:
     """Merge caller extras; namespace bare keys under oracle:."""
 
     if additional:
@@ -577,9 +573,7 @@ def prov_attribution(
 
     out = dict(entity)
     if agent is not None:
-        out["prov:wasAttributedTo"] = (
-            dict(agent) if isinstance(agent, Mapping) else str(agent)
-        )
+        out["prov:wasAttributedTo"] = dict(agent) if isinstance(agent, Mapping) else str(agent)
     if activity is not None:
         out["prov:wasGeneratedBy"] = (
             dict(activity) if isinstance(activity, Mapping) else str(activity)

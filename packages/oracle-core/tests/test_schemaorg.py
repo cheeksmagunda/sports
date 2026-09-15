@@ -131,7 +131,9 @@ def test_punch_list_item_list_links_priority_and_category() -> None:
 
 
 def test_place_and_sports_organization_nodes() -> None:
-    venue = place(identifier="gillette", name="Gillette Stadium", same_as="https://www.gillettestadium.com/")
+    venue = place(
+        identifier="gillette", name="Gillette Stadium", same_as="https://www.gillettestadium.com/"
+    )
     org = sports_organization(identifier="nfl", name="NFL", sport="American Football")
     team = sports_team(
         identifier="NE",
@@ -186,9 +188,7 @@ def test_attach_identifiers_and_validate() -> None:
     )
     assert enriched["identifier"][0] == "21042"
     assert enriched["identifier"][1]["propertyID"] == "gsis_id"
-    assert validate_typed_node(
-        enriched, expected_type="Person", require_identifier=True
-    ) == []
+    assert validate_typed_node(enriched, expected_type="Person", require_identifier=True) == []
     assert validate_typed_node({}, expected_type="Person", require_identifier=True) == [
         "missing @type",
         "missing identifier",
