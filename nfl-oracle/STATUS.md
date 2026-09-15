@@ -11,6 +11,50 @@ the issue; this note is the code follow-on only.
 
 Leave #160 alone. No LightGBM.
 
+## Week-close punch-list producer + CLI (issue #165, 2026-09-15 CT)
+
+Next slice after the week-close gate (#169, #179): a full-week punch-list
+producer and a `nfl-pipeline weekclose` CLI, plus light workflow wiring. No
+model change; this is read-only audit tooling.
+
+- `nfl_oracle.recommendations.weekclose` resolves the target week (explicit
+  season+week, or an as-of date) via the existing `calendar.slate.resolve_slate`
+  helper, never re-parsing schedule rows. For each gameday it reports freeze
+  status from `RecommendationStore.latest`, dayclose grade status from
+  `dayclose.dayclose_grade_kind`, and, when a finalized Corpus C contest is on
+  disk, replay metrics (`winner_capture_ratio`, `optimal_order_rate`) from the
+  existing `replay.harness.replay_contest`. It never freezes, grades, trains,
+  retrains, or submits a contest entry.
+- Infra/model findings are session-free: no freeze on a scheduled gameday,
+  an incomplete dayclose grade, and a model_fingerprint that changed within
+  the week (an observation to confirm an intentional retrain, never a trigger
+  for one). An optional `weekclose_punchlist:<season>-W<week>` artifact is
+  written via `store.put_artifact` when the store is writable, mirroring the
+  `dayclose_grade` pattern.
+- CLI: `nfl-pipeline weekclose --season --week` (or `--as-of`) is audit-only
+  by default; `--with-dayclose` first sweeps the week's gamedays that have a
+  freeze but no grade through the existing `dayclose.run` single-day path
+  (no second refresh stack). Output is the same
+  `json.dumps(..., sort_keys=True, separators=(",", ":"))` shape as `dayclose`.
+- `.github/workflows/nfl-weekclose.yml` now runs the audit-only punch list
+  after the final-slate dayclose grade and folds both JSON blocks plus a
+  suggested tracking-issue title/body into the same digest the
+  `dayclose-ledger` action already posts. Opening the tracking issue via
+  `gh issue create` automatically is left for a follow-up; this slice emits
+  the ready-to-post text instead of blocking on new `gh` permissions.
+
+### Known gap
+- The CLI resolves the week from the checked-in offline fixture at
+  `data/schedule/schedules.csv`, which currently ends at the 2025 season
+  (through Super Bowl weekend). It will report `resolved: false` for any
+  2026-season season/week until that fixture is refreshed from a live
+  nflverse download; no code path invents games to route around this.
+
+### Verification
+`uv run --frozen --package nfl-oracle pytest nfl-oracle/tests/unit/test_weekclose.py`
+plus the full `nfl-oracle` suite (381 passed, 1 skipped for missing Docker),
+`make lint`/`make typecheck` on the touched files, and `make check-boundaries`
+from the repository root.
 
 ## Max-depth label kinds + dormant feature wiring (issue #189, 2026-09-15 CT)
 

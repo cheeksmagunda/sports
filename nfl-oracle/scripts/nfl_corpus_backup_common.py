@@ -17,6 +17,7 @@ import io
 import json
 import os
 import pathlib
+import sys
 import tempfile
 import urllib.parse
 from collections.abc import Mapping, Sequence
@@ -208,6 +209,12 @@ def assert_no_regression(
 
 def validate_snapshot(snapshot_dir: pathlib.Path) -> dict[str, Any]:
     """Validate manifest shape, the exact table set, byte counts, and hashes."""
+
+    # prepared_decisions payload_json can exceed Python's default 128KiB CSV
+    # field limit (csv.Error: field larger than field limit). Writing has no
+    # such cap, so the first backup that carried a large prepared context
+    # failed only in validate_snapshot / restore (refs #172).
+    csv.field_size_limit(sys.maxsize)
 
     manifest_path = snapshot_dir / "manifest.json"
     try:
