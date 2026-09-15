@@ -35,7 +35,7 @@ dependencies = [
     # ML stack. Exact pins on libs whose version influences pickled bytes
     # so the determinism gate (train twice, assert pickle SHA equality)
     # is meaningful. LightGBM RFC 6731.
-    "numpy==2.2.6",
+    "numpy==2.4.6",
     "lightgbm==4.6.0",
     "scikit-learn>=1.5,<2.0",
     "scipy>=1.13,<2.0",
