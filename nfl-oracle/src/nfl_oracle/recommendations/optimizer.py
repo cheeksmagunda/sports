@@ -84,6 +84,8 @@ class Pick(Record):
     uncertainty: Finite
     ownership: Finite
     ownership_source: Literal["measured_prelock", "estimated_projection_softmax"]
+    # Agent/offline audit only: coef x feature pathways (issue #212). Not a UI contract.
+    why_this_pick: tuple[dict[str, float | str], ...] = ()
 
 
 class Recommendation(Record):
@@ -464,6 +466,7 @@ def optimize(
                 uncertainty=by_id[pid].stddev,
                 ownership=ownership[pid],
                 ownership_source=ownership_source[pid],
+                why_this_pick=tuple(by_id[pid].feature_contributions),
             )
             for i, pid in enumerate(ids)
         ),

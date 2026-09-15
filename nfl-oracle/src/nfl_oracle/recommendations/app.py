@@ -72,6 +72,21 @@ def create_app(
     def stylesheet() -> Response:
         return asset("style.css", "text/css")
 
+    def _public_lineup(lineup: Any) -> Any:
+        """Drop agent-only attribution before serving the decision page."""
+        if not isinstance(lineup, dict):
+            return lineup
+        public = dict(lineup)
+        picks = public.get("picks")
+        if isinstance(picks, list):
+            public["picks"] = [
+                {k: v for k, v in pick.items() if k != "why_this_pick"}
+                if isinstance(pick, dict)
+                else pick
+                for pick in picks
+            ]
+        return public
+
     def snapshot(day: date) -> dict[str, Any]:
         now = utc(clock())
         try:
@@ -105,7 +120,7 @@ def create_app(
         payload.update(
             status="locked" if locked else "frozen",
             stale=not locked and age > 900,
-            lineup=frozen["lineup"],
+            lineup=_public_lineup(frozen["lineup"]),
             games=frozen["slate"]["games"],
             boost_regime=frozen["slate"].get("boost_regime"),
             boost_nonzero_count=frozen["slate"].get("boost_nonzero_count"),
@@ -156,7 +171,13 @@ def create_app(
             "lineup",
             "contest_entry",
         }
-        return {"records": [{k: v for k, v in r.items() if k in keys} for r in records]}
+        cleaned = []
+        for r in records:
+            row = {k: v for k, v in r.items() if k in keys}
+            if "lineup" in row:
+                row["lineup"] = _public_lineup(row["lineup"])
+            cleaned.append(row)
+        return {"records": cleaned}
 
     return app
 
