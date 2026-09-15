@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import shutil
 import stat
+import subprocess
 import sys
 
 
@@ -146,6 +147,44 @@ def check_optional_encrypted_helper(
     return 0
 
 
+def gh_auth_status_exit_code(env: dict[str, str]) -> int:
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return 1
+    return result.returncode
+
+
+def github_cli_status() -> str:
+    if shutil.which("gh") is None:
+        return "unavailable"
+
+    if gh_auth_status_exit_code(dict(os.environ)) == 0:
+        return "authenticated"
+
+    # gh prioritizes GITHUB_TOKEN/GH_TOKEN over a native `gh auth login`
+    # session, so an invalid leftover value silently breaks every gh call
+    # even when a valid keyring login exists underneath. Re-check without
+    # those variables to tell the two failure modes apart.
+    shadow_vars = [
+        name for name in ("GITHUB_TOKEN", "GH_TOKEN") if os.environ.get(name)
+    ]
+    if shadow_vars:
+        clean_env = {k: v for k, v in os.environ.items() if k not in shadow_vars}
+        if gh_auth_status_exit_code(clean_env) == 0:
+            names = "/".join(shadow_vars)
+            return f"broken: {names} invalid, unset it to use the native login"
+
+    return "not authenticated"
+
+
 def environment_capabilities() -> list[str]:
     groups = (
         ("database", ("DATABASE_URL", "DATABASE_PUBLIC_URL", "DATABASE_RESTORE_URL")),
@@ -189,7 +228,7 @@ def main() -> None:
     errors += check_optional_encrypted_helper(
         portfolio_root, root_dir, root_file, app_dir, app_file
     )
-    status("GitHub CLI", "available" if shutil.which("gh") else "unavailable")
+    status("GitHub CLI", github_cli_status())
     status("Railway CLI", "available" if shutil.which("railway") else "unavailable")
     status("HTTPS client", "available" if shutil.which("curl") else "unavailable")
 
