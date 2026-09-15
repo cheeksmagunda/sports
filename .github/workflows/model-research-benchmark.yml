@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
@@ -109,7 +109,7 @@ jobs:
           --min-eligible-slates "$MIN_ELIGIBLE"
 
       - name: Upload game identity without database credentials
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: model-research-benchmark-game-identity
           path: ${{ runner.temp }}/identity/game_identity.csv
@@ -130,7 +130,7 @@ jobs:
       # does `git fetch origin backups` against this private repo, which
       # 403s without them. Mirrors corpus-backup.yml's publish job, which
       # keeps credentials for the same reason.
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
@@ -148,7 +148,7 @@ jobs:
           uv run --frozen --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Download prefetched game identity
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: model-research-benchmark-game-identity
           path: ${{ runner.temp }}/identity
@@ -175,7 +175,7 @@ jobs:
           --shard-count 20
 
       - name: Upload shard results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: model-research-benchmark-shard-${{ matrix.shard }}
           path: |
@@ -198,14 +198,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-python-uv
 
       - name: Download shard artifacts
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: model-research-benchmark-shard-*
           path: ${{ runner.temp }}/shards
@@ -222,7 +222,7 @@ jobs:
             --merge-shards "$SHARDS_DIR"/*/benchmark_results.json
 
       - name: Upload merged results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: model-research-benchmark-merged
           path: |
