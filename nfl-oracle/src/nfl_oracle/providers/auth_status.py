@@ -40,6 +40,14 @@ def _candidate_storage_paths() -> list[Path]:
         if raw:
             paths.append(Path(raw).expanduser())
     root = _project_root()
+    scraper_override = os.environ.get("NFL_ORACLE_SCRAPER_DIR", "").strip()
+    if scraper_override:
+        paths.append(Path(scraper_override).expanduser() / "storage_state.json")
+    volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    if volume:
+        vol = Path(volume).expanduser()
+        paths.append(vol / "scraper" / "storage_state.json")
+        paths.append(vol / "storage_state.json")
     paths.append(root / "scraper" / "storage_state.json")
     paths.append(root.parent / "wnba-oracle" / "scraper" / "storage_state.json")
     # de-dupe while preserving order

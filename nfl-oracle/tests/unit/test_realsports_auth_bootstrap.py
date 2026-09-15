@@ -60,3 +60,76 @@ def test_invalid_b64gz_still_fails_closed(monkeypatch):
 
     with pytest.raises(realsports.StorageStateMissing, match="REALSPORTS_STORAGE_STATE_B64GZ"):
         realsports.materialize_storage_state_from_env()
+
+
+def test_scraper_dir_uses_railway_volume_mount(tmp_path, monkeypatch):
+    volume = tmp_path / "volume"
+    volume.mkdir()
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", str(volume))
+    monkeypatch.delenv("NFL_ORACLE_SCRAPER_DIR", raising=False)
+
+    path = realsports.scraper_dir()
+
+    assert path == volume / "scraper"
+    assert path.is_dir()
+    assert path.stat().st_mode & 0o777 == 0o700
+
+
+def test_scraper_dir_explicit_override_beats_volume(tmp_path, monkeypatch):
+    volume = tmp_path / "volume"
+    volume.mkdir()
+    override = tmp_path / "explicit"
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", str(volume))
+    monkeypatch.setenv("NFL_ORACLE_SCRAPER_DIR", str(override))
+
+    path = realsports.scraper_dir()
+
+    assert path == override
+    assert not (volume / "scraper").exists()
+
+
+def test_storage_state_discovers_volume_copy_before_creating_default(tmp_path, monkeypatch):
+    volume = tmp_path / "volume"
+    scraper = volume / "scraper"
+    scraper.mkdir(parents=True)
+    existing = scraper / "storage_state.json"
+    existing.write_text('{"cookies":[],"origins":[]}')
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", str(volume))
+    monkeypatch.delenv("NFL_ORACLE_SCRAPER_DIR", raising=False)
+    monkeypatch.delenv("REALSPORTS_STORAGE_STATE_PATH", raising=False)
+    monkeypatch.delenv("NFL_REALSPORTS_STORAGE_STATE", raising=False)
+    monkeypatch.setattr(realsports, "project_root", lambda: tmp_path / "missing-project")
+
+    assert realsports.storage_state_path() == existing
+
+
+def test_storage_state_discovers_legacy_ephemeral_when_volume_empty(tmp_path, monkeypatch):
+    volume = tmp_path / "volume"
+    volume.mkdir()
+    legacy_dir = tmp_path / "project" / "scraper"
+    legacy_dir.mkdir(parents=True)
+    legacy = legacy_dir / "storage_state.json"
+    legacy.write_text('{"cookies":[],"origins":[]}')
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", str(volume))
+    monkeypatch.delenv("NFL_ORACLE_SCRAPER_DIR", raising=False)
+    monkeypatch.delenv("REALSPORTS_STORAGE_STATE_PATH", raising=False)
+    monkeypatch.delenv("NFL_REALSPORTS_STORAGE_STATE", raising=False)
+    monkeypatch.setattr(realsports, "project_root", lambda: tmp_path / "project")
+
+    assert realsports.storage_state_path() == legacy
+
+
+def test_materialize_writes_under_volume_scraper(tmp_path, monkeypatch):
+    volume = tmp_path / "volume"
+    volume.mkdir()
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", str(volume))
+    monkeypatch.delenv("NFL_ORACLE_SCRAPER_DIR", raising=False)
+    monkeypatch.setenv("REALSPORTS_STORAGE_STATE_B64GZ", _b64gz(_state()))
+    monkeypatch.delenv("NFL_REALSPORTS_STORAGE_STATE", raising=False)
+
+    path = realsports.materialize_storage_state_from_env()
+
+    assert path == volume / "scraper" / "storage_state.json"
+    assert path is not None
+    assert path.stat().st_mode & 0o777 == 0o600
+
