@@ -443,9 +443,21 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     }
     # Keep the ridge tie-breaker first, but never claim the fitted model won
     # when a simple frozen baseline has lower holdout error.
+    # player_prior is retained in candidates_mae / evaluation for diagnostics,
+    # but must not win production coefficients:
+    # a 1.0 weight on player_mean_shrunk is name memorization (Mahomes/Walker
+    # chalk), which is exactly what #185 anti-chalk and the W2 retrain mandate
+    # forbid. Prefer ridge (high-TV weighted, full context features); fall back
+    # to position_mean / global_mean archetypes when ridge loses holdout MAE.
+    activation_candidates = {
+        name: mae for name, mae in candidates_mae.items() if name != "player_prior"
+    }
     selected_estimator = cast(
         EstimatorName,
-        min(candidates_mae, key=lambda name: (candidates_mae[name], name != "ridge")),
+        min(
+            activation_candidates,
+            key=lambda name: (activation_candidates[name], name != "ridge"),
+        ),
     )
     ordered_weight_list = sample_weights_for_history(ordered)
     ordered_weights = {
