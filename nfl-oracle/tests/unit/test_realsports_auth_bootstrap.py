@@ -132,4 +132,3 @@ def test_materialize_writes_under_volume_scraper(tmp_path, monkeypatch):
     assert path == volume / "scraper" / "storage_state.json"
     assert path is not None
     assert path.stat().st_mode & 0o777 == 0o600
-
