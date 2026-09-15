@@ -33,6 +33,13 @@ the issue; this note is the code follow-on only.
 
 Leave #160 alone. No LightGBM.
 
+## Week-close punch-list escalate coverage (issue #204, 2026-09-15 CT)
+
+`nfl-weekclose.yml` now escalates the ops-guard ledger when either the final
+slate dayclose step or the audit punch-list producer fails (`continue-on-error`
+no longer hides punchlist-only failures). Tracking-issue auto-open remains
+with the #165 hands-off follow-up PR when present. Leave #160 alone.
+
 
 ## Week-close punch-list producer + CLI (issue #165, 2026-09-15 CT)
 
@@ -215,17 +222,22 @@ Builds on issue #140. Three changes:
   CSV table, `player_results.csv`, derived from the same artifacts (no
   Postgres schema change).
 
-## Corpus backup secret currently unconfigured (issue #172)
+## Corpus backup verified working (issue #172, 2026-09-15 CT)
 
-`NFL_DAYCLOSE_DATABASE_URL` works (day-close ledger posts succeed).
-`NFL_BACKUP_DATABASE_URL` is **not** currently set as a repo secret: recent
-`nfl-corpus-backup.yml` runs fail closed with an explicit `not_configured`
-signal, and `origin/backups` has never received an `nfl-oracle/data/backups/`
-snapshot. The 2026-09-12 checkpoint below overstated backup readiness; treat
-day-close as live and corpus backup as blocked on ops provisioning (#172).
-Once the secret is provisioned (same read-only pattern as day-close),
-re-run `nfl-corpus-backup.yml` via `workflow_dispatch` and confirm an
-`nfl-oracle/data/backups/*.csv` commit lands on `backups`.
+`NFL_BACKUP_DATABASE_URL` and `NFL_PG_SSL_ROOT_CERT` are present as GitHub
+Actions repo secrets (Railway worker keeps `NFL_DATABASE_URL` by design).
+Earlier "secret missing" logs were a false lead; real failures were:
+
+- CSV field size: `prepared_decisions.payload_json` exceeded Python's default
+  128KiB limit during validate/restore only (PR #196).
+- Orphan publish: worktree left on `backups`, so setup-python-uv post-cleanup
+  false-failed after a successful push (PR #198).
+
+Green end-to-end `workflow_dispatch`:
+https://github.com/cheeksmagunda/sports/actions/runs/34952913444
+(`nfl-oracle/data/backups/*` on the `backups` orphan branch). The 2026-09-12
+checkpoint below was directionally right on secrets; this note replaces the
+later "unconfigured" correction that lagged the green run.
 
 ## Day-close/backup went live; TLS and pipeline exit-code fixes (issue #149)
 
