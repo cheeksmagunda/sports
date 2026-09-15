@@ -190,3 +190,18 @@ def test_restore_cli_reports_failure_for_missing_snapshot(
     finally:
         sys.argv = argv_backup
     assert "ERROR" in capsys.readouterr().err
+
+
+def test_backup_main_reports_not_configured_without_database_url(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    backup_corpus = _import("backup_corpus")
+    monkeypatch.delenv("NFL_BACKUP_DATABASE_URL", raising=False)
+    monkeypatch.delenv("NFL_DATABASE_URL", raising=False)
+
+    assert backup_corpus.main() == 2
+    err = capsys.readouterr().err
+    assert "not_configured" in err
+    assert "NFL_BACKUP_DATABASE_URL" in err
+    assert "#172" in err
+
