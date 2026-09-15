@@ -29,6 +29,30 @@ def test_probe_realsports_auth_reports_missing_without_secrets() -> None:
     assert "password" not in blob
 
 
+def test_probe_token_cache_exists_on_railway_volume(tmp_path, monkeypatch) -> None:
+    """Volume-backed cache must be visible to nfl-provider-status (post-#174 leftover)."""
+    from nfl_oracle.ingest import realsports
+
+    volume = tmp_path / "volume"
+    scraper = volume / "scraper"
+    scraper.mkdir(parents=True)
+    cache = scraper / "request_token_cache.json"
+    cache.write_text("{}")
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", str(volume))
+    monkeypatch.delenv("NFL_ORACLE_SCRAPER_DIR", raising=False)
+    monkeypatch.delenv("REALSPORTS_TOKEN_CACHE_PATH", raising=False)
+    monkeypatch.delenv("NFL_REALSPORTS_TOKEN_CACHE", raising=False)
+    # Pin project roots so a local operator cache cannot mask the volume path.
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setattr("nfl_oracle.providers.auth_status._project_root", lambda: project)
+    monkeypatch.setattr(realsports, "project_root", lambda: project)
+
+    result = probe_realsports_auth()
+
+    assert result.token_cache_exists is True
+
+
 def test_five_card_stub_blocks_live_and_submit() -> None:
     stub = FiveCardProviderStub()
     ready = stub.readiness()
