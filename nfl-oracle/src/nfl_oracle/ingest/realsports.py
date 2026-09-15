@@ -86,29 +86,67 @@ def project_root() -> Path:
     return resolve_project_root(__file__)
 
 
+def _railway_volume_mount() -> Path | None:
+    """Return the Railway volume mount when the platform injects it."""
+    raw = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    if not raw:
+        return None
+    return Path(raw).expanduser()
+
+
 def scraper_dir() -> Path:
+    """Private session directory.
+
+    Preference order:
+    1. NFL_ORACLE_SCRAPER_DIR (explicit operator override)
+    2. $RAILWAY_VOLUME_MOUNT_PATH/scraper (persists across Railway redeploys)
+    3. <project_root>/scraper (local/Codespace default)
+    """
     override = os.environ.get("NFL_ORACLE_SCRAPER_DIR", "").strip()
-    path = Path(override).expanduser() if override else project_root() / "scraper"
+    if override:
+        path = Path(override).expanduser()
+    else:
+        volume = _railway_volume_mount()
+        path = (volume / "scraper") if volume is not None else project_root() / "scraper"
     _ensure_private_directory(path)
     return path
 
 
-def storage_state_path() -> Path:
+def _storage_state_candidates() -> list[Path]:
+    """Ordered discovery list for an existing storage_state.json."""
+    paths: list[Path] = []
     override = (
         os.environ.get("REALSPORTS_STORAGE_STATE_PATH", "").strip()
         or os.environ.get("NFL_REALSPORTS_STORAGE_STATE", "").strip()
     )
     if override and not _placeholder_secret(override) and not override.startswith("{"):
-        return Path(override).expanduser()
-    local = scraper_dir() / "storage_state.json"
-    if local.exists():
-        return local
+        paths.append(Path(override).expanduser())
+    paths.append(scraper_dir() / "storage_state.json")
+    # Legacy ephemeral path used before volume-aware discovery.
+    legacy = project_root() / "scraper" / "storage_state.json"
+    paths.append(legacy)
+    volume = _railway_volume_mount()
+    if volume is not None:
+        paths.append(volume / "scraper" / "storage_state.json")
+        paths.append(volume / "storage_state.json")
     # Optional sibling bootstrap when an operator keeps one Real Sports session
     # under wnba-oracle/scraper (path only; no WNBA domain imports).
-    sibling = project_root().parent / "wnba-oracle" / "scraper" / "storage_state.json"
-    if sibling.exists():
-        return sibling
-    return local
+    paths.append(project_root().parent / "wnba-oracle" / "scraper" / "storage_state.json")
+    seen: set[str] = set()
+    out: list[Path] = []
+    for path in paths:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            out.append(path)
+    return out
+
+
+def storage_state_path() -> Path:
+    for candidate in _storage_state_candidates():
+        if candidate.is_file() and not candidate.is_symlink():
+            return candidate
+    return scraper_dir() / "storage_state.json"
 
 
 def token_cache_path() -> Path:
@@ -118,7 +156,18 @@ def token_cache_path() -> Path:
     )
     if override:
         return Path(override).expanduser()
-    return scraper_dir() / "request_token_cache.json"
+    primary = scraper_dir() / "request_token_cache.json"
+    if primary.is_file() and not primary.is_symlink():
+        return primary
+    legacy = project_root() / "scraper" / "request_token_cache.json"
+    if legacy.is_file() and not legacy.is_symlink():
+        return legacy
+    volume = _railway_volume_mount()
+    if volume is not None:
+        vol_cache = volume / "scraper" / "request_token_cache.json"
+        if vol_cache.is_file() and not vol_cache.is_symlink():
+            return vol_cache
+    return primary
 
 
 def _placeholder_secret(value: str) -> bool:
@@ -303,10 +352,19 @@ async def capture_live_headers(
             ) from exc
         refreshed_state = await ctx.storage_state()
         local = scraper_dir() / "storage_state.json"
-        if (
-            state_path.resolve() == local.resolve()
-            or os.environ.get("NFL_REALSPORTS_WRITE_STATE") == "1"
-        ):
+        # Persist into scraper_dir (volume-backed on Railway). Discovery may have
+        # loaded a legacy ephemeral path; do not leave the refreshed session there.
+        explicit = (
+            os.environ.get("REALSPORTS_STORAGE_STATE_PATH", "").strip()
+            or os.environ.get("NFL_REALSPORTS_STORAGE_STATE", "").strip()
+        )
+        used_explicit = bool(
+            explicit
+            and not _placeholder_secret(explicit)
+            and not explicit.startswith("{")
+            and state_path.resolve() == Path(explicit).expanduser().resolve()
+        )
+        if (not used_explicit) or os.environ.get("NFL_REALSPORTS_WRITE_STATE") == "1":
             _write_private_json(local, refreshed_state)
         await browser.close()
 
