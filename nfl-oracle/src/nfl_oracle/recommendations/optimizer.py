@@ -104,6 +104,14 @@ class Recommendation(Record):
     diversity_relaxed: bool
     candidate_count: int
     scoring_policy: ScoringPolicy
+    # Carries the slate's own checked classification onto the artifact the
+    # optimizer actually hands off, so a consumer of the frozen lineup does
+    # not have to reach into the nested slate to know which regime produced
+    # it. See nfl_oracle.contests.boosts.BoostObservation for the capture
+    # this is ultimately derived from.
+    boost_regime: Literal["zero_boost", "provider_boosts_present"]
+    boost_nonzero_count: int
+    boost_max: Finite
     assumptions: tuple[str, ...]
     contest_entry: Literal[False] = False
 
@@ -474,6 +482,9 @@ def optimize(
         diversity_relaxed=(target_teams < requested_teams or target_games < requested_games),
         candidate_count=len(eligible),
         scoring_policy=scoring_policy,
+        boost_regime=slate.boost_regime,
+        boost_nonzero_count=slate.boost_nonzero_count,
+        boost_max=slate.boost_max,
         assumptions=(
             "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
             "game_correlation_is_configured_sensitivity_not_fitted",

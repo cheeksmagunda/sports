@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 from oracle_core.artifacts import atomic_write_json
 
+from nfl_oracle.contests.boosts import observe_boosts, snap_boost
 from nfl_oracle.ingest.realsports import (
     BASE,
     RequestHeaders,
@@ -301,7 +302,7 @@ class NFLReader:
                     team=game.home_team if home_player else game.away_team,
                     opponent=game.away_team if home_player else game.home_team,
                     injury_status=player.get("injuryStatus"),
-                    card_boost=player["multiplierBonus"],
+                    card_boost=snap_boost(player["multiplierBonus"]),
                     clock=EvidenceClock(
                         source_available_at=observed_at[pid], captured_at=observed_at[pid]
                     ),
@@ -309,20 +310,24 @@ class NFLReader:
             )
         # Refresh lock after the sweep, preserving each player's actual capture.
         contest = await self.contest(contest_id)
-        boosts = [candidate.card_boost for candidate in candidates]
-        nonzero_boosts = sum(1 for boost in boosts if boost > 0)
+        now = self.clock()
+        # The tested BoostObservation classification is the single source of
+        # truth for zero-boost-vs-published, not a second, ad hoc count kept
+        # in sync by hand. It reads the same raw multiplierBonus values used
+        # to build card_boost above, snapped the same way.
+        observation = observe_boosts(contest_id, rated.values(), captured_at=now.isoformat())
         unmatched = tuple(sorted(set(roster) - set(rated)))
         return Slate(
             contest=contest,
             games=games,
             candidates=tuple(candidates),
-            captured_at=self.clock(),
+            captured_at=now,
             source_hashes=tuple(self.hashes),
             pool_roster_count=len(roster),
             pool_search_matched_count=len(rated),
             pool_unmatched_ids=unmatched,
             pool_complete=len(roster) == len(rated) and not unmatched,
-            boost_regime="zero_boost" if nonzero_boosts == 0 else "provider_boosts_present",
-            boost_nonzero_count=nonzero_boosts,
-            boost_max=max(boosts) if boosts else 0.0,
+            boost_regime="zero_boost" if observation.all_zero else "provider_boosts_present",
+            boost_nonzero_count=observation.n_nonzero,
+            boost_max=observation.max_boost,
         )

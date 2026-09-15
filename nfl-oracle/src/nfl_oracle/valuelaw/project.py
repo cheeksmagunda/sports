@@ -1,8 +1,9 @@
 """Project live candidate values from Corpus G history.
 
-This module is deliberately small and auditable for the zero-boost week-1
-decision path. It turns the validated live candidate pool plus Real-id history
-join into slot-ordered projected values without provider writes.
+This module is deliberately small and auditable. It turns the validated live
+candidate pool plus Real-id history join into slot-ordered projected values
+without provider writes. Slot selection is boost-aware: it holds under both
+the zero-boost week-1 regime and the live card-boost table from week 2 on.
 """
 
 from __future__ import annotations
@@ -130,22 +131,65 @@ def recommend_slots(
     *,
     slot_multipliers: Sequence[float] = OBSERVED_SLOT_MULTIPLIERS,
 ) -> tuple[SlotRecommendation, ...]:
-    """Return the five slot-ordered recommendations for a zero-boost slate."""
+    """Return the five slot-ordered recommendations that maximize total score.
 
-    if len(slot_multipliers) != 5:
+    ``score = value * (slot + boost)`` splits into an order-invariant
+    ``sum(value * boost)`` term and a rearrangement term ``sum(value * slot)``
+    that, for any FIXED set of five players, is maximized by descending-value
+    slot assignment regardless of boost (rearrangement inequality). So once
+    the eligible pool is sorted by projected value descending, selecting the
+    optimal SET reduces to a linear-time DP over that sorted pool: this
+    mirrors ``nfl_oracle.replay.harness.hindsight_best_lineup`` exactly, the
+    same fix for the same bug class, applied to projected rather than
+    finalized values. Descending projected value alone (the prior behavior of
+    this function) is only optimal when every candidate shares the same
+    boost, e.g. the zero-boost regime; it is not assumed here.
+    """
+
+    k = len(slot_multipliers)
+    if k != 5:
         raise ValueError("five_slots_required")
     eligible = [p for p in projections if p.projected_value > 0]
-    if len(eligible) < 5:
+    if len(eligible) < k:
         raise ValueError("fewer_than_five_projected_candidates")
-    if any(p.card_boost != 0 for p in eligible):
-        raise ValueError("recommend_slots_requires_zero_boost_regime")
-    chosen = sorted(eligible, key=lambda p: (-p.projected_value, p.player_id))[:5]
+    ranked = sorted(eligible, key=lambda p: (-p.projected_value, p.player_id))
+    slots = [float(m) for m in slot_multipliers]
+    n = len(ranked)
+
+    neg_inf = float("-inf")
+    # best[j] = max achievable total using a prefix of the value-sorted pool,
+    # having filled j of the k slots so far (slot j+1 is assigned next).
+    best: list[float] = [0.0] + [neg_inf] * k
+    choice: list[list[bool]] = [[False] * (k + 1) for _ in range(n)]
+    for i, projection in enumerate(ranked):
+        own_boost_total = projection.projected_value * projection.card_boost
+        for j in range(min(i, k - 1), -1, -1):
+            if best[j] == neg_inf:
+                continue
+            candidate = best[j] + own_boost_total + projection.projected_value * slots[j]
+            if candidate > best[j + 1]:
+                best[j + 1] = candidate
+                choice[i][j + 1] = True
+
+    if best[k] == neg_inf:
+        raise ValueError("fewer_than_five_projected_candidates")
+    chosen: list[int] = []
+    j = k
+    for i in range(n - 1, -1, -1):
+        if j > 0 and choice[i][j]:
+            chosen.append(i)
+            j -= 1
+    chosen.reverse()
+
+    def expected_total_value(slot_index: int, projection: CandidateProjection) -> float:
+        return projection.projected_value * (slots[slot_index] + projection.card_boost)
+
     return tuple(
         SlotRecommendation(
-            slot=index + 1,
-            slot_multiplier=float(slot_multipliers[index]),
-            projection=projection,
-            expected_total_value=projection.projected_value * float(slot_multipliers[index]),
+            slot=slot_index + 1,
+            slot_multiplier=slots[slot_index],
+            projection=ranked[i],
+            expected_total_value=expected_total_value(slot_index, ranked[i]),
         )
-        for index, projection in enumerate(chosen)
+        for slot_index, i in enumerate(chosen)
     )
