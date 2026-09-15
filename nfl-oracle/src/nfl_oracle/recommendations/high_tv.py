@@ -10,11 +10,14 @@ Board/label serializations prefer schema.org via oracle_core.schemaorg.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from oracle_core.high_tv import (
     ArchiveSeasonDepth,
+    HighPotentialLabelKind,
     HighTvBoard,
     build_high_tv_board,
     game_value_rank_weights,
@@ -26,17 +29,76 @@ from oracle_core.high_tv import (
 from nfl_oracle.contests.field import counterfactual_best
 from nfl_oracle.contests.parse import ParsedContest
 from nfl_oracle.contests.schema import DraftStatRow
+from nfl_oracle.data.coverage_matrix import CoverageMatrixDocument, load_coverage_matrix_doc
+from nfl_oracle.data.label_depth import label_depth_report
 
 # Re-export shared names so NFL call sites can import from one place.
 __all__ = [
     "ArchiveSeasonDepth",
     "HighTvBoard",
+    "TvBoardCoverage",
     "game_value_rank_weights",
     "high_tv_board_from_draft_stats",
+    "nfl_season_for_day",
+    "nfl_label_depth_report",
     "player_high_tv_weights_from_draft_stats",
     "report_nfl_archive_season_depth",
     "sample_weights_for_history",
+    "tv_board_coverage_from_contests",
 ]
+
+
+def nfl_season_for_day(day: date) -> int:
+    """Season year for a contest day. January/February belong to the prior season."""
+
+    return day.year if day.month >= 3 else day.year - 1
+
+
+@dataclass(frozen=True)
+class TvBoardCoverage:
+    """Which seasons and games have a reconstructable high Total-Value board."""
+
+    seasons: tuple[int, ...] = ()
+    game_ids: tuple[int, ...] = ()
+    contest_ids: tuple[int, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "seasons": list(self.seasons),
+            "game_ids": list(self.game_ids),
+            "contest_ids": list(self.contest_ids),
+        }
+
+
+def tv_board_coverage_from_contests(
+    contests: Iterable[ParsedContest], *, top_n: int = 5
+) -> TvBoardCoverage:
+    """Scan parsed Corpus C contests for rung-1 (high Total-Value) coverage.
+
+    A contest earns the high-TV rung only when its own draft_stats reconstruct
+    a Total-Value board, which is what ``high_tv_board_from_draft_stats``
+    decides. Contests without boosts stay on the raw pre-boost rung, so old
+    seasons are classified rather than dropped.
+    """
+
+    seasons: set[int] = set()
+    games: set[int] = set()
+    contest_ids: set[int] = set()
+    for parsed in contests:
+        board = high_tv_board_from_draft_stats(parsed, top_n=top_n)
+        if board is None or board.label_kind != HighPotentialLabelKind.HIGH_TOTAL_VALUE_BOARD:
+            continue
+        record = parsed.contest
+        contest_ids.add(int(record.contest_id))
+        season = record.season if record.season is not None else nfl_season_for_day(record.day)
+        seasons.add(int(season))
+        if record.game_id is not None:
+            games.add(int(record.game_id))
+    return TvBoardCoverage(
+        seasons=tuple(sorted(seasons)),
+        game_ids=tuple(sorted(games)),
+        contest_ids=tuple(sorted(contest_ids)),
+    )
 
 
 def high_tv_board_from_draft_stats(parsed: ParsedContest, *, top_n: int = 5) -> HighTvBoard | None:
@@ -154,18 +216,59 @@ def _season_game_counts_from_history_rows(rows: Sequence[Any]) -> dict[int, int]
     return {season: len(ids) for season, ids in games.items()}
 
 
+def nfl_label_depth_report(
+    *,
+    project_root: Path | None = None,
+    catalog_path: Path | None = None,
+    matrix_path: Path | None = None,
+    matrix: CoverageMatrixDocument | None = None,
+    tv_board_coverage: TvBoardCoverage | None = None,
+) -> dict[str, Any]:
+    """Classify every coverage-matrix season by which ladder rung it supports.
+
+    Offline and auth-free: it reads the coverage matrix ingest already wrote.
+    Pass ``tv_board_coverage`` from parsed Corpus C contests to upgrade seasons
+    to the high Total-Value rung; without it every season with Real value is
+    reported honestly as raw pre-boost. No year cap is applied.
+    """
+
+    root = project_root or Path("nfl-oracle")
+    catalog = catalog_path or (root / "data" / "catalog" / "season_game_ids.json")
+    if matrix is not None:
+        document = matrix
+    else:
+        document = load_coverage_matrix_doc(
+            matrix_path or (root / "data" / "catalog" / "coverage_matrix.json")
+        )
+    coverage = tv_board_coverage or TvBoardCoverage()
+    catalog_counts = _season_game_counts_from_catalog(catalog) if catalog.is_file() else {}
+    return label_depth_report(
+        document,
+        tv_board_game_ids=coverage.game_ids,
+        tv_board_seasons=coverage.seasons,
+        catalog_seasons=sorted(catalog_counts),
+    )
+
+
 def report_nfl_archive_season_depth(
     *,
     project_root: Path | None = None,
     catalog_path: Path | None = None,
     corpus_g_root: Path | None = None,
     fit_rows: Sequence[Any] | None = None,
+    matrix_path: Path | None = None,
+    matrix: CoverageMatrixDocument | None = None,
+    tv_board_coverage: TvBoardCoverage | None = None,
 ) -> ArchiveSeasonDepth:
     """Report catalog vs on-disk vs fit season depth for NFL Corpus G.
 
     Policy: use the FULL available archive (catalog seasons 2002+ when
     present). Never apply a ~2y lookback cap. Fit seasons default to every
     on-disk finalized game when ``fit_rows`` is omitted.
+
+    The per-season ladder split comes from the coverage matrix, so a season
+    reports the high Total-Value rung only when a Corpus C board actually
+    reconstructs, and the raw pre-boost rung whenever Real value exists.
     """
 
     root = project_root or Path("nfl-oracle")
@@ -174,8 +277,17 @@ def report_nfl_archive_season_depth(
     catalog_counts = _season_game_counts_from_catalog(catalog) if catalog.is_file() else {}
     disk_counts = _season_game_counts_on_disk(corpus)
     fit_counts = _season_game_counts_from_history_rows(fit_rows) if fit_rows is not None else None
+    depth = nfl_label_depth_report(
+        project_root=root,
+        catalog_path=catalog,
+        matrix_path=matrix_path,
+        matrix=matrix,
+        tv_board_coverage=tv_board_coverage,
+    )
     return summarize_archive_season_depth(
         catalog_seasons=catalog_counts,
         on_disk_seasons=disk_counts,
         fit_seasons=fit_counts,
+        seasons_with_total_value_board=depth["seasons_with_total_value_board"],
+        seasons_with_raw_score_only=depth["seasons_with_raw_score_only"],
     )

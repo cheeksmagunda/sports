@@ -16,6 +16,8 @@ from oracle_core.artifacts import atomic_write_json
 from nfl_oracle.data.coverage import CoverageStatus, SeasonCoverageRow, infer_status_from_seeds
 from nfl_oracle.data.paths import resolve_data_paths
 
+LABEL_KINDS: tuple[str, ...] = ("high_total_value_board", "raw_highest_score_pre_boost")
+
 SEASON_STATUSES: tuple[CoverageStatus, ...] = ("known", "unknown", "blocked")
 
 
@@ -57,9 +59,43 @@ class CoverageMatrixDocument:
                         if block.get("blocked_reason") is not None
                         else None
                     ),
+                    label_kind=_season_label_kind(block),
                 )
             )
         return rows
+
+
+def _season_label_kind(block: dict[str, Any]) -> str | None:
+    """Season ladder rung: explicit key first, else derived from game cells.
+
+    Matrices written before #189 carry no ``label_kind``. Deriving from the
+    per-game cells keeps those readable without a rewrite: a game cell claims
+    the high-TV rung only when ingest or a report-time Corpus C upgrade said
+    so, otherwise any non-null Real value means the raw rung.
+    """
+
+    declared = block.get("label_kind")
+    if isinstance(declared, str) and declared in LABEL_KINDS:
+        return declared
+    games = block.get("games")
+    if not isinstance(games, dict):
+        return None
+    kinds: set[str] = set()
+    for game in games.values():
+        if not isinstance(game, dict):
+            continue
+        cell = game.get("label_kind")
+        if isinstance(cell, str) and cell in LABEL_KINDS:
+            kinds.add(cell)
+            continue
+        try:
+            if int(game.get("value_nonnull") or 0) > 0:
+                kinds.add("raw_highest_score_pre_boost")
+        except (TypeError, ValueError):
+            continue
+    if "high_total_value_board" in kinds:
+        return "high_total_value_board"
+    return "raw_highest_score_pre_boost" if kinds else None
 
 
 def coverage_matrix_file(catalog_dir: Path | None = None) -> Path:
@@ -115,9 +151,14 @@ def catalog_matrix_alignment(
         game_n = len(games) if isinstance(games, dict) else 0
         if status == "known" and game_n == 0:
             known_empty.append(str(key))
+    label_kinds: dict[str, int] = {}
+    for row in matrix.season_rows():
+        key = row.label_kind or "no_usable_label"
+        label_kinds[key] = label_kinds.get(key, 0) + 1
     return {
         "catalog_season_count": len(cat_keys),
         "matrix_season_count": len(mat_keys),
+        "label_kind_counts": dict(sorted(label_kinds.items())),
         "seasons_only_in_catalog": only_catalog,
         "seasons_only_in_matrix": only_matrix,
         "known_status_with_zero_games": sorted(known_empty),

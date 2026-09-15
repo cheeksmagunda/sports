@@ -357,3 +357,89 @@ def test_nws_forecast_is_predecision_and_venue_coordinates_are_verified() -> Non
             update={"rows": ({**source.rows[0], "forecast_generated_at": "2026-09-10T00:00:00Z"},)}
         )
         forecast_features(future, datetime(2026, 9, 13, 17, tzinfo=UTC), NOW)
+
+
+def _value_history() -> list[SimpleNamespace]:
+    """Finalized Corpus G shaped rows: Real value attributed to a defense.
+
+    BUF is team_id 2 in the slate fixture, so these are values BUF allowed.
+    Every kickoff is more than 24h before the decision clock.
+    """
+
+    earlier = datetime(2026, 9, 6, 17, tzinfo=UTC)
+    return [
+        SimpleNamespace(
+            player_id=pid,
+            game_id=19000 + pid,
+            opponent_team_id=opponent,
+            kickoff_at=earlier,
+            value=value,
+            position="WR",
+            did_not_play=False,
+        )
+        for pid, opponent, value in ((1, 2, 12.0), (7, 2, 8.0), (8, 3, 4.0), (9, 3, 4.0))
+    ]
+
+
+def test_context_wires_divisional_injury_weather_and_opponent_defense() -> None:
+    bundle = build_context(_slate(), _snapshot(), NOW, value_history=_value_history())
+    player = bundle.features_by_player[1]
+
+    # NE at BUF is an AFC East game; the static map is the whole join.
+    assert player["is_divisional"] == 1.0
+
+    # Real card injuryStatus was present on every candidate in the fixture.
+    assert player["injury_status_available"] == 1.0
+    assert player["injury_active"] == 1.0
+    assert bundle.features_by_player[2]["injury_questionable"] == 1.0
+
+    # No NWS source in this snapshot, so weather stays unavailable and no
+    # magnitude is invented.
+    assert player["weather_available"] == 0.0
+    assert "weather_temp_f" not in player
+    assert "weather_missing" in bundle.missing_by_player[1]
+
+    # BUF (team_id 2) allowed 12.0 and 8.0 before the decision; the league
+    # mean across all four observations is 7.0, so the defense factor is
+    # 10/7 and the player's own prior of 12.0 scales by it.
+    assert player["opp_def_value_allowed_prior"] == 10.0
+    assert player["opponent_adjusted_prior"] == pytest.approx(12.0 * (10.0 / 7.0))
+
+
+def test_opponent_defense_keys_are_absent_without_a_value_archive() -> None:
+    bundle = build_context(_slate(), _snapshot(), NOW)
+    player = bundle.features_by_player[1]
+    assert "opp_def_value_allowed_prior" not in player
+    assert "opponent_adjusted_prior" not in player
+    # The divisional join needs no archive at all.
+    assert player["is_divisional"] == 1.0
+
+
+def test_historical_enrichment_joins_real_value_allowed_from_the_rows_themselves() -> None:
+    kickoff = datetime(2026, 9, 13, 17, tzinfo=UTC)
+    target = SimpleNamespace(
+        player_id=11,
+        game_id=9001,
+        opponent_team_id=2,
+        kickoff_at=kickoff,
+        value=5.0,
+        position="WR",
+        did_not_play=False,
+    )
+    rows = [target, *_value_history()]
+    metadata = {
+        (11, 9001): {
+            "name": "José Smith",
+            "team": "NE",
+            "opponent": "BUF",
+            "position": "WR",
+            "season": 2026,
+            "week": 2,
+        }
+    }
+    result = enrich_historical_rows(rows, _snapshot(captured_at=NOW), metadata=metadata)
+    assert len(result.rows) == 1
+    features = result.rows[0].features
+    assert features["is_divisional"] == 1.0
+    # The target's own game must not enter its own defense prior.
+    assert features["opp_def_value_allowed_prior"] == 10.0

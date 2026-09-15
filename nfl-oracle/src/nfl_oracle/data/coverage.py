@@ -15,6 +15,11 @@ class SeasonCoverageRow:
     game_ids: tuple[int, ...] = ()
     value_presence_note: str = ""
     blocked_reason: str | None = None
+    # Which #185/#189 training-label rung this season supports:
+    # high_total_value_board, raw_highest_score_pre_boost, or None when no
+    # Real value has been observed yet. Older matrices have no such key, so
+    # None also means "not classified".
+    label_kind: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

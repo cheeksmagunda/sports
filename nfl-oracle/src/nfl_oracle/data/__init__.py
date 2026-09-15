@@ -9,17 +9,31 @@ from nfl_oracle.data.coverage_matrix import (
     save_coverage_matrix_doc,
 )
 from nfl_oracle.data.density import CoverageDensity, summarize_coverage_density
+from nfl_oracle.data.label_depth import (
+    LABEL_LADDER,
+    SeasonLabelDepth,
+    classify_matrix_label_depth,
+    game_label_kind,
+    label_depth_report,
+    label_depth_schemaorg,
+)
 from nfl_oracle.data.paths import DataPaths, resolve_data_paths
 from nfl_oracle.data.summary import research_data_summary
 
 __all__ = [
+    "LABEL_LADDER",
     "CoverageDensity",
     "CoverageMatrixDocument",
     "CoverageStatus",
     "DataPaths",
     "SeasonCoverageRow",
     "SeasonGameCatalog",
+    "SeasonLabelDepth",
     "catalog_matrix_alignment",
+    "classify_matrix_label_depth",
+    "game_label_kind",
+    "label_depth_report",
+    "label_depth_schemaorg",
     "load_coverage_matrix_doc",
     "load_season_game_catalog",
     "research_data_summary",

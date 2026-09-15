@@ -1,4 +1,4 @@
-"""FeatureSpec v1 — availability clocks + train/live flags."""
+"""FeatureSpec v1: availability clocks + train/live flags."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class FeatureSpec:
 
 
 def feature_registry() -> tuple[FeatureSpec, ...]:
-    """Honest registry — expand carefully; keep same-slate finals live-forbidden."""
+    """Honest registry. Expand carefully; keep same-slate finals live-forbidden."""
 
     return (
         FeatureSpec(
@@ -102,9 +102,12 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             train_ok=True,
             live_ok=True,
             availability_rule="known_from_public_schedule_team_divisions",
-            description="True when opponent is in the same division (offline schedule join).",
+            description=(
+                "True when opponent shares the player's division. Static 2002+ "
+                "division map in nfl_oracle.features.matchup, joined in "
+                "recommendations.context (#189)."
+            ),
             group="matchup",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="position",
@@ -185,14 +188,14 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             live_ok=True,
             availability_rule=(
                 "fit_on_seasons_strictly_earlier_than_decision_season;"
-                "offline_stub_until_opp_def_join_wired"
+                "from_historical_context_opponent_value_allowed_join"
             ),
             description=(
-                "Player/position prior adjusted by opponent defensive value-allowed "
-                "prior. Offline stub may emit null until join is wired."
+                "Player (else position) Real value prior scaled by the clamped "
+                "opponent-defense factor. Absent when either side lacks "
+                "walk-forward support; never emitted as zero (#189)."
             ),
             group="prior",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="opp_def_value_allowed_prior",
@@ -201,14 +204,14 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             live_ok=True,
             availability_rule=(
                 "fit_on_seasons_strictly_earlier_than_decision_season;"
-                "offline_stub_until_opponent_defense_table_wired"
+                "from_corpus_g_real_value_allowed_by_opponent_defense"
             ),
             description=(
-                "Walk-forward mean Real value allowed by opponent defense (by "
-                "position when available). Offline stub until table exists."
+                "Walk-forward mean Real value allowed by the opponent defense "
+                "(position split when it has support), built from finalized "
+                "Corpus G box rows keyed by opponent_team_id (#189)."
             ),
             group="matchup",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="prior_n_games",
@@ -242,13 +245,13 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             dtype="categorical",
             train_ok=True,
             live_ok=True,
-            availability_rule=("public_injury_report_when_captured_pre_lock_else_null_stub"),
+            availability_rule="real_card_injury_status_when_captured_pre_lock_else_null",
             description=(
-                "Coarse injury designation (out/doubtful/questionable/probable/"
-                "healthy/unknown). Offline stub emits null until capture wired."
+                "Coarse injury designation (active/questionable/doubtful/out/"
+                "inactive/ir/suspended/limited/dnp/full/unknown) from the Real "
+                "card injuryStatus field. Null when the field is absent."
             ),
             group="injury",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="injury_status_available",
@@ -256,39 +259,46 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             train_ok=True,
             live_ok=True,
             availability_rule="true_when_injury_status_source_captured_pre_lock",
-            description="Whether injury_status was observed pre-lock (not inferred).",
+            description=(
+                "Whether the Real card actually carried injuryStatus pre-lock. "
+                "An unrecognized designation is still an observation."
+            ),
             group="injury",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="weather_temp_f",
             dtype="float",
             train_ok=True,
             live_ok=True,
-            availability_rule=("public_forecast_for_outdoor_stadium_pre_lock_else_null_stub"),
-            description="Forecast kickoff temperature °F when outdoor and available.",
+            availability_rule="nws_forecast_for_outdoor_stadium_pre_lock_else_null",
+            description=(
+                "Forecast kickoff temperature in F from the NWS capture in "
+                "recommendations.sources. Null indoors or when uncaptured."
+            ),
             group="weather",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="weather_wind_mph",
             dtype="float",
             train_ok=True,
             live_ok=True,
-            availability_rule=("public_forecast_for_outdoor_stadium_pre_lock_else_null_stub"),
-            description="Forecast kickoff wind mph when outdoor and available.",
+            availability_rule="nws_forecast_for_outdoor_stadium_pre_lock_else_null",
+            description=(
+                "Forecast kickoff wind mph from the NWS capture. Null indoors or when uncaptured."
+            ),
             group="weather",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="weather_precip_prob",
             dtype="float",
             train_ok=True,
             live_ok=True,
-            availability_rule=("public_forecast_for_outdoor_stadium_pre_lock_else_null_stub"),
-            description="Forecast precipitation probability [0,1] when available.",
+            availability_rule="nws_forecast_for_outdoor_stadium_pre_lock_else_null",
+            description=(
+                "Forecast precipitation probability [0,1] from the NWS "
+                "capture. Null indoors or when uncaptured."
+            ),
             group="weather",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="weather_available",
@@ -296,9 +306,12 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             train_ok=True,
             live_ok=True,
             availability_rule="true_when_weather_forecast_captured_pre_lock",
-            description="Whether weather fields were observed pre-lock.",
+            description=(
+                "Whether any weather field was observed pre-lock. False "
+                "indoors and when no forecast was captured; magnitudes are "
+                "never invented to fill the gap."
+            ),
             group="weather",
-            offline_stub=True,
         ),
         FeatureSpec(
             name="team_pace_prior",
@@ -351,7 +364,7 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             train_ok=True,
             live_ok=False,
             availability_rule="post_finalization_label_only",
-            description="Realized Real value — train label; live forbidden.",
+            description="Realized Real value: train label only; live forbidden.",
             group="label_only",
         ),
     )

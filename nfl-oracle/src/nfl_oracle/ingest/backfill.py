@@ -15,6 +15,7 @@ import httpx
 from oracle_core.artifacts import atomic_write_json
 
 from nfl_oracle.common.logging import configure_logging, get_logger
+from nfl_oracle.data.label_depth import LABEL_KIND_HIGH_TV, LABEL_KIND_RAW, game_label_kind
 from nfl_oracle.ingest.corpus_g import CorpusGStore, GameIngestResult, ingest_game
 from nfl_oracle.ingest.realsports import (
     StorageStateMissing,
@@ -89,6 +90,10 @@ class CoverageCell:
     captured_at: str | None = None
     decision_at: str | None = None
     value_note: str | None = None
+    # #185/#189 label ladder rung this game supports. Corpus G alone can only
+    # justify the raw pre-boost rung: box scores carry Real value but no
+    # draft-context multiplier. A Corpus C board upgrades it at report time.
+    label_kind: str | None = None
 
 
 def cursor_path(store: CorpusGStore) -> Path:
@@ -130,6 +135,28 @@ def load_coverage_matrix(store: CorpusGStore) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise TypeError("coverage matrix must be a JSON object")
     return payload
+
+
+def _label_kind_for_cell(cell: CoverageCell) -> str | None:
+    return game_label_kind(value_nonnull=cell.value_nonnull, has_total_value_board=False)
+
+
+def _season_label_kind_from_games(games: dict[str, Any]) -> str | None:
+    """Season rung from its game cells. Any high-TV game lifts the season."""
+
+    kinds: set[str] = set()
+    for game in games.values():
+        if not isinstance(game, dict):
+            continue
+        kind = game.get("label_kind")
+        if kind in (LABEL_KIND_HIGH_TV, LABEL_KIND_RAW):
+            kinds.add(str(kind))
+            continue
+        if int(game.get("value_nonnull") or 0) > 0:
+            kinds.add(LABEL_KIND_RAW)
+    if LABEL_KIND_HIGH_TV in kinds:
+        return LABEL_KIND_HIGH_TV
+    return LABEL_KIND_RAW if kinds else None
 
 
 def _value_note_for_cell(cell: CoverageCell) -> str:
@@ -186,6 +213,9 @@ def _summarize_season_block(season_key: str, season_block: dict[str, Any]) -> di
     out["games"] = games
     out["games_ingested"] = len(games)
     out["value_note"] = season_value_note
+    out["label_kind"] = _season_label_kind_from_games(games)
+    out["label_ladder"] = [LABEL_KIND_HIGH_TV, LABEL_KIND_RAW]
+    out["year_cap"] = None
     if value_notes:
         out["game_value_notes"] = value_notes
     out.setdefault("season", int(season_key) if season_key.isdigit() else season_key)
@@ -243,6 +273,8 @@ def _upsert_coverage(store: CorpusGStore, cell: CoverageCell) -> None:
     cell_payload = asdict(cell)
     if not cell_payload.get("value_note"):
         cell_payload["value_note"] = _value_note_for_cell(cell)
+    if not cell_payload.get("label_kind"):
+        cell_payload["label_kind"] = _label_kind_for_cell(cell)
     games[str(cell.game_id)] = cell_payload
     season_block["games"] = games
     season_block["status"] = SEASON_STATUS_KNOWN
@@ -318,6 +350,7 @@ async def backfill_season(
                 source_available_at=result.source_available_at,
                 captured_at=result.captured_at or ingested_at,
                 decision_at=result.decision_at,
+                label_kind=game_label_kind(value_nonnull=result.value_nonnull),
             )
             _upsert_coverage(store, cell)
             done.add(game_id)
@@ -365,7 +398,10 @@ def main(argv: list[str] | None = None) -> int:
         matrix = refresh_coverage_matrix(store)
         print(f"coverage={coverage_matrix_path(store)}")
         for key, block in (matrix.get("seasons") or {}).items():
-            print(f"season={key} status={block.get('status')} note={block.get('value_note')}")
+            print(
+                f"season={key} status={block.get('status')} "
+                f"label_kind={block.get('label_kind')} note={block.get('value_note')}"
+            )
         return 0
     if args.season is None:
         print("[BLOCK] --season is required unless --refresh-matrix-only", file=sys.stderr)
@@ -396,7 +432,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     matrix = refresh_coverage_matrix(store)
     season_block = (matrix.get("seasons") or {}).get(str(args.season), {})
-    print(f"season_status={season_block.get('status')} value_note={season_block.get('value_note')}")
+    print(
+        f"season_status={season_block.get('status')} "
+        f"label_kind={season_block.get('label_kind')} "
+        f"value_note={season_block.get('value_note')}"
+    )
     print(f"coverage={coverage_matrix_path(store)}")
     print(f"cursor={cursor_path(store)}")
     return 0 if results else 1
