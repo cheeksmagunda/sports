@@ -1,13 +1,24 @@
 """schema.org vocabulary helpers for shared Oracle data contracts.
 
-Prefer schema.org types and properties for cross-sport abstractions:
-SportsEvent, SportsTeam, Person (athlete), SportsOrganization,
-QuantitativeValue, ItemList, and related properties.
+Prefer schema.org types and properties for cross-sport abstractions and
+entity linking: Person, SportsTeam, SportsOrganization, SportsEvent, Place,
+Role/OrganizationRole, identifier/PropertyValue, sameAs, Observation,
+QuantitativeValue, and ItemList.
+
+Hierarchy for shared portfolio contracts:
+1. schema.org first (identity, events, places, observations, lists).
+2. IPTC Sport Schema only where schema.org is weak (sport-specific
+   participation, competitions, statistics) -- keep that mapping in apps
+   or a later crosswalk, not forced into these helpers.
+3. PROV-O for provenance (wasGeneratedBy / wasAttributedTo style claims)
+   when source/time/process attribution is required; see drive research
+   and issue #199. Compact ``prov_*`` helpers below are optional additives.
 
 Extend only with clearly namespaced additional properties
 (``https://oracle.local/vocab#...`` or compact ``oracle:``) when schema.org
 has no fit. Sport apps map provider payloads onto these shapes; oracle-core
-does not import sport packages.
+does not import sport packages. Never assert ``sameAs`` from a fuzzy
+name+team match -- only authoritative URL/URI identity refs.
 """
 
 from __future__ import annotations
@@ -19,10 +30,13 @@ SCHEMA_ORG = "https://schema.org/"
 ORACLE_VOCAB = "https://oracle.local/vocab#"
 
 # Compact aliases used in JSON-LD @context maps.
+PROV_NS = "http://www.w3.org/ns/prov#"
+
 SCHEMA_CONTEXT: dict[str, str] = {
     "@vocab": SCHEMA_ORG,
     "schema": SCHEMA_ORG,
     "oracle": ORACLE_VOCAB,
+    "prov": PROV_NS,
 }
 
 
@@ -170,6 +184,8 @@ def person_athlete(
     *,
     identifier: str | int,
     name: str | None = None,
+    same_as: str | Sequence[str] | None = None,
+    identifiers: Sequence[Mapping[str, Any]] | None = None,
     additional: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a schema.org Person node used as an athlete reference."""
@@ -180,10 +196,11 @@ def person_athlete(
     }
     if name is not None:
         node["name"] = name
-    if additional:
-        for key, raw in additional.items():
-            node[key if ":" in key or key.startswith("@") else f"oracle:{key}"] = raw
-    return node
+    if same_as is not None:
+        node["sameAs"] = same_as_refs(same_as)
+    if identifiers:
+        node = attach_identifiers(node, *identifiers)
+    return _apply_additional(node, additional)
 
 
 def sports_event(
@@ -192,11 +209,18 @@ def sports_event(
     name: str | None = None,
     start_date: str | None = None,
     location_name: str | None = None,
+    location: Mapping[str, Any] | None = None,
     home_team: Mapping[str, Any] | None = None,
     away_team: Mapping[str, Any] | None = None,
+    same_as: str | Sequence[str] | None = None,
+    identifiers: Sequence[Mapping[str, Any]] | None = None,
     additional: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build a schema.org SportsEvent node."""
+    """Build a schema.org SportsEvent node.
+
+    Prefer passing a full ``location`` Place node. ``location_name`` remains as
+    a convenience that builds a minimal Place.
+    """
 
     node: dict[str, Any] = {
         "@type": "SportsEvent",
@@ -206,22 +230,29 @@ def sports_event(
         node["name"] = name
     if start_date is not None:
         node["startDate"] = start_date
-    if location_name is not None:
-        node["location"] = {"@type": "Place", "name": location_name}
+    if location is not None:
+        node["location"] = dict(location)
+    elif location_name is not None:
+        node["location"] = place(name=location_name)
     if home_team is not None:
         node["homeTeam"] = dict(home_team)
     if away_team is not None:
         node["awayTeam"] = dict(away_team)
-    if additional:
-        for key, raw in additional.items():
-            node[key if ":" in key or key.startswith("@") else f"oracle:{key}"] = raw
-    return node
+    if same_as is not None:
+        node["sameAs"] = same_as_refs(same_as)
+    if identifiers:
+        node = attach_identifiers(node, *identifiers)
+    return _apply_additional(node, additional)
 
 
 def sports_team(
     *,
     identifier: str | int,
     name: str | None = None,
+    sport: str | None = None,
+    member_of: Mapping[str, Any] | None = None,
+    same_as: str | Sequence[str] | None = None,
+    identifiers: Sequence[Mapping[str, Any]] | None = None,
     additional: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a schema.org SportsTeam node."""
@@ -232,10 +263,15 @@ def sports_team(
     }
     if name is not None:
         node["name"] = name
-    if additional:
-        for key, raw in additional.items():
-            node[key if ":" in key or key.startswith("@") else f"oracle:{key}"] = raw
-    return node
+    if sport is not None:
+        node["sport"] = sport
+    if member_of is not None:
+        node["memberOf"] = dict(member_of)
+    if same_as is not None:
+        node["sameAs"] = same_as_refs(same_as)
+    if identifiers:
+        node = attach_identifiers(node, *identifiers)
+    return _apply_additional(node, additional)
 
 
 def item_list(
@@ -263,6 +299,16 @@ def item_list(
         node["name"] = name
     if list_order is not None:
         node["itemListOrder"] = list_order
+    return _apply_additional(node, additional)
+
+
+
+
+def _apply_additional(
+    node: dict[str, Any], additional: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """Merge caller extras; namespace bare keys under oracle:."""
+
     if additional:
         for key, raw in additional.items():
             node[key if ":" in key or key.startswith("@") else f"oracle:{key}"] = raw
@@ -329,6 +375,218 @@ def punch_list_item_list(
             additional=additional,
         )
     )
+
+
+
+def _is_authoritative_uri(value: str) -> bool:
+    """Return True when value looks like an absolute http(s)/urn identity ref."""
+
+    lowered = value.strip().lower()
+    return (
+        lowered.startswith("https://")
+        or lowered.startswith("http://")
+        or lowered.startswith("urn:")
+    )
+
+
+def place(
+    *,
+    name: str | None = None,
+    identifier: str | int | None = None,
+    address: str | Mapping[str, Any] | None = None,
+    same_as: str | Sequence[str] | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a schema.org Place node (venue, city, or generic location)."""
+
+    node: dict[str, Any] = {"@type": "Place"}
+    if identifier is not None:
+        node["identifier"] = str(identifier)
+    if name is not None:
+        node["name"] = name
+    if isinstance(address, str):
+        node["address"] = address
+    elif isinstance(address, Mapping):
+        node["address"] = dict(address)
+    if same_as is not None:
+        node["sameAs"] = same_as_refs(same_as)
+    return _apply_additional(node, additional)
+
+
+def sports_organization(
+    *,
+    identifier: str | int,
+    name: str | None = None,
+    sport: str | None = None,
+    same_as: str | Sequence[str] | None = None,
+    identifiers: Sequence[Mapping[str, Any]] | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a schema.org SportsOrganization node (league, federation, club org)."""
+
+    node: dict[str, Any] = {
+        "@type": "SportsOrganization",
+        "identifier": str(identifier),
+    }
+    if name is not None:
+        node["name"] = name
+    if sport is not None:
+        node["sport"] = sport
+    if same_as is not None:
+        node["sameAs"] = same_as_refs(same_as)
+    if identifiers:
+        node["identifier"] = [
+            str(identifier),
+            *(dict(item) for item in identifiers),
+        ]
+    return _apply_additional(node, additional)
+
+
+def organization_role(
+    *,
+    member: Mapping[str, Any],
+    organization: Mapping[str, Any],
+    role_name: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a schema.org OrganizationRole for time-bounded membership.
+
+    Dates belong on the role (not only on the person or team), matching
+    schema.org Role / OrganizationRole guidance for roster periods.
+    """
+
+    node: dict[str, Any] = {
+        "@type": "OrganizationRole",
+        "member": dict(member),
+        # schema.org OrganizationRole uses `roleName` plus the related org via
+        # naming conventions; `oracle:organization` keeps the link explicit
+        # when a pure schema.org property is ambiguous for our graph joins.
+        "oracle:organization": dict(organization),
+    }
+    if role_name is not None:
+        node["roleName"] = role_name
+    if start_date is not None:
+        node["startDate"] = start_date
+    if end_date is not None:
+        node["endDate"] = end_date
+    return _apply_additional(node, additional)
+
+
+def identifier_value(
+    *,
+    value: str | int,
+    property_id: str,
+    name: str | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a schema.org PropertyValue suitable for structured ``identifier``."""
+
+    return property_value(
+        name=name or property_id,
+        value=str(value),
+        property_id=property_id,
+        additional=additional,
+    )
+
+
+def attach_identifiers(
+    node: Mapping[str, Any],
+    *identifiers: Mapping[str, Any] | str | int,
+) -> dict[str, Any]:
+    """Return a copy of node with identifier expanded to Text and/or PropertyValue.
+
+    Existing scalar identifier is preserved as the first list entry when present.
+    """
+
+    out = dict(node)
+    existing = out.get("identifier")
+    items: list[Any] = []
+    if isinstance(existing, list):
+        items.extend(existing)
+    elif existing is not None:
+        items.append(existing)
+    for ident in identifiers:
+        if isinstance(ident, Mapping):
+            items.append(dict(ident))
+        else:
+            items.append(str(ident))
+    out["identifier"] = items
+    return out
+
+
+def same_as_refs(values: str | Sequence[str]) -> str | list[str]:
+    """Normalize authoritative sameAs URL/URI refs.
+
+    Raises ValueError for non-absolute http(s)/urn values so callers cannot
+    silently promote fuzzy name+team matches into identity links.
+    """
+
+    seq = [values] if isinstance(values, str) else list(values)
+    if not seq:
+        raise ValueError("sameAs requires at least one authoritative URL/URI")
+    cleaned: list[str] = []
+    for raw in seq:
+        value = str(raw).strip()
+        if not _is_authoritative_uri(value):
+            raise ValueError(
+                "sameAs must be an absolute http(s) or urn identity reference; "
+                "do not assert sameAs from fuzzy name+team matches"
+            )
+        cleaned.append(value)
+    return cleaned[0] if len(cleaned) == 1 else cleaned
+
+
+def validate_typed_node(
+    node: Mapping[str, Any],
+    *,
+    expected_type: str | Sequence[str],
+    require_identifier: bool = False,
+) -> list[str]:
+    """Return a list of structural problems for a schema.org-like node (no I/O)."""
+
+    problems: list[str] = []
+    expected = {expected_type} if isinstance(expected_type, str) else set(expected_type)
+    raw_type = node.get("@type")
+    if raw_type is None:
+        problems.append("missing @type")
+    else:
+        types = {raw_type} if isinstance(raw_type, str) else set(raw_type)
+        if types.isdisjoint(expected):
+            problems.append(f"@type {raw_type!r} not in {sorted(expected)}")
+    if require_identifier and node.get("identifier") in (None, "", []):
+        problems.append("missing identifier")
+    return problems
+
+
+def prov_attribution(
+    *,
+    entity: Mapping[str, Any],
+    agent: Mapping[str, Any] | str | None = None,
+    activity: Mapping[str, Any] | str | None = None,
+    generated_at_time: str | None = None,
+    additional: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Attach compact PROV-O provenance properties to an entity copy.
+
+    Uses the ``prov:`` prefix registered in SCHEMA_CONTEXT. Prefer schema.org
+    Observation for measured values; use this when the claim needs source /
+    process attribution beyond Observation. See drive research and #199.
+    """
+
+    out = dict(entity)
+    if agent is not None:
+        out["prov:wasAttributedTo"] = (
+            dict(agent) if isinstance(agent, Mapping) else str(agent)
+        )
+    if activity is not None:
+        out["prov:wasGeneratedBy"] = (
+            dict(activity) if isinstance(activity, Mapping) else str(activity)
+        )
+    if generated_at_time is not None:
+        out["prov:generatedAtTime"] = generated_at_time
+    return _apply_additional(out, additional)
 
 
 def with_context(node: Mapping[str, Any]) -> dict[str, Any]:

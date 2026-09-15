@@ -17,9 +17,11 @@ calendar, and provider adapters. Dependency direction is one-way: sport
 application to `oracle-core`. Sport apps never import each other or
 `oracle-core` domain code back.
 
-## oracle-core (`packages/oracle-core/src/oracle_core/`): 14 files, flat
+## oracle-core (`packages/oracle-core/src/oracle_core/`): 16 files, flat
 
-Domain-free technical infrastructure shared by every app:
+Domain-free technical infrastructure shared by every app. Prefer schema.org
+(and PROV-O / IPTC Sport Schema only where noted in `AGENTS.md`) for shared
+entity contracts; see `schemaorg.py`.
 
 | File | Purpose |
 |---|---|
@@ -27,9 +29,11 @@ Domain-free technical infrastructure shared by every app:
 | `cache.py` | Caching primitives |
 | `config.py` | Configuration loading |
 | `dayclose.py` | Generic day-close sweep orchestration (grade a target day, retry a bounded catch-up window, isolate one day's failure), shared by every sport's day-close job |
+| `high_tv.py` | Provider-neutral high-TV / highest-value board helpers with schema.org ItemList serialization |
 | `http.py` | HTTP transport |
 | `jobs.py` | Job execution / scheduling primitives |
 | `logging.py`, `redaction.py` | Structured logging with secret redaction |
+| `schemaorg.py` | schema.org / JSON-LD constructors (Person, SportsTeam, SportsEvent, Place, Observation, sameAs, OrganizationRole, optional PROV-O attribution) |
 | `service.py` | Service scaffolding (e.g. FastAPI wiring) |
 | `storage.py` | Persistence primitives |
 | `testing.py` | Shared test helpers/fakes |
