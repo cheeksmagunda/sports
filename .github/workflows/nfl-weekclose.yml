@@ -2,10 +2,10 @@ name: nfl-weekclose
 
 # Sibling to nfl-dayclose.yml. Gate derives the week's final game from the
 # public nflverse schedule, requires live score finalization + kickoff-relative
-# 1h buffer, then runs. On the final-slate day, day-close skips (supersede).
-# Full-week punch-list / audit body is still tracked on issue #165; this wiring
-# grades the final slate day via the existing dayclose path so Monday is not
-# orphaned while that body lands.
+# 1h buffer, then runs. On the final-slate day, day-close skips (supersede),
+# so this workflow grades the final slate day via the existing dayclose path,
+# then runs the audit-only weekclose punch-list producer (issue #165) and
+# folds its findings into the same digest posted below.
 
 on:
   schedule:
@@ -112,11 +112,28 @@ jobs:
             exit 1
           fi
           # Live re-scrape happens inside dayclose (force-refresh contest + games).
-          # Full-week punch list (replay harness + infra incidents + tracking issue)
-          # remains open on #165; this step only covers the superseded final day.
           uv run --frozen --package nfl-oracle nfl-pipeline \
             dayclose --day "$FINAL_DAY" --catchup-window-days 1 \
             | tee "$RUNNER_TEMP/weekclose-output.json"
+
+      - name: Build week punch list (audit-only)
+        id: punchlist
+        if: steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        env:
+          NFL_DATABASE_URL: ${{ secrets.NFL_DAYCLOSE_DATABASE_URL }}
+          PGSSLROOTCERT: ${{ runner.temp }}/nfl_pg_root.crt
+        run: |
+          set -o pipefail
+          if [ -z "$NFL_DATABASE_URL" ]; then
+            echo "not_configured: NFL_DAYCLOSE_DATABASE_URL secret is unset" | tee "$RUNNER_TEMP/weekclose-punchlist.json"
+            exit 1
+          fi
+          # Session-free: reads existing freezes/grades/on-disk contests only,
+          # never a provider network client. Never trains or retrains a model.
+          uv run --frozen --package nfl-oracle nfl-pipeline \
+            weekclose --season "${{ steps.gate.outputs.season }}" --week "${{ steps.gate.outputs.week }}" \
+            | tee "$RUNNER_TEMP/weekclose-punchlist.json"
 
       - name: Build week-close digest
         if: always() && steps.gate.outputs.should_run == 'true'
@@ -129,8 +146,7 @@ jobs:
             echo "- final_game_id: \`${{ steps.gate.outputs.final_game_id || '-' }}\`"
             echo "- gate reason: \`${{ steps.gate.outputs.reason || '-' }}\`"
             echo
-            echo "Stopgap: graded final slate day via dayclose (live refresh)."
-            echo "Remaining on #165: full-week punch list (model + infra) via issue/PR process."
+            echo "Graded final slate day via dayclose (live refresh)."
             echo
             if [ -s "$RUNNER_TEMP/weekclose-output.json" ]; then
               echo '```json'
@@ -139,6 +155,19 @@ jobs:
             else
               echo "ALERT: week-close produced no dayclose output."
               cat "$RUNNER_TEMP/weekclose-report.md" 2>/dev/null || true
+            fi
+            echo
+            echo "## Week punch list (issue #165, audit-only, model/infra findings)"
+            echo
+            if [ -s "$RUNNER_TEMP/weekclose-punchlist.json" ]; then
+              echo '```json'
+              cat "$RUNNER_TEMP/weekclose-punchlist.json"
+              echo '```'
+              echo
+              echo "Suggested tracking issue title: \`NFL week ${{ steps.gate.outputs.season || '-' }}-W${{ steps.gate.outputs.week || '-' }} punch list\`"
+              echo "Suggested body: paste the punch_list entries above; findings are inputs to the issue/PR flow and do not change models on their own."
+            else
+              echo "ALERT: week punch list producer did not run or produced no output."
             fi
           } > "$RUNNER_TEMP/weekclose-report.md"
 

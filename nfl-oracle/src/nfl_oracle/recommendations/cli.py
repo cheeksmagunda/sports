@@ -396,6 +396,80 @@ def _dayclose(day_arg: str | None, *, catchup_window_days: int) -> int:
     return 1 if result["status"] == "failed" else 0
 
 
+def _sweep_week_dayclose(
+    store: RecommendationStore,
+    project: Path,
+    gamedays: list[date],
+    *,
+    catchup_window_days: int,
+) -> dict[str, str]:
+    """Grade every week gameday that has a freeze but no dayclose_grade yet.
+
+    Reuses dayclose.run's single-day grading path per day rather than
+    inventing a second refresh stack; catchup_window_days is passed straight
+    through and defaults small here since the caller already knows exactly
+    which days belong to this week.
+    """
+    from nfl_oracle.recommendations.dayclose import dayclose_grade_kind
+    from nfl_oracle.recommendations.dayclose import run as run_dayclose
+
+    outcomes: dict[str, str] = {}
+    for day in gamedays:
+        if store.latest(day) is None:
+            continue
+        if store.latest_artifact(dayclose_grade_kind(day)) is not None:
+            continue
+        result = run_dayclose(
+            store,
+            project_root=project,
+            target_day=day,
+            catchup_window_days=catchup_window_days,
+        )
+        outcomes[day.isoformat()] = result["status"]
+    return outcomes
+
+
+def _weekclose(
+    *,
+    season_arg: int | None,
+    week_arg: int | None,
+    as_of_arg: str | None,
+    with_dayclose: bool,
+    catchup_window_days: int,
+) -> int:
+    from nfl_oracle.calendar.schedule import resolve_schedule_csv_path, try_load_schedules_csv
+    from nfl_oracle.contests.store import ContestStore
+    from nfl_oracle.data.paths import resolve_data_paths
+    from nfl_oracle.recommendations.weekclose import (
+        build_and_persist_week_punch_list,
+        resolve_week_gamedays,
+    )
+
+    project = _project_root()
+    as_of = _day(as_of_arg)
+    store = RecommendationStore(_engine(), writable=True)
+    paths = resolve_data_paths(project)
+    games = try_load_schedules_csv(resolve_schedule_csv_path(paths.root))
+
+    if with_dayclose:
+        _slate, gamedays = resolve_week_gamedays(
+            games, season=season_arg, week=week_arg, as_of=as_of
+        )
+        _sweep_week_dayclose(store, project, gamedays, catchup_window_days=catchup_window_days)
+
+    contest_store = ContestStore(project=project)
+    result = build_and_persist_week_punch_list(
+        store,
+        games,
+        season=season_arg,
+        week=week_arg,
+        as_of=as_of,
+        contest_store=contest_store,
+    )
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
 def _backup_export() -> int:
     store = RecommendationStore(_engine())
     print(json.dumps(store.export_backup(), sort_keys=True, separators=(",", ":")))
@@ -440,6 +514,12 @@ def _parser() -> argparse.ArgumentParser:
     dayclose = commands.add_parser("dayclose")
     dayclose.add_argument("--day")
     dayclose.add_argument("--catchup-window-days", type=int, default=7)
+    weekclose = commands.add_parser("weekclose")
+    weekclose.add_argument("--season", type=int)
+    weekclose.add_argument("--week", type=int)
+    weekclose.add_argument("--as-of")
+    weekclose.add_argument("--with-dayclose", action="store_true")
+    weekclose.add_argument("--catchup-window-days", type=int, default=1)
     commands.add_parser("backup-export")
     restore = commands.add_parser("backup-restore")
     restore.add_argument("--file", default="-")
@@ -463,6 +543,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _train()
     if args.command == "dayclose":
         return _dayclose(args.day, catchup_window_days=args.catchup_window_days)
+    if args.command == "weekclose":
+        return _weekclose(
+            season_arg=args.season,
+            week_arg=args.week,
+            as_of_arg=args.as_of,
+            with_dayclose=args.with_dayclose,
+            catchup_window_days=args.catchup_window_days,
+        )
     if args.command == "backup-export":
         return _backup_export()
     if args.command == "backup-restore":
