@@ -207,3 +207,21 @@ def test_backup_main_reports_not_configured_without_database_url(
     assert "not_configured" in err
     assert "NFL_BACKUP_DATABASE_URL" in err
     assert "#172" in err
+
+
+def test_validate_snapshot_accepts_csv_fields_over_default_limit(tmp_path: Path) -> None:
+    """prepared_decisions payload_json can exceed csv's 128KiB default limit."""
+
+    backup_corpus = _import("backup_corpus")
+    common = _import("nfl_corpus_backup_common")
+    engine = _seeded_engine(tmp_path)
+    store = RecommendationStore(engine, writable=True, clock=lambda: NOW)
+    # ~200KiB prepared payload — above csv.field_size_limit default (131072).
+    store.put_artifact(
+        f"prepared:{NOW.date().isoformat()}-large",
+        {"schema_version": 1, "context": "x" * 200_000},
+    )
+    out_dir = tmp_path / "backup-large"
+    backup_corpus.export_corpus(engine, out_dir)
+    verified = common.validate_snapshot(out_dir)
+    assert verified["tables"]["prepared_decisions"]["rows"] >= 1
