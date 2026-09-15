@@ -373,7 +373,6 @@ def punch_list_item_list(
     )
 
 
-
 def _is_authoritative_uri(value: str) -> bool:
     """Return True when value looks like an absolute http(s)/urn identity ref."""
 
