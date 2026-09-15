@@ -10,7 +10,7 @@ from sqlalchemy.exc import DatabaseError
 import nfl_oracle.recommendations.app as recommendation_app
 from nfl_oracle.recommendations.app import create_app
 from nfl_oracle.recommendations.cli import main as pipeline_main
-from nfl_oracle.recommendations.schema import fingerprint
+from nfl_oracle.recommendations.schema import Slate, fingerprint
 from nfl_oracle.recommendations.store import RecommendationStore, migrate
 from tests.unit.test_recommendation_contracts import NOW, sample_slate
 
@@ -29,6 +29,45 @@ def save(store: RecommendationStore, *, model: str = "model-v1") -> dict:
         input_fingerprint="inputs-v1",
         decision_at=NOW,
     )
+
+
+def boosted_slate() -> Slate:
+    slate = sample_slate()
+    candidates = tuple(
+        c.model_copy(update={"card_boost": 2.5}) if i == 0 else c
+        for i, c in enumerate(slate.candidates)
+    )
+    return Slate(
+        contest=slate.contest,
+        games=slate.games,
+        candidates=candidates,
+        captured_at=slate.captured_at,
+        source_hashes=slate.source_hashes,
+        pool_roster_count=slate.pool_roster_count,
+        pool_search_matched_count=slate.pool_search_matched_count,
+    )
+
+
+def test_lineup_snapshot_exposes_boost_regime(tmp_path: Path) -> None:
+    store = setup_store(tmp_path)
+    client = TestClient(create_app(store, clock=lambda: NOW))
+    save(store)
+    response = client.get("/lineup/2026-09-09").json()
+    assert response["boost_regime"] == "zero_boost"
+    assert response["boost_nonzero_count"] == 0
+    assert response["boost_max"] == 0
+
+    store.freeze(
+        boosted_slate(),
+        {"picks": [{"player_id": i} for i in range(1, 6)]},
+        model_fingerprint="model-v2",
+        input_fingerprint="inputs-v2",
+        decision_at=NOW,
+    )
+    live = client.get("/lineup/2026-09-09").json()
+    assert live["boost_regime"] == "provider_boosts_present"
+    assert live["boost_nonzero_count"] == 1
+    assert live["boost_max"] == 2.5
 
 
 def test_history_restart_duplicate_and_readonly(tmp_path: Path) -> None:

@@ -1036,10 +1036,64 @@ games from prior player history and reports capture ratio summaries. These are
 not a claim of a calibrated production edge. They are executable scaffolds for
 the one-game week-1 decision path and for honest historical capture reporting.
 
-Frontend status after `7b208f8`: the served page renders five cards in slot
-order as player name plus team, position, and opponent. It intentionally omits
-numeric projections and repeats that entries are never submitted
-automatically.
+## Frontend audit and richer failure/boost-regime UX (issue #167)
+
+The `7b208f8` note below describing a names-only card with projections
+intentionally omitted is stale: PR #119 ("bring oracle frontend to WNBA
+parity") and PR #134 (gridiron palette) already restored a per-pick
+projected value and a per-pick boost badge to `nfl-oracle/frontend`, and
+neither of those PRs updated this file. The audit for issue #167 confirmed
+the live 3-file static page (`index.html`, `app.js`, `style.css`, no build
+pipeline, no npm dependency tree) against that discrepancy rather than the
+stale description.
+
+Audit conclusion: the zero-dependency static page stays. Nothing in the
+current interaction surface (a handful of fetch calls, a single dynamic
+list, a slide-out drawer) needs component state, routing, or a build step,
+and the WNBA frontend's own open dependency alerts are evidence against
+adding that surface here without a concrete need. Primary pick display
+stays name, team, opponent, position (unchanged; projections and boost
+remain secondary columns, not the primary identity).
+
+Landed this issue:
+
+- **Boost-regime indicator.** `nfl_oracle.recommendations.schema.Slate`
+  already computed `boost_regime` (`zero_boost` vs
+  `provider_boosts_present`), `boost_nonzero_count`, and `boost_max` per
+  captured slate, but `/lineup/{day}` never forwarded them past `games`.
+  The snapshot payload now includes all three whenever a lineup is frozen,
+  and the page shows a chip ("Zero-boost slate" / "Live boosts - up to
+  +X.X") next to the existing per-pick boost badges. This is the direct
+  ask from the week 1 retro: boosts were flat zero all of week 1 and are
+  scheduled to go live week 2 Thursday (2026-09-17), and the old UI gave no
+  way to see the regime change happen.
+- **Richer failure UX.** The API's `run` object (status, `detail_code`,
+  `details`, `checked_at`) was already returned in the `/lineup/{day}`
+  payload but the frontend only ever read `latest.status` against a
+  five-entry generic message map. It now also renders a diagnostic line
+  built from `run.detail_code` (mapped to a short human label, falling
+  back to the raw code with underscores replaced) plus any safe
+  `details.reason` and the last-checked time, whenever no lineup is being
+  shown. This directly answers the frontend half of issue #156's
+  observability gap: no backend schema change was needed, only exposing
+  data the API already had.
+- **Accessibility.** The system/history drawer is now `role="dialog"`
+  with `aria-modal`, moves focus to its heading on open, returns focus to
+  the invoking button on close, and closes on Escape; none of that existed
+  before. `drawer-content` updates now use `aria-live="polite"` instead of
+  the outer `aside`.
+- **Mobile.** Interactive controls inside the existing 700px breakpoint
+  (header buttons, the theme toggle, the close button, the date input, the
+  primary button) now meet a 44px touch target, which they did not before.
+
+No new dependency, build step, or schema migration. `Slate.boost_regime`
+and friends are pre-existing computed fields; this only changes what the
+already-serving `/lineup/{day}` endpoint forwards.
+
+Frontend status after `7b208f8` (superseded above, kept for history):
+the served page renders five cards in slot order as player name plus
+team, position, and opponent. It intentionally omits numeric projections
+and repeats that entries are never submitted automatically.
 
 Checks run in the canonical Codespace after `3196838`: `make write-path-check`,
 `make test-app APP=nfl-oracle` (257 passed, 1 skipped), `make -C nfl-oracle
