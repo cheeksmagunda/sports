@@ -36,6 +36,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       has_slate: ${{ steps.gate.outputs.has_slate }}
+      configured: ${{ steps.config.outputs.configured }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -54,8 +55,31 @@ jobs:
           uv run --frozen --package nfl-oracle python nfl-oracle/scripts/nfl_dayclose_gate.py \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Prepare TLS certificate
+      - name: Require NFL_BACKUP_DATABASE_URL
+        id: config
         if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        env:
+          NFL_BACKUP_DATABASE_URL: ${{ secrets.NFL_BACKUP_DATABASE_URL }}
+        run: |
+          if [ -z "$NFL_BACKUP_DATABASE_URL" ]; then
+            {
+              echo "## NFL corpus backup: not_configured"
+              echo
+              echo "\`NFL_BACKUP_DATABASE_URL\` repo secret is unset."
+              echo "Day-close uses \`NFL_DAYCLOSE_DATABASE_URL\` (working);"
+              echo "backup needs its own read-only URL provisioned the same way."
+              echo "No snapshot was attempted; \`backups\` branch left unchanged."
+              echo
+              echo "Refs #172."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::not_configured: NFL_BACKUP_DATABASE_URL secret is unset (refs #172)"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare TLS certificate
+        if: (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch') && steps.config.outputs.configured == 'true'
         env:
           # NFL's own Postgres instance's root cert, not WNBA's shared
           # PG_SSL_ROOT_CERT: Railway issues a distinct self-signed cert
@@ -66,7 +90,7 @@ jobs:
           printf '%s' "$NFL_PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
 
       - name: Load previous backup baseline
-        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        if: (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch') && steps.config.outputs.configured == 'true'
         env:
           PREVIOUS_MANIFEST: ${{ runner.temp }}/previous-manifest.json
         run: |
@@ -83,7 +107,7 @@ jobs:
           fi
 
       - name: Export corpus snapshot
-        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        if: (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch') && steps.config.outputs.configured == 'true'
         env:
           CORPUS_BACKUP_ALLOW_REGRESSION: ${{ inputs.allow_regression || false }}
           CORPUS_BACKUP_DIR: ${{ runner.temp }}/corpus-backup
@@ -91,20 +115,16 @@ jobs:
           NFL_BACKUP_DATABASE_URL: ${{ secrets.NFL_BACKUP_DATABASE_URL }}
           PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
         run: |
-          if [ -z "$NFL_BACKUP_DATABASE_URL" ]; then
-            echo "::error::NFL_BACKUP_DATABASE_URL secret is not configured"
-            exit 1
-          fi
           uv run --frozen --package nfl-oracle python nfl-oracle/scripts/backup_corpus.py
 
       - name: Verify snapshot manifest and hashes
-        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        if: (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch') && steps.config.outputs.configured == 'true'
         env:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
         run: uv run --frozen --package nfl-oracle python nfl-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
       - name: Transfer verified snapshot without database credentials
-        if: steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+        if: (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch') && steps.config.outputs.configured == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: nfl-corpus-backup-${{ github.run_id }}
@@ -119,7 +139,7 @@ jobs:
 
   publish:
     needs: export
-    if: needs.export.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch'
+    if: needs.export.result == 'success' && needs.export.outputs.configured == 'true' && (needs.export.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: write
     runs-on: ubuntu-latest
