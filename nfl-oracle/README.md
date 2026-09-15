@@ -215,7 +215,11 @@ make check-boundaries
 Build from the monorepo root with `docker build -f
 nfl-oracle/Dockerfile.production -t nfl-oracle:production .`. The image has
 the Playwright Chromium runtime needed for the worker's derived-session refresh,
-but it contains no provider session, local data, or credentials.
+but it contains no provider session, credentials, or mounted-volume data. It
+bakes only the slim public schedule CSV and its attribution README under
+`/opt/nfl-oracle/bootstrap/schedule/`, outside the worker data volume. Worker,
+train, and week-close starts copy that CSV into an empty volume without
+overwriting an existing volume schedule.
 
 Run the API service with:
 

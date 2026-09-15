@@ -10,7 +10,14 @@ def test_production_container_is_role_split_and_secret_free() -> None:
     assert "NFL_PIPELINE_ROLE=api" in dockerfile
     assert "PLAYWRIGHT_BROWSERS_PATH" in dockerfile
     assert "storage_state.json" not in dockerfile
-    assert "COPY nfl-oracle/data" not in dockerfile
+    bootstrap_dir = "/opt/nfl-oracle/bootstrap/schedule"
+    data_copies = [
+        line for line in dockerfile.splitlines() if line.startswith("COPY nfl-oracle/data/")
+    ]
+    assert data_copies == [
+        f"COPY nfl-oracle/data/schedule/schedules.csv {bootstrap_dir}/schedules.csv",
+        f"COPY nfl-oracle/data/schedule/README.md {bootstrap_dir}/README.md",
+    ]
     assert "alembic upgrade" not in dockerfile
 
 
