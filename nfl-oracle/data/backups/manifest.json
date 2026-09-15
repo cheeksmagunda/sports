@@ -1,0 +1,72 @@
+{
+  "generated_at_utc": "2026-09-15T09:09:36+00:00",
+  "schema_version": 1,
+  "tables": {
+    "dayclose_grades": {
+      "bytes": 3511,
+      "columns": [
+        "day",
+        "sha256",
+        "created_at",
+        "payload_json"
+      ],
+      "file": "dayclose_grades.csv",
+      "rows": 2,
+      "sha256": "d407c1007144acc668589331038dfb514299639e9ebc4ad03fc6ab69648fbcc5"
+    },
+    "frozen_lineups": {
+      "bytes": 2707702,
+      "columns": [
+        "slate_date",
+        "contest_id",
+        "sequence",
+        "digest",
+        "previous_digest",
+        "frozen_at",
+        "decision_at",
+        "model_fingerprint",
+        "input_fingerprint",
+        "lineup_json",
+        "slate_json"
+      ],
+      "file": "frozen_lineups.csv",
+      "rows": 40,
+      "sha256": "2b2fcffdddb456f7b4d7cfea195d370b7c90f4f2b3666bc39688bec9dc472bd0"
+    },
+    "player_results": {
+      "bytes": 133,
+      "columns": [
+        "day",
+        "contest_id",
+        "player_id",
+        "display_name",
+        "team_id",
+        "section",
+        "value",
+        "draft_count",
+        "card_boost",
+        "avg_effective_multiplier",
+        "avg_score",
+        "highest_score"
+      ],
+      "file": "player_results.csv",
+      "rows": 0,
+      "sha256": "7081f67ffce7bb28b6fdd860a5399957e8ae9ddda1200e771883d5712fc18c04"
+    },
+    "prepared_decisions": {
+      "bytes": 7490004,
+      "columns": [
+        "day",
+        "sha256",
+        "created_at",
+        "payload_json"
+      ],
+      "file": "prepared_decisions.csv",
+      "rows": 41,
+      "sha256": "094748d9b6ab674a01cb45f75fa04f7150cc659b2984c1160acf9674561523ea"
+    }
+  },
+  "transaction": {
+    "read_only": true
+  }
+}
