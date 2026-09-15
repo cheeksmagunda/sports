@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 803 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 804 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -397,6 +397,7 @@ Generated from `git ls-files`. 803 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_feature_registry_depth.py -- Feature registry depth for pre-lock decisioning.
 - nfl-oracle/tests/unit/test_feature_value_model.py -- Leakage-safe feature_ridge value model + strategy wiring.
 - nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
+- nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
