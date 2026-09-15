@@ -157,7 +157,7 @@ def kickoff_eastern(game: WeekGame) -> datetime | None:
     )
 
 
-def game_sort_key(game: WeekGame) -> tuple:
+def game_sort_key(game: WeekGame) -> tuple[datetime, str]:
     """Latest kickoff wins; missing gametime sorts after noon that gameday."""
 
     kick = kickoff_eastern(game)
