@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from nfl_oracle.common.paths import resolve_project_root
+from nfl_oracle.ingest.realsports import token_cache_path
 
 
 @dataclass(frozen=True)
@@ -86,7 +87,8 @@ def probe_realsports_auth() -> AuthProbeResult:
 
     root = _project_root()
     sibling = root.parent / "wnba-oracle" / "scraper" / "storage_state.json"
-    token_cache = root / "scraper" / "request_token_cache.json"
+    # Same discovery as ingest.realsports (volume / scraper_dir), not ephemeral root/scraper.
+    token_cache = token_cache_path()
     sibling_token = root.parent / "wnba-oracle" / "scraper" / "request_token_cache.json"
     token_cache_exists = (token_cache.is_file() and not token_cache.is_symlink()) or (
         sibling_token.is_file() and not sibling_token.is_symlink()
