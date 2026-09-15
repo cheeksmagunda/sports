@@ -103,9 +103,7 @@ def final_slate_for_week(
     return WeekFinalSlate(season=season, week=week, final_gameday=max(days))
 
 
-def resolve_week_final(
-    games: list[tuple[int, int, date]], *, as_of: date
-) -> WeekFinalSlate | None:
+def resolve_week_final(games: list[tuple[int, int, date]], *, as_of: date) -> WeekFinalSlate | None:
     """Final slate for the NFL week that contains `as_of`, if any.
 
     If `as_of` is not itself a gameday (bye / midweek), look backward up to 6

@@ -93,15 +93,13 @@ def test_main_scaffold_never_sets_should_run(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         gate,
         "_download",
-        lambda urls: CSV_HEADER
-        + _row(gameday="2026-09-14", week=1)
-        + _row(gameday="2026-09-15", week=1),
+        lambda urls: (
+            CSV_HEADER + _row(gameday="2026-09-14", week=1) + _row(gameday="2026-09-15", week=1)
+        ),
     )
     output_file = tmp_path / "github_output"
 
-    exit_code = gate.main(
-        ["--as-of", "2026-09-15", "--github-output", str(output_file)]
-    )
+    exit_code = gate.main(["--as-of", "2026-09-15", "--github-output", str(output_file)])
 
     assert exit_code == 0
     text = output_file.read_text(encoding="utf-8")
@@ -118,15 +116,13 @@ def test_main_reports_non_final_day(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         gate,
         "_download",
-        lambda urls: CSV_HEADER
-        + _row(gameday="2026-09-14", week=1)
-        + _row(gameday="2026-09-15", week=1),
+        lambda urls: (
+            CSV_HEADER + _row(gameday="2026-09-14", week=1) + _row(gameday="2026-09-15", week=1)
+        ),
     )
     output_file = tmp_path / "github_output"
 
-    exit_code = gate.main(
-        ["--as-of", "2026-09-14", "--github-output", str(output_file)]
-    )
+    exit_code = gate.main(["--as-of", "2026-09-14", "--github-output", str(output_file)])
 
     assert exit_code == 0
     text = output_file.read_text(encoding="utf-8")
