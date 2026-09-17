@@ -1,0 +1,67 @@
+name: devcontainer-smoke
+
+# Split out of backend-ci (see #220): a devcontainer/postStart-only change
+# used to trigger the full backend-ci suite (test-and-quality,
+# integration-and-container -- neither of which anything here can affect,
+# confirmed by grep: Dockerfile.production references neither
+# .devcontainer/** nor the devcontainer scripts). This workflow triggers
+# only on paths that actually change what it verifies: the devcontainer
+# itself, and the app suites it runs inside that devcontainer.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/oracle-core/**"
+      - "*-oracle/**"
+      - "Makefile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".devcontainer/**"
+      - "scripts/devcontainer-poststart.sh"
+      - "scripts/prune-merged-branches.sh"
+      - ".github/workflows/devcontainer-smoke.yml"
+  pull_request:
+    paths:
+      - "packages/oracle-core/**"
+      - "*-oracle/**"
+      - "Makefile"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".devcontainer/**"
+      - "scripts/devcontainer-poststart.sh"
+      - "scripts/prune-merged-branches.sh"
+      - ".github/workflows/devcontainer-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devcontainer-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  devcontainer-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Build the Codespaces environment and run post-create setup
+        run: npx --yes --package @devcontainers/cli@0.88.0 devcontainer up --workspace-folder . --frozen-lockfile
+
+      - name: Verify repository contracts in the devcontainer
+        run: >-
+          npx --yes --package @devcontainers/cli@0.88.0 devcontainer exec
+          --workspace-folder . make codespaces-smoke
+
+      - name: Verify portable services and migrations in the devcontainer
+        run: >-
+          npx --yes --package @devcontainers/cli@0.88.0 devcontainer exec
+          --workspace-folder . make test-core test-portfolio test-integration
