@@ -141,3 +141,27 @@ def test_success_cannot_hide_a_degraded_required_substep(monkeypatch) -> None:
     assert len(checks) == 1
     assert checks[0].status == "alert"
     assert "conflicts" in checks[0].summary
+
+
+def test_skipped_contest_discovery_on_no_contest_day_is_not_alert(monkeypatch) -> None:
+    """A slate with no WNBA contest to discover (off-season/bye) reports
+    contest_discovery/historical_backfill as skipped, not degraded or
+    failed -- see issue #145. This must be accepted, matching the existing
+    game_log_refresh skipped precedent, not treated as evidence of failure.
+    """
+    common, verifier = _load_verifier()
+    payload = _payload()
+    payload["jobs"]["dayclose"]["details"]["substeps"]["contest_discovery"] = {
+        "status": "skipped",
+        "reason": "no_wnba_contest",
+    }
+    payload["jobs"]["dayclose"]["details"]["substeps"]["historical_backfill"] = {
+        "status": "skipped",
+        "reason": "no_wnba_contest",
+    }
+    monkeypatch.setattr(verifier, "get_json", lambda _url: (200, payload))
+
+    checks = verifier._durable_dayclose_checks("https://api.example", _window(common))
+
+    assert len(checks) == 1
+    assert checks[0].status == "ok"

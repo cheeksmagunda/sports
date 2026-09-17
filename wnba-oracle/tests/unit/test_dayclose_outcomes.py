@@ -261,3 +261,59 @@ def test_placement_catchup_degraded_does_not_fail_dayclose() -> None:
 
     assert result.status is JobStatus.DEGRADED
     assert result.details["degraded_substeps"] == ["placement_catchup"]
+
+
+def test_no_contest_id_without_frozen_lineup_is_skipped_not_retryable() -> None:
+    """No WNBA contest visible on Real Sports (top_cid is None) is expected,
+    not a failure, on any slate with no frozen lineup -- there was never a
+    contest to discover (off-season/bye). See issue #145: this used to
+    return retryable_failure unconditionally, which false-alerted daily
+    once discovery started actually validating contests (issue #42).
+    """
+    patches = _success_steps()
+    patches[1] = patch.object(job_dayclose, "discover_wnba_contest_id", return_value=None)
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+        patch.object(job_dayclose, "_has_frozen_lineup", return_value=False),
+    ):
+        result = job_dayclose.run()
+
+    assert result.status is JobStatus.SUCCESS
+    assert result.details["substeps"]["contest_discovery"] == {
+        "status": "skipped",
+        "reason": "no_wnba_contest",
+    }
+    assert result.details["substeps"]["historical_backfill"] == {
+        "status": "skipped",
+        "reason": "no_wnba_contest",
+    }
+
+
+def test_no_contest_id_with_frozen_lineup_is_still_retryable_failure() -> None:
+    """A slate that DOES have a frozen lineup but still can't discover a
+    contest is the genuine transient case (a real Real Sports auth/session
+    failure or a Playwright crash) and must keep alerting -- WNBA's own
+    AGENTS.md prohibits turning a real failure into a silent success.
+    """
+    patches = _success_steps()
+    patches[1] = patch.object(job_dayclose, "discover_wnba_contest_id", return_value=None)
+    with (
+        patches[0],
+        patches[1],
+        patch.object(job_dayclose, "_has_frozen_lineup", return_value=True),
+    ):
+        result = job_dayclose.run()
+
+    assert result.status is JobStatus.RETRYABLE_FAILURE
+    assert result.details["substeps"]["contest_discovery"] == {
+        "status": "failed",
+        "reason": "no_contest_id",
+    }
