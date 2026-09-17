@@ -25,5 +25,6 @@
 		}
 	},
 	"postCreateCommand": "make setup",
+	"postStartCommand": "bash -lc 'bash scripts/devcontainer-poststart.sh'",
 	"forwardPorts": [8000, 5173]
 }
