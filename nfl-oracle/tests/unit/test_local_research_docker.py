@@ -54,6 +54,7 @@ def test_docker_research_make_target_skips_without_docker() -> None:
     assert "docker not available; skip" in (proc.stdout + proc.stderr)
 
 
+@pytest.mark.docker
 @pytest.mark.skipif(shutil.which("docker") is None, reason="docker not available")
 def test_docker_research_image_builds_when_docker_available() -> None:
     proc = subprocess.run(

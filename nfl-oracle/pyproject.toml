@@ -60,6 +60,10 @@ packages = ["src/nfl_oracle"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+addopts = "-m \"not docker\""
+markers = [
+    "docker: builds a real image via subprocess, requires Docker (deselect with -m \"not docker\")",
+]
 
 [tool.ruff]
 line-length = 100
