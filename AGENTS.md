@@ -39,6 +39,12 @@ commands, but cannot weaken this contract.
    `origin`. If the push is denied, stop and report the block on the issue.
    Do not mint a per-agent credential and do not keep building behind a
    credential that cannot land the work.
+7. Check the canonical Codespace's state (`gh codespace list`) and wake it if
+   `Shutdown` (`gh codespace ssh -c <name> -- true` resumes it; postStart then
+   runs the health-check and prune on its own). Do this at the start of an
+   active work session; do not rely only on the 6-hourly maintenance sweep
+   (`.github/workflows/codespace-maintenance.yml`), which exists for idle
+   stretches between sessions, not as a substitute for this step.
 
 ## Portfolio boundaries
 
