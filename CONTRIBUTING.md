@@ -25,9 +25,15 @@ immediately.
 2. Keep the issue, code, tests, and documentation aligned. Use the root
    `Makefile`, lockfile, and devcontainer as the shared command contract.
 3. Open a pull request linked to the issue. Wait for applicable checks, review
-   the diff, and squash merge when green. Delete the branch afterward.
+   the diff, and squash merge when green. Delete the branch afterward (the
+   codespace postStartCommand also auto-prunes worktrees/branches once their
+   tip is confirmed merged, so this rarely needs doing by hand).
 4. Deploy only from `main` through the documented application workflow. Do not
    mutate production data, schedules, or credentials from a local experiment.
+5. Do not end a session with a bare `git stash` for anything worth keeping.
+   Commit it to a branch with an issue instead, or discard it. A stash is not
+   a save point -- nothing prunes it automatically, and it accumulates as
+   silent, unreviewable sprawl.
 
 Every material commit and PR must reference an issue. Branch names should carry
 the issue number (`chat/<issue>-<slug>`), commits should include `#<issue>`, and
