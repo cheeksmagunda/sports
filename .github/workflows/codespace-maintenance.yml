@@ -25,6 +25,10 @@ jobs:
   sweep:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
       - name: Wake shutdown codespaces, let postStart run, put them back to sleep
         env:
           GH_TOKEN: ${{ secrets.CODESPACES_PAT }}
@@ -35,6 +39,13 @@ jobs:
             echo "::warning::CODESPACES_PAT is not set — skipping the codespace maintenance sweep. Add a repo secret scoped to just 'codespace' to enable it (see this workflow's header comment)."
             exit 0
           fi
+
+          # Derived from the script, not duplicated as a guess: the actual
+          # health-check timeout plus a 40s margin for the prune script and
+          # container boot jitter. If devcontainer-poststart.sh's timeout
+          # changes, this wait changes with it instead of silently going stale.
+          healthcheck_timeout=$(grep -oE 'timeout [0-9]+s' scripts/devcontainer-poststart.sh | head -1 | grep -oE '[0-9]+')
+          poststart_wait=$(( ${healthcheck_timeout:-20} + 40 ))
 
           repo="${{ github.repository }}"
           shutdown_codespaces=$(gh api "repos/${repo}/codespaces" --jq '.codespaces[] | select(.state == "Shutdown") | .name')
@@ -60,9 +71,7 @@ jobs:
               continue
             fi
 
-            # postStartCommand's health-check (20s timeout) and prune script
-            # (git-only, fast) both run backgrounded on start; give them room.
-            sleep 60
+            sleep "$poststart_wait"
 
             echo "=== stopping $name ==="
             gh api -X POST "user/codespaces/${name}/stop" >/dev/null

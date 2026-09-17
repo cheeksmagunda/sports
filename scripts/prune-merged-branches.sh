@@ -63,8 +63,10 @@ is_recently_active() {
   [ -n "$(find "$marker" -mmin "-${RECENT_ACTIVITY_MINUTES}" 2>/dev/null)" ]
 }
 
+worktree_list=$(git worktree list --porcelain)
+
 echo "=== Checking worktrees ==="
-git worktree list --porcelain | awk '
+echo "$worktree_list" | awk '
   /^worktree / { path=$2 }
   /^branch /   { ref=$2; print path, ref }
 ' | while read -r path ref; do
@@ -101,7 +103,7 @@ echo "=== Checking plain branches (no worktree) ==="
 git for-each-ref --format='%(refname:short)' refs/heads/ | while read -r branch; do
   [ "$branch" = "$current_branch" ] && continue
   [ "$branch" = "main" ] && continue
-  git worktree list --porcelain | grep -q "^branch refs/heads/$branch\$" && continue
+  echo "$worktree_list" | grep -q "^branch refs/heads/$branch\$" && continue
 
   if is_safe_to_delete "$branch"; then
     if [ "$DRY_RUN" = 1 ]; then
