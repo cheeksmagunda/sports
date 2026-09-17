@@ -27,6 +27,14 @@
 # anything whose git index was touched inside the last RECENT_ACTIVITY_MINUTES
 # (any git command — status, add, checkout — refreshes the index's stat
 # cache, so this catches "someone is here right now" even with zero diff).
+#
+# main is never a deletion candidate, worktree or not. is_safe_to_delete
+# trivially says yes for it (it's always its own ancestor), and without an
+# explicit exclusion a worktree checked out on main would eventually get
+# `git worktree remove`'d and then `git branch -D main` — deleting the local
+# main ref entirely, breaking every other worktree's fetch/merge-base target
+# in this shared .git. The plain-branch loop already excludes main; the
+# worktree loop needs the same exclusion.
 set -u
 
 DRY_RUN=0
@@ -72,6 +80,7 @@ echo "$worktree_list" | awk '
 ' | while read -r path ref; do
   branch=${ref#refs/heads/}
   [ "$path" = "$(git rev-parse --show-toplevel)" ] && continue
+  [ "$branch" = "main" ] && continue
 
   if ! is_safe_to_delete "$branch"; then
     echo "  keep (not confirmed merged at current tip): $branch ($path)"
