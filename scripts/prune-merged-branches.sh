@@ -20,10 +20,19 @@
 # PR's headRefOid (e.g. commits added locally after the PR merged, never
 # pushed) matches neither path and is correctly left alone — this is exactly
 # the failure mode a naive "any merged PR for this name" check misses.
+#
+# A worktree can also be merged AND clean AND actively in use — a peer agent
+# session mid-task that hasn't written anything yet. Merged+clean alone can't
+# tell those apart, so worktrees additionally get a recency guard: skip
+# anything whose git index was touched inside the last RECENT_ACTIVITY_MINUTES
+# (any git command — status, add, checkout — refreshes the index's stat
+# cache, so this catches "someone is here right now" even with zero diff).
 set -u
 
 DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
+
+RECENT_ACTIVITY_MINUTES=15
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 current_branch=$(git branch --show-current)
@@ -36,6 +45,22 @@ is_safe_to_delete() {
   tip=$(git rev-parse "$branch" 2>/dev/null) || return 1
   merged_sha=$(gh pr list --head "$branch" --state merged --json headRefOid --jq '.[0].headRefOid // empty' 2>/dev/null)
   [ -n "$merged_sha" ] && [ "$tip" = "$merged_sha" ]
+}
+
+is_recently_active() {
+  local path="$1"
+  local gitdir
+  gitdir=$(git -C "$path" rev-parse --git-dir 2>/dev/null) || return 1
+  case "$gitdir" in
+    /*) : ;;
+    *) gitdir="$path/$gitdir" ;;
+  esac
+
+  local marker="$gitdir/index"
+  [ -f "$marker" ] || marker="$gitdir/HEAD"
+  [ -f "$marker" ] || return 1
+
+  [ -n "$(find "$marker" -mmin "-${RECENT_ACTIVITY_MINUTES}" 2>/dev/null)" ]
 }
 
 echo "=== Checking worktrees ==="
@@ -53,6 +78,11 @@ git worktree list --porcelain | awk '
 
   if [ -n "$(git -C "$path" status --porcelain)" ]; then
     echo "  SKIP (merged but dirty — needs human review): $branch ($path)"
+    continue
+  fi
+
+  if is_recently_active "$path"; then
+    echo "  SKIP (merged+clean but active in the last ${RECENT_ACTIVITY_MINUTES}m — possible concurrent session): $branch ($path)"
     continue
   fi
 
