@@ -161,8 +161,13 @@ def _durable_dayclose_checks(api_base: str, window: RunWindow) -> list[Check]:
     if not isinstance(substeps, dict):
         return [Check("Durable day-close", "alert", "Substep outcomes were not recorded.")]
     missing = sorted(REQUIRED_DAYCLOSE_SUBSTEPS - set(substeps))
+    # contest_discovery/historical_backfill are skipped, not degraded, on a
+    # day with no frozen lineup for the slate -- no WNBA contest was ever
+    # expected (off-season/bye). See job_dayclose.py's _has_frozen_lineup
+    # and issue #145.
+    SKIPPABLE_SUBSTEPS = frozenset({"game_log_refresh", "contest_discovery", "historical_backfill"})
     allowed_statuses = {
-        name: ({"success", "skipped"} if name == "game_log_refresh" else {"success", "degraded"})
+        name: ({"success", "skipped"} if name in SKIPPABLE_SUBSTEPS else {"success", "degraded"})
         for name in REQUIRED_DAYCLOSE_SUBSTEPS
     }
     invalid = sorted(

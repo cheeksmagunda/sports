@@ -457,6 +457,28 @@ def _run_substep(
         degradations.append(name)
 
 
+def _has_frozen_lineup(slate_date: str) -> bool:
+    """Return True if a frozen lineup was ever captured for slate_date.
+
+    Same signal dayclose_verify.py checks via GET /lineup/{slate_date}
+    (404 when absent). A missing frozen lineup means no WNBA contest was
+    ever expected for this slate (off-season/bye), which distinguishes a
+    structurally-certain "no contest to discover" outcome from a genuine
+    transient discovery failure -- see issue #145.
+    """
+    from sqlalchemy import text
+
+    from wnba_oracle.db.engine import get_engine
+
+    engine = get_engine()
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd LIMIT 1"),
+            {"sd": slate_date},
+        ).first()
+    return row is not None
+
+
 def run() -> JobResult:
     """Run day-close and return durable, substep-level completion semantics."""
 
@@ -488,31 +510,41 @@ def run() -> JobResult:
             substeps={"contest_discovery": {"status": "failed", "error_type": type(exc).__name__}},
         )
     if top_cid is None:
-        log.warning("dayclose_no_contest_id")
-        return JobResult.retryable_failure(
-            "contest discovery returned no identifier",
-            processed_slate_date=processed_slate_date,
-            substeps={"contest_discovery": {"status": "failed", "reason": "no_contest_id"}},
+        if _has_frozen_lineup(processed_slate_date):
+            log.warning("dayclose_no_contest_id", slate_date=processed_slate_date)
+            return JobResult.retryable_failure(
+                "contest discovery returned no identifier",
+                processed_slate_date=processed_slate_date,
+                substeps={"contest_discovery": {"status": "failed", "reason": "no_contest_id"}},
+            )
+        # No frozen lineup for this slate -- no WNBA contest was ever
+        # expected today (off-season/bye). Unvalidated discovery is the
+        # correct, structurally-certain outcome here, not a transient
+        # failure worth retrying (issue #145). Skip the contest-dependent
+        # substeps and fall through to the rest, which already tolerate
+        # missing data as degraded rather than failed.
+        log.info("dayclose_no_wnba_contest", slate_date=processed_slate_date)
+        outcomes["contest_discovery"] = {"status": "skipped", "reason": "no_wnba_contest"}
+        outcomes["historical_backfill"] = {"status": "skipped", "reason": "no_wnba_contest"}
+    else:
+        outcomes["contest_discovery"] = {"status": "success", "contest_id": top_cid}
+
+        start_id = top_cid - 1
+        stop_id = max(1, top_cid - walk_window)
+        log.info(
+            "dayclose_walk",
+            top_cid=top_cid,
+            start_id=start_id,
+            stop_id=stop_id,
         )
-
-    outcomes["contest_discovery"] = {"status": "success", "contest_id": top_cid}
-
-    start_id = top_cid - 1
-    stop_id = max(1, top_cid - walk_window)
-    log.info(
-        "dayclose_walk",
-        top_cid=top_cid,
-        start_id=start_id,
-        stop_id=stop_id,
-    )
-    _run_substep(
-        "historical_backfill",
-        lambda: _ingest_historical_window(start_id, stop_id),
-        required=True,
-        outcomes=outcomes,
-        required_failures=required_failures,
-        degradations=degradations,
-    )
+        _run_substep(
+            "historical_backfill",
+            lambda: _ingest_historical_window(start_id, stop_id),
+            required=True,
+            outcomes=outcomes,
+            required_failures=required_failures,
+            degradations=degradations,
+        )
 
     # D85: audit yesterday's label coverage against the contest universe so a
     # player silently absent from slate_labels (the 2026-06-08 Loyd/Boston
