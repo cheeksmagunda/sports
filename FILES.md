@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 809 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 810 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -47,6 +47,7 @@ Generated from `git ls-files`. 809 tracked files. Regenerate with `scripts/gener
 - .github/workflows/backend-ci.yml -- GitHub Actions workflow
 - .github/workflows/backend-contracts.yml -- GitHub Actions workflow
 - .github/workflows/claude.yml -- GitHub Actions workflow
+- .github/workflows/codespace-maintenance.yml -- GitHub Actions workflow
 - .github/workflows/context-freshness.yml -- GitHub Actions workflow
 - .github/workflows/corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/frontend.yml -- GitHub Actions workflow
