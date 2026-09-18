@@ -23,6 +23,9 @@ from typing import Any
 from urllib import error, request
 
 ENDPOINT = "https://backboard.railway.com/graphql/v2"
+# Railway's edge answers 403 text/plain to urllib's default "Python-urllib/x.y"
+# User-Agent, before any auth check. An explicit product UA gets through.
+USER_AGENT = "sports-oracle-rwgql/1 (+https://github.com/cheeksmagunda/sports)"
 USAGE = "Usage: scripts/rwgql.sh '<graphql query>' [--variables-stdin]"
 AUTH_HELP = (
     "rwgql: set exactly one of RAILWAY_API_TOKEN (account/workspace) or RAILWAY_TOKEN (project)"
@@ -98,6 +101,10 @@ def resolve_auth(environ: Mapping[str, str]) -> dict[str, str] | None:
     return {"Project-Access-Token": project_token}
 
 
+def build_headers(auth: Mapping[str, str]) -> dict[str, str]:
+    return {**auth, "Content-Type": "application/json", "User-Agent": USER_AGENT}
+
+
 def emit_response(body: bytes, redactions: set[str]) -> bool:
     text = redact_text(body.decode("utf-8", errors="replace"), redactions)
     try:
@@ -140,7 +147,7 @@ def main() -> int:
         ENDPOINT,
         data=payload,
         method="POST",
-        headers={**auth, "Content-Type": "application/json"},
+        headers=build_headers(auth),
     )
     try:
         with request.urlopen(req, timeout=30) as response:

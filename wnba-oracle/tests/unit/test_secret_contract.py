@@ -389,3 +389,12 @@ def test_railway_graphql_refuses_missing_or_ambiguous_tokens(
     err = capsys.readouterr().err
     assert "exactly one" in err
     assert "sentinel" not in err
+
+
+def test_railway_graphql_sends_explicit_user_agent() -> None:
+    module = _load_rwgql()
+    headers = module.build_headers({"Authorization": "Bearer x"})
+    assert headers["User-Agent"].startswith("sports-oracle-rwgql/")
+    assert "Python-urllib" not in headers["User-Agent"]
+    assert headers["Content-Type"] == "application/json"
+    assert headers["Authorization"] == "Bearer x"
