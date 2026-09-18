@@ -102,8 +102,13 @@ commands, but cannot weaken this contract.
 
 - Required operational interfaces are ordinary files, process environment
   variables, shell commands, documented CLIs, and HTTPS APIs.
-- GitHub login, Copilot, Actions, and Codespaces secrets live in the repo's
-  Codespace for sports work. Do not mint per-agent PATs for Claude, Codex,
+- GitHub credentials have one home per surface: the `gh` login on the
+  operator Mac (keyring) and the `gh` login inside the repo's Codespace
+  (`hosts.yml`), both at the default scope set plus `workflow` (Mac also
+  `codespace`). Actions use the built-in `GITHUB_TOKEN` plus repository
+  secrets; Codespaces secrets are injected only into the Codespace container,
+  where interactive shells unset the built-in `GITHUB_TOKEN` so web and ssh
+  sessions share the `gh` login. Do not mint per-agent PATs for Claude, Codex,
   Copilot, or Grok.
 - Claude, Codex, and Copilot are clients for the Codespace, live checkout, or
   live GitHub repository. They are not separate GitHub credential homes.

@@ -133,10 +133,13 @@ handling. WNBA-specific:
 - Real Sports derived storage state is a secret. Write
   `scraper/storage_state.json` atomically with mode `0600`; never commit it.
 - Standard `gh` and Railway CLI logins are valid ordinary interfaces. Railway
-  CLI, GraphQL, and repair operations all read the same `RAILWAY_TOKEN`
-  environment variable (the previously separate `RAILWAY_WORKSPACE_TOKEN` name
-  was retired in #113). Provision `RAILWAY_TOKEN` with the narrowest scope
-  that still lets these operations succeed. Never print or persist its value.
+  CLI, `scripts/rwgql.sh`, and repair operations read exactly one of two
+  token variables: `RAILWAY_TOKEN` (a project token scoped to one environment;
+  GraphQL header `Project-Access-Token`) or `RAILWAY_API_TOKEN` (an account or
+  workspace token; `Authorization: Bearer`). Setting both is an error. The
+  earlier `RAILWAY_WORKSPACE_TOKEN` name was retired in #113. Provision the
+  narrowest scope that still lets the operation succeed. Never print or
+  persist a value.
 
 ## Providers
 
