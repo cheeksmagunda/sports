@@ -18,6 +18,18 @@ set -u
 
 cd /workspaces/sports || exit 0
 
+# One GitHub identity per codespace (issue #235). Codespaces injects a
+# repo-scoped GITHUB_TOKEN into VS Code/web terminals but not into
+# `gh codespace ssh` sessions, and gh prefers an env token over the stored
+# `gh auth login`. Without this, the two entry points act as different
+# identities and the web one 401s once the injected token expires. Only
+# interactive shells are touched; postStart/CI scripts keep their env.
+for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  [ -f "$rc" ] || continue
+  grep -qF "# sports: one gh identity in this codespace (issue #235)" "$rc" && continue
+  printf '\n%s\n[ -n "${PS1:-}" ] && unset GITHUB_TOKEN GH_TOKEN\n' "# sports: one gh identity in this codespace (issue #235)" >> "$rc"
+done
+
 (
   timeout 20s uv run --frozen --package wnba-oracle python scripts/check_dev_services.py \
     >/tmp/sports-dev-services-check.log 2>&1

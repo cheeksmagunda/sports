@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Call Railway GraphQL with ambient auth and optional variables on stdin."""
+"""Call Railway GraphQL with ambient auth and optional variables on stdin.
+
+Railway issues two token kinds and they authenticate differently
+(https://docs.railway.com/integrations/api):
+
+- ``RAILWAY_API_TOKEN``: account or workspace token, sent as
+  ``Authorization: Bearer``.
+- ``RAILWAY_TOKEN``: project token scoped to one environment, sent as
+  ``Project-Access-Token``.
+
+Exactly one must be set; the Railway CLI also refuses both at once.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +18,18 @@ import json
 import os
 import re
 import sys
+from collections.abc import Mapping
 from typing import Any
 from urllib import error, request
 
 ENDPOINT = "https://backboard.railway.com/graphql/v2"
+# Railway's edge answers 403 text/plain to urllib's default "Python-urllib/x.y"
+# User-Agent, before any auth check. An explicit product UA gets through.
+USER_AGENT = "sports-oracle-rwgql/1 (+https://github.com/cheeksmagunda/sports)"
 USAGE = "Usage: scripts/rwgql.sh '<graphql query>' [--variables-stdin]"
+AUTH_HELP = (
+    "rwgql: set exactly one of RAILWAY_API_TOKEN (account/workspace) or RAILWAY_TOKEN (project)"
+)
 SENSITIVE_NAME = re.compile(
     r"(?:auth|credential|key|password|secret|state|token|url)", re.IGNORECASE
 )
@@ -67,6 +85,26 @@ def redact_fields(value: Any) -> Any:
     return value
 
 
+def resolve_auth(environ: Mapping[str, str]) -> dict[str, str] | None:
+    """Pick the Railway auth header for whichever token kind is configured.
+
+    Returns None when neither or both tokens are present, because a project
+    token sent as Bearer (or vice versa) fails with an opaque 401 that is
+    indistinguishable from a revoked token.
+    """
+    api_token = environ.get("RAILWAY_API_TOKEN", "").strip()
+    project_token = environ.get("RAILWAY_TOKEN", "").strip()
+    if bool(api_token) == bool(project_token):
+        return None
+    if api_token:
+        return {"Authorization": f"Bearer {api_token}"}
+    return {"Project-Access-Token": project_token}
+
+
+def build_headers(auth: Mapping[str, str]) -> dict[str, str]:
+    return {**auth, "Content-Type": "application/json", "User-Agent": USER_AGENT}
+
+
 def emit_response(body: bytes, redactions: set[str]) -> bool:
     text = redact_text(body.decode("utf-8", errors="replace"), redactions)
     try:
@@ -87,9 +125,9 @@ def main() -> int:
     if not query:
         print("rwgql: GraphQL query is required", file=sys.stderr)
         return 64
-    token = os.environ.get("RAILWAY_TOKEN", "").strip()
-    if not token:
-        print("rwgql: RAILWAY_TOKEN is missing", file=sys.stderr)
+    auth = resolve_auth(os.environ)
+    if auth is None:
+        print(AUTH_HELP, file=sys.stderr)
         return 78
 
     variables: object = {}
@@ -109,10 +147,7 @@ def main() -> int:
         ENDPOINT,
         data=payload,
         method="POST",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
+        headers=build_headers(auth),
     )
     try:
         with request.urlopen(req, timeout=30) as response:

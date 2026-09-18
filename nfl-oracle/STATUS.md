@@ -588,10 +588,12 @@ provenance sidecars, mode 0600) with the resume cursor in
   storage-state keys plus additive `NFL_DEVICE_*`; legacy
   `NFL_REALSPORTS_DEVICE_*` names may remain present and unused by code.
   No deploy source connected (0/1 online by design). No contest code.
-- Railway operations use the authenticated local native Railway CLI. Do not
-  perform Railway operations in cloud sessions or mint/copy an additional
+- Railway operations use the authenticated local native Railway CLI, or a
+  Codespace/Actions path that reads a pre-provisioned `RAILWAY_TOKEN` or
+  `RAILWAY_API_TOKEN` secret. Do not perform Railway operations from cloud
+  agent chats (claude.ai, Codex web, Copilot cloud) or mint/copy an additional
   token to bypass the boundary recorded in issue #109. Recheck authentication
-  locally before any authorized Railway action.
+  before any authorized Railway action.
 - Secrets stay local under ignored `scraper/` / `.secrets/`; never committed
 
 ## Train vs live

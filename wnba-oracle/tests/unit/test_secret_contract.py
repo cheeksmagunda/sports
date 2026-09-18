@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -350,3 +351,50 @@ def test_railway_graphql_output_redacts_environment_and_variable_secrets(
     assert "environment-sentinel" not in output
     assert "variable-sentinel" not in output
     assert "[REDACTED]" in output
+
+
+def _load_rwgql() -> Any:
+    module_path = WORKSPACE_ROOT / "wnba-oracle" / "scripts" / "rwgql.py"
+    spec = importlib.util.spec_from_file_location("rwgql_auth_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_railway_graphql_project_token_uses_project_access_header() -> None:
+    module = _load_rwgql()
+    headers = module.resolve_auth({"RAILWAY_TOKEN": " project-sentinel "})
+    assert headers == {"Project-Access-Token": "project-sentinel"}
+
+
+def test_railway_graphql_account_token_uses_bearer_header() -> None:
+    module = _load_rwgql()
+    headers = module.resolve_auth({"RAILWAY_API_TOKEN": "account-sentinel"})
+    assert headers == {"Authorization": "Bearer account-sentinel"}
+
+
+def test_railway_graphql_refuses_missing_or_ambiguous_tokens(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    module = _load_rwgql()
+    assert module.resolve_auth({}) is None
+    assert module.resolve_auth({"RAILWAY_TOKEN": "   "}) is None
+    assert module.resolve_auth({"RAILWAY_TOKEN": "a", "RAILWAY_API_TOKEN": "b"}) is None
+    # main() must fail closed before any network call and never echo a value.
+    monkeypatch.setenv("RAILWAY_TOKEN", "project-sentinel")
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "account-sentinel")
+    monkeypatch.setattr(sys, "argv", ["rwgql.py", "{ me { id } }"])
+    assert module.main() == 78
+    err = capsys.readouterr().err
+    assert "exactly one" in err
+    assert "sentinel" not in err
+
+
+def test_railway_graphql_sends_explicit_user_agent() -> None:
+    module = _load_rwgql()
+    headers = module.build_headers({"Authorization": "Bearer x"})
+    assert headers["User-Agent"].startswith("sports-oracle-rwgql/")
+    assert "Python-urllib" not in headers["User-Agent"]
+    assert headers["Content-Type"] == "application/json"
+    assert headers["Authorization"] == "Bearer x"
