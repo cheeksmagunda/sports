@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-09-17T15:36:36+00:00",
+  "generated_at_utc": "2026-09-18T15:04:57+00:00",
   "schema_version": 1,
   "tables": {
     "dayclose_grades": {
@@ -15,7 +15,7 @@
       "sha256": "d407c1007144acc668589331038dfb514299639e9ebc4ad03fc6ab69648fbcc5"
     },
     "frozen_lineups": {
-      "bytes": 2707702,
+      "bytes": 2780741,
       "columns": [
         "slate_date",
         "contest_id",
@@ -30,8 +30,8 @@
         "slate_json"
       ],
       "file": "frozen_lineups.csv",
-      "rows": 40,
-      "sha256": "2b2fcffdddb456f7b4d7cfea195d370b7c90f4f2b3666bc39688bec9dc472bd0"
+      "rows": 41,
+      "sha256": "6c0a19b879564f58dd7df724e14e9f65f9f266333f8a8dafb6db6af49de6457d"
     },
     "player_results": {
       "bytes": 133,
@@ -54,7 +54,7 @@
       "sha256": "7081f67ffce7bb28b6fdd860a5399957e8ae9ddda1200e771883d5712fc18c04"
     },
     "prepared_decisions": {
-      "bytes": 7490004,
+      "bytes": 7708364,
       "columns": [
         "day",
         "sha256",
@@ -62,8 +62,8 @@
         "payload_json"
       ],
       "file": "prepared_decisions.csv",
-      "rows": 41,
-      "sha256": "094748d9b6ab674a01cb45f75fa04f7150cc659b2984c1160acf9674561523ea"
+      "rows": 42,
+      "sha256": "6b60011f33bee3442d4aef606e98ace3b47264cf57118b25838915ae5c94d4c3"
     }
   },
   "transaction": {
