@@ -70,16 +70,12 @@ Seed from `REALSPORTS_STORAGE_STATE_B64GZ`:
 uv run --package nfl-oracle python nfl-oracle/scripts/seed_storage_state.py
 ```
 
-NFL does not independently capture its own Real Sports session. `nfl-oracle`'s
-`REALSPORTS_STORAGE_STATE_B64GZ` on Railway (`nfl-oracle-worker`), the GitHub
-Actions secret, and the Codespaces secret are literal, hash-verified copies of
-the one portfolio-wide, operator-seeded session documented in root
-`AGENTS.md`'s Portable operations and secrets. The Railway copy is
-deliberately unsealed (not the historical default) so it can be hash-compared
-against the canonical value with `railway run --service nfl-oracle-worker`;
-compare by `sha256[:8]`, never by printing values. See `AGENTS.md` for why the
-one readable/settable copy of that value lives in the `wnba-oracle` Railway
-project.
+NFL does not independently capture its own Real Sports session; it is a copy
+of the one portfolio-wide credential root `AGENTS.md` defines. `nfl-oracle`'s
+Railway copy (`nfl-oracle-worker`) is deliberately unsealed (not the
+historical default) so it can be hash-compared against the canonical value
+with `railway run --service nfl-oracle-worker`; compare by `sha256[:8]`,
+never by printing values.
 
 If NFL ever needs its own independently-captured session (a separate Real
 Sports account, for example), open a headed browser on an operator machine and

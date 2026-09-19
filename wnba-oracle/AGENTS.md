@@ -133,13 +133,10 @@ handling. WNBA-specific:
 - Real Sports derived storage state is a secret. Write
   `scraper/storage_state.json` atomically with mode `0600`; never commit it.
 - This project's `REALSPORTS_STORAGE_STATE_B64GZ` shared variable is the one
-  readable/settable copy of the portfolio-wide, operator-seeded Real Sports
-  session (root `../AGENTS.md`'s Portable operations and secrets), not a
-  WNBA-owned credential; it lives here only because Railway has no
-  cross-project shared variables. `nfl-oracle-worker`, the GitHub Actions
-  secret, and the Codespaces secret hold literal, hash-verified copies of the
-  same value. Changing this variable's value changes every downstream copy's
-  correctness, not only WNBA's; treat it with that wider blast radius.
+  readable/settable copy of the single portfolio-wide credential root
+  `../AGENTS.md` defines (Portable operations and secrets), not a WNBA-owned
+  one. Do not restate that contract here; read it there. Treat a change to
+  this value as portfolio-wide, not WNBA-only.
 - Standard `gh` and Railway CLI logins are valid ordinary interfaces. Railway
   CLI, `scripts/rwgql.sh`, and repair operations read exactly one of two
   token variables: `RAILWAY_TOKEN` (a project token scoped to one environment;
