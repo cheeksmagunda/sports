@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 819 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 821 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -79,6 +79,7 @@ Generated from `git ls-files`. 819 tracked files. Regenerate with `scripts/gener
 - drive/2026-09-14-week1-operator-retro.md -- Week 1 retro: operator observations
 - drive/NFL-ORACLE Data Science Resources, Strategy, Research, and more.txt
 - drive/README.md -- Document Drive
+- drive/Sports Flows.pdf
 - drive/discover_nfl_contest.py -- Ad-hoc headless Playwright sniff for the active NFL playerratingcontest id.
 - drive/probe_nfl.py -- Ad-hoc NFL endpoint probe, reusing WNBA Oracle's Real Sports auth machinery.
 - drive/scan_contests.py
@@ -530,6 +531,7 @@ Generated from `git ls-files`. 819 tracked files. Regenerate with `scripts/gener
 - scripts/check_dev_services.py -- Read-only, bounded probes of the explicitly configured development services.
 - scripts/check_import_boundaries.py -- Enforce the workspace dependency direction with static import checks.
 - scripts/check_issue_link.py -- Enforce issue linkage for material pull request work.
+- scripts/codespace-push
 - scripts/codespaces-smoke.sh -- Shell script
 - scripts/devcontainer-postcreate.sh -- Shell script
 - scripts/devcontainer-poststart.sh -- Shell script
