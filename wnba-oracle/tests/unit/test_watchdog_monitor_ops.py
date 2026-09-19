@@ -149,7 +149,7 @@ def test_recurring_freshness_does_not_alert_before_first_deadline() -> None:
     assert job2.status == "ok"
 
 
-def test_monitor_consumes_job_endpoint_and_withholds_heartbeat_on_missing_rows(
+def test_monitor_consumes_job_endpoint_and_forwards_alert_to_heartbeat_on_missing_rows(
     monkeypatch,
 ) -> None:
     monitor = _load_monitor()
@@ -172,10 +172,10 @@ def test_monitor_consumes_job_endpoint_and_withholds_heartbeat_on_missing_rows(
 
     assert "https://wnba.example/watchdog/jobs/today" in requested
     assert any(check.status == "alert" for check in checks)
-    assert heartbeat_calls == []
+    assert heartbeat_calls == ["https://heartbeat/fail"]
 
 
-def test_monitor_withholds_heartbeat_and_recovery_while_a_job_is_running(
+def test_monitor_pings_heartbeat_but_withholds_recovery_while_a_job_is_running(
     monkeypatch,
 ) -> None:
     monitor = _load_monitor()
@@ -208,7 +208,7 @@ def test_monitor_withholds_heartbeat_and_recovery_while_a_job_is_running(
     checks = monitor.run("https://wnba.example", heartbeat_url="https://heartbeat", now=now)
 
     assert any(check.status == "warn" for check in checks)
-    assert heartbeat_calls == []
+    assert heartbeat_calls == ["https://heartbeat"]
     assert monitor.summarize_status(checks) == "warn"
 
 

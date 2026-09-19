@@ -306,26 +306,29 @@ def run(
 
 
 def _heartbeat_checks(checks: list[Check], heartbeat_url: str) -> list[Check]:
-    """Send a dead-man signal only after every independent check is healthy."""
+    """Send the dead-man signal on every run, in the Healthchecks.io convention.
 
-    if any(check.status != "ok" for check in checks):
-        checks.append(
-            Check(
-                "Monitor heartbeat",
-                "warn",
-                "Heartbeat was withheld because the independent monitor was not fully healthy.",
-            )
-        )
-        return checks
+    A plain ping means "the monitor ran and nothing is alerting"; a ping to
+    ``<url>/fail`` forwards an alert. A missing ping therefore means the
+    monitor itself is dead, which is the one failure nothing else can report.
+    """
+
     if not heartbeat_url.strip():
         checks.append(Check("Monitor heartbeat", "warn", "No heartbeat target is configured."))
         return checks
+    alerting = any(check.status == "alert" for check in checks)
+    target = heartbeat_url.rstrip("/") + "/fail" if alerting else heartbeat_url
     try:
-        post_heartbeat(heartbeat_url)
+        post_heartbeat(target)
     except SafeRequestError as exc:
         checks.append(Check("Monitor heartbeat", "alert", str(exc)))
     else:
-        checks.append(Check("Monitor heartbeat", "ok", "Independent heartbeat was accepted."))
+        detail = (
+            "Heartbeat sent; the production alert was forwarded."
+            if alerting
+            else ("Heartbeat sent.")
+        )
+        checks.append(Check("Monitor heartbeat", "ok", detail))
     return checks
 
 
