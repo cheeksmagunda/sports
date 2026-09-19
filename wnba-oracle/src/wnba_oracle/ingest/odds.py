@@ -302,7 +302,7 @@ def fetch_player_props(
 ) -> list[PlayerProp]:
     """Fetch WNBA player prop O/Us from The Odds API.
 
-    Player props encode injury news, role, matchup, and minutes — priced by
+    Player props encode injury news, role, matchup, and minutes, priced by
     sharper analysts than any heuristic. Used as a projection multiplier in
     job2 (D78) and stored in job1 features_json.
 
@@ -310,7 +310,7 @@ def fetch_player_props(
     (`/events/{id}/odds`); the aggregate `/odds` endpoint returns HTTP 422 for
     `player_*` markets. We therefore list events (free) then query each event.
     Cost is 1 credit per market per event, so the default is `player_points`
-    only — the single market job2's `_prop_signal_multiplier` reads — to stay
+    only, the single market job2's `_prop_signal_multiplier` reads, to stay
     well inside the 500-credit/month free tier (~3 events x 2 daily runs).
     Cache TTL is 3h (props move closer to tip than game odds).
 

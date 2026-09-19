@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-19T08:43:28Z
+Last verified: 2026-09-19T09:32:30Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -25,19 +25,19 @@ not exposed by the read-only checks available during this audit.
   the interpreter resolution first. The public API at
   `https://api-production-7033.up.railway.app` responded to `/health` with
   `{"status":"ok","version":"0.1.0"}`.
-- Active source commit: `fe39f118c2b9c2e1078d730b34c3d55957d0d4c7` (#249) is
-  the deployed backend commit, confirmed via Railway's per-service deployment
-  record for `api`, `cron-job1`, `cron-job1-late`, `cron-job2`, and
-  `cron-dayclose` (each cites this SHA on its SUCCESS deployment). Current
-  `origin/main` HEAD is one commit ahead at
-  `ddf9c3c868f1bf6fe86f1c491fe1d44df4cb032f` (#250, docs-only
-  `ENTRY_POINTS.md` sync-tracking change); Railway recorded a deployment
-  attempt for that commit on every backend service as `SKIPPED`. `frontend`'s
-  active deployment is on that newer HEAD commit itself (`SUCCESS`,
-  2026-09-19T08:15:59Z), one commit ahead of the backend services.
+- Active source commit: `1634ec1891ce29d9958ebdc927f459948ceda631` (#253) remains
+  the last successful backend deployment. The newly merged documentation-only
+  `64faa871176b000964d6dbdac3509b995ebe9f41` (#255) has Railway deployment
+  records in `WAITING`/stopped state and is not yet a successful active
+  deployment. The public API is therefore still serving the previous
+  successful commit, while `main` is current at `64faa87`. The prior active
+  commit `fe39f118c2b9c2e1078d730b34c3d55957d0d4c7` (#249) is in its ancestry.
+  Railway recorded the new deployment attempt across the source-backed
+  services, but the read-only service summary still reports the prior
+  successful deployment as active. Recheck after Railway settles the
+  deployment; do not describe `64faa87` as production-active yet.
   `de1d68a402f634e7a9978f4ce773693ea1b7e460` (#230, Real Sports access
-  coordination) is in `fe39f118`'s ancestry and was itself briefly the live
-  deployment (2026-09-19T07:25:55Z) before being superseded.
+  coordination) was itself briefly live before being superseded.
 - Model artifact and SHA: production model SHA is still
   `7b06b6f98d0bb0cd69d4b12c49c5c97102b39eb30734c586f9d1f02ab69f1da2`
   (`wnba-oracle/models/picker_95264ce9_1788339935.pkl`), confirmed live as
@@ -52,7 +52,7 @@ not exposed by the read-only checks available during this audit.
   (`frozen_at=2026-09-17T22:50:07Z`) and `slate_date=2026-09-18`
   (`frozen_at=2026-09-18T22:50:15Z`) both carry this `model_sha`, confirming
   live post-promotion freezes have run under this artifact. `slate_date=2026-09-19`
-  has no frozen lineup yet as of this verification (2026-09-19T08:38Z),
+  has no frozen lineup yet as of this verification (2026-09-19T09:32Z),
   which is before the day's job1 (13:30 UTC) and job2 (14:20 UTC) deadlines.
 - Rollback: two pre-refit artifacts are retained in the repository. Their
   sha256 hashes were independently verified against each file's own
@@ -83,7 +83,7 @@ not exposed by the read-only checks available during this audit.
   Railway's live deployment history at time of need.
 - Service and schedule state: watchdog `/watchdog/today` reports
   `status=ok`, no events, for `slate_date=2026-09-19`. `/slate/2026-09-19`
-  currently 404s with "no slate timing for slate" (checked 2026-09-19T08:38Z,
+  currently 404s with "no slate timing for slate" (checked 2026-09-19T09:32Z,
   before today's job1 deadline; this does not establish whether games are
   scheduled today). The last two finalized slates both confirm the hard
   diversification policy is active: 2026-09-18 (3 games, 5 players, 5
