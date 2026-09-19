@@ -1310,3 +1310,43 @@ lint`, `make -C nfl-oracle typecheck`, `make check-boundaries`, and `make
 codespaces-smoke`. Docker is not installed in that Codespace, so the Docker
 smoke targets skip there by design. The Mac Docker production smoke passed
 after `.dockerignore` was updated to include `nfl-oracle/config/`.
+
+## Real Sports session propagation and gh/Railway auth doc refresh (issue #242, 2026-09-19 ~05:52 UTC)
+
+`REALSPORTS_STORAGE_STATE_B64GZ` on `nfl-oracle-worker` (Railway project
+`dc2d3b51-2551-4df1-981e-c2c1440dc992`, environment `21c8b1a2-6648-4535-8a26-
+b65da96d8ed1`) was set to the canonical portfolio session value (the one held
+in `wnba-oracle`'s Railway shared variable of the same name) and verified by
+hash: `sha256[:8]` of both copies is `c4a729e2`. Set with `--skip-deploys`, so
+it takes effect on the worker's next normal deploy (this change's own PR
+merge triggers one through the existing CI-gated Railway pipeline), not
+through an out-of-band restart of the live recommendations writer
+(`NFL_RECOMMENDATIONS_ENABLED=1` at the time of this change). The variable
+was deliberately left unsealed (previously sealed and unreadable) so this
+hash comparison, and future ones, are possible; a sealed copy can only ever
+be blindly overwritten, never verified.
+
+The GitHub Actions repository secret of the same name was set from the same
+canonical value (verifiable with the new `secret-audit` workflow,
+`workflow_dispatch` only, `sha256[:8]` output, no values printed). The
+Codespaces secret copy was already present (confirmed in #242's investigation
+record) and unchanged here.
+
+Added `nfl-oracle/scripts/auth-check-live`, NFL's first `--live` auth hook
+(github, railway CLI, Real Sports structure check; no GraphQL probe, to avoid
+importing wnba-oracle's `rwgql.py` across the app boundary). `scripts/auth-check
+nfl-oracle --live` now exits 0 end to end. Added `.devcontainer` Chromium
+system libraries (the exact jammy set `wnba-oracle/Dockerfile` already pins
+for production) plus a `postCreateCommand` step
+(`scripts/devcontainer-postcreate.sh`) that installs the per-user Chromium
+binary, so a fresh Codespace can exercise Real Sports Playwright capture
+without an ad hoc `sudo playwright install-deps` step.
+
+`nfl-oracle-worker-volume` was checked in the same session: 4464/5000 MB
+(89%), unchanged from the prior handoff. Not touched here; this task was
+auth propagation, not volume remediation. Flag again before the next T-40.
+
+Checks run locally on the Mac checkout before hand-off to the Codespace for
+commit: `make test-app APP=nfl-oracle` (403 passed, 1 skipped, 1 deselected),
+`make lint`, `make typecheck`, `make check-boundaries`, `make test-portfolio`,
+`make check-applications`. All green.

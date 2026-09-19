@@ -22,11 +22,15 @@ to the repository.
 Use the button above to create or resume a Codespace on `main`, or choose
 **Code > Codespaces > Create codespace on main**. The button uses GitHub's
 [documented resume link](https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/setting-up-your-repository/facilitating-quick-creation-and-resumption-of-codespaces).
-The devcontainer starts PostgreSQL and Redis, installs the locked workspace,
-and runs `make codespaces-smoke`. Required setup does not install Claude,
-Codex, Copilot, Grok, or other vendor tooling. Those are optional editor or
-chat capabilities that should attach to the live repo or receive refreshed
-snapshots.
+The devcontainer starts PostgreSQL and Redis and, on creation, installs the
+locked workspace and the per-user Chromium binary Playwright needs for Real
+Sports session capture and verification (the underlying system libraries are
+baked into the devcontainer image). `make codespaces-smoke` is the separate
+CI check (`.github/workflows/devcontainer-smoke.yml`) that verifies a fresh
+build stays buildable; it does not run automatically inside a live Codespace.
+Required setup does not install Claude, Codex, Copilot, Grok, or other vendor
+tooling. Those are optional editor or chat capabilities that should attach to
+the live repo or receive refreshed snapshots.
 
 Inside a Codespace, use the same commands as locally:
 
@@ -68,6 +72,14 @@ Codespace, where the pinned Railway CLI and `wnba-oracle/scripts/rwgql.sh`
 read it from login shells. Nobody runs `railway login` in the Codespace, and
 the Mac login is never copied into a cloud session. Other cloud agent chats
 have no Railway access.
+
+Real Sports authentication reaches the Codespace the same way: the
+Codespaces secret `REALSPORTS_STORAGE_STATE_B64GZ` plus the devcontainer's
+baked-in Playwright/Chromium browser (see `AGENTS.md`'s Portable operations
+and secrets). Any session attached to the Codespace can capture or verify the
+Real Sports session without a manual recovery step; scripted login itself is
+still rejected by the provider and remains an operator-only, interactive
+recovery path.
 
 The SSH feature takes effect in newly created or rebuilt containers. An
 existing Codespace without an SSH server needs that prerequisite before
@@ -199,10 +211,16 @@ retroactively; only new sport day-close jobs are expected to build on it.
 
 All sport day-close jobs that need a Real Sports session share one
 operator-captured session end to end: the operator captures it locally
-(`scraper/storage_state.json`), it is stored as a single repository secret,
-`REALSPORTS_STORAGE_STATE_B64GZ` (base64+gzip, unprefixed - not per sport),
-and every sport's day-close workflow reads that same secret. Database
-credentials stay per-sport and prefixed (for example
+(`scraper/storage_state.json`), and every surface that needs it holds a
+literal, hash-verified copy of the same value under the same unprefixed name,
+`REALSPORTS_STORAGE_STATE_B64GZ` (base64+gzip, not per sport) - the GitHub
+Actions repository secret every sport's day-close workflow reads, the
+Codespaces secret, and each Railway service that runs live Real Sports calls
+(currently `wnba-oracle`'s cron services and `nfl-oracle-worker`). See
+`AGENTS.md`'s Portable operations and secrets for why the one
+readable/settable copy of that value happens to live in the `wnba-oracle`
+Railway project. Database credentials stay per-sport and prefixed (for
+example
 `NFL_DAYCLOSE_DATABASE_URL`), since each application owns a separate
 database. TLS root certificates are per-sport and prefixed too, for the same
 reason a database URL is: Railway issues a distinct, self-signed certificate

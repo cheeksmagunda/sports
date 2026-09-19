@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 810 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 814 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -56,6 +56,7 @@ Generated from `git ls-files`. 810 tracked files. Regenerate with `scripts/gener
 - .github/workflows/nfl-corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/nfl-dayclose.yml -- GitHub Actions workflow
 - .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
+- .github/workflows/secret-audit.yml -- GitHub Actions workflow
 - .github/workflows/watchdog-monitor.yml -- GitHub Actions workflow
 - .github/workflows/wnba-backfill-enrichment.yml -- GitHub Actions workflow
 - .github/workflows/wnba-dayclose-verify.yml -- GitHub Actions workflow
@@ -163,6 +164,7 @@ Generated from `git ls-files`. 810 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/frontend/style.css
 
 ## nfl-oracle/scripts/
+- nfl-oracle/scripts/auth-check-live
 - nfl-oracle/scripts/auth_presence_check.py -- Print presence-only Real Sports auth surface status (never values).
 - nfl-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable NFL decision corpus.
 - nfl-oracle/scripts/cache_nflverse_schedules.py -- Download public nflverse/nfldata games.csv and slim into offline schedule cache.
@@ -380,6 +382,7 @@ Generated from `git ls-files`. 810 tracked files. Regenerate with `scripts/gener
 ## nfl-oracle/tests/unit/
 - nfl-oracle/tests/unit/__init__.py
 - nfl-oracle/tests/unit/test_anti_chalk_high_tv.py -- Anti-chalk + high-potential label path pins for issue #185.
+- nfl-oracle/tests/unit/test_auth_check_live.py -- NFL parity for wnba-oracle's auth-check-live value-free contract.
 - nfl-oracle/tests/unit/test_auth_presence_check.py -- auth_presence_check must see volume-backed Real Sports session files.
 - nfl-oracle/tests/unit/test_backfill_cursor.py -- Tests for season backfill cursor resume.
 - nfl-oracle/tests/unit/test_capture_storage_state_paths.py -- capture_storage_state must write under volume-aware scraper_dir.
@@ -528,6 +531,7 @@ Generated from `git ls-files`. 810 tracked files. Regenerate with `scripts/gener
 - scripts/check_import_boundaries.py -- Enforce the workspace dependency direction with static import checks.
 - scripts/check_issue_link.py -- Enforce issue linkage for material pull request work.
 - scripts/codespaces-smoke.sh -- Shell script
+- scripts/devcontainer-postcreate.sh -- Shell script
 - scripts/devcontainer-poststart.sh -- Shell script
 - scripts/generate_file_manifest.py -- Regenerate FILES.md: a one-line-per-file manifest of every tracked file.
 - scripts/prune-merged-branches.sh -- Shell script

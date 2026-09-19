@@ -53,7 +53,14 @@ scripts/with-secrets wnba-oracle -- uv run --package nfl-oracle nfl-corpus-g-bac
 ```
 
 The WNBA project name is used only because the operator-seeded Real Sports
-session currently lives in that SOPS file. NFL does not import WNBA code.
+session's optional local SOPS copy happens to live in that file. The
+authoritative propagation path is not this SOPS file: it is root `AGENTS.md`'s
+Real Sports credential contract (`REALSPORTS_STORAGE_STATE_B64GZ`, a literal,
+hash-verified copy on the `nfl-oracle-worker` Railway service, the GitHub
+Actions secret, and the Codespaces secret, all copies of the one durable
+session whose readable/settable copy lives in the `wnba-oracle` Railway
+project only because Railway has no cross-project shared variables). NFL does
+not import WNBA code.
 
 ## Verification bar
 

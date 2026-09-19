@@ -34,3 +34,39 @@ RUN set -eu; \
 	chmod 0755 /usr/local/bin/railway; \
 	rm -f /tmp/railway.tgz; \
 	railway --version
+
+# Chromium runtime deps for Playwright (same jammy set wnba-oracle/Dockerfile
+# pins for the production image, minus test-only packages). Real Sports
+# session capture and structure verification (auth-check-live, this app's
+# own capture/probe scripts) is Playwright-based; without these libs the
+# per-user chromium binary installed in postCreateCommand cannot launch, so
+# any session attached to this Codespace could get into GitHub and Railway
+# but not into Real Sports (issue #242). Baked into the image, not installed
+# ad hoc per Codespace, so a fresh Codespace has it on first boot.
+RUN apt-get update \
+	&& export DEBIAN_FRONTEND=noninteractive \
+	&& apt-get install -y --no-install-recommends \
+		libasound2 \
+		libatk-bridge2.0-0 \
+		libatk1.0-0 \
+		libatspi2.0-0 \
+		libcairo2 \
+		libcups2 \
+		libdbus-1-3 \
+		libdrm2 \
+		libexpat1 \
+		libgbm1 \
+		libglib2.0-0 \
+		libnspr4 \
+		libnss3 \
+		libpango-1.0-0 \
+		libx11-6 \
+		libxcb1 \
+		libxcomposite1 \
+		libxdamage1 \
+		libxext6 \
+		libxfixes3 \
+		libxkbcommon0 \
+		libxrandr2 \
+	&& apt-get clean \
+	&& rm -rf /var/lib/apt/lists/*
