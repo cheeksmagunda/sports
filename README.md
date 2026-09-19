@@ -209,17 +209,11 @@ Actions by `wnba-dayclose-verify.yml`) predates this pattern and is
 structurally different. It is not migrated onto `oracle_core.dayclose`
 retroactively; only new sport day-close jobs are expected to build on it.
 
-All sport day-close jobs that need a Real Sports session share one
-operator-captured session end to end: the operator captures it locally
-(`scraper/storage_state.json`), and every surface that needs it holds a
-literal, hash-verified copy of the same value under the same unprefixed name,
-`REALSPORTS_STORAGE_STATE_B64GZ` (base64+gzip, not per sport) - the GitHub
-Actions repository secret every sport's day-close workflow reads, the
-Codespaces secret, and each Railway service that runs live Real Sports calls
-(currently `wnba-oracle`'s cron services and `nfl-oracle-worker`). See
-`AGENTS.md`'s Portable operations and secrets for why the one
-readable/settable copy of that value happens to live in the `wnba-oracle`
-Railway project. Database credentials stay per-sport and prefixed (for
+All sport day-close jobs that need a Real Sports session read the same
+unprefixed secret, `REALSPORTS_STORAGE_STATE_B64GZ` (base64+gzip, not per
+sport): the one portfolio-wide credential `AGENTS.md`'s Portable operations
+and secrets defines. Read that section for the propagation contract; don't
+restate it here. Database credentials stay per-sport and prefixed (for
 example
 `NFL_DAYCLOSE_DATABASE_URL`), since each application owns a separate
 database. TLS root certificates are per-sport and prefixed too, for the same
