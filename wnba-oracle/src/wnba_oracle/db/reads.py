@@ -21,7 +21,7 @@ def read_label_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
     Each row is a Real Sports contest entry with the realized ``real_score``
     target the player earned on that slate. ~4.5k rows, grows by ~30 per day.
 
-    Used by the EB baseline and the real_score blend / CQR calibration — NOT
+    Used by the EB baseline and the real_score blend / CQR calibration; NOT
     by the LightGBM heads. The heads train on ``build_gamelog_corpus``
     (per-player-game feature+target rows over ``wnba_game_logs``, ~13k rows).
     Replaces the legacy ``training_corpus.parquet`` archive.

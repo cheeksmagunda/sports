@@ -32,7 +32,7 @@ def get_watchdog_today(
         curl https://<api-domain>/watchdog/today | jq .status
 
     Declared BEFORE the ``/{slate_date}`` route so FastAPI matches the
-    specific path first — otherwise a request to ``/watchdog/today``
+    specific path first; otherwise a request to ``/watchdog/today``
     silently binds ``slate_date="today"`` and returns an empty event
     list against the bogus slate.
     """

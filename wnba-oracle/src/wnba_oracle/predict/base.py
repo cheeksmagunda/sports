@@ -14,7 +14,7 @@ def boost_prior(card_boost: float) -> float:
 
     Calibrated 2026-05-27 against the 16-slate parquet corpus:
     `real_score = 3.16 - 0.45 * card_boost` (linear fit, n=449
-    player-slates from 2026-05-10 onward — the date the boost system
+    player-slates from 2026-05-10 onward, the date the boost system
     rolled out). The slope is NEGATIVE because card_boost is a handicap
     the platform assigns to weaker baseline players to balance the
     multiplier contribution. A boost-3 player has lower expected
