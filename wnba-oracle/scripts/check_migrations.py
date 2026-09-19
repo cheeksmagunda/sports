@@ -17,8 +17,8 @@ from wnba_oracle.common.db_utils import normalize_postgres_url
 
 WNBA_ROOT = Path(__file__).resolve().parents[1]
 SAFE_HOSTS = {"127.0.0.1", "localhost", "postgres"}
-PREVIOUS_REVISION = "20260820_0009"
-HEAD_REVISION = "20260820_0010"
+PREVIOUS_REVISION = "20260820_0010"
+HEAD_REVISION = "20260919_0011"
 
 
 def _database_url(base_url: sa.URL, database: str) -> str:

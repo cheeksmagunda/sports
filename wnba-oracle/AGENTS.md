@@ -169,6 +169,23 @@ handling. WNBA-specific:
 - Job names, role guards, schedules, pause windows, preconditions, and
   watchdog semantics remain WNBA-owned. `WNBA_CRON_ROLE` must match the selected
   job in production.
+- Real Sports account access coordination (issue #230,
+  `scheduler/access_coordination.py` + `scheduler/realsports_access.py`) is
+  default-off: `job_runtime._with_realsports_access` is a pure passthrough
+  unless `REALSPORTS_ACCESS_COORDINATION_ENABLED` is truthy, so landing the
+  coordinator and its `external_access_windows` migration is not itself a
+  production behavior or schedule change. Enabling it is a separate,
+  explicit decision (it changes `job1`/`job1games`/`dayclose`/`backfill` to
+  return a retryable failure instead of running when the shared account
+  budget is exhausted) and needs its own authorization and rollback plan,
+  not just a variable set. It coordinates WNBA's jobs against WNBA's own
+  Postgres only; `nfl-oracle-worker` also holds a copy of the same Real
+  Sports session (root `../AGENTS.md`) but has its own separate database and
+  is not gated by this table, so account-wide bursts across WNBA and NFL
+  together are not covered even once this is enabled. Closing that gap
+  needs either NFL running its own coordinator against a value it can
+  observe, or a cross-app coordination point neither app's Postgres can
+  host alone; no such design exists yet.
 - A successful exit means required durable work completed. Optional provider
   degradation may be reported as degraded, but database, freeze, role, or
   artifact-integrity failures must return nonzero.

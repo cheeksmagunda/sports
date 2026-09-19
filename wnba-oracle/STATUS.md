@@ -60,5 +60,14 @@ not exposed by the read-only checks available during this audit.
   (`read_game_identity()`/`index_game_identity()`) not touched by this push;
   see issue #53's final comment for detail.
 
+Scoped addition verified 2026-09-19 (does not re-verify the snapshot above):
+migration `20260919_0011_external_access_windows` adds the
+`external_access_windows` table (upgrade and downgrade both verified against
+an empty PostgreSQL 14 database, this session). Its consumer,
+`REALSPORTS_ACCESS_COORDINATION_ENABLED` (issue #230), is default-off in
+every deployed service today; no production behavior or schedule changed by
+landing it. See `AGENTS.md`'s Jobs and production operations for the enable
+decision and the known `nfl-oracle-worker` coordination gap.
+
 Development plans, branch history, check output, decisions, and completed work
 belong in GitHub Issues and Pull Requests, not this file.

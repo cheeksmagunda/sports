@@ -56,12 +56,20 @@ def test_role_mismatch_precedes_dependency_validation() -> None:
     [
         (
             "job1",
-            Settings(ENV="prod", REALSPORTS_STORAGE_STATE_B64GZ="configured"),
+            Settings(
+                ENV="prod",
+                DATABASE_URL="",
+                REALSPORTS_STORAGE_STATE_B64GZ="configured",
+            ),
             ["DATABASE_URL"],
         ),
         (
             "job1games",
-            Settings(ENV="prod", DATABASE_URL="postgresql://configured"),
+            Settings(
+                ENV="prod",
+                DATABASE_URL="postgresql://configured",
+                REALSPORTS_STORAGE_STATE_B64GZ="",
+            ),
             ["REALSPORTS_STORAGE_STATE_B64GZ"],
         ),
         (
@@ -69,6 +77,7 @@ def test_role_mismatch_precedes_dependency_validation() -> None:
             Settings(
                 ENV="prod",
                 DATABASE_URL="postgresql://configured",
+                REDIS_URL="",
                 WNBA_ORACLE_MODEL_ARTIFACT_SHA="a" * 64,
             ),
             ["REDIS_URL"],

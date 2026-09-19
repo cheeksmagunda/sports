@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 814 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 819 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -684,6 +684,7 @@ Generated from `git ls-files`. 814 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/migrations/versions/20260613_0008_contest_placements_sha64.py -- Fix freeze_model_sha column: varchar(40) -> varchar(64).
 - wnba-oracle/migrations/versions/20260820_0009_freeze_operation_key.py -- Add semantic idempotency keys to append-only freezes.
 - wnba-oracle/migrations/versions/20260820_0010_job_runs.py -- Add durable job lifecycle heartbeats.
+- wnba-oracle/migrations/versions/20260919_0011_external_access_windows.py -- Add durable external account access windows.
 
 ## wnba-oracle/models/
 - wnba-oracle/models/.gitkeep
@@ -864,6 +865,7 @@ Generated from `git ls-files`. 814 tracked files. Regenerate with `scripts/gener
 
 ## wnba-oracle/src/wnba_oracle/scheduler/
 - wnba-oracle/src/wnba_oracle/scheduler/__init__.py
+- wnba-oracle/src/wnba_oracle/scheduler/access_coordination.py -- Durable coordination for one scarce external account's access windows.
 - wnba-oracle/src/wnba_oracle/scheduler/antibot.py -- Anti-bot timing primitives.
 - wnba-oracle/src/wnba_oracle/scheduler/cron.py -- WNBA cron command backed by the shared job runner.
 - wnba-oracle/src/wnba_oracle/scheduler/job1.py -- Job 1: morning scrape + Real Sports re-auth + odds + RotoWire lineups.
@@ -882,6 +884,7 @@ Generated from `git ls-files`. 814 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/scheduler/live_ownership.py -- Same-day live ownership capture (#38 / F6).
 - wnba-oracle/src/wnba_oracle/scheduler/placements.py -- Closed-loop placement / calibration tracking.
 - wnba-oracle/src/wnba_oracle/scheduler/placements_calibration.py -- Pure calibration math for the placement feedback loop: DB-free,
+- wnba-oracle/src/wnba_oracle/scheduler/realsports_access.py -- WNBA ownership of Real Sports account-window policy.
 - wnba-oracle/src/wnba_oracle/scheduler/shadow.py -- Model shadow-eval: run a challenger head over the same enrichment as
 - wnba-oracle/src/wnba_oracle/scheduler/shadow_knobs.py -- Knob-overlay shadow harness (2026-07-04, follow-up to model shadow D95).
 - wnba-oracle/src/wnba_oracle/scheduler/watchdog.py -- Watchdog: pipeline-health checks + persistence + operator surface.
@@ -918,6 +921,7 @@ Generated from `git ls-files`. 814 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/integration/test_runtime_boundaries.py -- Acceptance tests against real PostgreSQL and Redis services.
 
 ## wnba-oracle/tests/unit/
+- wnba-oracle/tests/unit/test_access_coordination.py
 - wnba-oracle/tests/unit/test_all_tiers_integration.py -- End-to-end integration: all three D57 tiers armed at once.
 - wnba-oracle/tests/unit/test_analyze_stacking_decisions.py -- Pure helper tests for read-only stacking-decision analytics.
 - wnba-oracle/tests/unit/test_anchor_floor.py -- Tier 1 lineup anchor floor (D57): the optimizer must field >= min_anchors
@@ -1009,6 +1013,7 @@ Generated from `git ls-files`. 814 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_project_paths.py
 - wnba-oracle/tests/unit/test_prop_signal.py -- D78: sportsbook prop-signal multiplier in job2._prop_signal_multiplier.
 - wnba-oracle/tests/unit/test_reads_point_in_time.py -- Point-in-time safeguards on the label-corpus read helpers.
+- wnba-oracle/tests/unit/test_realsports_access.py
 - wnba-oracle/tests/unit/test_realsports_parse.py -- Parser tests for the Real Sports pool response. Hits no network.
 - wnba-oracle/tests/unit/test_realsports_pool_fallback.py -- Targeted-search fallback in `fetch_pool_for_date`.
 - wnba-oracle/tests/unit/test_recompose.py -- predict_real_score recompose helpers + fallback (D63, Phase 2).
