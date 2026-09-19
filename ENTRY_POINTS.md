@@ -181,7 +181,8 @@ gh pr list
 gh codespace list
 
 # Railway CLI — available when installed in current surface
-# If auth fails, verify RAILWAY_TOKEN validity and project access scope
+# If auth fails, verify the token kind: RAILWAY_API_TOKEN (account/workspace)
+# or RAILWAY_TOKEN (project, one environment); never both at once
 railway link
 railway status
 # See nfl-oracle/STATUS.md for Railway project link notes
@@ -255,7 +256,7 @@ operator re-uploads snapshots to any configured static project:
 | Claude/Codex/Copilot/Grok snapshot differs from repo | Snapshot drifted | Fetch live via GitHub connector |
 | `make setup` fails | Locked deps changed | Check if you're on latest `main` |
 | Tests fail in CLI but pass in Codespace | Different Python/uv version | Run `uv sync --frozen --reinstall` |
-| Railway commands fail | CLI not authenticated | Run `railway login` or check `RAILWAY_TOKEN` |
+| Railway commands fail | CLI not authenticated | Run `railway login` or check `RAILWAY_API_TOKEN` / `RAILWAY_TOKEN` (exactly one) |
 
 ## Next steps
 

@@ -62,9 +62,12 @@ GitHub authentication opens the connection; project commands use the
 Codespace's own authentication. Run edits and verification in the remote
 checkout, and inspect its branch and working tree before making changes.
 
-Railway operations use the operator's authenticated local Railway CLI.
-Codespaces and other cloud sessions do not have Railway access. Never copy
-the local Railway login or its credentials into a cloud session.
+Railway operations use the operator's authenticated local Railway CLI on the
+Mac, and the Codespaces secret `RAILWAY_API_TOKEN` (an account token) in the
+Codespace, where the pinned Railway CLI and `wnba-oracle/scripts/rwgql.sh`
+read it from login shells. Nobody runs `railway login` in the Codespace, and
+the Mac login is never copied into a cloud session. Other cloud agent chats
+have no Railway access.
 
 The SSH feature takes effect in newly created or rebuilt containers. An
 existing Codespace without an SSH server needs that prerequisite before
