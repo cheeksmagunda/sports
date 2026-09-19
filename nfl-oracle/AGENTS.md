@@ -52,15 +52,11 @@ Optional secret injection for live Real Sports calls:
 scripts/with-secrets wnba-oracle -- uv run --package nfl-oracle nfl-corpus-g-backfill --season 2002 --game-ids 126323
 ```
 
-The WNBA project name is used only because the operator-seeded Real Sports
-session's optional local SOPS copy happens to live in that file. The
-authoritative propagation path is not this SOPS file: it is root `AGENTS.md`'s
-Real Sports credential contract (`REALSPORTS_STORAGE_STATE_B64GZ`, a literal,
-hash-verified copy on the `nfl-oracle-worker` Railway service, the GitHub
-Actions secret, and the Codespaces secret, all copies of the one durable
-session whose readable/settable copy lives in the `wnba-oracle` Railway
-project only because Railway has no cross-project shared variables). NFL does
-not import WNBA code.
+The WNBA project name is used only because the optional local SOPS copy of
+the Real Sports session happens to live in that file. That is not the
+authoritative path; root `AGENTS.md` defines the one portfolio-wide
+credential contract for GitHub, Railway, and Real Sports. Read it there, not
+here. NFL does not import WNBA code.
 
 ## Verification bar
 
