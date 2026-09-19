@@ -49,10 +49,8 @@ Environment (see `.env.example`):
 | `NFL_DEVICE_NAME` | Device name used when harvesting headers (default `nfl-oracle-dev-01`) |
 
 Code reads `NFL_DEVICE_UUID` / `NFL_DEVICE_NAME` (with optional `WNBA_DEVICE_*`
-fallbacks). It does **not** read `NFL_REALSPORTS_DEVICE_UUID` /
-`NFL_REALSPORTS_DEVICE_NAME`. Those legacy names may still exist as harmless
-placeholders on Railway project `nfl-oracle-staging` / service `nfl-oracle`;
-the additive correct names are what the package uses.
+fallbacks). The legacy `NFL_REALSPORTS_DEVICE_*` names were never read and were
+removed from Railway on 2026-09-19 (#239).
 
 Default local storage path: `nfl-oracle/scraper/storage_state.json`.
 Never commit `scraper/`, cookies, tokens, or payloads containing `userId`.
