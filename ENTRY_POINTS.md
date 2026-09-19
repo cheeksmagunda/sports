@@ -18,7 +18,12 @@ This document explains how to access Sports Oracle from different clients and ho
 ### GitHub Codespaces (browser, app, or forwarded editor)
 
 1. Click **Code > Codespaces > Create codespace on main**, or use the badge in README.md
-2. The devcontainer automatically starts PostgreSQL, Redis, and runs `make codespaces-smoke`
+2. The devcontainer starts PostgreSQL and Redis, then on creation installs the
+   locked workspace and the Playwright/Chromium browser Real Sports needs
+   (`scripts/devcontainer-postcreate.sh`). `make codespaces-smoke` is a
+   separate CI check (`.github/workflows/devcontainer-smoke.yml`) that
+   verifies a fresh build stays buildable; it does not run automatically
+   inside a live Codespace.
 3. Use the integrated terminal like a local checkout:
 
 ```bash
