@@ -25,6 +25,7 @@ Applications retain ownership of their settings extensions, database schema,
 migrations, routes, jobs, schedules, provider adapters, and domain behavior.
 `oracle_core.dayclose.run_sweep` is intentionally thin: it isolates one day's
 failure from the rest of the sweep and aggregates outcomes into a
-`JobResult`, but every domain judgment - what "graded" means, what provider
-data to refresh, which outcome statuses are terminal versus worth flagging -
-stays in the calling application's `close_one_day` callback.
+`JobResult`, but every domain judgment stays in the calling application: what
+"graded" means, what provider data to refresh, and which day's identity to use
+are defined by its `close_one_day` callback, while its `settled_statuses` set
+defines which returned statuses are terminal rather than worth flagging.

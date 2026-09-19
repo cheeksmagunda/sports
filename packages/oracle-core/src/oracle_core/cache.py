@@ -1,4 +1,8 @@
-"""Atomic JSON TTL caching over a technical key-value capability."""
+"""JSON TTL caching over a technical key-value capability.
+
+Individual ``get`` and ``set`` calls are as atomic as the underlying store;
+``get_or_set`` is check-then-set and may call its factory concurrently.
+"""
 
 from __future__ import annotations
 

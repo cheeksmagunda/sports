@@ -4,7 +4,8 @@
 Pipeline hooks (STATUS Codespace checklist / #91 shadow):
   1) Corpus G coverage matrix refresh (offline --refresh-matrix-only)
   2) Label extract + walk-forward baselines (nfl-value-baselines)
-  3) Status artifact under data/artifacts/ (gitignored)
+  3) Provider/auth readiness presence check (nfl-provider-status --json)
+  4) Status artifact under data/artifacts/ (gitignored)
 
 Does not authenticate to Real Sports, does not call Railway, does not enter contests.
 Intended to run in Codespace (or any workspace with deps installed).

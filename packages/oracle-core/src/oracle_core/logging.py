@@ -178,9 +178,9 @@ def configure_json_logging(
 ) -> logging.Logger:
     """Configure the root logger and return it.
 
-    Existing handlers are preserved unless ``replace_handlers`` is requested.
-    This makes the function safe for test harnesses and host applications that
-    install their own log destination.
+    Existing handler objects and their destinations are preserved unless
+    ``replace_handlers`` is requested. Each handler's formatter and redaction
+    filter are still replaced to enforce JSON output.
     """
 
     global _active_redaction_policy

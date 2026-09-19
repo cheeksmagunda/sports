@@ -488,8 +488,10 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     # evaluation for diagnostics, but must not win production coefficients:
     # a 1.0 weight on player_mean_shrunk is name memorization (Mahomes/Walker
     # chalk), which is exactly what #185 anti-chalk and the W2 retrain mandate
-    # forbid. Prefer ridge (high-TV weighted, full context features); fall back
-    # to position_mean / global_mean archetypes when ridge loses holdout MAE.
+    # forbid. Prefer ridge (high-TV weighted, full context features); when no
+    # context features are wired, fall back to position_mean / global_mean
+    # archetypes if ridge loses holdout MAE. With context features, #212 below
+    # forces ridge so those features remain live.
     activation_candidates = {
         name: mae for name, mae in candidates_mae.items() if name != "player_prior"
     }

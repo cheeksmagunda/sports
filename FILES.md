@@ -496,7 +496,7 @@ Generated from `git ls-files`. 819 tracked files. Regenerate with `scripts/gener
 ## packages/oracle-core/src/oracle_core/
 - packages/oracle-core/src/oracle_core/__init__.py -- Domain-free runtime infrastructure for Oracle applications.
 - packages/oracle-core/src/oracle_core/artifacts.py -- Atomic artifact persistence and integrity verification.
-- packages/oracle-core/src/oracle_core/cache.py -- Atomic JSON TTL caching over a technical key-value capability.
+- packages/oracle-core/src/oracle_core/cache.py -- JSON TTL caching over a technical key-value capability.
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Provider-neutral dossier entry and gap schema for contest analysis.

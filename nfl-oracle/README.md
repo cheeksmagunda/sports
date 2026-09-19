@@ -3,8 +3,9 @@
 Real Sports NFL research application. Current track: Corpus G (historical
 games/box/play archive with Real `value` labels) and honest coverage audits.
 
-Slice 1 scope is read-only ingest + redacted persistence. Contest submission,
-live entry, and Railway production secrets are explicitly out of scope here.
+Current scope includes read-only ingest, redacted persistence, the gated
+recommendation and freeze/grade pipeline, and Railway-hosted operations.
+Contest submission and live contest entry remain hard-forbidden by policy.
 
 ## Connection surfaces
 
