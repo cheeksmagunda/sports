@@ -22,6 +22,11 @@ from wnba_oracle.common.settings import Settings
 from wnba_oracle.db.engine import get_engine
 
 PICKING_JOBS = frozenset({"job1", "job1games", "job1late", "job2"})
+# Jobs that touch the shared Real Sports account and are eligible for access
+# coordination (issue #230) when REALSPORTS_ACCESS_COORDINATION_ENABLED is
+# set. job1late and job2 stay independent: they read the already-captured
+# pool/token cache rather than opening a fresh provider window.
+REALSPORTS_JOBS = frozenset({"job1", "job1games", "dayclose", "backfill"})
 JOB_NAMES = ("job1", "job1games", "job1late", "job2", "dayclose", "backfill")
 
 
@@ -32,6 +37,15 @@ def _from_exit_code(job_name: str, exit_code: int) -> JobResult:
         f"{job_name} returned a nonzero exit code",
         source_exit_code=exit_code,
     )
+
+
+def _with_realsports_access(
+    context: JobContext,
+    operation: Callable[[], JobResult],
+) -> JobResult:
+    from wnba_oracle.scheduler.realsports_access import run_with_access_window
+
+    return run_with_access_window(context, operation)
 
 
 def _handler(job_name: str, settings: Settings) -> Callable[[JobContext], JobResult]:
@@ -48,12 +62,18 @@ def _handler(job_name: str, settings: Settings) -> Callable[[JobContext], JobRes
         if job_name == "job1":
             from wnba_oracle.scheduler import job1
 
-            return _from_exit_code(job_name, job1.main())
+            return _with_realsports_access(
+                context,
+                lambda: _from_exit_code(job_name, job1.main()),
+            )
         if job_name == "job1games":
             from wnba_oracle.scheduler import job1
 
-            job1.run_game_starts(slate)
-            return JobResult.success()
+            def _run_game_starts() -> JobResult:
+                job1.run_game_starts(slate)
+                return JobResult.success()
+
+            return _with_realsports_access(context, _run_game_starts)
         if job_name == "job1late":
             from wnba_oracle.scheduler import job1
 
@@ -65,11 +85,14 @@ def _handler(job_name: str, settings: Settings) -> Callable[[JobContext], JobRes
         if job_name == "dayclose":
             from wnba_oracle.scheduler import job_dayclose
 
-            return job_dayclose.run()
+            return _with_realsports_access(context, job_dayclose.run)
         if job_name == "backfill":
             from wnba_oracle.scheduler import job_backfill
 
-            return _from_exit_code(job_name, job_backfill.main())
+            return _with_realsports_access(
+                context,
+                lambda: _from_exit_code(job_name, job_backfill.main()),
+            )
         return JobResult.failed("unregistered WNBA job")
 
     return run
