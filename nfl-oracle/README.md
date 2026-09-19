@@ -266,9 +266,10 @@ container. It does not connect to Railway or any other database.
 
 ## Codespace daily ops (planned)
 
-**HOLD** until Codespaces `RAILWAY_TOKEN` is confirmed. Org-wide default:
 Codespaces is the long-term home for every app's daily processes (NFL is the
-first concrete slice). Full checklist lives in `STATUS.md`. Shadow only: Corpus G
-coverage refresh → label/baseline recompute → status artifact; no contest entry;
-no recreate-blind Codespace; device secrets are `NFL_DEVICE_UUID` /
-`NFL_DEVICE_NAME` only (never git).
+first concrete slice). The Codespace Railway CLI uses the account/workspace
+credential `RAILWAY_API_TOKEN`; the scoped `RAILWAY_TOKEN` is reserved for
+explicit GitHub Actions repair paths. Full checklist lives in `STATUS.md`.
+Shadow only: Corpus G coverage refresh → label/baseline recompute → status
+artifact; no contest entry; no recreate-blind Codespace; device secrets are
+`NFL_DEVICE_UUID` / `NFL_DEVICE_NAME` only (never git).
