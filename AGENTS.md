@@ -124,6 +124,21 @@ commands, but cannot weaken this contract.
   those CLIs. Do not copy their stored credentials into repository files or
   duplicate them as local tokens merely to run normal commands. HTTP
   automation receives only the scoped environment credential it requires.
+- Real Sports authentication is a third portfolio-wide credential, the same
+  shape as GitHub and Railway: one operator-seeded, durable browser session,
+  not assumed to expire on a schedule and not rotated on one. Recovery is
+  only an ordinary interactive browser login, never a scripted one, and only
+  on explicit operator action. The canonical value lives in the env var
+  `REALSPORTS_STORAGE_STATE_B64GZ`; its one readable/settable copy is the
+  `wnba-oracle` Railway project's shared variable of that name, a storage
+  location Railway's project-scoped shared variables require, not an
+  ownership claim by that application. Every other surface holds a literal,
+  hash-verified copy of the same value: the GitHub Actions secret, the
+  Codespaces secret, and each Railway service that needs it (for example
+  `nfl-oracle-worker`). Compare copies by `sha256[:8]`, never by value. A
+  session attached to the Codespace reaches Real Sports the same way it
+  reaches GitHub and Railway, through the Codespaces secret and the
+  devcontainer's baked-in Playwright/Chromium dependencies (issue #242).
 - SOPS and age are an optional at-rest helper for environment-backed values
   that an operator chooses to persist locally. When used, root-common values
   live in `.secrets/common.sops.env` and application values live in

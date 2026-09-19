@@ -36,6 +36,15 @@ domain code. Live calls go through `nfl_oracle.ingest.realsports.headers_or_capt
    Playwright using a private `storage_state.json`.
 3. Call `https://web.realapp.com` read-only.
 
+`scripts/auth-check nfl-oracle --live` reports Real Sports session presence
+and structure validity, value-free, the same way it reports GitHub and
+Railway liveness. It is a fast, browser-free structure check by design: the
+operator-seeded session is durable and not assumed to expire on a schedule,
+so this check never launches a browser or calls the provider. For a deeper,
+live verification, follow `wnba-oracle/scripts/probe_realsports.py`'s pattern
+(Playwright reload against realsports.io) rather than folding that into the
+routine check.
+
 Environment (see `.env.example`):
 
 | Variable | Purpose |
@@ -61,7 +70,19 @@ Seed from `REALSPORTS_STORAGE_STATE_B64GZ`:
 uv run --package nfl-oracle python nfl-oracle/scripts/seed_storage_state.py
 ```
 
-To create the private state on an operator machine, open a headed browser and
+NFL does not independently capture its own Real Sports session. `nfl-oracle`'s
+`REALSPORTS_STORAGE_STATE_B64GZ` on Railway (`nfl-oracle-worker`), the GitHub
+Actions secret, and the Codespaces secret are literal, hash-verified copies of
+the one portfolio-wide, operator-seeded session documented in root
+`AGENTS.md`'s Portable operations and secrets. The Railway copy is
+deliberately unsealed (not the historical default) so it can be hash-compared
+against the canonical value with `railway run --service nfl-oracle-worker`;
+compare by `sha256[:8]`, never by printing values. See `AGENTS.md` for why the
+one readable/settable copy of that value lives in the `wnba-oracle` Railway
+project.
+
+If NFL ever needs its own independently-captured session (a separate Real
+Sports account, for example), open a headed browser on an operator machine and
 sign in normally (password manager/autofill is fine):
 
 ```sh
@@ -71,15 +92,17 @@ uv run --package nfl-oracle python nfl-oracle/scripts/capture_storage_state.py
 Press Enter in the terminal after the page is visibly signed in. The helper
 writes `nfl-oracle/scraper/storage_state.json` with mode `0600`; it never prints
 or uploads the session. The resulting file can be compressed and base64
-encoded for a sealed Railway variable:
+encoded for a Railway variable:
 
 ```sh
 gzip -c nfl-oracle/scraper/storage_state.json | base64 | pbcopy
 ```
 
-Paste that clipboard value into Railway's sealed
-`REALSPORTS_STORAGE_STATE_B64GZ` variable for the worker service only. Do not
-paste it into chat, commit it, or set it on the read-only API service.
+Paste that clipboard value into Railway's `REALSPORTS_STORAGE_STATE_B64GZ`
+variable for the worker service only. Do not paste it into chat, commit it,
+or set it on the read-only API service. Scripted login is rejected by the
+provider regardless of path; this is always an ordinary interactive browser
+sign-in.
 
 ## Train vs live clock / config boundaries
 

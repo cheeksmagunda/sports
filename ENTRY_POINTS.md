@@ -7,6 +7,7 @@ This document explains how to access Sports Oracle from different clients and ho
 - Source of truth: `main` on `cheeksmagunda/sports`.
 - Canonical workspace: GitHub Codespaces for this repo. Prefer that Codespace over local clones for sports work.
 - Auth home: GitHub login, Copilot, Actions, and Codespaces secrets inside Codespace. Do not mint per-agent PATs for Claude, Codex, Copilot, or Grok.
+- Real Sports auth home: the same Codespaces-secrets pattern as GitHub and Railway. `REALSPORTS_STORAGE_STATE_B64GZ` is a Codespaces secret, an Actions secret, and a Railway service variable on every service that needs it; all are literal, hash-verified copies of one operator-seeded, durable session (not assumed to expire, not rotated on a schedule; see root `AGENTS.md`). Codespaces secrets reach login shells only (`bash -l` / `gh codespace ssh`, not a bare non-login command) — same caveat as `RAILWAY_API_TOKEN` below.
 - Claude / Codex / Copilot: clients only. Before material sports work, use Codespace or read live `main`. Do not treat local folders, chat uploads, or remembered summaries as authoritative when Codespace or `main` is reachable.
 - Grok Bot: the only Cursor-based surface. No standing GitHub PAT. Use Cursor cloud agents on this repo, or an operator-authorized one-session `gh` login. Never copy Codespace credentials into chat or other agents.
 - Sync claim: only say "current" after the relevant commit is on live `main`. A dirty or unpushed Codespace is local state, not portfolio state.
@@ -171,6 +172,11 @@ scripts/auth-check wnba-oracle --offline
 scripts/auth-check nfl-oracle --offline
 scripts/auth-check nba-oracle --offline
 scripts/auth-check nhl-oracle --offline
+
+# --live adds a value-free Real Sports structure check for wnba-oracle and
+# nfl-oracle (the only two applications that use it today):
+scripts/auth-check wnba-oracle --live
+scripts/auth-check nfl-oracle --live
 ```
 
 ### External CLI tools (operator/environment-dependent)
@@ -257,6 +263,8 @@ operator re-uploads snapshots to any configured static project:
 | `make setup` fails | Locked deps changed | Check if you're on latest `main` |
 | Tests fail in CLI but pass in Codespace | Different Python/uv version | Run `uv sync --frozen --reinstall` |
 | Railway commands fail | CLI not authenticated | Run `railway login` or check `RAILWAY_API_TOKEN` / `RAILWAY_TOKEN` (exactly one) |
+| Codespaces secret looks unset (`RAILWAY_API_TOKEN`, `REALSPORTS_STORAGE_STATE_B64GZ`) | Non-login shell | Codespaces secrets reach login shells only; use `bash -l` or `gh codespace ssh`, not a bare non-login command |
+| `scripts/auth-check APP --live` reports Real Sports "not configured" | Session not propagated to this surface | Compare `sha256[:8]` of the copies (Railway service var, Actions secret, Codespaces secret) against the canonical value; never compare by printing values |
 
 ## Next steps
 
