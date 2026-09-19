@@ -1,73 +1,138 @@
 # Status
 
-Last verified: 2026-09-02T09:30:00Z
+Last verified: 2026-09-19T08:43:28Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
 
 ## Live operational snapshot
 
-- Deployment state: All 9 Railway services in the `production` environment
-  (api, cron-job1, cron-job1-late, cron-job2, cron-dayclose,
-  backfill-enrichment, frontend, redis, postgres) report `SUCCESS` on the
-  latest deployment. The public API at
+- Deployment state: 8 of 9 Railway services in the `production` environment
+  report `SUCCESS` on their active deployment: `api`, `cron-job1`,
+  `cron-job1-late`, `cron-job2`, `cron-dayclose` (all redeployed
+  2026-09-19T08:06:34Z), `frontend` (2026-09-19T08:15:59Z), `redis`, and
+  `postgres`. `backfill-enrichment` is `FAILED`: two consecutive build
+  attempts at 2026-09-19T04:27Z on source `c1facd04530ef41099d4db0c6aa184220ecf060d`
+  (2026-08-22, unchanged since its last successful build on that same
+  commit) both failed at `uv sync --locked --no-dev --no-install-project`
+  with `error: No interpreter found for Python >=3.11, <3.13 in managed
+  installations or search path` (railpack/mise build path, "Python downloads
+  are set to 'never'"). No matching GitHub Actions dispatch was found for
+  `wnba-backfill-enrichment` around that time, so what triggered the rebuild
+  is unverified. This service has no cron, source auto-deploy, or restart
+  loop, so no live traffic is affected, but a manual dispatch right now would
+  fail at build until this is fixed; do not redeploy it without addressing
+  the interpreter resolution first. The public API at
   `https://api-production-7033.up.railway.app` responded to `/health` with
   `{"status":"ok","version":"0.1.0"}`.
-- Active source commit: `6f466cf9d17cae9ffac74732e33d7df9f374ea2` on GitHub
-  `main`. Confirmed via Railway's own deployment record for every service
-  above (each service's active deployment cites this commit).
-- Model artifact and SHA: production model SHA is
+- Active source commit: `fe39f118c2b9c2e1078d730b34c3d55957d0d4c7` (#249) is
+  the deployed backend commit, confirmed via Railway's per-service deployment
+  record for `api`, `cron-job1`, `cron-job1-late`, `cron-job2`, and
+  `cron-dayclose` (each cites this SHA on its SUCCESS deployment). Current
+  `origin/main` HEAD is one commit ahead at
+  `ddf9c3c868f1bf6fe86f1c491fe1d44df4cb032f` (#250, docs-only
+  `ENTRY_POINTS.md` sync-tracking change); Railway recorded a deployment
+  attempt for that commit on every backend service as `SKIPPED`. `frontend`'s
+  active deployment is on that newer HEAD commit itself (`SUCCESS`,
+  2026-09-19T08:15:59Z), one commit ahead of the backend services.
+  `de1d68a402f634e7a9978f4ce773693ea1b7e460` (#230, Real Sports access
+  coordination) is in `fe39f118`'s ancestry and was itself briefly the live
+  deployment (2026-09-19T07:25:55Z) before being superseded.
+- Model artifact and SHA: production model SHA is still
   `7b06b6f98d0bb0cd69d4b12c49c5c97102b39eb30734c586f9d1f02ab69f1da2`
-  (`wnba-oracle/models/picker_95264ce9_1788339935.pkl`), set as
-  `WNBA_ORACLE_MODEL_ARTIFACT_SHA` on `cron-job2` (the only role that requires
-  it per `_PRODUCTION_ROLE_REQUIREMENTS`) and confirmed applied via a real
-  redeploy (not `--skip-deploys`). GitHub repository variable
-  `WNBA_EXPECTED_MODEL_SHA` matches. This is a full-refit retrain on
+  (`wnba-oracle/models/picker_95264ce9_1788339935.pkl`), confirmed live as
+  `WNBA_ORACLE_MODEL_ARTIFACT_SHA` on `cron-job2` (the only role that
+  requires it per `_PRODUCTION_ROLE_REQUIREMENTS`). GitHub repository
+  variable `WNBA_EXPECTED_MODEL_SHA` matches. This is a full-refit retrain on
   `main@6f466cf` (season_game_number train/serve parity fixed, causal
   point-in-time pace, pooled-F cohort, calibrators disabled at serving);
   incumbent architecture, selected over a challenger artifact after a paired
   104-slate tournament showed no statistically significant improvement. The
-  WNBA season is on a break, so no live post-promotion slate freeze has run
-  yet under this artifact; the most recent frozen lineup
-  (`slate_date=2026-08-30`) correctly still shows the prior `model_sha`
-  (`94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`), since
-  frozen lineups are immutable history and predate this promotion.
-- Rollback: previous production artifact
-  `wnba-oracle/models/picker_bf3c8996_1780752059.pkl` (sha256
-  `94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`) and the
-  tournament-tested `wnba-oracle/models/picker_e2ced9ec_1780873338.pkl` are
-  both retained in the repository. Previous `api` deployment
-  `f83dd705-b9ca-47ee-a02f-aa166a346a0e` (source `6f466cf`, pre-model-SHA-swap)
-  and the last known-good pre-this-push deployment on source `38ba732` remain
-  available as rollback targets through Railway's deployment history.
+  season is live, not on break: frozen lineups for `slate_date=2026-09-17`
+  (`frozen_at=2026-09-17T22:50:07Z`) and `slate_date=2026-09-18`
+  (`frozen_at=2026-09-18T22:50:15Z`) both carry this `model_sha`, confirming
+  live post-promotion freezes have run under this artifact. `slate_date=2026-09-19`
+  has no frozen lineup yet as of this verification (2026-09-19T08:38Z),
+  which is before the day's job1 (13:30 UTC) and job2 (14:20 UTC) deadlines.
+- Rollback: two pre-refit artifacts are retained in the repository. Their
+  sha256 hashes were independently verified against each file's own
+  `.sha256` sidecar and via `shasum -a 256`, correcting a filename/hash
+  pairing error carried forward in this file since 2026-09-02, sourced
+  from issue #53's closing comment.
+  `wnba-oracle/models/picker_e2ced9ec_1780873338.pkl` hashes to
+  `94f8e8606dab4d48652929bb3884fb9152e1abc766eeb2c2d86559f4318676cd`; this
+  is confirmed live as the `model_sha` on the pre-promotion 2026-08-30
+  frozen lineup and its history, so this file, not
+  `picker_bf3c8996_1780752059.pkl`, is the true previous production
+  artifact.
+  `wnba-oracle/models/picker_bf3c8996_1780752059.pkl` hashes to
+  `2cc953b7fe86e8db8a21f7f9a594a2944c4ce9d98aa21d05a0a0b434d6efd985`. Issue
+  #53 names it the tournament's pre-existing baseline against challenger
+  `picker_e2ced9ec_1780873338.pkl`, consistent with
+  `scripts/model_tournament.py`'s own `--baseline-artifact`/
+  `--challenger-artifacts` usage example naming the same two files in the
+  same roles; no `tournament_results.json` remains in the repository to
+  confirm this exact invocation produced the reported 104-slate results.
+  Railway's per-service deployment history (checked for
+  `api`, `cron-job1`, `cron-job1-late`, `cron-job2`,
+  `cron-dayclose`) retains the prior commits `de1d68a4` (#230, `REMOVED`,
+  2026-09-19T07:25:55Z) and `ca6a43d4` (#244, `REMOVED`, 2026-09-19T06:19:09Z)
+  as entries in the deployment list; whether a `REMOVED` deployment can be
+  redeployed with one click was not verified. Specific rollback deployment
+  IDs are not restated here since they change on every redeploy; use
+  Railway's live deployment history at time of need.
 - Service and schedule state: watchdog `/watchdog/today` reports
-  `status=ok`, no events, for `slate_date=2026-09-02`. Verified live:
-  `/slate/{date}`, `/lineup/{date}`, `/lineup/{date}/history`, and
-  `/dossier/{date}` all return correctly for the last finalized slate
-  (2026-08-30). That lineup's team/game distribution (5 players, 5 distinct
-  teams, 4 distinct games, 2-1-1-1 split) matches the hard anti-stacking
-  policy for a four-game slate, confirming the diversification policy is
-  active in production. The WNBA season is on a break; no current slate
-  exists, so a first post-break live freeze under the new artifact remains
-  naturally pending.
-- Current incidents and production risks: none open. The prior day-close
-  degradation and watchdog failures noted in the previous snapshot
-  (2026-09-01) predate this push's fixes and were not re-observed in this
-  verification. Known residual limitation: the offline model tournament used
-  a documented offline feature-reconstruction path
-  (`--game-logs-csv`/`--game-identity-csv`) rather than the live DB read path,
-  which has a separate, pre-existing schema mismatch
-  (`read_game_identity()`/`index_game_identity()`) not touched by this push;
-  see issue #53's final comment for detail.
-
-Scoped addition verified 2026-09-19 (does not re-verify the snapshot above):
-migration `20260919_0011_external_access_windows` adds the
-`external_access_windows` table (upgrade and downgrade both verified against
-an empty PostgreSQL 14 database, this session). Its consumer,
-`REALSPORTS_ACCESS_COORDINATION_ENABLED` (issue #230), is default-off in
-every deployed service today; no production behavior or schedule changed by
-landing it. See `AGENTS.md`'s Jobs and production operations for the enable
-decision and the known `nfl-oracle-worker` coordination gap.
+  `status=ok`, no events, for `slate_date=2026-09-19`. `/slate/2026-09-19`
+  currently 404s with "no slate timing for slate" (checked 2026-09-19T08:38Z,
+  before today's job1 deadline; this does not establish whether games are
+  scheduled today). The last two finalized slates both confirm the hard
+  diversification policy is active: 2026-09-18 (3 games, 5 players, 5
+  distinct teams, 2-1-2 split) satisfies the three-or-more-games cap of two
+  per game. `/lineup/{date}`, `/lineup/{date}/history`, and `/dossier/{date}`
+  were exercised live for 2026-09-17 and 2026-09-18 and returned correctly.
+- Current incidents and production risks:
+  - #243 (OPEN): watchdog `ALERT` at 2026-09-19T06:02Z, `cron-dayclose`
+    `degraded` (`placement_capture` reason `missing_labels_or_leaderboard`
+    for slate 2026-09-18, processed ~7 hours after freeze). Diagnosed live
+    this session as the documented pre-catchup case
+    (`_catch_up_missing_placements` only considers dates strictly before
+    "yesterday," so 2026-09-18 is not yet eligible); expected to self-heal
+    via the 2026-09-20 dayclose run, with the watchdog auto-closing once a
+    clean probe runs. #233 (same alert class) closed at 2026-09-19T04:04Z
+    with no active alert; this is a recurrence of that alert class a few
+    hours later, not evidence that #229's fix regressed, but that has not
+    been independently re-verified beyond the live diagnosis above.
+  - `backfill-enrichment` build failure: see Deployment state above. Not yet
+    filed as a tracked issue.
+  - corpus-backup (#202, landed as #245 in `484db735`): every scheduled run
+    from 2026-09-10 through 2026-09-18 ended red on the orphan-branch
+    worktree-restore `Post Run` step. Verified live this session via
+    workflow_dispatch run `35427434241` (2026-09-19T06:44:47Z): fully green
+    including `Post Run`. Also checked one prior red run
+    (`35341487312`, 2026-09-18 schedule): export and the actual snapshot
+    commit/push both succeeded; only the `Post Run` cleanup step failed,
+    confirming these were red-run/cleanup failures, not backup-data gaps.
+    The first *scheduled* (non-manual) run under the fix has not happened
+    yet as of verification time.
+  - #230 (Real Sports access coordination, closed): migration
+    `20260919_0011_external_access_windows` and its consumer
+    (`scheduler/access_coordination.py` + `scheduler/realsports_access.py`)
+    landed in `de1d68a4`. `REALSPORTS_ACCESS_COORDINATION_ENABLED` confirmed
+    absent (default-off) on `cron-job1`, `cron-dayclose`, and
+    `backfill-enrichment` via live variable reads this session; no
+    production behavior or schedule change from landing it. Alembic ran
+    during the latest `api` deployment startup (confirmed in deploy logs),
+    consistent with the migration path executing automatically; the specific
+    `20260919_0011` revision was not independently confirmed as the current
+    head against production Postgres. See `AGENTS.md`'s Jobs and production
+    operations for the enable decision and the known `nfl-oracle-worker`
+    coordination gap.
+  - Known residual limitation: the offline model tournament used a
+    documented offline feature-reconstruction path
+    (`--game-logs-csv`/`--game-identity-csv`) rather than the live DB read
+    path, which has a separate, pre-existing schema mismatch
+    (`read_game_identity()`/`index_game_identity()`) not touched by recent
+    pushes; see issue #53's final comment for detail.
 
 Development plans, branch history, check output, decisions, and completed work
 belong in GitHub Issues and Pull Requests, not this file.

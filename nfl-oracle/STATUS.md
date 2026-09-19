@@ -1350,3 +1350,48 @@ Checks run locally on the Mac checkout before hand-off to the Codespace for
 commit: `make test-app APP=nfl-oracle` (403 passed, 1 skipped, 1 deselected),
 `make lint`, `make typecheck`, `make check-boundaries`, `make test-portfolio`,
 `make check-applications`. All green.
+
+## Post-#242 live re-verification: value held, currently not unsealed (issue #242 follow-up, 2026-09-19 ~08:41 UTC)
+
+Re-verified the section above against live Railway state after several more
+main merges landed tonight (through PR #251, `ddf9c3c`).
+
+- **Worker redeploy confirmed clean.** `nfl-oracle-worker` deployment
+  `6340c3be` is `SUCCESS`/`RUNNING`, built from commit `ddf9c3c`, exactly
+  current `main` HEAD (PR #251, merged 2026-09-19T08:15:57Z; deployment
+  created 08:15:59Z, two seconds later through the existing CI-gated
+  pipeline). The `nfl-oracle` read-only API service redeployed to the same
+  commit in the same window. `NFL_RECOMMENDATIONS_ENABLED=1` is still set
+  post-redeploy.
+- **`REALSPORTS_STORAGE_STATE_B64GZ` value confirmed unchanged.** Read
+  directly from the running worker container (`railway ssh`), it is present,
+  9248 bytes, `sha256[:8]=c4a729e2`, matching the value this file recorded
+  above. Propagation held through the subsequent redeploy.
+- **Transient listing gap, not a persistent reseal.** At ~08:41 UTC,
+  `railway variables --json`, `railway run --service nfl-oracle-worker`, and
+  the Railway MCP `list_variables` call all agreed the key was absent from
+  listing (only 4 custom keys shown, while `get_service_config` reported 5
+  variables defined - consistent with a sealed variable at that moment); only
+  `railway ssh` into the live container recovered it then. Re-checked
+  independently minutes later (~08:52 UTC) with the same two CLI methods
+  (`railway run --service nfl-oracle-worker` and `railway variable list
+  --json`): both now show the key present and correctly hashed
+  (`sha256[:8]=c4a729e2`). Whatever caused the first check's absent reading
+  did not reproduce; most likely transient Railway API/listing lag rather
+  than an actual seal-state change, but that is inferred, not confirmed - no
+  seal-state toggle was made in between. The documented check in
+  `nfl-oracle/README.md` (`railway run --service nfl-oracle-worker`, compare
+  `sha256[:8]`) is working as documented as of this correction. Worth a spot
+  re-check next session rather than assuming it was a one-off.
+- **`railway ssh` surfaced an unrelated dated risk.** The CLI warns that
+  Config-as-Code (`railway.json` / `railway.toml`) is deprecated in favor of
+  Infrastructure-as-Code; existing files keep working only until
+  2026-12-01. `nfl-oracle` owns `railway.toml` as its deploy-source selector
+  (Production container boundary, `AGENTS.md`). Needs a `railway config
+  migrate` before that date; not urgent tonight, recorded so it is not lost.
+- **Volume unchanged.** `nfl-oracle-worker-volume` is 4463.7/5000 MB
+  (~89.3%), the same 4464/5000 MB (89%) this file already recorded above,
+  give or take rounding. No remediation needed yet; still worth a fresh flag
+  before the next T-40. Separately, issues #129 and #124 (2026-09-09
+  provisioning) remain open on GitHub although the worker is live; not
+  touched tonight.

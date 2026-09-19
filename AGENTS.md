@@ -45,6 +45,41 @@ commands, but cannot weaken this contract.
    active work session. There is no scheduled sweep; GitHub's own idle
    timeout and 30-day retention handle Codespaces between sessions.
 
+## End every task
+
+Documentation is not a follow-up step; a change is not done until its
+documentation is, and that happens before the PR merges, not after.
+
+1. Update every document the change actually affects before opening or
+   updating the PR: the child `STATUS.md` for any current-state fact
+   (deployment, schedule, credential, incident, production risk), the child
+   `README.md` for any stable-shape change, root `AGENTS.md` when a
+   portfolio-wide boundary or credential contract changed. A PR that changes
+   behavior without updating the doc that describes it is incomplete, not
+   merely undocumented.
+2. State each fact exactly once, at the level that owns it. If root
+   `AGENTS.md`, `README.md`, or `ENTRY_POINTS.md` already documents
+   something, a child file references it, never restates it (see Portable
+   operations and secrets and Context synchronization below). Two copies of
+   one fact are two chances for it to drift out of sync with each other;
+   treat that as a bug to fix, not a style choice, whenever it turns up.
+3. Verify a documentation claim against live state before writing it, the
+   same discipline as verifying code against tests: check the actual
+   Railway/GitHub/API status, not a deployment or build field as a stand-in
+   for the application's own recorded outcome, and not a prior session's
+   memory of either. Write "unverified" rather than a plausible-sounding
+   guess.
+4. Regenerate `FILES.md` (`scripts/generate_file_manifest.py`) whenever the
+   tracked tree changed, and re-run the touched application's verification
+   bar against the state the PR will actually merge, not the state it was
+   drafted against.
+5. Prefer changes that keep DevOps posture and visibility consistent across
+   every application, not just the one directly touched: a credential,
+   auth, or push-path change (issue-first tracking, `write-path-check`,
+   git/Railway/Real Sports auth, Codespace as the default execution
+   environment) is portfolio-wide by nature, so its documentation update is
+   too, even when the code change was scoped to one app.
+
 ## Portfolio boundaries
 
 - Dependency direction is `sport application -> oracle-core`.
