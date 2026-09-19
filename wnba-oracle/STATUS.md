@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-19T09:32:30Z
+Last verified: 2026-09-19T09:46:42Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -27,10 +27,10 @@ not exposed by the read-only checks available during this audit.
   `{"status":"ok","version":"0.1.0"}`.
 - Active source commit: `1634ec1891ce29d9958ebdc927f459948ceda631` (#253) remains
   the last successful backend deployment. The newly merged documentation-only
-  `64faa871176b000964d6dbdac3509b995ebe9f41` (#255) has Railway deployment
+  `ffddc7e052470186d204c2ef7a39b1c566e65da4` (#257) has Railway deployment
   records in `WAITING`/stopped state and is not yet a successful active
   deployment. The public API is therefore still serving the previous
-  successful commit, while `main` is current at `64faa87`. The prior active
+  successful commit, while `main` is current at `ffddc7e`. The prior active
   commit `fe39f118c2b9c2e1078d730b34c3d55957d0d4c7` (#249) is in its ancestry.
   Railway recorded the new deployment attempt across the source-backed
   services, but the read-only service summary still reports the prior
