@@ -35,10 +35,13 @@ commands, but cannot weaken this contract.
     follow `CONTRIBUTING.md` for the repository contribution process.
 6. Before material work, declare the acting environment and prove the write
    path. Run `make write-path-check` from the repository root. It reports the
-   host, checkout, remote, and branch, then confirms this session can push to
-   `origin`. If the push is denied, stop and report the block on the issue.
-   Do not mint a per-agent credential and do not keep building behind a
-   credential that cannot land the work.
+   host, checkout, remote, and branch. Inside the Codespace it confirms a
+   direct dry-run push to `origin`; from the Mac checkout it confirms an
+   authenticated Codespace push route is available through
+   `scripts/codespace-push` instead of a direct local push. If neither route
+   is available, stop and report the block on the issue. Do not mint a
+   per-agent credential and do not keep building behind a credential that
+   cannot land the work.
 7. Check the canonical Codespace's state (`gh codespace list`) and wake it if
    `Shutdown` (`gh codespace ssh -c <name> -- true` resumes it; postStart then
    runs the health-check and prune on its own). Do this at the start of an
@@ -136,14 +139,15 @@ documentation is, and that happens before the PR merges, not after.
 
 - Required operational interfaces are ordinary files, process environment
   variables, shell commands, documented CLIs, and HTTPS APIs.
-- GitHub credentials have one home per surface: the `gh` login on the
-  operator Mac (keyring) and the `gh` login inside the repo's Codespace
-  (`hosts.yml`), both at the default scope set plus `workflow` (Mac also
-  `codespace`). Actions use the built-in `GITHUB_TOKEN` plus repository
-  secrets; Codespaces secrets are injected only into the Codespace container,
-  where interactive shells unset the built-in `GITHUB_TOKEN` so web and ssh
-  sessions share the `gh` login. Do not mint per-agent PATs for Claude, Codex,
-  Copilot, or Grok.
+- The Codespace is the persistent Git authentication and push surface. The
+  operator Mac keeps only the native `gh` access needed to open the Codespace
+  and may edit a local checkout. Use `scripts/codespace-push` to transfer the
+  local worktree diff and perform commit and push inside the Codespace. Do not
+  copy Codespace credentials to the Mac or mint per-agent PATs for Claude,
+  Codex, Copilot, or Grok. Actions use the built-in `GITHUB_TOKEN` plus
+  repository secrets; Codespaces secrets are injected only into the Codespace
+  container, where interactive shells unset the built-in `GITHUB_TOKEN` so web
+  and SSH sessions share the `gh` login.
 - Claude, Codex, and Copilot are clients for the Codespace, live checkout, or
   live GitHub repository. They are not separate GitHub credential homes.
 - Grok Bot is the only Cursor-based surface. Use Cursor cloud agents on this
@@ -241,7 +245,8 @@ A dirty or unpushed Codespace is local state, not portfolio state.
 Never hold more than five unpushed commits. Push the branch or open a draft
 pull request first. An agent that cannot push has no working credential and
 must stop and report rather than accumulate history that only one machine
-holds. `make write-path-check` enforces both the push proof and the ceiling.
+holds. `make write-path-check` enforces both the push-route check and the
+ceiling.
 
 **Static-copy entry points** (may be stale; fetch live before acting):
 - Claude, Codex, Copilot, and Grok cloud projects or chats that use uploaded

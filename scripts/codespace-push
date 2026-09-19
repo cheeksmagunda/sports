@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+# Push local edits through the authenticated Codespace. No credential is
+# copied to the Mac checkout: edit here, then this script transfers the
+# uncommitted worktree diff (staged and unstaged) and runs commit + push
+# inside the Codespace, where the GitHub auth actually lives.
+#
+# This syncs worktree changes, not unpushed local commits: local HEAD must
+# already be a commit the Codespace can fetch from origin.
+
+codespace="${SPORTS_CODESPACE_NAME:-}"
+message="${1:-Sync local worktree through Codespace}"
+
+if [ -z "$codespace" ]; then
+    codespace="$(gh codespace list --json name,repository,state --jq '.[] | select(.repository == "cheeksmagunda/sports") | select(.state != "Deleted") | .name' | head -n 1)"
+fi
+[ -n "$codespace" ] || { echo "No Sports Codespace found; set SPORTS_CODESPACE_NAME." >&2; exit 1; }
+
+branch="$(git branch --show-current)"
+[ -n "$branch" ] && [ "$branch" != "HEAD" ] || { echo "Detached HEAD is not supported." >&2; exit 1; }
+
+local_head="$(git rev-parse HEAD)"
+
+rssh() {
+    gh codespace ssh -c "$codespace" -- "$1"
+}
+
+rssh "cd /workspaces/sports && git fetch origin --quiet"
+
+if ! rssh "cd /workspaces/sports && git cat-file -e '${local_head}^{commit}' 2>/dev/null"; then
+    echo "Codespace does not have local commit ${local_head} yet." >&2
+    echo "This tool syncs uncommitted worktree changes, not unpushed local commits." >&2
+    echo "Push local commits to origin (or commit through this tool first) before retrying." >&2
+    exit 1
+fi
+
+if ! rssh "cd /workspaces/sports && test -z \"\$(git status --porcelain)\""; then
+    echo "The Codespace checkout is not clean. Resolve it before synchronizing." >&2
+    exit 1
+fi
+
+diff_file="$(mktemp)"
+message_file="$(mktemp)"
+trap 'rm -f "$diff_file" "$message_file"' EXIT
+
+git diff HEAD --binary > "$diff_file"
+if [ ! -s "$diff_file" ]; then
+    echo "No uncommitted worktree changes to sync." >&2
+    exit 1
+fi
+
+rssh "cd /workspaces/sports && git checkout -B '${branch}' '${local_head}' --quiet"
+gh codespace ssh -c "$codespace" -- "cd /workspaces/sports && git apply --index -" < "$diff_file"
+
+printf '%s\n' "$message" > "$message_file"
+gh codespace ssh -c "$codespace" -- "cd /workspaces/sports && git commit --file=-" < "$message_file"
+gh codespace ssh -c "$codespace" -- "cd /workspaces/sports && git push origin HEAD:'${branch}'"
+echo "Committed and pushed ${branch} through Codespace ${codespace}."

@@ -76,6 +76,11 @@ claude code
 
 **Sync status:** Live client if the CLI reads from your checkout or Codespace. Only `main` is portfolio-current.
 
+For Mac editing with Codespace-authenticated Git operations, run
+`SPORTS_CODESPACE_NAME=<name> scripts/codespace-push "message"` from the local
+checkout. Your local worktree diff is transferred to the Codespace, where
+commit and push execute. Credentials remain in the Codespace.
+
 ### Claude app, web, and mobile
 
 Use Claude with a live GitHub connector, Codespace, or synchronized local checkout when possible. Claude is a client, not a separate GitHub credential home. If the Claude client is using uploaded project files or pasted context, use the cloud project snapshot rules below.

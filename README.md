@@ -66,6 +66,22 @@ GitHub authentication opens the connection; project commands use the
 Codespace's own authentication. Run edits and verification in the remote
 checkout, and inspect its branch and working tree before making changes.
 
+### Mac editing with Codespace push
+
+The Codespace is the persistent Git authentication and push surface. A Mac
+checkout is a supported editing surface, but commits and pushes route through
+the Codespace instead of copying its credential to the Mac. From the Mac
+checkout, run:
+
+```sh
+SPORTS_CODESPACE_NAME=<name> scripts/codespace-push "Describe the change"
+```
+
+The command requires a Codespace checkout on the same commit as your local
+`HEAD` and a clean Codespace working tree. It transfers your local worktree
+diff and runs `git apply`, `git commit`, and `git push` inside the Codespace.
+`make write-path-check` reports whether this route is available.
+
 Railway operations use the operator's authenticated local Railway CLI on the
 Mac, and the Codespaces secret `RAILWAY_API_TOKEN` (an account token) in the
 Codespace, where the pinned Railway CLI and `wnba-oracle/scripts/rwgql.sh`
