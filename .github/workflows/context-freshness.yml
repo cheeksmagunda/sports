@@ -7,6 +7,7 @@ on:
     paths:
       - AGENTS.md
       - README.md
+      - ENTRY_POINTS.md
       - OVERVIEW.md
       - FILES.md
       - Makefile
@@ -37,10 +38,10 @@ jobs:
         run: |
           set -eu
           if [ "${{ github.event_name }}" = "push" ]; then
-            summary=$(git log "${{ github.event.before }}..${{ github.sha }}" --format='%h %ad %s' --date=short -- AGENTS.md README.md OVERVIEW.md FILES.md Makefile pyproject.toml .devcontainer .github/workflows ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+            summary=$(git log "${{ github.event.before }}..${{ github.sha }}" --format='%h %ad %s' --date=short -- AGENTS.md README.md ENTRY_POINTS.md OVERVIEW.md FILES.md Makefile pyproject.toml .devcontainer .github/workflows ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
           else
             since=$(date -u -d '8 days ago' +%Y-%m-%dT%H:%M:%SZ)
-            summary=$(git log --since="$since" --format='%h %ad %s' --date=short -- AGENTS.md README.md OVERVIEW.md FILES.md Makefile pyproject.toml .devcontainer .github/workflows ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+            summary=$(git log --since="$since" --format='%h %ad %s' --date=short -- AGENTS.md README.md ENTRY_POINTS.md OVERVIEW.md FILES.md Makefile pyproject.toml .devcontainer .github/workflows ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
           fi
           if [ -z "$summary" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"

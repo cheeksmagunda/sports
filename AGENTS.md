@@ -219,12 +219,16 @@ holds. `make write-path-check` enforces both the push proof and the ceiling.
 
 Claude, Codex, Copilot, and Grok cloud projects may contain uploaded static
 copies of the root instructions and application documents. The canonical
-snapshot bundle is root `AGENTS.md`, root `README.md`, root `OVERVIEW.md`, root
-`FILES.md`, root `Makefile`, root `pyproject.toml`, `.devcontainer/`,
-`.github/workflows/`, and each application's `AGENTS.md`, `README.md`, and
-`STATUS.md`. `OVERVIEW.md` is curated structural context. `FILES.md` is
-generated with `scripts/generate_file_manifest.py` and must be regenerated when
-the tracked tree changes. The root of this repository has no `STATUS.md`;
+snapshot bundle is root `AGENTS.md`, root `README.md`, root `ENTRY_POINTS.md`,
+root `OVERVIEW.md`, root `FILES.md`, root `Makefile`, root `pyproject.toml`,
+`.devcontainer/`, `.github/workflows/`, and each application's `AGENTS.md`,
+`README.md`, and `STATUS.md`. `ENTRY_POINTS.md` is the portfolio-wide
+Codespace, agent, auth, and push reference every application `README.md`
+points to; keep it in the bundle so it never drifts out of sync with the
+files that depend on it. `OVERVIEW.md` is curated structural context.
+`FILES.md` is generated with `scripts/generate_file_manifest.py` and must be
+regenerated when the tracked tree changes. The root of this repository has
+no `STATUS.md`;
 mutable state belongs to application `STATUS.md` files. Static copies drift.
 Before acting on any of them:
 
@@ -236,9 +240,10 @@ Before acting on any of them:
    and Grok projects when the context freshness workflow flags a change
 
 Sync-critical files: every `AGENTS.md` and `README.md`, every application
-`STATUS.md`, plus root `Makefile`, `pyproject.toml`, `.devcontainer/`, and
-`.github/workflows/`. When one of these changes on `main`, every agent must
-re-read it before related work, and the operator refreshes the uploaded
+`STATUS.md`, plus root `ENTRY_POINTS.md`, `Makefile`, `pyproject.toml`,
+`.devcontainer/`, and `.github/workflows/`. When one of these changes on
+`main`, every agent must re-read it before related work, and the operator
+refreshes the uploaded
 snapshots. A scheduled workflow opens a tracking issue when these files change
 so re-uploads are not forgotten.
 
