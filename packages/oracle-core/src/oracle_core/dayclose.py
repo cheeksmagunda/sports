@@ -9,9 +9,10 @@ contest, a missed run, an earlier outage). This module owns only that
 orchestration shape.
 
 Sport-specific concerns stay in the owning application: what "graded" means,
-what provider data to refresh, what a day's identity is, and which outcome
-statuses are terminal versus worth flagging all live in the `close_one_day`
-callback passed to `run_sweep`. This module never imports a sport package.
+what provider data to refresh, and what a day's identity is live in the
+`close_one_day` callback passed to `run_sweep`; the caller's `settled_statuses`
+set determines which returned statuses are terminal rather than worth
+flagging. This module never imports a sport package.
 """
 
 from __future__ import annotations

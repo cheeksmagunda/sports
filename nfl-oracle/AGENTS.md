@@ -72,7 +72,9 @@ here. NFL does not import WNBA code.
 - Endpoints: `/games/{id}/sport/nfl/stats`, `/players`, `/feed?version=2&view=all&viewFrame=default`
 - Persist redacted JSON with sha256 + provenance; resume by season cursor
 - Primary Real label field: `playerBoxScores[].value`
-- Corpus C (contests) and five-man policy are out of scope for the first scaffold
+- Corpus C contest data and the five-card policy are implemented for read-only
+  research and freeze/grade workflows; contest submission and live entry remain
+  hard-forbidden by the provider boundary.
 
 ## Scaffold modules (observation only)
 

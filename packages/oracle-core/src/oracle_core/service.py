@@ -122,7 +122,9 @@ def create_service(
     root_response_model: Any | None = None,
     health_response_model: Any | None = None,
 ) -> FastAPI:
-    """Create a FastAPI app with generic root and health routes only.
+    """Create a FastAPI app with generic root and health routes.
+
+    Any application routers supplied in ``routers`` are mounted as well.
 
     Payload, documentation, and schema overrides let applications preserve an
     existing provider-neutral response contract while core continues to own

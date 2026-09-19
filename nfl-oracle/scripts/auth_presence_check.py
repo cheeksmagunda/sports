@@ -26,7 +26,11 @@ _PLACEHOLDERS = {
 
 
 def _candidate_storage_states() -> list[Path]:
-    """Same durable/ephemeral order as ingest.realsports / auth_status."""
+    """Check this script's durable/ephemeral storage candidates.
+
+    This is a subset of ``ingest.realsports`` and ``auth_status`` discovery;
+    it intentionally does not include the WNBA sibling-storage fallback.
+    """
 
     paths: list[Path] = []
     for key in ("REALSPORTS_STORAGE_STATE_PATH", "NFL_REALSPORTS_STORAGE_STATE"):

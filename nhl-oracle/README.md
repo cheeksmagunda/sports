@@ -2,9 +2,13 @@
 
 NHL Oracle application scaffold.
 
-Current scope is infrastructure only: package wiring, boundary-safe layout, and
-verification targets. Domain behavior (providers, schemas, models, contests,
-and operations) is intentionally not implemented yet.
+Current scope is a pre-provider-access scaffold exercised only against
+synthetic fixtures: package wiring, boundary-safe layout, verification
+targets, a candidate contest contract and audit gates (`contract/`), a
+redacted payload provenance store (`ingest/`), an identity map and collision
+reconciler (`identity/`), and a freeze-cycle job skeleton (`scheduler/`). No
+live NHL provider, model, optimizer, hosted API, frontend, or deployment
+exists yet; see `STATUS.md` for current detail.
 
 ## Connection surfaces
 

@@ -346,8 +346,9 @@ def sample_weights_for_labeled_rows(
 ) -> list[float]:
     """Per-row weights aligned with ``rows`` grouping by ``game_id``.
 
-    Rows need ``player_id``, ``game_id``, ``value``, and ``did_not_play``
-    attributes (duck-typed). DNP / missing-value rows keep ``base_weight``.
+    Rows need ``player_id`` and ``game_id`` attributes (duck-typed). ``value``
+    and ``did_not_play`` default to ``None`` and ``False`` when absent. DNP /
+    missing-value rows keep ``base_weight``.
     """
 
     by_game: dict[int, dict[int, float]] = defaultdict(dict)
