@@ -1,9 +1,10 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 821 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 823 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
+- .cursorrules
 - .dockerignore
 - .env.example
 - .gitignore
@@ -31,6 +32,7 @@ Generated from `git ls-files`. 821 tracked files. Regenerate with `scripts/gener
 
 ## .github/
 - .github/PULL_REQUEST_TEMPLATE.md
+- .github/copilot-instructions.md -- Sports Oracle Portfolio Instructions
 - .github/dependabot.yml
 
 ## .github/ISSUE_TEMPLATE/

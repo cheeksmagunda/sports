@@ -213,10 +213,12 @@ documentation is, and that happens before the PR merges, not after.
 - Decision rationale belongs in issues, PRs, tests, code comments, or commits.
   Do not create competing markdown ledgers.
 - `AGENTS.md` is the only agent-instruction format in this repository. Each
-  `CLAUDE.md` is a plain symlink to its sibling `AGENTS.md`, present only
-  because Claude Code does not read `AGENTS.md` natively. Do not add any
-  other model-specific instruction file or a shim that carries separate
-  content.
+  `CLAUDE.md` is a plain symlink to its sibling `AGENTS.md`. Root
+  `.github/copilot-instructions.md` and root `.cursorrules` are the same
+  pattern at the portfolio level, symlinked to root `AGENTS.md`, present only
+  because Copilot Chat/CLI and Cursor (Grok Bot) do not read `AGENTS.md`
+  natively. Do not add any other model-specific instruction file or a shim
+  that carries separate content.
 
 ## Context synchronization
 
