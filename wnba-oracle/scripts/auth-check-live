@@ -5,14 +5,24 @@ from __future__ import annotations
 
 import base64
 import gzip
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
+from typing import Any
 from urllib import error, parse, request
 
 TIMEOUT_SECONDS = 10
+RAILWAY_ENDPOINT = "https://backboard.railway.com/graphql/v2"
+# Smallest query each token kind is allowed to answer: a project token cannot
+# list projects, and an account/workspace token has no projectToken.
+RAILWAY_PROBE_QUERY = {
+    "Authorization": "query { projects { edges { node { id } } } }",
+    "Project-Access-Token": "query { projectToken { projectId environmentId } }",
+}
 
 
 def report(name: str, result: str) -> None:
@@ -65,21 +75,54 @@ def check_railway_cli() -> int:
     return int(result.returncode != 0)
 
 
-def check_railway_graphql() -> int:
-    token = os.environ.get("RAILWAY_TOKEN", "").strip()
-    if not token:
-        report("railway GraphQL", "not configured")
-        return 0
-    payload = json.dumps({"query": "query { projects { edges { node { id } } } }"}).encode()
-    req = request.Request(
-        "https://backboard.railway.com/graphql/v2",
+def load_rwgql() -> Any:
+    """Import the sibling rwgql.py so header choice and User-Agent stay single-sourced."""
+    module_path = Path(__file__).resolve().parent / "rwgql.py"
+    spec = importlib.util.spec_from_file_location("wnba_rwgql", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def railway_probe(environ: dict[str, str]) -> request.Request | None:
+    """Build the value-free Railway probe for whichever token kind is set.
+
+    Returns None when neither or both of RAILWAY_API_TOKEN and RAILWAY_TOKEN
+    are present; rwgql.resolve_auth refuses the ambiguous case for the same
+    reason (a mismatched header fails with an opaque 401).
+    """
+    rwgql = load_rwgql()
+    auth = rwgql.resolve_auth(environ)
+    if auth is None:
+        return None
+    header = next(iter(auth))
+    payload = json.dumps({"query": RAILWAY_PROBE_QUERY[header]}).encode()
+    return request.Request(
+        RAILWAY_ENDPOINT,
         data=payload,
         method="POST",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
+        headers=rwgql.build_headers(auth),
     )
+
+
+def check_railway_graphql() -> int:
+    configured = [
+        name
+        for name in ("RAILWAY_API_TOKEN", "RAILWAY_TOKEN")
+        if os.environ.get(name, "").strip()
+    ]
+    if not configured:
+        report("railway GraphQL", "not configured")
+        return 0
+    req = railway_probe(dict(os.environ))
+    if req is None:
+        report(
+            "railway GraphQL",
+            "ambiguous, set exactly one of RAILWAY_API_TOKEN or RAILWAY_TOKEN",
+        )
+        return 1
     try:
         with request.urlopen(req, timeout=TIMEOUT_SECONDS) as response:
             body = response.read()
@@ -88,7 +131,7 @@ def check_railway_graphql() -> int:
         report("railway GraphQL", "validation failed")
         return 1
     if isinstance(decoded, dict) and decoded.get("data") and not decoded.get("errors"):
-        report("railway GraphQL", "authenticated")
+        report("railway GraphQL", f"authenticated ({configured[0]})")
         return 0
     report("railway GraphQL", "authentication failed")
     return 1

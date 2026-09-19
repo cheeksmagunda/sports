@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import importlib.machinery
 import importlib.util
 import json
 import os
@@ -398,3 +399,74 @@ def test_railway_graphql_sends_explicit_user_agent() -> None:
     assert "Python-urllib" not in headers["User-Agent"]
     assert headers["Content-Type"] == "application/json"
     assert headers["Authorization"] == "Bearer x"
+
+
+def _load_live_hook() -> Any:
+    module_path = WORKSPACE_ROOT / "wnba-oracle" / "scripts" / "auth-check-live"
+    spec = importlib.util.spec_from_file_location(
+        "auth_check_live_test",
+        module_path,
+        loader=importlib.machinery.SourceFileLoader("auth_check_live_test", str(module_path)),
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_live_hook_probes_workspace_token_with_bearer_and_projects_query() -> None:
+    hook = _load_live_hook()
+    req = hook.railway_probe({"RAILWAY_API_TOKEN": "account-sentinel"})
+    assert req is not None
+    assert req.get_header("Authorization") == "Bearer account-sentinel"
+    assert req.get_header("Project-access-token") is None
+    assert req.get_header("User-agent").startswith("sports-oracle-rwgql/")
+    assert json.loads(req.data)["query"].startswith("query { projects")
+
+
+def test_live_hook_probes_project_token_with_project_access_header() -> None:
+    hook = _load_live_hook()
+    req = hook.railway_probe({"RAILWAY_TOKEN": "project-sentinel"})
+    assert req is not None
+    assert req.get_header("Project-access-token") == "project-sentinel"
+    assert req.get_header("Authorization") is None
+    # A project token cannot list projects; it may only describe itself.
+    assert json.loads(req.data)["query"].startswith("query { projectToken")
+
+
+def test_live_hook_railway_check_fails_closed_on_ambiguous_tokens(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    hook = _load_live_hook()
+    monkeypatch.setenv("RAILWAY_TOKEN", "project-sentinel")
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "account-sentinel")
+    monkeypatch.setattr(
+        hook.request, "urlopen", lambda *_args, **_kwargs: pytest.fail("no network call expected")
+    )
+    assert hook.check_railway_graphql() == 1
+    out = capsys.readouterr().out
+    assert "exactly one" in out
+    assert "sentinel" not in out
+    monkeypatch.delenv("RAILWAY_TOKEN")
+    monkeypatch.delenv("RAILWAY_API_TOKEN")
+    assert hook.check_railway_graphql() == 0
+    assert "not configured" in capsys.readouterr().out
+
+
+def test_auth_check_counts_either_railway_token_kind_as_railway_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_path = WORKSPACE_ROOT / "scripts" / "auth-check"
+    spec = importlib.util.spec_from_file_location(
+        "auth_check_test",
+        module_path,
+        loader=importlib.machinery.SourceFileLoader("auth_check_test", str(module_path)),
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for name in ("RAILWAY_API_TOKEN", "RAILWAY_TOKEN"):
+        monkeypatch.delenv("RAILWAY_API_TOKEN", raising=False)
+        monkeypatch.delenv("RAILWAY_TOKEN", raising=False)
+        monkeypatch.setenv(name, "sentinel")
+        assert "Railway HTTP" in module.environment_capabilities(), name

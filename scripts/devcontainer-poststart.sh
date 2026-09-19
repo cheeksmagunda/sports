@@ -30,6 +30,17 @@ for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
   printf '\n%s\n[ -n "${PS1:-}" ] && unset GITHUB_TOKEN GH_TOKEN\n' "# sports: one gh identity in this codespace (issue #235)" >> "$rc"
 done
 
+# Railway: the CLI reads RAILWAY_API_TOKEN from the environment (issue #235);
+# only the per-directory project link is container state, so restore it on
+# every start. Best effort and backgrounded like everything else here.
+if [ -n "${RAILWAY_API_TOKEN:-}" ] && command -v railway >/dev/null 2>&1; then
+  (
+    cd nfl-oracle && railway link -p nfl-oracle-staging -e production -s nfl-oracle-worker
+    cd ../wnba-oracle && railway link -p wnba-oracle -e production -s api
+  ) >/tmp/sports-railway-link.log 2>&1 &
+  disown
+fi
+
 (
   timeout 20s uv run --frozen --package wnba-oracle python scripts/check_dev_services.py \
     >/tmp/sports-dev-services-check.log 2>&1
