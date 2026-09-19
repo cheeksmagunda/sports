@@ -585,8 +585,8 @@ provenance sidecars, mode 0600) with the resume cursor in
 - Device identity for header harvest: `NFL_DEVICE_UUID` and `NFL_DEVICE_NAME`
   (see `realsports.py`). Not `NFL_REALSPORTS_DEVICE_*`.
 - Railway staging (`nfl-oracle-staging` / `nfl-oracle`): placeholders include
-  storage-state keys plus additive `NFL_DEVICE_*`; legacy
-  `NFL_REALSPORTS_DEVICE_*` names may remain present and unused by code.
+  storage-state keys plus `NFL_DEVICE_*`; the legacy `NFL_REALSPORTS_DEVICE_*`
+  names were deleted on 2026-09-19 (#239).
   No deploy source connected (0/1 online by design). No contest code.
 - Railway operations use the authenticated local native Railway CLI, or a
   Codespace/Actions path that reads a pre-provisioned `RAILWAY_TOKEN` or
