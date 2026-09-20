@@ -93,6 +93,13 @@ jobs:
           umask 077
           printf '%s' "$NFL_PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/nfl_pg_root.crt"
 
+      # See the matching step/comment in nfl-dayclose.yml: the live
+      # re-scrape below needs Playwright Chromium, which no GHA runner has
+      # pre-installed. Root cause of issues #143 / #144.
+      - name: Install Playwright Chromium
+        if: steps.gate.outputs.should_run == 'true'
+        run: uv run --frozen --package nfl-oracle playwright install --with-deps chromium
+
       - name: Grade final slate day (supersede stopgap until punch-list body)
         id: weekclose
         if: steps.gate.outputs.should_run == 'true'

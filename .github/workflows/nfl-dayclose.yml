@@ -84,6 +84,22 @@ jobs:
           umask 077
           printf '%s' "$NFL_PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/nfl_pg_root.crt"
 
+      # Grading a day with a pending frozen lineup calls headers_or_capture(),
+      # which falls back to a live Playwright Chromium capture whenever no
+      # fresh cached token exists (always true on an ephemeral GHA runner).
+      # The devcontainer and production Dockerfile both already install this
+      # browser (system libs baked into their images); a stock ubuntu-latest
+      # runner has neither, so --with-deps pulls the OS packages too. Without
+      # this step, any day-close run that needs to grade a pending day fails
+      # with playwright._impl._errors.Error ("Executable doesn't exist");
+      # this is the confirmed root cause of the 2026-09-16 through
+      # 2026-09-20 failure streak (issues #143 / #144).
+      - name: Install Playwright Chromium
+        if: >-
+          steps.gate.outputs.skip_for_weekclose != 'true'
+          && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
+        run: uv run --frozen --package nfl-oracle playwright install --with-deps chromium
+
       - name: Run day-close grading
         id: dayclose
         if: >-
