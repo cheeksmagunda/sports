@@ -1,5 +1,25 @@
 # Status
 
+## nfl-dayclose/weekclose CI: Playwright Chromium install (issue #266, 2026-09-20)
+
+`nfl-dayclose.yml` failed 5 consecutive scheduled runs (2026-09-16 through
+2026-09-20). Root cause: any catch-up day with a pending frozen lineup calls
+a live Real Sports header refresh, which falls back to a Playwright Chromium
+capture whenever no fresh cached token exists (always true on an ephemeral
+GitHub Actions runner). No workflow anywhere installed the Chromium binary
+(`playwright>=1.59.0` is a regular `nfl-oracle` dependency, but `uv sync`
+only installs the Python package, not the browser). Fixed by adding
+`uv run --frozen --package nfl-oracle playwright install --with-deps chromium`
+to both `nfl-dayclose.yml` and `nfl-weekclose.yml`, gated on the same
+condition as the live grading step. Verified live: a `workflow_dispatch` run
+against 2026-09-17 (one of the two days that had errored) completed with
+`{"outcomes":{"2026-09-17":"graded"},"status":"success"}` instead of
+`"Error"` (run 35530210610). Issues #143/#144 are the workflow's own
+perpetual results/guard ledger issues (one sticky open issue per label, kept
+open by design and appended to on every run) — they are not closed by this
+fix; they simply stop receiving failure escalations now that the root cause
+is resolved.
+
 ## Week-close hands-off follow-up (issue #165, 2026-09-15 CT)
 
 After the punch-list producer (#195):
