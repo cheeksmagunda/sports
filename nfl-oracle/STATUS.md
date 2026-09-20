@@ -1,5 +1,37 @@
 # Status
 
+## main red: restored oracle-core.browser/timing dropped from the disk-fill fix (issue #268, 2026-09-20)
+
+`main` was red from 19:05 UTC to (this fix) on 2026-09-20: `backend-ci`
+failed with 40 collection errors, every nfl-oracle test module unable to
+import. Commit 7644fb3 (the disk-fill incident fix below) added
+`nfl_oracle/ingest/realsports.py`'s `from oracle_core.browser import
+launch_chromium_session` and referenced `oracle_core.timing.window_decision()`
+in its own commit message, but neither `oracle_core/browser.py` nor
+`oracle_core/timing.py` (nor their tests) were actually in that commit's diff.
+Root cause: `scripts/codespace-push` builds its transfer from `git diff HEAD
+--binary`, which never carries new, never-`git add`-ed files -- the previous
+session created these files locally but the sync into the Codespace (where
+the commit landed) silently dropped them. That commit's own verification
+claim could not have run against what was actually pushed.
+
+Fix: recovered the four files from the uncommitted state they were still
+sitting in on the operator's Mac checkout. Content is unchanged from what the
+disk-fill commit message described. No other changes.
+`oracle_core.timing.window_decision()` remains unconsumed (still deferred to
+#267); `oracle_core.browser.launch_chromium_session()` is now actually
+importable, which is what `nfl_oracle.ingest.realsports` needs.
+
+Verification: `make test-core` (87 passed), `make test-app APP=nfl-oracle`
+(408 passed/1 skipped/1 deselected), `make lint`, `make typecheck`,
+`make check-boundaries` all pass.
+
+`nfl-oracle-worker` on Railway auto-rebuilds from `main`; if it rebuilt from
+7644fb3 it would have hit the same import error. Not confirmed live from this
+session (Railway log read was blocked by local tooling permissions) --
+operator should check the worker's deployment/logs directly, or grant that
+read and ask again.
+
 ## nfl-dayclose/weekclose CI: Playwright Chromium install (issue #266, 2026-09-20)
 
 `nfl-dayclose.yml` failed 5 consecutive scheduled runs (2026-09-16 through

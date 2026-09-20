@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 823 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -499,6 +499,7 @@ Generated from `git ls-files`. 823 tracked files. Regenerate with `scripts/gener
 ## packages/oracle-core/src/oracle_core/
 - packages/oracle-core/src/oracle_core/__init__.py -- Domain-free runtime infrastructure for Oracle applications.
 - packages/oracle-core/src/oracle_core/artifacts.py -- Atomic artifact persistence and integrity verification.
+- packages/oracle-core/src/oracle_core/browser.py -- Guaranteed-cleanup Playwright browser sessions.
 - packages/oracle-core/src/oracle_core/cache.py -- JSON TTL caching over a technical key-value capability.
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
@@ -513,9 +514,11 @@ Generated from `git ls-files`. 823 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/src/oracle_core/service.py -- Generic FastAPI service metadata and health behavior.
 - packages/oracle-core/src/oracle_core/storage.py -- Provider-neutral PostgreSQL transactions and Redis-backed stores.
 - packages/oracle-core/src/oracle_core/testing.py -- Deterministic fakes and log capture helpers for application tests.
+- packages/oracle-core/src/oracle_core/timing.py -- Sport-neutral wall-clock timing helpers for scheduled decision gates.
 
 ## packages/oracle-core/tests/
 - packages/oracle-core/tests/test_artifacts.py
+- packages/oracle-core/tests/test_browser.py
 - packages/oracle-core/tests/test_config.py
 - packages/oracle-core/tests/test_dayclose.py
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
@@ -526,6 +529,7 @@ Generated from `git ls-files`. 823 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/tests/test_service.py
 - packages/oracle-core/tests/test_storage_cache.py
 - packages/oracle-core/tests/test_testing.py
+- packages/oracle-core/tests/test_timing.py
 
 ## scripts/
 - scripts/auth-check
