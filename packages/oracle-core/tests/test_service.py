@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from fastapi.testclient import TestClient
 
 from oracle_core.service import (
+    DiskUsageHealthContributor,
     HealthCheck,
     ServiceMetadata,
     create_service,
@@ -168,3 +169,46 @@ def test_service_factory_supports_application_docs_and_schema_compatibility() ->
     assert schema["paths"]["/health"]["get"]["responses"]["200"]["content"]["application/json"][
         "schema"
     ]["additionalProperties"] == {"type": "string"}
+
+
+def test_disk_usage_health_contributor_ok_degraded_error(tmp_path, monkeypatch) -> None:
+    contributor = DiskUsageHealthContributor(
+        name="disk", path=tmp_path, warn_percent=50, error_percent=90
+    )
+
+    def fake_usage(_path):
+        return _Usage(total=100, used=10, free=90)
+
+    monkeypatch.setattr("oracle_core.service.shutil.disk_usage", fake_usage)
+    result = contributor.check()
+    assert result.status == "ok"
+    assert result.metadata["percent_used"] == 10.0
+
+    monkeypatch.setattr(
+        "oracle_core.service.shutil.disk_usage", lambda _p: _Usage(total=100, used=60, free=40)
+    )
+    assert contributor.check().status == "degraded"
+
+    monkeypatch.setattr(
+        "oracle_core.service.shutil.disk_usage", lambda _p: _Usage(total=100, used=95, free=5)
+    )
+    assert contributor.check().status == "error"
+
+
+def test_disk_usage_health_contributor_reports_error_on_oserror(tmp_path, monkeypatch) -> None:
+    contributor = DiskUsageHealthContributor(name="disk", path=tmp_path / "missing")
+
+    def raise_oserror(_path):
+        raise OSError("no such path")
+
+    monkeypatch.setattr("oracle_core.service.shutil.disk_usage", raise_oserror)
+    result = contributor.check()
+    assert result.status == "error"
+    assert result.metadata["error_type"] == "OSError"
+
+
+class _Usage:
+    def __init__(self, *, total: int, used: int, free: int) -> None:
+        self.total = total
+        self.used = used
+        self.free = free

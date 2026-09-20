@@ -12,16 +12,20 @@ import asyncio
 import json
 import os
 import sys
+import time
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import httpx
+from oracle_core.artifacts import prune_content_addressed_directory
+from oracle_core.service import DiskUsageHealthContributor
 from oracle_core.storage import PoolOptions, create_postgres_engine
 from sqlalchemy import create_engine
 
 from nfl_oracle.calendar.schedule import ensure_offline_schedules
+from nfl_oracle.common.logging import get_logger
 from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
@@ -37,6 +41,8 @@ from nfl_oracle.recommendations.sources import (
     load_venues,
 )
 from nfl_oracle.recommendations.store import RecommendationStore, migrate
+
+log = get_logger("nfl_oracle.recommendations.cli")
 
 
 def _project_root() -> Path:
@@ -266,6 +272,21 @@ def _already_frozen(store: RecommendationStore, day: date) -> bool:
     return datetime.now(UTC) < cutoff
 
 
+def _disk_usage_metadata(project: Path) -> dict[str, Any]:
+    """Best-effort disk snapshot to attach to a run record.
+
+    The worker has no HTTP server for the API's health middleware to poll, so
+    this is how disk pressure becomes visible before a volume actually fills:
+    it rides along on the run record every poll already writes. See
+    DiskUsageHealthContributor in oracle_core.service.
+    """
+    try:
+        check = DiskUsageHealthContributor(name="nfl_worker_disk", path=project / "data").check()
+    except Exception:
+        return {}
+    return {"disk": {"status": check.status, **check.metadata}}
+
+
 async def _worker_once(
     project: Path,
     store: RecommendationStore,
@@ -276,6 +297,12 @@ async def _worker_once(
     del headers_from  # The provider module reads its own scoped environment path.
     from nfl_oracle.ingest.realsports import headers_or_capture
 
+    def record_run(
+        day: date, *, status: str, detail_code: str, details: dict[str, Any] | None = None
+    ) -> None:
+        merged = {**(details or {}), **_disk_usage_metadata(project)}
+        store.record_run(day, status=status, detail_code=detail_code, details=merged)
+
     headers = await headers_or_capture()
     async with httpx.AsyncClient(timeout=25) as client:
         reader = NFLReader(
@@ -285,12 +312,12 @@ async def _worker_once(
         )
         day = requested_day or await reader.next_day()
         if _already_frozen(store, day):
-            store.record_run(day, status="ready", detail_code="already_frozen_for_slate")
+            record_run(day, status="ready", detail_code="already_frozen_for_slate")
             return None
         content = await reader.day_content(day)
         games = tuple(parse_game(raw) for raw in content.get("games", []))
         if not games:
-            store.record_run(day, status="no_slate", detail_code="no_games")
+            record_run(day, status="no_slate", detail_code="no_games")
             return None
         now = datetime.now(UTC)
         # A Sunday slate has many kickoffs. Gating on min(kickoff) across every
@@ -300,12 +327,12 @@ async def _worker_once(
         # still refuses a contest whose games are already under way.
         upcoming = tuple(game for game in games if game.kickoff_at > now)
         if not upcoming:
-            store.record_run(day, status="locked", detail_code="slate_cutoff_passed")
+            record_run(day, status="locked", detail_code="slate_cutoff_passed")
             return None
         cutoff = min(game.kickoff_at for game in upcoming)
         due = cutoff - timedelta(minutes=40)
         if now < due:
-            store.record_run(
+            record_run(
                 day,
                 status="waiting",
                 detail_code="waiting_for_t40",
@@ -315,7 +342,7 @@ async def _worker_once(
         available = content.get("config", {}).get("dailyDraftInfo", {}).get("contests", [])
         contest_ids = [item.get("id") for item in available if isinstance(item, dict)]
         if len(contest_ids) != 1 or type(contest_ids[0]) is not int:
-            store.record_run(day, status="blocked", detail_code="contest_unavailable")
+            record_run(day, status="blocked", detail_code="contest_unavailable")
             return None
         slate = await reader.collect(day, contest_id=contest_ids[0])
         # Collection is a live network round trip; every per-candidate and
@@ -361,6 +388,42 @@ def _record_worker_failure(
         )
 
 
+_RETENTION_SECONDS = {
+    # Content-addressed audit logs, not the source of truth (Postgres is).
+    # A poll every 10-60s with the digest bug fixed still accumulates one file
+    # per distinct payload change; three days is enough to debug a live
+    # incident without regrowing to the 3.6GB, 69k-file state that filled the
+    # Railway volume to 100% on 2026-09-20 (see #266 and STATUS.md).
+    "raw/observations": 3 * 24 * 60 * 60,
+    # Each context capture is a full audit snapshot (~150-190KB) legitimately
+    # unique per decision, not a dedup bug -- but with no retention it grows
+    # forever. A week covers a full slate's post-freeze review window.
+    "artifacts/context": 7 * 24 * 60 * 60,
+}
+_PRUNE_INTERVAL_SECONDS = 60 * 60
+
+
+def _prune_data_retention(project: Path) -> None:
+    """Sweep bounded-retention directories. Best-effort: never blocks a poll."""
+    for relative, max_age in _RETENTION_SECONDS.items():
+        target = project / "data" / relative
+        try:
+            result = prune_content_addressed_directory(target, max_age_seconds=max_age)
+            if result.removed_count:
+                log.info(
+                    "worker_data_retention_prune",
+                    path=relative,
+                    removed_count=result.removed_count,
+                    removed_bytes=result.removed_bytes,
+                )
+        except Exception as error:
+            log.warning(
+                "worker_data_retention_prune_error",
+                path=relative,
+                error_type=type(error).__name__,
+            )
+
+
 async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None) -> int:
     project = _project_root()
     ensure_offline_schedules(resolve_data_paths(project).root)
@@ -371,7 +434,12 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
         print(json.dumps({"status": "blocked", "detail_code": "recommendations_disabled"}))
         return 1
     pipeline = RecommendationPipeline(store, policy=policy)
+    next_prune_at = 0.0
     while True:
+        now_monotonic = time.monotonic()
+        if now_monotonic >= next_prune_at:
+            _prune_data_retention(project)
+            next_prune_at = now_monotonic + _PRUNE_INTERVAL_SECONDS
         try:
             record = await _worker_once(project, store, pipeline, requested_day)
             if record is not None:

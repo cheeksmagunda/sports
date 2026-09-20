@@ -19,6 +19,7 @@ from typing import Any
 
 import httpx
 from oracle_core.artifacts import atomic_write_json
+from oracle_core.browser import launch_chromium_session
 from oracle_core.http import HttpxAsyncTransport, RetryPolicy, async_request_with_retry
 
 from nfl_oracle.common.logging import get_logger
@@ -300,28 +301,24 @@ async def capture_live_headers(
     device_uuid = device_uuid or _device_uuid()
     device_name = device_name or _device_name()
 
-    from playwright.async_api import async_playwright
-
     captured: dict[str, str] = {}
     done = asyncio.Event()
 
-    async with async_playwright() as pw:
-        # The worker image runs Chromium as a non-root user, and a container's
-        # default /dev/shm is 64MB. Without these two flags the browser dies on
-        # startup instead of failing a navigation, which surfaces as a bare
-        # TargetClosedError rather than the StorageStateStale a real session
-        # problem would raise. Observed in production: the worker logged
-        # TargetClosedError on every poll for twelve hours while the same
-        # session captured cleanly outside a container.
-        browser = await pw.chromium.launch(
-            headless=not headed,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
-        )
-        ctx = await browser.new_context(
-            viewport={"width": 599, "height": 868},
-            storage_state=str(state_path),
-            user_agent=DEFAULT_USER_AGENT,
-        )
+    # launch_chromium_session guarantees browser.close() runs on every exit
+    # path, including a caller exception -- unlike the two explicit
+    # browser.close() calls this replaced, which left the browser process
+    # (and its threads) running on any other path: a new_context/new_page
+    # failure, a non-TimeoutError raised while waiting for the captured
+    # headers, or an exception while persisting storage_state. Confirmed via
+    # a 96-thread NFL worker container observed in production on 2026-09-20.
+    async with launch_chromium_session(
+        headless=not headed,
+        viewport={"width": 599, "height": 868},
+        storage_state=state_path,
+        user_agent=DEFAULT_USER_AGENT,
+    ) as session:
+        ctx = session.context
+        page = session.page
 
         async def on_request(req: Any) -> None:
             if "realapp.com" not in req.url:
@@ -334,7 +331,6 @@ async def capture_live_headers(
                 done.set()
 
         ctx.on("request", on_request)
-        page = await ctx.new_page()
         try:
             await page.goto(
                 "https://realsports.io/?sport=nfl",
@@ -346,7 +342,6 @@ async def capture_live_headers(
         try:
             await asyncio.wait_for(done.wait(), timeout=20.0)
         except TimeoutError as exc:
-            await browser.close()
             raise StorageStateStale(
                 "Did not capture authenticated headers within 20s. Session may be expired."
             ) from exc
@@ -366,7 +361,6 @@ async def capture_live_headers(
         )
         if (not used_explicit) or os.environ.get("NFL_REALSPORTS_WRITE_STATE") == "1":
             _write_private_json(local, refreshed_state)
-        await browser.close()
 
     captured["real-device-uuid"] = device_uuid
     captured.setdefault("real-device-id", device_uuid)

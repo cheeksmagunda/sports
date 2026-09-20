@@ -54,3 +54,34 @@ def test_worker_once_still_fails_when_poll_and_failure_audit_fail(
 
     assert asyncio.run(cli._run_worker(True, 30, date(2026, 9, 9))) == 1
     sleep.assert_not_awaited()
+
+
+def test_prune_data_retention_removes_only_expired_files(tmp_path) -> None:
+    obs = tmp_path / "data" / "raw" / "observations" / "ab"
+    obs.mkdir(parents=True)
+    fresh = obs / "fresh.json"
+    stale = obs / "stale.json"
+    fresh.write_text("{}")
+    stale.write_text("{}")
+    import os
+    import time
+
+    old = time.time() - 10 * 24 * 60 * 60
+    os.utime(stale, (old, old))
+
+    cli._prune_data_retention(tmp_path)
+
+    assert fresh.exists()
+    assert not stale.exists()
+
+
+def test_prune_data_retention_survives_missing_directories(tmp_path) -> None:
+    # Neither data/raw/observations nor data/artifacts/context exists yet.
+    cli._prune_data_retention(tmp_path)
+
+
+def test_disk_usage_metadata_reports_percent_used(tmp_path) -> None:
+    (tmp_path / "data").mkdir()
+    metadata = cli._disk_usage_metadata(tmp_path)
+    assert "disk" in metadata
+    assert "percent_used" in metadata["disk"]

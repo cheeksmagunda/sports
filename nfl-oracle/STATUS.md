@@ -1415,3 +1415,65 @@ main merges landed tonight (through PR #251, `ddf9c3c`).
   before the next T-40. Separately, issues #129 and #124 (2026-09-09
   provisioning) remain open on GitHub although the worker is live; not
   touched tonight.
+
+## 2026-09-20 disk-fill incident: browser-leak, dedup, and retention fixes landed (issue #266 follow-through)
+
+Same incident as the "Playwright Chromium missing from CI" entry above
+(`nfl-oracle-worker`'s volume hit 4992/5000 MB, ~100%, with a manual SSH
+emergency deletion of 52,033 stale `raw/observations/` files as a stopgap).
+That entry fixed the CI symptom (grading jobs failing for 5 straight days).
+This entry documents the durable, automated fix for the disk-fill root
+cause itself, landed the same day:
+
+- **Browser-leak fix.** `capture_live_headers()` in
+  `nfl_oracle/ingest/realsports.py` now uses the new
+  `oracle_core.browser.launch_chromium_session()` context manager instead of
+  manual `browser.close()` calls. The old code only reached `browser.close()`
+  on 2 of several exit paths; an exception from `new_context()`, `new_page()`,
+  or the storage-state write leaked the browser process. The new primitive
+  guarantees cleanup via nested try/finally regardless of what the caller
+  raises. Same bug and same fix are needed in `wnba_oracle`'s copy of this
+  function (tracked separately; deliberately not touched here to keep this
+  change narrowly scoped to NFL).
+- **`ObservationStore` dedup fix.** `record()` in
+  `nfl_oracle/recommendations/provider.py` used to fingerprint the *entire*
+  record dict, including `captured_at`/`source_available_at` (wall-clock,
+  different on every poll) -- so the "content-addressed" store never
+  actually deduped anything; every single poll wrote a brand-new file even
+  when the underlying payload hadn't changed. This is the actual root cause
+  of the disk fill: `raw/observations/` held 69,555 files (3.6 GB) when
+  discovered, only ~89% of the volume's own realistic distinct-payload
+  count. The digest is now computed over only the content-identifying
+  fields (`source`, `method`, `path`, `params`, `parser_version`, `payload`);
+  `captured_at` is still recorded for audit purposes but no longer affects
+  whether a file is written.
+- **Retention pruning wired into the worker loop.** `_run_worker` now calls
+  `oracle_core.artifacts.prune_content_addressed_directory()` once per hour
+  against `data/raw/observations` (3-day retention) and
+  `data/artifacts/context` (7-day retention, this one is legitimately unique
+  per decision, not a dedup bug, but had no retention at all). Best-effort:
+  a prune failure is logged (`nfl_oracle.recommendations.cli` structlog
+  logger) and never blocks a poll.
+- **Disk-usage metadata on run records.** Every `record_run()` write from
+  the worker's main gate path (`ready`/`no_slate`/`locked`/`waiting`/
+  `blocked`) now carries a `details.disk` snapshot
+  (`{status, percent_used, free_bytes, total_bytes}`) from the new
+  `oracle_core.service.DiskUsageHealthContributor`, so a slate's run history
+  in Postgres shows the disk trend leading up to any future incident instead
+  of only revealing it once the volume is already full.
+- **Deliberately deferred, not fixed this pass:** the T-40 gate-ordering bug
+  (the worker calls `headers_or_capture()` and `reader.day_content()` --
+  both live network/browser round trips -- before it can check whether T-40
+  has actually arrived, because the gate's `cutoff` is computed from
+  kickoff times inside that live-fetched `day_content()`, not from the
+  offline schedule). Fixing this safely needs the offline schedule model
+  (`ScheduledGame` in `nfl_oracle/calendar/schedule.py`) to carry a kickoff
+  time-of-day, which today's committed `data/schedule/schedules.csv` fixture
+  does not have a column for. Filed separately as a scoped follow-up rather
+  than rushed against production data: see the schedule-ingestion issue this
+  section links once filed.
+- **Verification:** `make test-core` (90/90), `make test-app APP=nfl-oracle`
+  (408/1 skipped/1 deselected), `make lint`, `make typecheck`,
+  `make check-boundaries` all pass. The emergency manual deletion performed
+  during triage is now redundant going forward -- the hourly prune keeps the
+  same directories bounded automatically.

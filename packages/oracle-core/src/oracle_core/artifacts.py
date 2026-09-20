@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,72 @@ def write_artifact(
         raise ValueError("Artifact SHA-256 does not match the expected digest")
     destination = atomic_write_bytes(path, data, mode=mode)
     return ArtifactInfo(path=destination, sha256=digest, size=len(data))
+
+
+@dataclass(frozen=True)
+class PruneResult:
+    """Outcome of one retention sweep over a directory tree."""
+
+    removed_count: int
+    removed_bytes: int
+    scanned_count: int
+
+
+def prune_content_addressed_directory(
+    root: str | os.PathLike[str],
+    *,
+    max_age_seconds: float,
+    now: float | None = None,
+    dry_run: bool = False,
+) -> PruneResult:
+    """Remove files older than ``max_age_seconds`` under a directory tree.
+
+    Written for content-addressed evidence stores (each capture writes a new
+    file, keyed by a digest, and is never mutated afterward) whose own
+    application-level dedup cannot be relied on as the sole retention
+    mechanism -- a store this prunes should already try to dedup on write,
+    but a broken or imperfect fingerprint must not be the only thing standing
+    between a poll loop and a full disk. Age is judged by each file's mtime.
+    Empty directories left behind (a stale two-level shard directory, for
+    example) are removed too. ``dry_run`` reports what would be removed
+    without deleting anything, for a startup/health-check preview.
+    """
+
+    cutoff = (now if now is not None else time.time()) - max_age_seconds
+    base = Path(root)
+    removed_count = 0
+    removed_bytes = 0
+    scanned_count = 0
+    if not base.is_dir():
+        return PruneResult(removed_count=0, removed_bytes=0, scanned_count=0)
+
+    for path in sorted(base.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+        if path.is_symlink():
+            continue
+        if path.is_file():
+            scanned_count += 1
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            if stat.st_mtime >= cutoff:
+                continue
+            removed_count += 1
+            removed_bytes += stat.st_size
+            if not dry_run:
+                try:
+                    path.unlink()
+                except OSError:
+                    removed_count -= 1
+                    removed_bytes -= stat.st_size
+        elif path.is_dir() and not dry_run:
+            try:
+                path.rmdir()
+            except OSError:
+                pass  # Not empty (or a race with a concurrent writer); leave it.
+    return PruneResult(
+        removed_count=removed_count, removed_bytes=removed_bytes, scanned_count=scanned_count
+    )
 
 
 def _sync_directory(path: Path) -> None:

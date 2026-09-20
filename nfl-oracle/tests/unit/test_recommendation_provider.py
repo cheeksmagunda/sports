@@ -209,3 +209,33 @@ async def test_request_limit_and_redacted_observation(tmp_path):
     assert len(files) == 1
     assert files[0].stat().st_mode & 0o777 == 0o600
     assert '"method":"GET"' in files[0].read_text().replace(" ", "")
+
+
+def test_observation_store_dedups_identical_content_captured_at_different_times(tmp_path) -> None:
+    """The dedup fingerprint must ignore wall-clock capture time.
+
+    Root cause of the 2026-09-16..2026-09-20 disk-fill incident: including
+    `captured_at` in the digest meant every poll wrote a brand-new file even
+    when the fetched content had not changed, so the store never actually
+    deduped anything.
+    """
+
+    store = ObservationStore(tmp_path)
+    payload = {"ok": True, "value": 1}
+    first = store.record("/games/1", {"a": "b"}, payload, datetime(2026, 9, 17, 1, 0, tzinfo=UTC))
+    second = store.record("/games/1", {"a": "b"}, payload, datetime(2026, 9, 17, 2, 0, tzinfo=UTC))
+
+    assert first == second
+    files = list(tmp_path.rglob("*.json"))
+    assert len(files) == 1
+
+
+def test_observation_store_distinguishes_different_content(tmp_path) -> None:
+    store = ObservationStore(tmp_path)
+    now = datetime(2026, 9, 17, 1, 0, tzinfo=UTC)
+    first = store.record("/games/1", {"a": "b"}, {"value": 1}, now)
+    second = store.record("/games/1", {"a": "b"}, {"value": 2}, now)
+
+    assert first != second
+    files = list(tmp_path.rglob("*.json"))
+    assert len(files) == 2

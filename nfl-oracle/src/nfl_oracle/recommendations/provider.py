@@ -61,7 +61,24 @@ class ObservationStore:
             "parser_version": 1,
             "payload": clean,
         }
-        digest = fingerprint(record)
+        # Fingerprint only the content-identifying fields. `captured_at` and
+        # `source_available_at` are wall-clock and differ on every poll, so
+        # including them in the digest (as this used to) meant no repeated
+        # capture of unchanged content was ever recognized as a duplicate:
+        # every poll wrote a new file, unbounded, forever. Two captures of
+        # the same path/params/payload now collapse to the first file
+        # written for that content, which is what "content-addressed" is
+        # supposed to mean here.
+        digest = fingerprint(
+            {
+                "source": record["source"],
+                "method": record["method"],
+                "path": record["path"],
+                "params": record["params"],
+                "parser_version": record["parser_version"],
+                "payload": record["payload"],
+            }
+        )
         target = self.root / digest[:2] / f"{digest}.json"
         if not target.exists():
             atomic_write_json(target, record, mode=0o600)

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import inspect
+import shutil
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from fastapi import APIRouter, FastAPI
@@ -105,6 +107,48 @@ async def run_health_checks(
     else:
         overall = "ok"
     return HealthStatus(status=overall, checks=checks, checked_at=clock())
+
+
+@dataclass(frozen=True)
+class DiskUsageHealthContributor:
+    """Report ``degraded``/``error`` before a volume actually fills.
+
+    No worker process in the portfolio has an HTTP server to health-check
+    directly (issue behind the 2026-09-20 NFL disk-fill incident: the first
+    signal was the volume already full, not a warning beforehand). Any
+    service that does have one -- the API, not the worker -- can still watch
+    the same volume mount the worker writes to and surface it here, or a
+    worker can attach a value like this to its own run-record ``details``.
+    """
+
+    name: str
+    path: str | Path
+    warn_percent: float = 80.0
+    error_percent: float = 95.0
+
+    def check(self) -> HealthCheck:
+        try:
+            usage = shutil.disk_usage(self.path)
+        except OSError as error:
+            return HealthCheck(
+                status="error",
+                detail="disk usage unavailable",
+                metadata={"error_type": type(error).__name__},
+            )
+        percent_used = round((usage.used / usage.total) * 100, 1) if usage.total else 0.0
+        status: Literal["ok", "degraded", "error"] = "ok"
+        if percent_used >= self.error_percent:
+            status = "error"
+        elif percent_used >= self.warn_percent:
+            status = "degraded"
+        return HealthCheck(
+            status=status,
+            metadata={
+                "percent_used": percent_used,
+                "free_bytes": usage.free,
+                "total_bytes": usage.total,
+            },
+        )
 
 
 def create_service(
