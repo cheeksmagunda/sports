@@ -7,6 +7,7 @@ This document explains how to access Sports Oracle from different clients and ho
 - Source of truth: `main` on `cheeksmagunda/sports`.
 - Canonical workspace: GitHub Codespaces for this repo. Prefer that Codespace over local clones for sports work.
 - Auth home: GitHub login, Copilot, Actions, and Codespaces secrets inside Codespace. Do not mint per-agent PATs for Claude, Codex, Copilot, or Grok.
+- One `gh` identity per surface (issue #235; see root `AGENTS.md`'s Portable operations and secrets): `write-path-check` and `scripts/codespace-push` always unset any agent-injected `GH_TOKEN`/`GITHUB_TOKEN` before calling `gh codespace ...`, so a local agent CLI's own scoped token can never shadow the native keyring login those two scripts need. Do not restate the mechanism here.
 - Real Sports auth home: the same Codespaces-secrets pattern as GitHub and Railway. `REALSPORTS_STORAGE_STATE_B64GZ` is a Codespaces secret, an Actions secret, and a Railway service variable on every service that needs it; all are literal, hash-verified copies of one operator-seeded, durable session (not assumed to expire, not rotated on a schedule; see root `AGENTS.md`). Codespaces secrets reach login shells only (`bash -l` / `gh codespace ssh`, not a bare non-login command); the same caveat applies to `RAILWAY_API_TOKEN`
   below.
 - Claude / Codex / Copilot: clients only. Before material sports work, use Codespace or read live `main`. Do not treat local folders, chat uploads, or remembered summaries as authoritative when Codespace or `main` is reachable.

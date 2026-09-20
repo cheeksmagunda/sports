@@ -9,6 +9,14 @@ set -eu
 # This syncs worktree changes, not unpushed local commits: local HEAD must
 # already be a commit the Codespace can fetch from origin.
 
+# One gh identity for this Mac-side script (issue #235 gap: a local agent CLI
+# (Claude Code, Codex CLI, Copilot CLI) can inject its own scoped
+# GH_TOKEN/GITHUB_TOKEN for its own API calls; gh prefers that env token over
+# the native keyring `gh auth login`, so every `gh codespace ...` call below
+# must always resolve to the native login, exactly like the Codespace's own
+# interactive-shell rule, never to a wrapper-injected token.
+unset GITHUB_TOKEN GH_TOKEN
+
 codespace="${SPORTS_CODESPACE_NAME:-}"
 message="${1:-Sync local worktree through Codespace}"
 

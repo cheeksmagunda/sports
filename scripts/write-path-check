@@ -6,6 +6,15 @@ set -eu
 # and fails when unpushed history has grown past the ceiling.
 # Never prints credential values.
 
+# One gh identity for the Mac-side codespace check (issue #235 gap: a local
+# agent CLI (Claude Code, Codex CLI, Copilot CLI) can inject its own scoped
+# GH_TOKEN/GITHUB_TOKEN for its own API calls; gh prefers that env token over
+# the native keyring `gh auth login`, so a narrower/expired agent token
+# silently 403s `gh codespace list` even though the real, codespace-scoped
+# login underneath is fine. This script must always resolve to the native
+# login, exactly like the Codespace's own interactive-shell rule.
+unset GITHUB_TOKEN GH_TOKEN
+
 remote="${1:-origin}"
 ceiling="${SPORTS_UNPUSHED_CEILING:-5}"
 branch="$(git rev-parse --abbrev-ref HEAD)"

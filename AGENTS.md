@@ -148,6 +148,16 @@ documentation is, and that happens before the PR merges, not after.
   repository secrets; Codespaces secrets are injected only into the Codespace
   container, where interactive shells unset the built-in `GITHUB_TOKEN` so web
   and SSH sessions share the `gh` login.
+- One `gh` identity on every surface, not just the Codespace (issue #235):
+  `gh` prefers an env `GH_TOKEN`/`GITHUB_TOKEN` over the native keyring
+  `gh auth login`, and a local agent CLI (Claude Code, Codex CLI, Copilot CLI)
+  commonly injects its own scoped token for its own API calls into the
+  process it runs commands in. `make write-path-check` and
+  `scripts/codespace-push` always `unset GITHUB_TOKEN GH_TOKEN` before calling
+  `gh codespace ...`, so an agent-injected token can never shadow the native,
+  codespace-scoped login these two scripts depend on. If a `gh codespace`
+  call still fails outside those two scripts, run it with
+  `env -u GH_TOKEN -u GITHUB_TOKEN gh ...` rather than re-diagnosing this.
 - Claude, Codex, and Copilot are clients for the Codespace, live checkout, or
   live GitHub repository. They are not separate GitHub credential homes.
 - Grok Bot is the only Cursor-based surface. Use Cursor cloud agents on this
