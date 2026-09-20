@@ -1,9 +1,9 @@
 {
-  "generated_at_utc": "2026-09-19T11:33:01+00:00",
+  "generated_at_utc": "2026-09-20T11:48:24+00:00",
   "schema_version": 1,
   "tables": {
     "contest_leaderboards": {
-      "bytes": 12850405,
+      "bytes": 12908817,
       "columns": [
         "contest_id",
         "slate_date",
@@ -17,14 +17,14 @@
         "ingested_at"
       ],
       "file": "contest_leaderboards.csv",
-      "max_slate": "2026-09-17",
+      "max_slate": "2026-09-18",
       "min_slate": "2025-05-16",
-      "rows": 4420,
-      "sha256": "e7bae5d64b786e4803594abb8fd53d5797deffd506830a4e397d29c05bf0f2a8",
-      "slates": 221
+      "rows": 4440,
+      "sha256": "aec2fc27a70e9564b97940df5ed8cdc9547899a7c4e67de014d2268e96568714",
+      "slates": 222
     },
     "slate_labels": {
-      "bytes": 790306,
+      "bytes": 794815,
       "columns": [
         "contest_id",
         "slate_date",
@@ -38,11 +38,11 @@
         "ingested_at"
       ],
       "file": "slate_labels.csv",
-      "max_slate": "2026-09-17",
+      "max_slate": "2026-09-18",
       "min_slate": "2025-05-16",
-      "rows": 6672,
-      "sha256": "2d59308a596e8d2e6dfb1936c913ffe75d2e05166ce5b7b2cc9ff990b61c99e4",
-      "slates": 221
+      "rows": 6710,
+      "sha256": "9b61adea23230f660ab616cfb829375567cd1152929e137c5174099612afd233",
+      "slates": 222
     }
   },
   "transaction": {
