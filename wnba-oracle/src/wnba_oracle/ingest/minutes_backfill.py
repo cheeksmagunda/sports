@@ -48,7 +48,17 @@ COLS = [
 # Phoenix changed abbreviation from PHO (2024) to PHX (2025+). Same franchise;
 # unify so cross-season joins work.
 TEAM_ALIASES = {"PHO": "PHX"}
-GAME_LOG_RETRY_DELAYS = (2.0, 5.0)
+# stats.wnba.com (via nba_api) intermittently times out or 5xx's from a shared
+# cloud IP -- observed live on 2026-09-20 (job_runs run_id ab252902, dayclose
+# for slate 2026-09-19: game_log_refresh failed after exhausting these delays,
+# which escalated the whole night's day-close to "failed" per the D102
+# required-failure policy, even though every other substep succeeded). The
+# original (2.0, 5.0) window gave the upstream API under 10 seconds total to
+# recover from a transient blip before paging the operator. Longer, more
+# numerous delays absorb a genuinely transient outage without weakening the
+# required-failure policy itself -- a truly down upstream still fails and
+# still escalates, just after a fairer amount of real retry time.
+GAME_LOG_RETRY_DELAYS = (3.0, 8.0, 20.0, 45.0)
 
 
 class GameLogRefreshError(RuntimeError):

@@ -32,6 +32,7 @@ from wnba_oracle.features.serving_features import (
 )
 from wnba_oracle.features.serving_features import lookup as head_feature_lookup
 from wnba_oracle.ingest.identity import build_resolver
+from wnba_oracle.ingest.identity_map import mapping_from_outcome
 from wnba_oracle.ingest.minutes_features import (
     build_minutes_features,
     lookup,
@@ -252,15 +253,18 @@ def _build_enrichment_rows(
 
         head_feature = None
         resolved_player_id: int | None = None
+        resolution = None
         if context.resolver:
             try:
-                resolved_player_id = context.resolver.resolve(
+                resolution = context.resolver.resolve_with_outcome(
                     player.platform_id,
                     display_name=player.display_name,
                     first_name=player.first_name,
                     last_name=player.last_name,
                     team=player.team,
+                    nba_id=getattr(player, "nba_id", None),
                 )
+                resolved_player_id = resolution.wnba_player_id
                 if resolved_player_id is not None and isinstance(context.head_features, dict):
                     head_feature = context.head_features.get(resolved_player_id)
             except Exception as exc:
@@ -339,6 +343,20 @@ def _build_enrichment_rows(
                 "position": player.position,
                 "card_boost": float(player.multiplier_bonus),
                 "features_json": json.dumps(features),
+                "_canonical_identity_mapping": (
+                    mapping_from_outcome(
+                        context.resolver,
+                        resolution,
+                        real_sports_id=player.platform_id,
+                        display_name=player.display_name,
+                        first_name=player.first_name,
+                        last_name=player.last_name,
+                        team=player.team,
+                        nba_id=getattr(player, "nba_id", None),
+                    )
+                    if context.resolver and resolution is not None
+                    else None
+                ),
             }
         )
 

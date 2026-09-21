@@ -32,6 +32,48 @@ session (Railway log read was blocked by local tooling permissions) --
 operator should check the worker's deployment/logs directly, or grant that
 read and ask again.
 
+## T-40 resiliency follow-through (issue #156, 2026-09-20)
+
+Three remaining production-resiliency checks from the master NFL T-40 incident
+issue are now implemented, without touching the already-landed multi-game
+freeze refusal fix (#158), results capture work (#140 / #146), or boost work
+from this session:
+
+- **No terminal state:** `nfl_oracle.recommendations.cli` now treats an
+  existing successful same-day freeze as terminal for the worker's write path.
+  Once a lineup is published and the slate is still open, later poll cycles
+  record `already_frozen_for_slate` and skip the expensive provider sweep plus
+  re-freeze path. Read-serving is unchanged. A deliberate operator override is
+  explicit: `nfl-pipeline worker --allow-refreeze` bypasses only this terminal
+  guard so a human can intentionally re-freeze when needed.
+- **Model TTL vs NFL-week cadence:** `RecommendationPipeline.active_model()`
+  still keeps `model_max_age_days=8` as a hard backstop, but the primary gate
+  is now week-aware. Using the offline NFL schedule, it resolves the slate's
+  NFL week, derives that week's Tuesday 00:00 America/New_York retrain
+  boundary from the first gameday in the week, and refuses any model trained
+  before that boundary (`model_stale_for_nfl_week`). This keeps a same-week
+  Tuesday retrain fresh through Thursday and Sunday, while correctly refusing a
+  missed retrain even when the old model is only a few days old.
+- **Deadline alerting:** added `nfl_oracle.recommendations.watchdog`,
+  `nfl-oracle/scripts/nfl_t40_watchdog.py`, and
+  `.github/workflows/nfl-t40-watchdog.yml`. The watchdog is GitHub
+  Actions-based because the Railway worker has no HTTP surface a monitor
+  could poll. Every 15 minutes inside NFL kickoff windows (UTC crons in the
+  workflow: Sun 13-14 and 16-21, Sun/Mon/Thu 23, Mon/Tue/Fri 0) it combines
+  public nflverse kickoff times
+  (no provider session) with `RecommendationStore` freeze/run state and opens
+  or updates one `nfl-ops-guard` issue titled `NFL T-40 watchdog alert` when a
+  freeze is missing past the post-T-40 grace deadline. If
+  `NFL_DATABASE_URL` or `NFL_PG_SSL_ROOT_CERT` is absent, the workflow writes a
+  clear `not_configured` report and exits cleanly instead of silently passing
+  or inventing a new secret requirement.
+
+Verification for this slice: `make test-app APP=nfl-oracle` (423 passed, 1
+skipped, 1 deselected), `make -C nfl-oracle lint`, and
+`make -C nfl-oracle typecheck` all passed after the final changes. Whole-repo
+`make lint` remains blocked by a pre-existing unrelated WNBA lint error in
+`wnba_oracle/eval/identity_coverage.py`, outside this task's allowed scope.
+
 ## nfl-dayclose/weekclose CI: Playwright Chromium install (issue #266, 2026-09-20)
 
 `nfl-dayclose.yml` failed 5 consecutive scheduled runs (2026-09-16 through
