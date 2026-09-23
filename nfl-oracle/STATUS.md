@@ -1594,7 +1594,7 @@ loop iteration. On a long-lived local checkout with real worker output
 older than the 7-day retention window, running this test silently deletes
 that real (gitignored, non-authoritative) local data -- it did exactly that
 during this verification pass (one stale 187MB file). Not fixed here to
-keep this change scoped to #267; filed as a new issue (test hermeticity --
+keep this change scoped to #267; filed as #278 (test hermeticity --
 `_run_worker` tests should run against an isolated project root).
 
 - **Verification:** `make test-app APP=nfl-oracle` (419/1 skipped/1
