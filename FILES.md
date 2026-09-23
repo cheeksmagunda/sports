@@ -181,7 +181,7 @@ Generated from `git ls-files`. 823 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/scripts/postgres_store_smoke.py -- Exercise NFL recommendation storage against a temporary local PostgreSQL.
 - nfl-oracle/scripts/production_container_smoke.py -- Build and smoke-test the NFL production image without secrets or a database.
 - nfl-oracle/scripts/research_client_smoke.py -- Offline research FastAPI client smoke (observation only; no contest entry).
-- nfl-oracle/scripts/restore_corpus.py -- Validate a verified NFL corpus backup snapshot.
+- nfl-oracle/scripts/restore_corpus.py -- Validate and explicitly restore a verified NFL corpus backup snapshot.
 - nfl-oracle/scripts/seed_storage_state.py -- Materialize scraper/storage_state.json from REALSPORTS_STORAGE_STATE_B64GZ.
 
 ## nfl-oracle/src/nfl_oracle/
@@ -502,7 +502,7 @@ Generated from `git ls-files`. 823 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/src/oracle_core/cache.py -- JSON TTL caching over a technical key-value capability.
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
-- packages/oracle-core/src/oracle_core/dossier.py -- Provider-neutral dossier entry and gap schema for contest analysis.
+- packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
 - packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
 - packages/oracle-core/src/oracle_core/jobs.py -- Generic job registration, lifecycle, role validation, and execution.

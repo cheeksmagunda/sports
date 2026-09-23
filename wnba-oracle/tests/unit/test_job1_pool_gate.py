@@ -72,8 +72,28 @@ def test_valid_capture_replaces_the_whole_slate_atomically() -> None:
     conn = MagicMock()
     conn.execute.return_value.fetchall.return_value = []
     rows = [
-        {"slate_date": "2026-06-08", "player_id": 1},
-        {"slate_date": "2026-06-08", "player_id": 2},
+        {
+            "slate_date": "2026-06-08",
+            "player_id": 1,
+            "real_sports_player_id": "1",
+            "name": "Player 1",
+            "team": "LVA",
+            "opponent": "NYL",
+            "position": "F",
+            "card_boost": 1.0,
+            "features_json": "{}",
+        },
+        {
+            "slate_date": "2026-06-08",
+            "player_id": 2,
+            "real_sports_player_id": "2",
+            "name": "Player 2",
+            "team": "NYL",
+            "opponent": "LVA",
+            "position": "F",
+            "card_boost": 1.0,
+            "features_json": "{}",
+        },
     ]
 
     persisted = job1._replace_enrichment(conn, "2026-06-08", rows)
@@ -88,6 +108,47 @@ def test_valid_capture_replaces_the_whole_slate_atomically() -> None:
     assert [call.args[1] for call in upserts] == rows
 
 
+def test_identity_persist_failure_does_not_block_enrichment_write() -> None:
+    conn = MagicMock()
+    conn.execute.return_value.fetchall.return_value = []
+    nested = MagicMock()
+    conn.begin_nested.return_value.__enter__.return_value = nested
+    rows = [
+        {
+            "slate_date": "2026-06-08",
+            "player_id": 1,
+            "real_sports_player_id": "1",
+            "name": "Player 1",
+            "team": "LVA",
+            "opponent": "NYL",
+            "position": "F",
+            "card_boost": 1.0,
+            "features_json": "{}",
+            "_canonical_identity_mapping": object(),
+        }
+    ]
+
+    with patch.object(
+        job1_persist,
+        "persist_canonical_identity_mappings",
+        side_effect=RuntimeError("identity write failed"),
+    ):
+        persisted = job1._replace_enrichment(conn, "2026-06-08", rows)
+
+    assert persisted == 1
+    assert conn.execute.call_args_list[2].args[1] == {
+        "slate_date": "2026-06-08",
+        "player_id": 1,
+        "real_sports_player_id": "1",
+        "name": "Player 1",
+        "team": "LVA",
+        "opponent": "NYL",
+        "position": "F",
+        "card_boost": 1.0,
+        "features_json": "{}",
+    }
+
+
 def test_post_tip_replacement_keeps_existing_game_identity() -> None:
     conn = MagicMock()
     old_features = {"game_id": "4512", "game_start_utc": "2026-06-08T23:00:00Z"}
@@ -96,7 +157,12 @@ def test_post_tip_replacement_keeps_existing_game_identity() -> None:
         {
             "slate_date": "2026-06-08",
             "player_id": 123,
+            "real_sports_player_id": "123",
+            "name": "A. Wilson",
+            "team": "LVA",
             "opponent": "CHI",
+            "position": "F",
+            "card_boost": 1.5,
             "features_json": json.dumps(
                 {
                     "game_id": "9999",
@@ -132,7 +198,12 @@ def test_pre_tip_replacement_can_update_game_identity() -> None:
         {
             "slate_date": "2026-06-08",
             "player_id": 123,
+            "real_sports_player_id": "123",
+            "name": "A. Wilson",
+            "team": "LVA",
             "opponent": "CHI",
+            "position": "F",
+            "card_boost": 1.5,
             "features_json": json.dumps(
                 {"game_id": "9999", "game_start_utc": "2026-06-11T23:00:00Z"}
             ),
@@ -233,7 +304,13 @@ def test_enrichment_prefers_provider_game_identity_for_opponent() -> None:
         minutes={},
         head_features={123: {"opp_pace": 0.0, "opp_dvp_guard": 0.0}},
         resolver=SimpleNamespace(
-            resolve=lambda real_sports_id, **_kwargs: 123 if real_sports_id == "123" else None
+            resolve_with_outcome=lambda real_sports_id, **_kwargs: SimpleNamespace(
+                wnba_player_id=123 if real_sports_id == "123" else None,
+                status="resolved" if real_sports_id == "123" else "unresolved",
+                provenance="normalized_name_fallback" if real_sports_id == "123" else None,
+                catalog_full_name="A'ja Wilson" if real_sports_id == "123" else None,
+            ),
+            catalog_full_name=lambda _player_id: "A'ja Wilson",
         ),
         team_stats={"LVA": {"pace": 80.0}, "NYL": {"pace": 77.0}, "CHI": {"pace": 99.0}},
         opponent_dvp={"NYL": 2.1, "CHI": 9.9},

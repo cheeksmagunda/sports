@@ -1,9 +1,31 @@
 # Status
 
-Last verified: 2026-09-19T09:46:42Z
+Last verified: 2026-09-20T12:15:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## Read-only results endpoint (issue #34, 2026-09-20)
+
+Added `GET /results/{slate_date}` (`wnba_oracle/api/results.py`) so
+GitHub/ChatGPT/Claude/mobile surfaces without a terminal or a direct
+read-only PostgreSQL session can answer "who were the highest realized-value
+Real Sports players on a given slate" the same way `/lineup/{date}` already
+answers "what did Oracle freeze." Reads only `slate_labels`; `real_score` is
+returned verbatim (never recomputed). Returns `status: "pending"` (200, not
+404) when a slate date has no ingested rows yet, matching the issue's
+explicit "clear machine-readable pending state" requirement. The response
+includes every ingested row plus a deterministic `top_value` view: top 5 by
+`real_score`, deduped by player across Real Sports sections (a player can
+appear in more than one section on the same slate), keeping each player's
+best score and recording every section they appeared in for provenance.
+Ties break by ascending `platform_player_id` for determinism; null
+`real_score` (not yet graded) always ranks last. 15 new unit tests cover
+pending/available status, verbatim `real_score`, cross-section dedup, the
+top-5 cap with deterministic tie-breaking, and null-score ordering; the
+existing OpenAPI contract test (`test_api_app.py`) now also asserts
+`/results/{slate_date}` is present. No frontend changes, no Real Sports auth
+added to the API, no change to `/lineup/{date}` behavior.
 
 ## Live operational snapshot
 
@@ -133,6 +155,96 @@ not exposed by the read-only checks available during this audit.
     path, which has a separate, pre-existing schema mismatch
     (`read_game_identity()`/`index_game_identity()`) not touched by recent
     pushes; see issue #53's final comment for detail.
+
+## 2026-09-20: durable day-close ALERT investigated (issues #2/#243 ledger)
+
+The perpetual `ops-results` (#2) and `ops-guard` (#243) ledger issues (same
+sticky-comment pattern as `nfl-oracle`'s #143/#144 -- intentionally left
+open forever, updated by `wnba-dayclose-verify.yml` on every scheduled run)
+showed `ALERT: Durable day-close: The durable run ended with status failed`
+for the 2026-09-19 slate. Investigated live via `job_runs` in the WNBA
+Postgres instance (queried through `railway ssh --service api`, since
+`railway logs --service cron-dayclose` returns no output for a completed
+cron run -- Railway does not retain post-exit logs for ephemeral cron job
+instances via the CLI, only the durable `job_runs` row does):
+
+- Root cause: the `game_log_refresh` substep (`_refresh_current_game_logs`
+  in `wnba_oracle/scheduler/job_dayclose.py`, calling `refresh_game_logs()`
+  in `wnba_oracle/ingest/minutes_backfill.py`) exhausted its bounded
+  `nba_api`/stats.wnba.com retries and raised `GameLogRefreshError`. This
+  substep is deliberately `required=True` (comment references D102: a
+  silent staleness here previously caused the 2026-08-xx C. Leite
+  head-features gap), so one required-substep failure correctly escalated
+  the whole night's run to `status=failed` even though every other substep
+  (contest discovery, label coverage, retention cleanup, historical
+  backfill, placement catchup) succeeded.
+- This is a legitimate transient upstream failure, not a code bug: `job_runs`
+  history for the surrounding days (2026-09-16 through 2026-09-18) shows
+  `game_log_refresh` succeeding normally. The retry window was thin,
+  though -- only `(2.0, 5.0)` seconds, under 10 seconds of total retry time
+  for a shared-cloud-IP-sensitive external API. Widened to
+  `(3.0, 8.0, 20.0, 45.0)` in `minutes_backfill.py` so a genuinely transient
+  blip has a fair chance to clear before escalating; a truly down upstream
+  still fails and still escalates, unchanged.
+- Also applied the same browser-leak fix `nfl-oracle` got this session:
+  `wnba_oracle/ingest/realsports.py`'s `capture_live_headers()` and
+  `discover_wnba_contest_id()` now use
+  `oracle_core.browser.launch_chromium_session()` instead of manual
+  `browser.close()` calls that only ran on some exit paths. WNBA's own
+  disk usage was not independently confirmed to be under the same pressure
+  NFL's was, but the leak was real and the fix is a narrow, low-risk,
+  mechanical swap (see `nfl-oracle/STATUS.md`'s 2026-09-20 entry for the
+  fuller incident writeup this mirrors).
+- **#2 and #243 intentionally remain open** (same reasoning as NFL's
+  #143/#144): they are the durable ops ledger, not one-off incident reports.
+  This fix reduces how often a transient upstream blip pages as `ALERT`;
+  it does not and should not make the ledger issues disappear.
+- Verification: `make test-app APP=wnba-oracle` (993 passed, 7 deselected),
+  `make lint`, `make typecheck` all pass for `wnba-oracle`.
+
+## 2026-09-20: security dependency bump (issue #41)
+
+- `starlette` 0.52.1 -> 1.6.0 and `pyarrow` 21.0.0 -> 25.0.1, resolving all
+  6 known CVEs (`PYSEC-2026-161/248/249/2280/2281` on starlette,
+  `PYSEC-2026-113` on pyarrow) that `pip-audit` flagged on 2026-08-30 and
+  that had been deliberately deferred (major-version jumps landing inside a
+  pre-freeze window).
+- Compatibility check: installed FastAPI (0.141.1, the top of the app's
+  existing `<0.142` pin) already declares `starlette>=0.46.0` with no upper
+  bound, so no FastAPI bump was needed alongside the starlette major jump.
+- `wnba-oracle/pyproject.toml` constraints widened to
+  `starlette>=1.3.1,<2.0` and `pyarrow>=23.0.1,<26.0`; `uv.lock` regenerated.
+- Verification: `pip-audit` against the resolved dependency set (excluding
+  local workspace packages) reports no known vulnerabilities; full
+  `make test-app APP=wnba-oracle` (993 passed, 7 deselected), API contract
+  tests (`tests/unit/test_api_app.py`, 6 passed) covering `/health`,
+  `/lineup/{date}`, `/slate/{date}`, `/watchdog/today`, `/dossier/{date}`
+  and their security headers, `make lint`, `make typecheck` all pass.
+- New (non-blocking) deprecation warning from the starlette bump: FastAPI's
+  `TestClient` uses `httpx`'s deprecated starlette integration path,
+  suggesting `httpx2`. Not acted on here -- purely a test-harness
+  deprecation notice, no runtime behavior change; worth a follow-up if/when
+  `httpx2` stabilizes.
+
+## 2026-09-20: canonical Real Sports -> stats.wnba.com identity table landed locally (issue #30)
+
+- Repository-local change only so far: Alembic head `20260920_0012` adds
+  `canonical_player_identities`, keyed by Real Sports player id with the
+  resolved stats.wnba.com id, provenance (`provider_nba_id`,
+  `explicit_override`, `normalized_name_fallback`), first/last-seen
+  timestamps, and audit-friendly name/team metadata.
+- Ordinary Job 1 ingestion now attempts a nested-savepoint upsert into this
+  table whenever the existing resolver resolves a player unambiguously. The
+  write is isolated so a canonical-identity persistence failure cannot block
+  the durable `job1_enrichment` promotion or change the frozen-lineup
+  decision path.
+- Historical backfill logic was added and tested only against synthetic
+  fixtures. **No live backfill was run here. Separate operator authorization
+  is still required before any production backfill execution.**
+- Evaluation coverage reporting now prefers the canonical mapping for
+  prediction-to-outcome joins and explicitly reports the fraction of
+  predictions unresolved by the canonical map instead of silently name-matching
+  everything.
 
 Development plans, branch history, check output, decisions, and completed work
 belong in GitHub Issues and Pull Requests, not this file.
