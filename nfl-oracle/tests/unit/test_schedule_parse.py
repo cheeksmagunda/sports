@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from nfl_oracle.calendar.schedule import (
+    ScheduledGame,
     catalog_vs_schedule_density,
+    earliest_upcoming_kickoff,
     games_in_week,
     load_schedules_csv,
     parse_schedules_csv,
+    scheduled_kickoff_at,
     summarize_schedule_density,
     week_for_gameday,
     weeks_for_season,
@@ -32,6 +35,138 @@ def test_parse_schedules_filters_season() -> None:
     assert len(games) == 3
     assert weeks_for_season(games) == [1, 2]
     assert games[0].home_team == "AAA"
+
+
+def test_parse_schedules_reads_gametime_column() -> None:
+    sample = SAMPLE.replace(
+        "season,week,game_id,gameday,home_team,away_team,game_type",
+        "season,week,game_id,gameday,home_team,away_team,game_type,gametime",
+    ).replace(
+        "2024,1,2024_01_AAA_BBB,2024-09-08,AAA,BBB,REG",
+        "2024,1,2024_01_AAA_BBB,2024-09-08,AAA,BBB,REG,13:00",
+    )
+    games = parse_schedules_csv(sample, season=2024)
+    assert games[0].gametime == "13:00"
+    # Rows this fixture didn't add a time to stay unresolved, not "00:00".
+    assert games[1].gametime is None
+
+
+def test_scheduled_kickoff_at_converts_et_to_utc_across_dst() -> None:
+    # 2024-09-08 13:00 ET is EDT (UTC-4): 17:00Z.
+    summer = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="a",
+        gameday=date(2024, 9, 8),
+        home_team="AAA",
+        away_team="BBB",
+        gametime="13:00",
+    )
+    assert scheduled_kickoff_at(summer) == datetime(2024, 9, 8, 17, 0, tzinfo=UTC)
+
+    # 2024-12-08 13:00 ET is EST (UTC-5): 18:00Z.
+    winter = ScheduledGame(
+        season=2024,
+        week=14,
+        game_id="b",
+        gameday=date(2024, 12, 8),
+        home_team="AAA",
+        away_team="BBB",
+        gametime="13:00",
+    )
+    assert scheduled_kickoff_at(winter) == datetime(2024, 12, 8, 18, 0, tzinfo=UTC)
+
+
+def test_scheduled_kickoff_at_returns_none_when_unresolvable() -> None:
+    no_time = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="a",
+        gameday=date(2024, 9, 8),
+        home_team="AAA",
+        away_team="BBB",
+        gametime=None,
+    )
+    no_date = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="a",
+        gameday=None,
+        home_team="AAA",
+        away_team="BBB",
+        gametime="13:00",
+    )
+    malformed = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="a",
+        gameday=date(2024, 9, 8),
+        home_team="AAA",
+        away_team="BBB",
+        gametime="not-a-time",
+    )
+    assert scheduled_kickoff_at(no_time) is None
+    assert scheduled_kickoff_at(no_date) is None
+    assert scheduled_kickoff_at(malformed) is None
+
+
+def test_earliest_upcoming_kickoff_picks_soonest_future_game() -> None:
+    now = datetime(2024, 9, 8, 12, 0, tzinfo=UTC)
+    past = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="past",
+        gameday=date(2024, 9, 1),
+        home_team="AAA",
+        away_team="BBB",
+        gametime="13:00",
+    )
+    soon = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="soon",
+        gameday=date(2024, 9, 8),
+        home_team="CCC",
+        away_team="DDD",
+        gametime="13:00",
+    )
+    later = ScheduledGame(
+        season=2024,
+        week=2,
+        game_id="later",
+        gameday=date(2024, 9, 15),
+        home_team="EEE",
+        away_team="FFF",
+        gametime="13:00",
+    )
+    unresolvable = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="unresolvable",
+        gameday=date(2024, 9, 7),
+        home_team="GGG",
+        away_team="HHH",
+        gametime=None,
+    )
+    found = earliest_upcoming_kickoff([past, unresolvable, later, soon], now=now)
+    assert found is not None
+    gameday, kickoff_at = found
+    assert gameday == date(2024, 9, 8)
+    assert kickoff_at == datetime(2024, 9, 8, 17, 0, tzinfo=UTC)
+
+
+def test_earliest_upcoming_kickoff_none_when_nothing_resolvable() -> None:
+    now = datetime(2024, 9, 8, 12, 0, tzinfo=UTC)
+    unresolvable = ScheduledGame(
+        season=2024,
+        week=1,
+        game_id="unresolvable",
+        gameday=date(2024, 9, 9),
+        home_team="GGG",
+        away_team="HHH",
+        gametime=None,
+    )
+    assert earliest_upcoming_kickoff([unresolvable], now=now) is None
 
 
 def test_parse_skips_malformed_and_nonpositive_weeks() -> None:

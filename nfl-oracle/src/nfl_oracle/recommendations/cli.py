@@ -22,9 +22,11 @@ import httpx
 from oracle_core.artifacts import prune_content_addressed_directory
 from oracle_core.service import DiskUsageHealthContributor
 from oracle_core.storage import PoolOptions, create_postgres_engine
+from oracle_core.timing import window_decision
 from sqlalchemy import create_engine
 
 from nfl_oracle.calendar.schedule import (
+    earliest_upcoming_kickoff,
     ensure_offline_schedules,
     resolve_schedule_csv_path,
     try_load_schedules_csv,
@@ -296,6 +298,34 @@ def _disk_usage_metadata(project: Path) -> dict[str, Any]:
     return {"disk": {"status": check.status, **check.metadata}}
 
 
+def _offline_t40_gate(project: Path, now: datetime) -> tuple[date, bool, dict[str, str]] | None:
+    """Provisional T-40 gate from the offline nflverse schedule, no live calls.
+
+    Returns (gameday, due, details) for the soonest upcoming kickoff the
+    offline schedule can resolve, or None when the schedule is unavailable
+    or has no resolvable kickoff for any upcoming game -- callers must fall
+    back to the live path in that case, never assume "not due".
+    """
+
+    path = resolve_schedule_csv_path(resolve_data_paths(project).root)
+    if path is None:
+        return None
+    games = try_load_schedules_csv(path)
+    found = earliest_upcoming_kickoff(games, now=now)
+    if found is None:
+        return None
+    gameday, kickoff_at = found
+    decision = window_decision(now=now, target_at=kickoff_at, lead=timedelta(minutes=40))
+    # Match the live gate's detail keys (nfl_oracle.recommendations.app reads
+    # "next_freeze" for the frontend's countdown), not WindowDecision's own
+    # generic "next_due"/"target_at" naming.
+    details = {
+        "next_freeze": decision.due_at.isoformat(),
+        "cutoff_at": decision.target_at.isoformat(),
+    }
+    return gameday, decision.due, details
+
+
 async def _worker_once(
     project: Path,
     store: RecommendationStore,
@@ -313,6 +343,27 @@ async def _worker_once(
     ) -> None:
         merged = {**(details or {}), **_disk_usage_metadata(project)}
         store.record_run(day, status=status, detail_code=detail_code, details=merged)
+
+    # Check the poll loop's own gate offline first: every poll (10-60s, all
+    # day, every day) otherwise pays for a live fetch -- and, on a cold
+    # cache, a full browser launch -- just to be told "not due yet" until
+    # T-40. `requested_day` is only set for an operator-triggered manual run,
+    # which should always see the live/authoritative path. A gate this
+    # returns as "not due" is a provisional estimate: it never overrides a
+    # live-fetched cutoff, and any offline-vs-live disagreement always
+    # resolves in favor of doing the live check (see #267).
+    if requested_day is None:
+        gate = _offline_t40_gate(project, datetime.now(UTC))
+        if gate is not None:
+            gameday, gate_due, details = gate
+            if not gate_due:
+                record_run(
+                    gameday,
+                    status="waiting",
+                    detail_code="waiting_for_t40_offline",
+                    details={**details, "source": "offline_schedule"},
+                )
+                return None
 
     headers = await headers_or_capture()
     async with httpx.AsyncClient(timeout=25) as client:

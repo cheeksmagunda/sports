@@ -14,9 +14,10 @@ import shutil
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 # Primary public source (Lee Sharpe / nflverse nfldata). Release-tag CSV may 404;
 # raw games.csv is the stable offline-cacheable feed.
@@ -51,6 +52,44 @@ class ScheduledGame:
     home_team: str
     away_team: str
     game_type: str = "REG"
+    # Upstream nflverse convention: 24-hour wall-clock time in the game's
+    # broadcast timezone (America/New_York), independent of stadium location.
+    # None when upstream hasn't published a kickoff time yet.
+    gametime: str | None = None
+
+
+# nflverse publishes `gametime` as America/New_York wall-clock regardless of
+# stadium location (including international and neutral-site games), so this
+# is the one zone every row is interpreted against.
+_NFLVERSE_GAMETIME_ZONE = ZoneInfo("America/New_York")
+
+
+def scheduled_kickoff_at(game: ScheduledGame) -> datetime | None:
+    """Best-effort offline kickoff instant (aware, UTC) from the schedule cache.
+
+    Returns None when `gameday`/`gametime` aren't both resolvable. Callers
+    must treat that as "unknown", never as "already past" -- this is a
+    provisional estimate for skipping unnecessary live work while waiting,
+    not the authoritative kickoff time, which still comes from the live
+    provider payload once fetched.
+    """
+
+    if game.gameday is None or not game.gametime:
+        return None
+    try:
+        hour_str, minute_str = game.gametime.strip().split(":", 1)
+        hour, minute = int(hour_str), int(minute_str)
+    except ValueError:
+        return None
+    local = datetime(
+        game.gameday.year,
+        game.gameday.month,
+        game.gameday.day,
+        hour,
+        minute,
+        tzinfo=_NFLVERSE_GAMETIME_ZONE,
+    )
+    return local.astimezone(UTC)
 
 
 @dataclass(frozen=True)
@@ -128,6 +167,7 @@ def parse_schedules_csv(text: str, *, season: int | None = None) -> list[Schedul
                 home_team=str(row.get("home_team") or ""),
                 away_team=str(row.get("away_team") or ""),
                 game_type=game_type,
+                gametime=(str(row.get("gametime") or "").strip() or None),
             )
         )
     return out
@@ -199,6 +239,31 @@ def resolve_schedule_csv_path(data_root: Path | None = None) -> Path | None:
                 return candidate
     bootstrap = schedule_bootstrap_dir() / "schedules.csv"
     return bootstrap if bootstrap.is_file() else None
+
+
+def earliest_upcoming_kickoff(
+    games: Iterable[ScheduledGame],
+    *,
+    now: datetime,
+) -> tuple[date, datetime] | None:
+    """Return (gameday, kickoff_at) for the soonest not-yet-started game.
+
+    Offline-only estimate for gating a live poll, not an authoritative
+    kickoff. Games with no resolvable `gametime` are skipped rather than
+    treated as due, so a gap in upstream publication degrades to "unknown"
+    (caller falls back to the live path), never to a missed freeze.
+    """
+
+    best: tuple[date, datetime] | None = None
+    for game in games:
+        if game.gameday is None or game.gameday < now.date():
+            continue
+        kickoff = scheduled_kickoff_at(game)
+        if kickoff is None or kickoff <= now:
+            continue
+        if best is None or kickoff < best[1]:
+            best = (game.gameday, kickoff)
+    return best
 
 
 def weeks_for_season(games: Iterable[ScheduledGame]) -> list[int]:

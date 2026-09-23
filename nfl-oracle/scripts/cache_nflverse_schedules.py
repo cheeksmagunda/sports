@@ -20,7 +20,16 @@ from nfl_oracle.calendar.schedule import (
 from nfl_oracle.common.paths import resolve_project_root
 from nfl_oracle.data.paths import resolve_data_paths
 
-KEEP = ("season", "week", "game_id", "gameday", "home_team", "away_team", "game_type")
+KEEP = (
+    "season",
+    "week",
+    "game_id",
+    "gameday",
+    "home_team",
+    "away_team",
+    "game_type",
+    "gametime",
+)
 
 
 def _download(urls: tuple[str, ...]) -> bytes:

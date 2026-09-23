@@ -1551,3 +1551,61 @@ cause itself, landed the same day:
   `make check-boundaries` all pass. The emergency manual deletion performed
   during triage is now redundant going forward -- the hourly prune keeps the
   same directories bounded automatically.
+
+## T-40 offline gate landed (issue #267, 2026-09-23)
+
+Fixes the gate-ordering bug deferred above. `ScheduledGame` in
+`nfl_oracle/calendar/schedule.py` now carries `gametime` (nflverse's
+America/New_York wall-clock kickoff time-of-day), parsed by
+`scheduled_kickoff_at()` into an aware UTC instant via `zoneinfo`
+(`America/New_York` correctly resolves EDT/EST across the DST boundary).
+`data/schedule/schedules.csv` and `scripts/cache_nflverse_schedules.py` were
+regenerated/updated to carry the new column for all 6,771 cached rows
+(seasons 2002-2026); every 2026 row has a populated `gametime` upstream.
+
+`_worker_once` (`nfl_oracle/recommendations/cli.py`) now runs a new
+`_offline_t40_gate()` check first, before `headers_or_capture()` or any
+other live call, whenever `requested_day` is None (the poll-loop case this
+issue is about; an operator-triggered manual run with an explicit day still
+always takes the live path). It finds the soonest not-yet-started game in
+the offline schedule cache (`earliest_upcoming_kickoff()`) and applies
+`oracle_core.timing.window_decision()` (the T-40 lead) against that
+estimate. When the offline schedule can't resolve a kickoff for any
+upcoming game (missing file, missing `gametime`), the gate returns "unknown"
+and the worker falls through to the existing live path unchanged -- an
+offline miss can only ever cost an extra live call, never delay a real
+freeze. When the offline gate is due, the worker also proceeds into the
+unchanged live path, which still computes its own authoritative cutoff from
+the live-fetched kickoff times exactly as before; the offline estimate only
+ever short-circuits the "not due yet" case.
+
+New "waiting" run records from this path use `detail_code
+waiting_for_t40_offline` (distinct from the live path's `waiting_for_t40`)
+and carry `details.source = "offline_schedule"`, but reuse the same
+`next_freeze`/`cutoff_at` detail keys the live path and the frontend
+(`nfl_oracle.recommendations.app`) already read, so the existing "next
+freeze" UI countdown keeps working during an offline-gated wait.
+
+Found while verifying: `test_worker_recovers_when_failure_audit_database_is_unavailable`
+in `tests/unit/test_worker_retry.py` calls `_run_worker`, which resolves
+`project = _project_root()` (the real repository checkout, not a fixture
+`tmp_path`) and unconditionally prunes `data/artifacts/context` on its first
+loop iteration. On a long-lived local checkout with real worker output
+older than the 7-day retention window, running this test silently deletes
+that real (gitignored, non-authoritative) local data -- it did exactly that
+during this verification pass (one stale 187MB file). Not fixed here to
+keep this change scoped to #267; filed as a new issue (test hermeticity --
+`_run_worker` tests should run against an isolated project root).
+
+- **Verification:** `make test-app APP=nfl-oracle` (419/1 skipped/1
+  deselected, three tests added), `make lint`, `make typecheck`,
+  `make check-boundaries`, root `scripts/generate_file_manifest.py --check`
+  all pass. Not yet landed on `main`: the canonical Codespace
+  (`fluffy-zebra-g4gqq746477q2jg`) currently refuses to start
+  (`HTTP 402: There is a billing issue that is preventing you from starting
+  this codespace`), and per root `AGENTS.md` the Mac checkout has no direct
+  push route, so this is committed locally on `chat/267-offline-t40-gate`
+  pending `scripts/codespace-push` once the Codespace is billable again.
+  Every scheduled Actions run repo-wide has been failing near-instantly
+  (empty job steps, no runner assigned) since 2026-09-20, the same root
+  cause.
