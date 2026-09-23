@@ -314,8 +314,12 @@ def _offline_t40_gate(project: Path, now: datetime) -> tuple[date, bool, dict[st
     # (season is the year the season *started*, so a January/February
     # postseason game is still labeled with the prior year's season number)
     # rather than re-parsing and zoneinfo-converting all ~6800 cached rows
-    # on every 10-60s poll.
-    this_year = now.year
+    # on every 10-60s poll. Use the ET year, matching earliest_upcoming_kickoff's
+    # own ET-based "today" -- not the UTC year, which could disagree with ET
+    # for a few hours around New Year's.
+    from zoneinfo import ZoneInfo
+
+    this_year = now.astimezone(ZoneInfo("America/New_York")).year
     games = try_load_schedules_csv(path, season=this_year) + try_load_schedules_csv(
         path, season=this_year - 1
     )
