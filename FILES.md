@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 846 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 847 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -455,6 +455,7 @@ Generated from `git ls-files`. 846 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_weekclose.py
 - nfl-oracle/tests/unit/test_weekclose_gate.py
 - nfl-oracle/tests/unit/test_worker_context_bootstrap.py -- Worker context cold-start for Week-2 / TNF freezes (no baked-in artifacts).
+- nfl-oracle/tests/unit/test_worker_offline_t40_gate.py -- #267: the poll loop's T-40 gate must not make live calls when not due.
 - nfl-oracle/tests/unit/test_worker_retry.py
 - nfl-oracle/tests/unit/test_worker_terminal_state.py -- A published slate is terminal: freeze once, then stop.
 
