@@ -254,9 +254,17 @@ def earliest_upcoming_kickoff(
     (caller falls back to the live path), never to a missed freeze.
     """
 
+    # `gameday` is nflverse's America/New_York calendar date (see
+    # scheduled_kickoff_at); comparing it against a UTC `now.date()` is
+    # wrong once UTC has rolled to the next day while it's still evening in
+    # ET (e.g. a 20:20 ET Sunday-night kickoff is 00:20 UTC Monday). That
+    # mismatch would drop the current slate's game from consideration right
+    # as its T-40 window opens -- the one failure mode this gate must never
+    # cause. Compare `gameday` against ET's own "today" instead.
+    today_et = now.astimezone(_NFLVERSE_GAMETIME_ZONE).date()
     best: tuple[date, datetime] | None = None
     for game in games:
-        if game.gameday is None or game.gameday < now.date():
+        if game.gameday is None or game.gameday < today_et:
             continue
         kickoff = scheduled_kickoff_at(game)
         if kickoff is None or kickoff <= now:

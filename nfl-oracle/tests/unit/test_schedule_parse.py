@@ -155,6 +155,41 @@ def test_earliest_upcoming_kickoff_picks_soonest_future_game() -> None:
     assert kickoff_at == datetime(2024, 9, 8, 17, 0, tzinfo=UTC)
 
 
+def test_earliest_upcoming_kickoff_correct_when_utc_date_has_rolled_but_et_has_not() -> None:
+    # Sunday Night Football: gameday is Sunday (ET), 20:15 ET kickoff is
+    # 00:15Z Monday (EDT, UTC-4). "now" below is Monday 00:05Z -- already
+    # the next UTC calendar day, but still Sunday 20:05 ET, ten minutes
+    # before kickoff and well past the T-40 due point (23:35Z Sunday).
+    # Comparing `gameday` against a UTC `now.date()` would wrongly treat
+    # this game as already past and skip it, leaving only the far-future
+    # Thursday game below as "best" -- reporting "not due" while the real
+    # next kickoff is ten minutes away. This must pick the Sunday game.
+    now = datetime(2026, 9, 21, 0, 5, tzinfo=UTC)
+    sunday_night = ScheduledGame(
+        season=2026,
+        week=3,
+        game_id="snf",
+        gameday=date(2026, 9, 20),
+        home_team="AAA",
+        away_team="BBB",
+        gametime="20:15",
+    )
+    next_thursday = ScheduledGame(
+        season=2026,
+        week=4,
+        game_id="tnf",
+        gameday=date(2026, 9, 24),
+        home_team="CCC",
+        away_team="DDD",
+        gametime="20:15",
+    )
+    found = earliest_upcoming_kickoff([next_thursday, sunday_night], now=now)
+    assert found is not None
+    gameday, kickoff_at = found
+    assert gameday == date(2026, 9, 20)
+    assert kickoff_at == datetime(2026, 9, 21, 0, 15, tzinfo=UTC)
+
+
 def test_earliest_upcoming_kickoff_none_when_nothing_resolvable() -> None:
     now = datetime(2024, 9, 8, 12, 0, tzinfo=UTC)
     unresolvable = ScheduledGame(

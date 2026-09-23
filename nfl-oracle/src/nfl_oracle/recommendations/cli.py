@@ -310,7 +310,15 @@ def _offline_t40_gate(project: Path, now: datetime) -> tuple[date, bool, dict[st
     path = resolve_schedule_csv_path(resolve_data_paths(project).root)
     if path is None:
         return None
-    games = try_load_schedules_csv(path)
+    # Bound the per-poll scan to the current and prior nflverse season
+    # (season is the year the season *started*, so a January/February
+    # postseason game is still labeled with the prior year's season number)
+    # rather than re-parsing and zoneinfo-converting all ~6800 cached rows
+    # on every 10-60s poll.
+    this_year = now.year
+    games = try_load_schedules_csv(path, season=this_year) + try_load_schedules_csv(
+        path, season=this_year - 1
+    )
     found = earliest_upcoming_kickoff(games, now=now)
     if found is None:
         return None
