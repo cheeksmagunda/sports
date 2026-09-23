@@ -125,6 +125,7 @@ class PlayerPredictions:
     p_active_by_pid: dict[int, float] = field(default_factory=dict)
     n_min_games_by_pid: dict[int, int] = field(default_factory=dict)
     head_quantiles_by_pid: dict[int, dict[str, float]] = field(default_factory=dict)
+    prediction_audit_by_pid: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -284,6 +285,17 @@ def _apply_head_tier(
         "p50": p50 * starter_multiplier,
         "p90": p90 * starter_multiplier,
     }
+    predictions.prediction_audit_by_pid[player.pid] = {
+        "tier": "trained_heads",
+        "base_components": {
+            "head_quantiles_raw": {"p10": float(p10), "p50": float(p50), "p90": float(p90)},
+            "starter_multiplier": float(starter_multiplier),
+            "prop_multiplier": float(prop_multiplier),
+            "floor_multiplier": float(floor_multiplier),
+            "game_script_multiplier": float(player.game_script_multiplier),
+        },
+        "pre_availability_score": float(predictions.pred_real_scores[player.pid]),
+    }
 
     is_starter = bool(int(player.features.get("is_starter", 0) or 0))
     minutes = player.minutes
@@ -351,6 +363,16 @@ def _apply_minutes_tier(
         cfg=context.minutes_cfg,
     )
     predictions.rows_by_pid[player.pid] = player.row
+    predictions.prediction_audit_by_pid[player.pid] = {
+        "tier": "minutes_blend",
+        "base_components": {
+            "recent_minutes": float(minutes["recent_minutes"]),
+            "per_min_rate": float(minutes["per_min_rate"]),
+            "n_min_games": int(minutes["n_min_games"]),
+            "game_script_multiplier": float(player.game_script_multiplier),
+        },
+        "pre_availability_score": float(predictions.pred_real_scores[player.pid]),
+    }
     work.mix.minutes += 1
     return True
 
@@ -371,12 +393,15 @@ def _apply_fallback_tier(
     if eb_prediction is not None:
         base = eb_prediction
         work.mix.eb += 1
+        tier = "eb_baseline"
     elif context.player_history is not None and player.pid in context.player_history:
         base = max(0.5, context.player_history[player.pid])
         work.mix.history += 1
+        tier = "player_history"
     else:
         base = _heuristic_real_score(player.boost)
         work.mix.heuristic += 1
+        tier = "heuristic_fallback"
     predictions = work.predictions
     predictions.pred_real_scores[player.pid] = max(
         0.5, base * player.game_script_multiplier * starter_multiplier
@@ -387,6 +412,15 @@ def _apply_fallback_tier(
         cfg=context.minutes_cfg,
     )
     predictions.rows_by_pid[player.pid] = player.row
+    predictions.prediction_audit_by_pid[player.pid] = {
+        "tier": tier,
+        "base_components": {
+            "base_score": float(base),
+            "starter_multiplier": float(starter_multiplier),
+            "game_script_multiplier": float(player.game_script_multiplier),
+        },
+        "pre_availability_score": float(predictions.pred_real_scores[player.pid]),
+    }
 
 
 def _apply_game_script_redistribution(
@@ -407,6 +441,12 @@ def _apply_game_script_redistribution(
             0.5,
             work.predictions.pred_real_scores[pid] + delta_minutes * rate,
         )
+        work.predictions.prediction_audit_by_pid.setdefault(pid, {})[
+            "game_script_minutes_redistribution"
+        ] = {
+            "delta_minutes": float(delta_minutes),
+            "per_min_rate": float(rate),
+        }
     log.info(
         "game_script_minutes",
         n_bumped=n_bumped,
@@ -429,6 +469,9 @@ def _apply_availability_hurdle(
                 0.5,
                 work.predictions.pred_real_scores[pid] * probability,
             )
+            audit = work.predictions.prediction_audit_by_pid.setdefault(pid, {})
+            audit["availability_probability"] = float(probability)
+            audit["post_availability_score"] = work.predictions.pred_real_scores[pid]
             if probability < 0.5:
                 n_low += 1
     log.info(

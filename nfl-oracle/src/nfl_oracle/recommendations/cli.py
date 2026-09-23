@@ -24,7 +24,11 @@ from oracle_core.service import DiskUsageHealthContributor
 from oracle_core.storage import PoolOptions, create_postgres_engine
 from sqlalchemy import create_engine
 
-from nfl_oracle.calendar.schedule import ensure_offline_schedules
+from nfl_oracle.calendar.schedule import (
+    ensure_offline_schedules,
+    resolve_schedule_csv_path,
+    try_load_schedules_csv,
+)
 from nfl_oracle.common.logging import get_logger
 from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
@@ -51,6 +55,11 @@ def _project_root() -> Path:
         return Path(configured).expanduser().resolve()
     local = Path("nfl-oracle")
     return (local if local.is_dir() else Path.cwd()).resolve()
+
+
+def _schedule_games(project: Path) -> tuple[Any, ...]:
+    path = resolve_schedule_csv_path(resolve_data_paths(project).root)
+    return tuple(try_load_schedules_csv(path))
 
 
 def _engine() -> Any:
@@ -292,6 +301,8 @@ async def _worker_once(
     store: RecommendationStore,
     pipeline: RecommendationPipeline,
     requested_day: date | None,
+    *,
+    allow_refreeze: bool = False,
 ) -> dict[str, Any] | None:
     headers_from = os.environ.get("NFL_REALSPORTS_STORAGE_STATE", "")
     del headers_from  # The provider module reads its own scoped environment path.
@@ -311,7 +322,7 @@ async def _worker_once(
             ObservationStore(project / "data" / "raw" / "observations"),
         )
         day = requested_day or await reader.next_day()
-        if _already_frozen(store, day):
+        if not allow_refreeze and _already_frozen(store, day):
             record_run(day, status="ready", detail_code="already_frozen_for_slate")
             return None
         content = await reader.day_content(day)
@@ -424,7 +435,13 @@ def _prune_data_retention(project: Path) -> None:
             )
 
 
-async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None) -> int:
+async def _run_worker(
+    once: bool,
+    poll_seconds: int,
+    requested_day: date | None,
+    *,
+    allow_refreeze: bool = False,
+) -> int:
     project = _project_root()
     ensure_offline_schedules(resolve_data_paths(project).root)
     engine = _engine()
@@ -433,7 +450,7 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
     if not policy.recommendations_enabled:
         print(json.dumps({"status": "blocked", "detail_code": "recommendations_disabled"}))
         return 1
-    pipeline = RecommendationPipeline(store, policy=policy)
+    pipeline = RecommendationPipeline(store, policy=policy, schedule_games=_schedule_games(project))
     next_prune_at = 0.0
     while True:
         now_monotonic = time.monotonic()
@@ -441,7 +458,13 @@ async def _run_worker(once: bool, poll_seconds: int, requested_day: date | None)
             _prune_data_retention(project)
             next_prune_at = now_monotonic + _PRUNE_INTERVAL_SECONDS
         try:
-            record = await _worker_once(project, store, pipeline, requested_day)
+            record = await _worker_once(
+                project,
+                store,
+                pipeline,
+                requested_day,
+                allow_refreeze=allow_refreeze,
+            )
             if record is not None:
                 print(
                     json.dumps({"status": "ready", "slate_date": record["slate_date"], "picks": 5})
@@ -490,7 +513,11 @@ def _train(*, force: bool = False) -> int:
     else:
         snapshot = ContextSnapshot.load(context_path)
     store = RecommendationStore(_engine(), writable=True)
-    pipeline = RecommendationPipeline(store, policy=_policy())
+    pipeline = RecommendationPipeline(
+        store,
+        policy=_policy(),
+        schedule_games=_schedule_games(project),
+    )
     if force:
         # `_ensure_model` returns the active model untouched whenever it is
         # still inside `model_max_age_days`, which is the right behaviour for
@@ -696,6 +723,14 @@ def _parser() -> argparse.ArgumentParser:
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--poll-seconds", type=int, default=30)
     worker.add_argument("--day")
+    worker.add_argument(
+        "--allow-refreeze",
+        action="store_true",
+        help=(
+            "bypass the terminal-state guard and attempt a deliberate re-freeze "
+            "even when this slate already has a published lineup"
+        ),
+    )
     return parser
 
 
@@ -724,7 +759,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "backup-restore":
         return _backup_restore(args.file, migrate_first=args.migrate)
     requested_day = _day(args.day or os.environ.get("NFL_SLATE_DATE"))
-    return asyncio.run(_run_worker(args.once, args.poll_seconds, requested_day))
+    return asyncio.run(
+        _run_worker(
+            args.once,
+            args.poll_seconds,
+            requested_day,
+            allow_refreeze=args.allow_refreeze,
+        )
+    )
 
 
 if __name__ == "__main__":

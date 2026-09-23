@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from wnba_oracle.db.engine import get_api_engine as get_engine
-from wnba_oracle.dossier import build_dossier
+from wnba_oracle.lineage.audit import build_post_slate_dossier
 
 router = APIRouter(prefix="/dossier", tags=["dossier"])
 
@@ -31,7 +31,7 @@ def get_dossier(slate_date: str) -> dict[str, Any]:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    dossier = build_dossier(slate_date, engine=eng)
+    dossier = build_post_slate_dossier(slate_date, engine=eng)
     if dossier is None:
         raise HTTPException(status_code=404, detail="no dossier for slate")
-    return dossier.to_dict()
+    return dossier

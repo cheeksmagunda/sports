@@ -34,6 +34,7 @@ from typing import Any
 
 import httpx
 from oracle_core.artifacts import atomic_write_json
+from oracle_core.browser import launch_chromium_session
 from oracle_core.http import (
     HttpxAsyncTransport,
     RetryPolicy,
@@ -202,18 +203,23 @@ async def capture_live_headers(
         )
     _ensure_private_file(STORAGE_STATE_PATH)
 
-    from playwright.async_api import async_playwright
-
     captured: dict[str, str] = {}
     done = asyncio.Event()
 
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=not headed)
-        ctx = await browser.new_context(
-            viewport={"width": 599, "height": 868},
-            storage_state=str(STORAGE_STATE_PATH),
-            user_agent=DEFAULT_USER_AGENT,
-        )
+    # Mechanical swap onto oracle_core.browser.launch_chromium_session, which
+    # guarantees browser/context cleanup in every case (NFL's same bug,
+    # narrowly ported here per the 2026-09-20 disk-fill incident's PR3 scope --
+    # see nfl-oracle/STATUS.md). The old code only reached browser.close() on
+    # the timeout-exception and the final success paths; any other exception
+    # (new_context/new_page failure, a storage_state write error) leaked the
+    # browser process.
+    async with launch_chromium_session(
+        headless=not headed,
+        viewport={"width": 599, "height": 868},
+        storage_state=STORAGE_STATE_PATH,
+        user_agent=DEFAULT_USER_AGENT,
+    ) as session:
+        ctx = session.context
 
         async def on_request(req):
             if "realapp.com" not in req.url:
@@ -226,7 +232,7 @@ async def capture_live_headers(
                 done.set()
 
         ctx.on("request", on_request)
-        page = await ctx.new_page()
+        page = session.page
         try:
             await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=25000)
         except Exception:
@@ -235,7 +241,6 @@ async def capture_live_headers(
         try:
             await asyncio.wait_for(done.wait(), timeout=20.0)
         except TimeoutError as exc:
-            await browser.close()
             raise StorageStateStale(
                 "Did not capture authenticated headers within 20s. "
                 "storage_state.json's session has expired. Recover the session "
@@ -246,7 +251,6 @@ async def capture_live_headers(
         # Persist any sliding-window cookies updated during this reload.
         refreshed_state = await ctx.storage_state()
         _write_private_json(STORAGE_STATE_PATH, refreshed_state)
-        await browser.close()
 
     captured["real-device-uuid"] = device_uuid
     captured.setdefault("real-device-id", device_uuid)
@@ -757,16 +761,15 @@ async def discover_wnba_contest_id(headers: RequestHeaders | None = None) -> int
     """
     if not STORAGE_STATE_PATH.exists():
         raise StorageStateMissing(f"{STORAGE_STATE_PATH} not found; cannot discover contest id.")
-    from playwright.async_api import async_playwright
 
     seen_ids: list[int] = []
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
-        ctx = await browser.new_context(
-            viewport={"width": 599, "height": 868},
-            storage_state=str(STORAGE_STATE_PATH),
-            user_agent=DEFAULT_USER_AGENT,
-        )
+    async with launch_chromium_session(
+        headless=True,
+        viewport={"width": 599, "height": 868},
+        storage_state=STORAGE_STATE_PATH,
+        user_agent=DEFAULT_USER_AGENT,
+    ) as session:
+        page = session.page
 
         def on_req(req):
             url = req.url
@@ -779,7 +782,6 @@ async def discover_wnba_contest_id(headers: RequestHeaders | None = None) -> int
             except (ValueError, IndexError):
                 pass
 
-        page = await ctx.new_page()
         page.on("request", on_req)
         try:
             await page.goto("https://realsports.io/", wait_until="domcontentloaded", timeout=15000)
@@ -793,7 +795,6 @@ async def discover_wnba_contest_id(headers: RequestHeaders | None = None) -> int
                 pass
         except Exception:
             pass
-        await browser.close()
 
     if not seen_ids:
         return None

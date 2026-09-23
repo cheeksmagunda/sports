@@ -53,6 +53,17 @@ make test-wnba
   the stored lineup payload, serving knobs, stack decision, model provenance,
   and source-assurance metadata.
 - `GET /lineup/{date}/history`: return all freeze sequences for a slate.
+- `GET /results/{date}`: return realized Real Sports slate results from
+  `slate_labels` -- every ingested row plus a deterministic top-5
+  `top_value` view (deduped by player across sections, `real_score` returned
+  verbatim, never recomputed). Answers "who were the highest realized-value
+  players yesterday" without a terminal or direct PostgreSQL session. Returns
+  `status: "pending"` (200, not 404) when a slate date has no ingested rows
+  yet, so remote agents can distinguish "not ingested" from a bad request.
+  Together with `/lineup/{date}` this covers the operator-safe post-slate
+  read path for GitHub/ChatGPT/Claude/mobile surfaces: "what did Oracle
+  freeze" and "what actually happened," both from canonical PostgreSQL state
+  (issue #34).
 - `GET /slate/{date}`: return first-tip, lock, freeze, and pause metadata.
 - `GET /dossier/{date}`: return the finalized-slate dossier -- our committed
   entry, the best observed field entry, and the theoretical ceiling, each with
@@ -211,9 +222,13 @@ enforced read-only; migrations and scheduled writers use separate job paths.
 | --- | --- | --- | --- |
 | Gamelog corpus | player-game | `wnba_game_logs` | Minutes and per-minute model heads |
 | Label corpus | player-slate | `slate_labels` | Baseline, blend, and calibration |
+| Canonical cross-corpus identity | player | `canonical_player_identities` | Identity-aware evaluation, benchmark coverage reporting, and authorized backfill prep |
 
 These frames use different identifiers and are not interchangeable. WNBA-owned
-identity resolution belongs in this application.
+identity resolution belongs in this application. The canonical identity table
+persists the existing Real Sports -> stats.wnba.com resolver output from Job 1
+without changing any model-facing decision path. Historical backfill is a
+separate, explicit operation and is not part of ordinary ingestion.
 
 ## Layout
 

@@ -10,9 +10,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import Field, field_validator, model_validator
 
+from nfl_oracle.calendar import ScheduledGame, games_in_week, season_week_for_date
 from nfl_oracle.recommendations.context import ContextBundle
 from nfl_oracle.recommendations.model import (
     ContextAdjustment,
@@ -78,6 +80,69 @@ def freeze_due(slate: Slate) -> datetime:
     return slate.cutoff() - timedelta(minutes=40)
 
 
+EASTERN = ZoneInfo("America/New_York")
+
+
+def model_weekly_retrain_boundary(
+    decision_at: datetime,
+    schedule_games: tuple[ScheduledGame, ...],
+) -> datetime | None:
+    """Tuesday 00:00 ET boundary for the slate week containing ``decision_at``.
+
+    NFL retrains are weekly, not "every N days". A model built for a given NFL
+    week should stay valid through that week's Thursday/Sunday slates, while a
+    missed weekly retrain must refuse even if the old model is only a few days
+    old. The offline schedule already owns week identity, so use it to map a
+    decision date to its slate week, then require the model to be at least as
+    new as that week's Tuesday retrain boundary.
+
+    Returns ``None`` when the week cannot be resolved from the offline schedule;
+    callers then fall back to the fixed-day backstop rather than refusing a
+    slate just because schedule context is unavailable.
+    """
+    if not schedule_games:
+        return None
+    season_week = season_week_for_date(
+        decision_at.astimezone(EASTERN).date(),
+        schedule=schedule_games,
+    )
+    if season_week.week is None:
+        return None
+    week_games = games_in_week(schedule_games, season=season_week.season, week=season_week.week)
+    gamedays = [game.gameday for game in week_games if game.gameday is not None]
+    if not gamedays:
+        return None
+    first_gameday = min(gamedays)
+    boundary_day = first_gameday - timedelta(days=(first_gameday.weekday() - 1) % 7)
+    return datetime(
+        boundary_day.year,
+        boundary_day.month,
+        boundary_day.day,
+        tzinfo=EASTERN,
+    ).astimezone(UTC)
+
+
+def model_staleness_reason(
+    *,
+    trained_at: datetime,
+    decision_at: datetime,
+    max_age_days: int,
+    schedule_games: tuple[ScheduledGame, ...] = (),
+) -> str | None:
+    """Why a model is unusable for ``decision_at``, else ``None``."""
+    now = utc(decision_at)
+    trained = utc(trained_at)
+    age = now - trained
+    if age.total_seconds() < 0:
+        return "future_model"
+    boundary = model_weekly_retrain_boundary(now, schedule_games)
+    if boundary is not None and trained < boundary:
+        return "model_stale_for_nfl_week"
+    if age > timedelta(days=max_age_days):
+        return "model_stale_or_future"
+    return None
+
+
 def validate_lock_refresh(original: Contest, current: Contest) -> None:
     """A refresh cannot silently substitute another contest or scoring law."""
     stable = ("contest_id", "contest_type", "sport", "day", "end_day", "slot_multipliers")
@@ -94,10 +159,12 @@ class RecommendationPipeline:
         *,
         policy: PipelinePolicy | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        schedule_games: tuple[ScheduledGame, ...] = (),
     ) -> None:
         self.store = store
         self.policy = policy or PipelinePolicy()
         self.clock = clock
+        self.schedule_games = schedule_games
 
     def active_model(self) -> tuple[str, ModelBundle]:
         activation = self.store.latest_artifact("active_model")
@@ -107,9 +174,14 @@ class RecommendationPipeline:
         if artifact is None or artifact["kind"] != "model_bundle":
             raise ValueError("active_model_artifact_missing")
         bundle = ModelBundle.model_validate(artifact["payload"])
-        age = utc(self.clock()) - bundle.model.trained_at
-        if age.total_seconds() < 0 or age > timedelta(days=self.policy.model_max_age_days):
-            raise ValueError("model_stale_or_future")
+        reason = model_staleness_reason(
+            trained_at=bundle.model.trained_at,
+            decision_at=self.clock(),
+            max_age_days=self.policy.model_max_age_days,
+            schedule_games=self.schedule_games,
+        )
+        if reason is not None:
+            raise ValueError(reason)
         return artifact["sha256"], bundle
 
     def activate_model(self, bundle: ModelBundle) -> str:

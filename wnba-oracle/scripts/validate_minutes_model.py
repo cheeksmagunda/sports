@@ -52,44 +52,51 @@ def alias(t):
 
 
 def load_joined() -> pd.DataFrame:
-    from wnba_oracle.db.reads import read_game_logs, read_label_corpus
+    from wnba_oracle.db.reads import (
+        read_canonical_player_identities,
+        read_game_logs,
+        read_label_corpus,
+    )
+    from wnba_oracle.eval.identity_coverage import join_predictions_to_outcomes
 
     corpus = read_label_corpus().to_pandas()
     logs = read_game_logs().to_pandas()
-    corpus = corpus.copy()
-    corpus["initial"] = corpus["display_name"].map(lambda s: _norm(s)[:1])
-    corpus["last"] = corpus["display_name"].map(
-        lambda s: _norm(str(s).split()[-1]) if str(s).strip() else ""
+    canonical = read_canonical_player_identities().to_pandas()
+    j, report = join_predictions_to_outcomes(
+        predictions=corpus,
+        outcomes=logs,
+        canonical_mapping=canonical,
+        prediction_date_col="slate_date",
+        prediction_player_id_col="player_id",
+        prediction_name_col="display_name",
+        prediction_team_col="team",
+        outcome_date_col="game_date",
+        outcome_player_id_col="player_id",
+        outcome_name_col="player_name",
+        outcome_team_col="team",
+        fallback_team_alias=alias,
     )
-    corpus["talias"] = corpus["team"].map(alias)
-    logs = logs.copy().rename(columns={"first_initial": "initial", "last_name": "last"})
-    logs["talias"] = logs["team"].map(alias)
-    logs = logs[logs["min"] > 0]
-
-    # Primary join on (date, initial, last); disambiguate dup names by team.
-    j = corpus.merge(
-        logs[["game_date", "initial", "last", "talias", "min", "pts"]],
-        left_on=["slate_date", "initial", "last"],
-        right_on=["game_date", "initial", "last"],
-        how="left",
-        suffixes=("", "_log"),
-    )
-    # When a (date, initial, last) matched multiple log rows (dup names),
-    # prefer the team-matching one.
-    j["team_match"] = (j["talias"] == j["talias_log"]).fillna(False)
-    j = j.sort_values("team_match", ascending=False).drop_duplicates(
-        subset=["slate_date", "player_id"], keep="first"
-    )
+    j.attrs["identity_report"] = report
     return j
 
 
 def main() -> None:
     j = load_joined()
+    report = j.attrs["identity_report"]
     n_total = len(j)
     matched = j[j["min"].notna()].copy()
     print(
         f"corpus rows: {n_total}  |  matched to minutes: {len(matched)} "
         f"({len(matched) / n_total:.0%})"
+    )
+    print(
+        "identity coverage: "
+        f"canonical={report.canonical_outcome_matches}/{report.total_predictions} "
+        f"({report.canonical_outcome_match_rate:.0%})  "
+        f"name_fallback={report.fallback_outcome_matches}/{report.total_predictions} "
+        f"({report.fallback_outcome_match_rate:.0%})  "
+        f"canonical_unresolved={report.unresolved_canonical_predictions}/{report.total_predictions} "
+        f"({report.unresolved_canonical_rate:.0%})"
     )
     cov26 = j[j["slate_date"] >= "2026-01-01"]
     cov26m = cov26[cov26["min"].notna()]

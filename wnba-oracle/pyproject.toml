@@ -11,7 +11,7 @@ dependencies = [
     "oracle-core==0.1.0",
     # Web + serving
     "fastapi>=0.120,<0.142",
-    "starlette>=0.49.1,<1.0",
+    "starlette>=1.3.1,<2.0",
     "uvicorn[standard]>=0.32,<0.53",
     "pydantic>=2.9,<3.0",
     "pydantic-settings>=2.6,<3.0",
@@ -30,7 +30,7 @@ dependencies = [
     # Dataframes
     "polars>=1.16,<2.0",
     "pandas>=2.2,<3.0",
-    "pyarrow>=18.0,<22.0",
+    "pyarrow>=23.0.1,<26.0",
     "pandera[polars]>=0.21,<1.0",
     # ML stack. Exact pins on libs whose version influences pickled bytes
     # so the determinism gate (train twice, assert pickle SHA equality)
@@ -55,7 +55,7 @@ dev = [
     "pytest-asyncio>=0.24,<2.0",
     "respx>=0.21,<1.0",
     "ruff>=0.7,<1.0",
-    "mypy>=1.13,<2.0",
+    "mypy>=2.3.1,<3.0",
     "pip-audit>=2.10,<3.0",
     "types-pyyaml>=6.0,<7.0",
     "bandit>=1.7,<2.0",
