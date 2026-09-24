@@ -38,7 +38,7 @@ jobs:
       has_slate: ${{ steps.gate.outputs.has_slate }}
       configured: ${{ steps.config.outputs.configured }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -125,7 +125,7 @@ jobs:
 
       - name: Transfer verified snapshot without database credentials
         if: (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch') && steps.config.outputs.configured == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: nfl-corpus-backup-${{ github.run_id }}
           path: |
@@ -145,7 +145,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -153,7 +153,7 @@ jobs:
       - uses: ./.github/actions/setup-python-uv
 
       - name: Download verified snapshot
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: nfl-corpus-backup-${{ github.run_id }}
           path: ${{ runner.temp }}/corpus-backup
