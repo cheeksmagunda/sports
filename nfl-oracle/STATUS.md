@@ -1,5 +1,45 @@
 # Status
 
+## GitHub Actions billing outage and T-40 readiness recovery (2026-09-20 to 2026-09-24, issue #281)
+
+`cheeksmagunda`'s GitHub account was billing-locked from around 2026-09-20
+19:05 UTC, blocking every Actions run and Codespace start repo-wide (`"The
+job was not started because your account is locked due to a billing issue."`
+on every job, and Codespace start returned `HTTP 402`). The operator restored
+billing on 2026-09-24. Verified live on recovery, ~17:30-17:50 UTC:
+
+- Re-ran CI on all 8 then-open PRs (#270-#277, #282) and today's failed
+  scheduled runs (`watchdog-monitor`, `backend-contracts`, `nfl-dayclose`,
+  `wnba-dayclose-verify`, `corpus-backup`, `nfl-corpus-backup`); billing is
+  confirmed fixed (jobs now run past the lock stage and mostly pass).
+- `nfl-oracle-worker` and `nfl-oracle` (API) on Railway (`nfl-oracle-staging`
+  project) both redeployed to `c20b54c` (the #268 fix, current `main`)
+  successfully at 2026-09-20T20:36:50Z, correctly skipping the broken
+  `7644fb3` deploy attempt. `NFL_RECOMMENDATIONS_ENABLED=1`. Worker volume
+  disk usage stable at ~1.65GB over the trailing 6 hours (no repeat of the
+  2026-09-17 full-volume incident).
+- Tonight's slate (2026-09-24, NFL week 3): GB at ATL, from the offline
+  schedule fixture; no kickoff time-of-day in that fixture (see #267).
+- New finding, not yet root-caused: `watchdog-monitor`'s rerun today failed
+  its own probe step (`wnba-oracle/scripts/watchdog_monitor.py` exited 1 in
+  under 2s, no report produced) rather than reporting a real WNBA alert.
+  Manual checks of the WNBA production API (`/health`, `/watchdog/today`,
+  `/slate/2026-09-24`) all came back clean at the same time, so this looks
+  like a probe-script failure, not a live production incident. Not
+  investigated further this session; worth a fresh look before trusting the
+  next scheduled `watchdog-monitor` run.
+- Landed #278 (worker-retry test hermeticity, test-only) via
+  `scripts/codespace-push` for uncommitted changes and a git-bundle transfer
+  through the Codespace for the unpushed commit; see PR #282.
+- Held #267 and PR #270 (`chat/156-land-resiliency-batch`, 76 files,
+  including WNBA identity/freeze-audit migrations) unmerged deliberately:
+  both are large multi-domain batches, not reviewed same-day as a live T-40
+  window. `issue-link-enforcement` also now fails for real (not the billing
+  lock) on the dependabot PRs (#271-277), since their branches/bodies don't
+  reference an issue number by construction; that gate has no dependabot
+  carve-out as configured, so those PRs cannot merge through the normal
+  autonomous flow without a process change.
+
 ## main red: restored oracle-core.browser/timing dropped from the disk-fill fix (issue #268, 2026-09-20)
 
 `main` was red from 19:05 UTC to (this fix) on 2026-09-20: `backend-ci`
