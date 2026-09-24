@@ -58,7 +58,7 @@ runs:
       run: |
         gh label create "$GUARD_LABEL" --color B60205 --description "Production operations incident" 2>/dev/null || true
         number=$(gh issue list --label "$GUARD_LABEL" --state open --json number,title \
-          --jq --arg t "$GUARD_TITLE" '.[] | select(.title == $t) | .number' | head -n 1)
+          | jq -r --arg t "$GUARD_TITLE" '.[] | select(.title == $t) | .number' | head -n 1)
         if [ "$SHOULD_ESCALATE" = "true" ]; then
           if [ -n "$number" ]; then
             gh issue comment "$number" --body-file "$REPORT_PATH"
