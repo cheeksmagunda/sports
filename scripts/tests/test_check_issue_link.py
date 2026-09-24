@@ -31,3 +31,33 @@ def test_accepts_cross_repository_issue_reference() -> None:
         )
         == []
     )
+
+
+def test_dependabot_branch_needs_only_pr_body_link() -> None:
+    assert (
+        validation_errors(
+            "dependabot/uv/pandas-3.0.6",
+            "Bumps pandas.\n\nRefs #285",
+            ["chore(deps): bump pandas from 2.3.3 to 3.0.6"],
+        )
+        == []
+    )
+
+
+def test_dependabot_branch_still_requires_pr_body_link() -> None:
+    errors = validation_errors(
+        "dependabot/uv/pandas-3.0.6",
+        "Bumps pandas.",
+        ["chore(deps): bump pandas from 2.3.3 to 3.0.6"],
+    )
+
+    assert errors == ["PR body must include Closes/Fixes/Resolves/Refs #123"]
+
+
+def test_bot_exemption_is_prefix_only() -> None:
+    errors = validation_errors("chat/dependabot/x", "Refs #285", ["No link"])
+
+    assert errors == [
+        "branch name must include an issue number, for example chat/123-cleanup",
+        "commit 1 is missing an issue reference",
+    ]

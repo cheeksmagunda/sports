@@ -17,18 +17,22 @@ PR_REF = re.compile(
     re.IGNORECASE,
 )
 BRANCH_ISSUE = re.compile(r"(?:^|[/-])[1-9]\d*(?:[/-]|$)")
+# Dependabot owns its branch names and commit messages, so only the PR body
+# (which a maintainer can edit) can carry the issue link for those PRs (#285).
+BOT_BRANCH_PREFIXES = ("dependabot/",)
 
 
 def validation_errors(branch: str, body: str, commit_messages: list[str]) -> list[str]:
     errors: list[str] = []
-    if not BRANCH_ISSUE.search(branch):
+    bot_branch = branch.startswith(BOT_BRANCH_PREFIXES)
+    if not bot_branch and not BRANCH_ISSUE.search(branch):
         errors.append(
             "branch name must include an issue number, for example chat/123-cleanup"
         )
     if not PR_REF.search(body):
         errors.append("PR body must include Closes/Fixes/Resolves/Refs #123")
     for index, message in enumerate(commit_messages, start=1):
-        if not ISSUE_REF.search(message):
+        if not bot_branch and not ISSUE_REF.search(message):
             errors.append(f"commit {index} is missing an issue reference")
     return errors
 
