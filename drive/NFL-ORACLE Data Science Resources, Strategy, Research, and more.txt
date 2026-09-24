@@ -2871,3 +2871,76 @@ Append-only. No secret values. No contest entry.
   Codespace or SOPS `scripts/with-secrets` operator secrets.
 - Still deferred: Corpus C, verified provider slot/boost/lock contract, contest
   submission, Railway deploy source.
+
+
+Dated note: 2026-09-23 06:11 UTC
+### Issue #91 evidence append: pre-lock contest contract, checked against the Corpus C archive
+
+Append-only. No secret values. No contest entry. Written from a document-only
+pass (no code, credentials, or production changes); source is
+`nfl-oracle/STATUS.md`'s "Corpus C landed: the historical contest archive
+(2026-09-09 UTC)" section, personally re-read line by line before writing
+this, not taken on trust from a summary. This is archive evidence (92 NFL
+contests saved, 91 finalized, spanning 2024-11-24 to 2026-02-08, plus one
+live pregame contest 2141), not a fresh authorized pre-lock live observation
+as #91 originally asked for -- flagged explicitly per checkbox below.
+
+Per #91's acceptance checklist:
+
+- **Contest identity, board/regime, eligible pool, player IDs, five-card
+  legality, slot vector**: RESOLVED, from archive. `/entries` returns the
+  top-20 human lineups per finalized contest with per-card slot, boost, Real
+  value, score, and finalized value rank; a 45-row `draftStats` block gives
+  per-player boosts and draft counts. Caveat: `/entries` caps at 20 rows with
+  no working pagination parameter (page/offset/limit/cursor all return the
+  same 20), so every field statistic here is conditioned on the visible top
+  twenty; the median entry is never observed.
+- **Lock / per-game edit behavior vs. our operational freeze cutoff**:
+  PARTIALLY RESOLVED. The T-40 freeze mechanism is well characterized
+  operationally (see #156, #267 STATUS entries), but a provider-side "lock"
+  timestamp/event distinct from our own freeze cutoff has not been isolated
+  from a live pre-lock observation in what I reviewed.
+- **multiplierBonus visible/fixed pre-lock, real vs. placeholder,
+  account-scoped vs. resource-spend**: RESOLVED for the regime shape, from
+  archive. Boosts are provider-assigned from the player's pre-game Real
+  ranking, never entrant-chosen. They are all-zero for the entirety of NFL
+  week 1 (contests 839, 843, 849, 851, all-zero boost tables; live pregame
+  contest 2141 on 2026-09-09 also read all-zero) and switch on at week 2
+  Thursday (contest 857, full 0.1-3.0 spread). An all-zero table is
+  shape-identical to a real one; an optimizer fed zeros silently degenerates
+  to "take the five highest projected values." Not resolved: whether an
+  individual entrant can influence which resource is spent versus a purely
+  provider-determined value; the archive shows the *values*, not the
+  *mechanism*.
+- **Negative-value scoring branch**: STILL OPEN, per #91's own instruction
+  not to treat non-negative observations as proof. `score = value *
+  (slot_multiplier + card_boost)` reconciles on every card of every saved
+  entry across all 91 finalized contests with no exception -- but every one
+  of those cards is non-negative. The non-negative branch is verified; the
+  negative branch has never been observed, live or archived, and remains an
+  assumption (a 2026-09-06 offline scaffold note describes it only as
+  "refused," i.e. not exercised).
+- **Ranking, tie, payout semantics**: RESOLVED, from archive. Leaderboard
+  prizes are 100/80/60/40/20 Rax for ranks 1-5, 10 Rax for 6-10 (negligible
+  against 20,000+ entrant fields); the material payouts are optional Rax
+  side pools (top 50% pays 1.7x, top 20% pays 3.5x, top 10% pays 7x on a 100
+  Rax wager), tiebreak by earliest entry. The operator's chosen objective
+  (maximize expected Total Value) is explicitly not the same objective as
+  maximizing P(top 10%); both are exposed in the archive analysis, neither
+  is claimed as a validated edge.
+
+### Go/no-go
+
+**NO-GO for contest entry**, unchanged from the standing `provider_contract_verified=false`
+default already in code. Most of the contract is now empirically well
+established via the Corpus C archive (above), which is more than this
+document previously reflected -- a 2026-09-20 issue comment on #91 declined
+to act, citing the need for a live pre-lock observation, without citing this
+archive. That comment's caution about *live-observation specifics* (lock
+timing, account-scoped boost mechanics) still stands and is why this is
+PARTIALLY RESOLVED, not fully resolved. The blocking gap is narrower than
+"the whole contract is unknown": it is specifically the negative-value
+scoring branch, plus the lock-mechanism/account-scoping detail above. Both
+need an authorized live pre-lock observation to close, not further archive
+mining -- the archive has already been read as far as it can honestly go for
+this question.
