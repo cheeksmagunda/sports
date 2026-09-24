@@ -2,15 +2,15 @@
   "contest_entry": false,
   "dry_run": false,
   "feature_ridge_vs_best_baseline": {
-    "best_baseline": "position_mean",
-    "best_baseline_mae": 0.6288461538461539,
-    "delta_mae": 0.12109930030746197,
+    "best_baseline": "position_median",
+    "best_baseline_mae": 0.7831882313162958,
+    "delta_mae": 0.015491989503720105,
     "feature_ridge_better": false,
-    "feature_ridge_mae": 0.7499454541536159,
+    "feature_ridge_mae": 0.7986802208200159,
     "feature_ridge_present": true,
     "note": "Negative delta_mae means feature_ridge has lower pooled MAE than the best classical baseline (lower is better)."
   },
-  "fixture_mode": true,
+  "fixture_mode": false,
   "methods": [
     "global_mean",
     "position_mean",
@@ -19,7 +19,7 @@
     "feature_ridge"
   ],
   "mode": "walk_forward_eval",
-  "n_labels": 21,
+  "n_labels": 47206,
   "notes": [
     "Walk-forward by season on Corpus G anchors only (shadow / observation).",
     "No contest submission or live entry code paths are exercised.",
@@ -33,45 +33,43 @@
   "observation_only": true,
   "ranking_by_mae": [
     {
-      "bias": 0.014743589743589691,
-      "kind": "position_mean",
-      "mae": 0.6288461538461539,
-      "n": 13,
-      "rmse": 0.7146998951804457
-    },
-    {
-      "bias": -0.019230769230769214,
+      "bias": -0.34087642150074554,
       "kind": "position_median",
-      "mae": 0.6884615384615385,
-      "n": 13,
-      "rmse": 0.754601270157344
+      "mae": 0.7831882313162958,
+      "n": 23955,
+      "rmse": 1.2466297934450297
     },
     {
-      "bias": 0.1608974358974358,
-      "kind": "player_mean",
-      "mae": 0.7365384615384615,
-      "n": 13,
-      "rmse": 0.8755370757084882
-    },
-    {
-      "bias": 0.03145814387170003,
+      "bias": 0.07396990172916075,
       "kind": "feature_ridge",
-      "mae": 0.7499454541536159,
-      "n": 13,
-      "rmse": 0.8673492719820228
+      "mae": 0.7986802208200159,
+      "n": 23955,
+      "rmse": 1.1294022833808124
     },
     {
-      "bias": 0.12532051282051296,
+      "bias": 0.07401767166248407,
+      "kind": "player_mean",
+      "mae": 0.798682220237072,
+      "n": 23955,
+      "rmse": 1.129409657097235
+    },
+    {
+      "bias": 0.04279009742729382,
+      "kind": "position_mean",
+      "mae": 0.8578077674691583,
+      "n": 23955,
+      "rmse": 1.1944466763129442
+    },
+    {
+      "bias": 0.04504794151066388,
       "kind": "global_mean",
-      "mae": 1.3451923076923078,
-      "n": 13,
-      "rmse": 1.5356296385366288
+      "mae": 0.9347482543128031,
+      "n": 23955,
+      "rmse": 1.2711164363080933
     }
   ],
-  "root": "tests/fixtures/value_labels",
+  "root": "data/raw/corpus_g",
   "seasons": [
-    2022,
-    2023,
     2024,
     2025
   ],
@@ -86,292 +84,97 @@
     "contest_entry": false,
     "folds": [
       {
-        "global_prior": 3.2,
+        "global_prior": 1.017877129529467,
         "kind": "global_mean",
         "metrics": {
-          "actual_mean": 2.5,
-          "bias": 0.7000000000000002,
-          "mae": 1.6,
-          "n": 4,
-          "pred_mean": 3.2,
-          "rmse": 1.6926310879810758
+          "actual_mean": 0.9728291880188521,
+          "bias": 0.04504794151066388,
+          "mae": 0.9347482543128031,
+          "n": 23955,
+          "pred_mean": 1.0178771295289442,
+          "rmse": 1.2711164363080933
         },
-        "n_positions": 5,
-        "n_train": 8,
-        "test_season": 2023,
+        "n_positions": 11,
+        "n_train": 23251,
+        "test_season": 2025,
         "train_seasons": [
-          2022
+          2024
         ]
       },
       {
-        "global_prior": 3.2,
+        "global_prior": 1.017877129529467,
         "kind": "position_mean",
         "metrics": {
-          "actual_mean": 2.5,
-          "bias": 0.675,
-          "mae": 0.8,
-          "n": 4,
-          "pred_mean": 3.175,
-          "rmse": 0.868187767709267
+          "actual_mean": 0.9728291880188521,
+          "bias": 0.04279009742729382,
+          "mae": 0.8578077674691583,
+          "n": 23955,
+          "pred_mean": 1.015619285446279,
+          "rmse": 1.1944466763129442
         },
-        "n_positions": 5,
-        "n_train": 8,
-        "test_season": 2023,
+        "n_positions": 11,
+        "n_train": 23251,
+        "test_season": 2025,
         "train_seasons": [
-          2022
+          2024
         ]
       },
       {
-        "global_prior": 3.2,
+        "global_prior": 1.017877129529467,
         "kind": "position_median",
         "metrics": {
-          "actual_mean": 2.5,
-          "bias": 0.675,
-          "mae": 0.8,
-          "n": 4,
-          "pred_mean": 3.175,
-          "rmse": 0.868187767709267
+          "actual_mean": 0.9728291880188521,
+          "bias": -0.34087642150074554,
+          "mae": 0.7831882313162958,
+          "n": 23955,
+          "pred_mean": 0.6319527665180636,
+          "rmse": 1.2466297934450297
         },
-        "n_positions": 5,
-        "n_train": 8,
-        "test_season": 2023,
+        "n_positions": 11,
+        "n_train": 23251,
+        "test_season": 2025,
         "train_seasons": [
-          2022
+          2024
         ]
       },
       {
-        "global_prior": 3.2,
+        "global_prior": 1.017877129529467,
         "kind": "player_mean",
         "metrics": {
-          "actual_mean": 2.5,
-          "bias": 1.15,
-          "mae": 1.15,
-          "n": 4,
-          "pred_mean": 3.65,
-          "rmse": 1.2589678312014172
+          "actual_mean": 0.9728291880188521,
+          "bias": 0.07401767166248407,
+          "mae": 0.798682220237072,
+          "n": 23955,
+          "pred_mean": 1.0468468596813456,
+          "rmse": 1.129409657097235
         },
-        "n_positions": 5,
-        "n_train": 8,
-        "test_season": 2023,
+        "n_positions": 11,
+        "n_train": 23251,
+        "test_season": 2025,
         "train_seasons": [
-          2022
+          2024
         ]
       },
       {
-        "global_prior": 3.2,
+        "global_prior": 1.017877129529467,
         "kind": "feature_ridge",
         "metrics": {
-          "actual_mean": 2.5,
-          "bias": 1.034988295760772,
-          "mae": 1.034988295760772,
-          "n": 4,
-          "pred_mean": 3.5349882957607717,
-          "rmse": 1.1544556469774117
+          "actual_mean": 0.9728291880188521,
+          "bias": 0.07396990172916075,
+          "mae": 0.7986802208200159,
+          "n": 23955,
+          "pred_mean": 1.0467990897479769,
+          "rmse": 1.1294022833808124
         },
-        "n_positions": 5,
-        "n_train": 8,
-        "test_season": 2023,
-        "train_seasons": [
-          2022
-        ]
-      },
-      {
-        "global_prior": 2.966666666666667,
-        "kind": "global_mean",
-        "metrics": {
-          "actual_mean": 2.75,
-          "bias": 0.21666666666666679,
-          "mae": 1.25,
-          "n": 4,
-          "pred_mean": 2.966666666666667,
-          "rmse": 1.494805821651911
-        },
-        "n_positions": 5,
-        "n_train": 12,
-        "test_season": 2024,
-        "train_seasons": [
-          2022,
-          2023
-        ]
-      },
-      {
-        "global_prior": 2.966666666666667,
-        "kind": "position_mean",
-        "metrics": {
-          "actual_mean": 2.75,
-          "bias": 0.16666666666666652,
-          "mae": 0.44999999999999996,
-          "n": 4,
-          "pred_mean": 2.9166666666666665,
-          "rmse": 0.5201495511442411
-        },
-        "n_positions": 5,
-        "n_train": 12,
-        "test_season": 2024,
-        "train_seasons": [
-          2022,
-          2023
-        ]
-      },
-      {
-        "global_prior": 2.966666666666667,
-        "kind": "position_median",
-        "metrics": {
-          "actual_mean": 2.75,
-          "bias": 0.09999999999999998,
-          "mae": 0.6,
-          "n": 4,
-          "pred_mean": 2.85,
-          "rmse": 0.6244997998398398
-        },
-        "n_positions": 5,
-        "n_train": 12,
-        "test_season": 2024,
-        "train_seasons": [
-          2022,
-          2023
-        ]
-      },
-      {
-        "global_prior": 2.966666666666667,
-        "kind": "player_mean",
-        "metrics": {
-          "actual_mean": 2.75,
-          "bias": 0.16666666666666652,
-          "mae": 0.44999999999999996,
-          "n": 4,
-          "pred_mean": 2.9166666666666665,
-          "rmse": 0.5201495511442411
-        },
-        "n_positions": 5,
-        "n_train": 12,
-        "test_season": 2024,
-        "train_seasons": [
-          2022,
-          2023
-        ]
-      },
-      {
-        "global_prior": 2.966666666666667,
-        "kind": "feature_ridge",
-        "metrics": {
-          "actual_mean": 2.75,
-          "bias": 0.016909511765839325,
-          "mae": 0.4526755902948938,
-          "n": 4,
-          "pred_mean": 2.7669095117658395,
-          "rmse": 0.4991065007731289
-        },
-        "n_positions": 5,
-        "n_train": 12,
-        "test_season": 2024,
-        "train_seasons": [
-          2022,
-          2023
-        ]
-      },
-      {
-        "global_prior": 2.9125,
-        "kind": "global_mean",
-        "metrics": {
-          "actual_mean": 3.3200000000000003,
-          "bias": -0.40750000000000003,
-          "mae": 1.2175,
-          "n": 5,
-          "pred_mean": 2.9125,
-          "rmse": 1.4323603771397755
-        },
-        "n_positions": 5,
-        "n_train": 16,
+        "n_positions": 11,
+        "n_train": 23251,
         "test_season": 2025,
         "train_seasons": [
-          2022,
-          2023,
-          2024
-        ]
-      },
-      {
-        "global_prior": 2.9125,
-        "kind": "position_mean",
-        "metrics": {
-          "actual_mean": 3.3200000000000003,
-          "bias": -0.635,
-          "mae": 0.635,
-          "n": 5,
-          "pred_mean": 2.6849999999999996,
-          "rmse": 0.7131795005466717
-        },
-        "n_positions": 5,
-        "n_train": 16,
-        "test_season": 2025,
-        "train_seasons": [
-          2022,
-          2023,
-          2024
-        ]
-      },
-      {
-        "global_prior": 2.9125,
-        "kind": "position_median",
-        "metrics": {
-          "actual_mean": 3.3200000000000003,
-          "bias": -0.6699999999999999,
-          "mae": 0.6699999999999999,
-          "n": 5,
-          "pred_mean": 2.65,
-          "rmse": 0.7519973404208288
-        },
-        "n_positions": 5,
-        "n_train": 16,
-        "test_season": 2025,
-        "train_seasons": [
-          2022,
-          2023,
-          2024
-        ]
-      },
-      {
-        "global_prior": 2.9125,
-        "kind": "player_mean",
-        "metrics": {
-          "actual_mean": 3.3200000000000003,
-          "bias": -0.635,
-          "mae": 0.635,
-          "n": 5,
-          "pred_mean": 2.6849999999999996,
-          "rmse": 0.7131795005466717
-        },
-        "n_positions": 5,
-        "n_train": 16,
-        "test_season": 2025,
-        "train_seasons": [
-          2022,
-          2023,
-          2024
-        ]
-      },
-      {
-        "global_prior": 2.9125,
-        "kind": "feature_ridge",
-        "metrics": {
-          "actual_mean": 3.3200000000000003,
-          "bias": -0.7597270719548689,
-          "mae": 0.7597270719548689,
-          "n": 5,
-          "pred_mean": 2.5602729280451313,
-          "rmse": 0.8309429962509529
-        },
-        "n_positions": 5,
-        "n_train": 16,
-        "test_season": 2025,
-        "train_seasons": [
-          2022,
-          2023,
           2024
         ]
       }
     ],
-    "n_labels": 21,
+    "n_labels": 47206,
     "notes": [
       "Walk-forward by season on Corpus G anchors only (shadow / observation).",
       "No contest submission or live entry code paths are exercised.",
@@ -382,49 +185,47 @@
     "observation_only": true,
     "pooled": {
       "feature_ridge": {
-        "actual_mean": 2.892307692307692,
-        "bias": 0.03145814387170003,
-        "mae": 0.7499454541536159,
-        "n": 13,
-        "pred_mean": 2.923765836179393,
-        "rmse": 0.8673492719820228
+        "actual_mean": 0.9728291880188521,
+        "bias": 0.07396990172916075,
+        "mae": 0.7986802208200159,
+        "n": 23955,
+        "pred_mean": 1.0467990897479769,
+        "rmse": 1.1294022833808124
       },
       "global_mean": {
-        "actual_mean": 2.892307692307692,
-        "bias": 0.12532051282051296,
-        "mae": 1.3451923076923078,
-        "n": 13,
-        "pred_mean": 3.017628205128206,
-        "rmse": 1.5356296385366288
+        "actual_mean": 0.9728291880188521,
+        "bias": 0.04504794151066388,
+        "mae": 0.9347482543128031,
+        "n": 23955,
+        "pred_mean": 1.0178771295289442,
+        "rmse": 1.2711164363080933
       },
       "player_mean": {
-        "actual_mean": 2.892307692307692,
-        "bias": 0.1608974358974358,
-        "mae": 0.7365384615384615,
-        "n": 13,
-        "pred_mean": 3.053205128205128,
-        "rmse": 0.8755370757084882
+        "actual_mean": 0.9728291880188521,
+        "bias": 0.07401767166248407,
+        "mae": 0.798682220237072,
+        "n": 23955,
+        "pred_mean": 1.0468468596813456,
+        "rmse": 1.129409657097235
       },
       "position_mean": {
-        "actual_mean": 2.892307692307692,
-        "bias": 0.014743589743589691,
-        "mae": 0.6288461538461539,
-        "n": 13,
-        "pred_mean": 2.907051282051282,
-        "rmse": 0.7146998951804457
+        "actual_mean": 0.9728291880188521,
+        "bias": 0.04279009742729382,
+        "mae": 0.8578077674691583,
+        "n": 23955,
+        "pred_mean": 1.015619285446279,
+        "rmse": 1.1944466763129442
       },
       "position_median": {
-        "actual_mean": 2.892307692307692,
-        "bias": -0.019230769230769214,
-        "mae": 0.6884615384615385,
-        "n": 13,
-        "pred_mean": 2.8730769230769226,
-        "rmse": 0.754601270157344
+        "actual_mean": 0.9728291880188521,
+        "bias": -0.34087642150074554,
+        "mae": 0.7831882313162958,
+        "n": 23955,
+        "pred_mean": 0.6319527665180636,
+        "rmse": 1.2466297934450297
       }
     },
     "seasons": [
-      2022,
-      2023,
       2024,
       2025
     ]

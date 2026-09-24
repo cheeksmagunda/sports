@@ -14,8 +14,15 @@ def test_worker_recovers_when_failure_audit_database_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     poll_error: Exception,
+    tmp_path,
 ) -> None:
     monkeypatch.setenv("NFL_RECOMMENDATIONS_ENABLED", "1")
+    # _run_worker's retention-prune sweep runs against whatever _project_root()
+    # resolves to. Left unmocked, that's the real repository checkout, not
+    # this test's sandbox -- on a long-lived local checkout it silently
+    # deletes real, aged (but not disposable-right-now) local data as a side
+    # effect of running this test. See #278.
+    monkeypatch.setattr(cli, "_project_root", lambda: tmp_path)
     store = Mock()
     store.record_run.side_effect = RuntimeError("password=must-not-appear")
     monkeypatch.setattr(cli, "_engine", Mock())
@@ -41,8 +48,10 @@ def test_worker_recovers_when_failure_audit_database_is_unavailable(
 
 def test_worker_once_still_fails_when_poll_and_failure_audit_fail(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
 ) -> None:
     monkeypatch.setenv("NFL_RECOMMENDATIONS_ENABLED", "1")
+    monkeypatch.setattr(cli, "_project_root", lambda: tmp_path)  # see #278
     store = Mock()
     store.record_run.side_effect = RuntimeError("database unavailable")
     monkeypatch.setattr(cli, "_engine", Mock())

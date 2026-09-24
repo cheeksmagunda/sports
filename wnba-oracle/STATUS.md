@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-20T12:15:00Z
+Last verified: 2026-09-24T18:15:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -27,7 +27,56 @@ existing OpenAPI contract test (`test_api_app.py`) now also asserts
 `/results/{slate_date}` is present. No frontend changes, no Real Sports auth
 added to the API, no change to `/lineup/{date}` behavior.
 
-## Live operational snapshot
+## Stopped using GitHub issues as permanent ledgers/incident trackers (2026-09-24, issue #283, PR #284)
+
+`wnba-dayclose-verify.yml` and `watchdog-monitor.yml` previously used issues
+as permanent application state: #2 (WNBA results ledger) was appended to
+forever with no close path, and #243 (WNBA Oracle watchdog alert) had no
+code path to close itself even after a healthy run; the two workflows also
+silently shared one issue by label only (`ops-guard`, no title check), so a
+day-close report could land in what was meant to be the watchdog's own
+alert issue and vice versa.
+
+Fixed via the shared `dayclose-ledger` composite action (NFL already used
+it; WNBA's inlined copy of the same logic was replaced with it for parity):
+results digests now post to the job's step summary, not an issue; the guard
+issue is matched on label and exact title together; it now closes itself
+with a resolution comment on the next healthy run.
+`watchdog-monitor.yml` also separates a probe *execution* failure from a
+real *production* alert into two distinct, independently closeable
+trackers, and captures the probe's stdout/stderr into its fallback report
+instead of failing silently, in case it crashes again.
+
+#2 was closed directly (nothing writes to it going forward). #243 will
+close itself the next time `watchdog-monitor` runs clean under the new
+logic; it does not need a manual close.
+
+## 2026-09-24 update: billing outage recovery, T-40 readiness (issue #281)
+
+GitHub billing-locked the account from 2026-09-20 to 2026-09-24, blocking
+every Actions run and Codespace start; see `nfl-oracle/STATUS.md` for the
+portfolio-wide incident detail (it is one GitHub account, not a WNBA-only
+issue). Operator restored billing 2026-09-24. Re-checked live this session:
+
+- All 9 `production` Railway services report a status; 8 `SUCCESS`, one
+  known `FAILED` (`backfill-enrichment`, unchanged, see below). `api`,
+  `cron-dayclose`, `cron-job1`, `cron-job1-late`, `cron-job2`, and `frontend`
+  are all on the 2026-09-20T20:36:50Z deploy (`c20b54c`, the #268 fix); this
+  superseded the 2026-09-19T08:xx deploys referenced below. `main` has since
+  moved to `d44df18` (nfl-oracle-only artifact/doc change); not reverified
+  whether that triggered a new WNBA redeploy.
+- `/health`, `/watchdog/today`, and `/slate/2026-09-24` on the public API all
+  responded clean: no watchdog events today, tonight's slate has
+  `first_tip_utc=2026-09-24T23:00:00Z`, `freeze_target_utc=2026-09-24T22:20:00Z`,
+  `picks_paused=false`.
+- New, not yet root-caused: the `watchdog-monitor` GitHub Actions workflow's
+  own probe script (`wnba-oracle/scripts/watchdog_monitor.py`) crashed (exit
+  1, under 2s, no report) on today's rerun, which is why it still fails CI
+  and why #243 stays open. That is a probe-script failure, not a live alert;
+  the manual checks above are clean. Worth a fresh look before trusting the
+  next scheduled run.
+
+## Live operational snapshot (as of 2026-09-19T09:46:42Z; superseded in part above)
 
 - Deployment state: 8 of 9 Railway services in the `production` environment
   report `SUCCESS` on their active deployment: `api`, `cron-job1`,
@@ -44,7 +93,8 @@ added to the API, no change to `/lineup/{date}` behavior.
   is unverified. This service has no cron, source auto-deploy, or restart
   loop, so no live traffic is affected, but a manual dispatch right now would
   fail at build until this is fixed; do not redeploy it without addressing
-  the interpreter resolution first. The public API at
+  the interpreter resolution first. Still `FAILED`, unchanged, as of
+  2026-09-24 (see update above). The public API at
   `https://api-production-7033.up.railway.app` responded to `/health` with
   `{"status":"ok","version":"0.1.0"}`.
 - Active source commit: `1634ec1891ce29d9958ebdc927f459948ceda631` (#253) remains

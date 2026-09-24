@@ -2,28 +2,28 @@
 
 Observation only — no contest entry. Dry-run/submit gates unchanged.
 
-- **root:** `tests/fixtures/value_labels`
-- **fixture_mode:** `True`
-- **labels:** 21
-- **seasons:** [2022, 2023, 2024, 2025]
+- **root:** `data/raw/corpus_g`
+- **fixture_mode:** `False`
+- **labels:** 47206
+- **seasons:** [2024, 2025]
 - **methods:** ['global_mean', 'position_mean', 'position_median', 'player_mean', 'feature_ridge']
 
 ## Pooled ranking (lower MAE better)
 
 | rank | method | n | mae | rmse | bias |
 | ---: | --- | ---: | ---: | ---: | ---: |
-| 1 | `position_mean` | 13 | 0.628846 | 0.714700 | 0.014744 |
-| 2 | `position_median` | 13 | 0.688462 | 0.754601 | -0.019231 |
-| 3 | `player_mean` | 13 | 0.736538 | 0.875537 | 0.160897 |
-| 4 | `feature_ridge` | 13 | 0.749945 | 0.867349 | 0.031458 |
-| 5 | `global_mean` | 13 | 1.345192 | 1.535630 | 0.125321 |
+| 1 | `position_median` | 23955 | 0.783188 | 1.246630 | -0.340876 |
+| 2 | `feature_ridge` | 23955 | 0.798680 | 1.129402 | 0.073970 |
+| 3 | `player_mean` | 23955 | 0.798682 | 1.129410 | 0.074018 |
+| 4 | `position_mean` | 23955 | 0.857808 | 1.194447 | 0.042790 |
+| 5 | `global_mean` | 23955 | 0.934748 | 1.271116 | 0.045048 |
 
 ## feature_ridge vs best baseline
 
-- best_baseline: `position_mean`
-- feature_ridge_mae: `0.7499454541536159`
-- best_baseline_mae: `0.6288461538461539`
-- delta_mae (ridge − best): `0.12109930030746197`
+- best_baseline: `position_median`
+- feature_ridge_mae: `0.7986802208200159`
+- best_baseline_mae: `0.7831882313162958`
+- delta_mae (ridge − best): `0.015491989503720105`
 - feature_ridge_better: `False`
 - note: Negative delta_mae means feature_ridge has lower pooled MAE than the best classical baseline (lower is better).
 

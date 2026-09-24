@@ -50,7 +50,7 @@ def test_postgres_is_at_head_with_runtime_tables() -> None:
     finally:
         engine.dispose()
 
-    assert revision == "20260920_0012"
+    assert revision == "20260920_0013"
     assert {"canonical_player_identities", "frozen_lineups", "job_runs", "slate_labels"} <= tables
 
 

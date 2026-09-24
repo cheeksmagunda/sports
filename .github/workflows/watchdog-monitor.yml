@@ -9,7 +9,6 @@ permissions:
   contents: read
 
 env:
-  ALERT_LABEL: ops-guard
   WATCHDOG_TITLE: WNBA Oracle watchdog alert
   WNBA_API_BASE: https://api-production-7033.up.railway.app
   WNBA_FRONTEND_URL: https://frontend-production-a739.up.railway.app
@@ -33,46 +32,58 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
+      # Captures stdout+stderr regardless of outcome so a crash (as opposed
+      # to a real alert) is diagnosable from the run instead of vanishing;
+      # `set -o pipefail` is required or `tee`'s own exit code (0) would
+      # mask a real probe failure, the same class of bug already fixed for
+      # nfl-dayclose (see its "Exit code" STATUS.md entry, issue #149).
       - name: Probe production
         id: probe
         continue-on-error: true
-        run: >-
-          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/watchdog_monitor.py
-          --report "$RUNNER_TEMP/watchdog-report.md"
+        run: |
+          set -o pipefail
+          uv run --frozen --package wnba-oracle python wnba-oracle/scripts/watchdog_monitor.py \
+            --report "$RUNNER_TEMP/watchdog-report.md" 2>&1 | tee "$RUNNER_TEMP/watchdog-probe.log"
 
       - name: Ensure an incident-safe report exists
         if: always()
         run: |
           if [ ! -s "$RUNNER_TEMP/watchdog-report.md" ]; then
-            printf '# WNBA Oracle watchdog\n\n- ALERT: the production probe did not produce a report.\n' > "$RUNNER_TEMP/watchdog-report.md"
+            {
+              echo "# WNBA Oracle watchdog"
+              echo
+              echo "- ALERT: the production probe did not produce a report."
+              echo
+              echo '```'
+              tail -n 50 "$RUNNER_TEMP/watchdog-probe.log" 2>/dev/null || echo "(no probe output captured)"
+              echo '```'
+            } > "$RUNNER_TEMP/watchdog-report.md"
           fi
 
-      - name: Open one issue per incident
-        if: always() && (steps.probe.outcome != 'success' || steps.probe.outputs.status == 'alert')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh label create "$ALERT_LABEL" --color B60205 --description "Live watchdog alert" 2>/dev/null || true
-          number=$(gh issue list --label "$ALERT_LABEL" --state open --json number,title \
-            --jq '.[] | select(.title == "WNBA Oracle watchdog alert") | .number' | head -n 1)
-          if [ -z "$number" ]; then
-            gh issue create \
-              --label "$ALERT_LABEL" \
-              --title "$WATCHDOG_TITLE" \
-              --body-file "$RUNNER_TEMP/watchdog-report.md"
-          fi
+      # Tracked separately from a real production alert below: a probe crash
+      # is a monitor-health problem, not evidence WNBA production is down,
+      # and must not block resolving (or fabricate) a real alert either way.
+      #
+      # Deliberately keyed on `steps.probe.outputs.status` being empty, not
+      # on `steps.probe.outcome`: the script's own exit code is 1 for BOTH a
+      # crash and a legitimate `status=alert` finding (same exit code, two
+      # different meanings), so `outcome` alone cannot tell them apart. The
+      # GITHUB_OUTPUT write only happens once `main()` runs to completion, so
+      # an empty `status` output is the actual "did not finish" signal.
+      - uses: ./.github/actions/dayclose-ledger
+        if: always()
+        with:
+          results_title: "WNBA watchdog probe log"
+          guard_label: ops-guard-probe
+          guard_title: "WNBA watchdog probe failure"
+          report_path: ${{ runner.temp }}/watchdog-report.md
+          should_escalate: ${{ steps.probe.outputs.status == '' && 'true' || 'false' }}
 
-      - name: Close incident when no alert remains
-        if: always() && steps.probe.outcome == 'success' && steps.probe.outputs.status != 'alert'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for number in $(gh issue list --label "$ALERT_LABEL" --state open --json number,title \
-            --jq '.[] | select(.title == "WNBA Oracle watchdog alert") | .number'); do
-            gh issue comment "$number" --body "Production has no active watchdog alert as of $(date -u +'%F %T') UTC."
-            gh issue close "$number"
-          done
-
-      - name: Fail an unhealthy monitor after escalation
-        if: always() && (steps.probe.outcome != 'success' || steps.probe.outputs.status == 'alert')
-        run: exit 1
+      - uses: ./.github/actions/dayclose-ledger
+        if: always() && steps.probe.outputs.status != ''
+        with:
+          results_title: "WNBA Oracle watchdog alert log"
+          guard_label: ops-guard
+          guard_title: ${{ env.WATCHDOG_TITLE }}
+          report_path: ${{ runner.temp }}/watchdog-report.md
+          should_escalate: ${{ steps.probe.outputs.status == 'alert' && 'true' || 'false' }}
