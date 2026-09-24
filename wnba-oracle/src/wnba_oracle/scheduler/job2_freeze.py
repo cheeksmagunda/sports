@@ -40,13 +40,14 @@ FROZEN_APPEND = text(
     INSERT INTO frozen_lineups (
         slate_date, model_sha, payout_regime, frozen_at, lineup,
         entry_recommendation, expected_payout, metadata_json,
-        freeze_seq, frozen_via, operation_key
+        freeze_seq, frozen_via, operation_key, audit_snapshot_sha256
     )
     SELECT
         :slate_date, CAST(:model_sha AS varchar), :payout_regime, now(),
         CAST(:lineup AS JSONB),
         :entry_recommendation, :expected_payout, CAST(:metadata_json AS JSONB),
-        COALESCE(MAX(freeze_seq), 0) + 1, :frozen_via, :operation_key
+        COALESCE(MAX(freeze_seq), 0) + 1, :frozen_via, :operation_key,
+        :audit_snapshot_sha256
     FROM frozen_lineups
     WHERE slate_date = :slate_date AND model_sha = CAST(:model_sha AS varchar)
     ON CONFLICT DO NOTHING
@@ -151,6 +152,7 @@ def _freeze(
     serving_knobs: dict | None = None,
     model_provenance: dict | None = None,
     source_assurance: dict | None = None,
+    audit_snapshot_sha256: str | None = None,
     via: str | None = None,
 ) -> bool:
     """Idempotent freeze: first job2 fire writes, subsequent fires no-op.
@@ -270,6 +272,7 @@ def _freeze(
         "metadata_json": json.dumps({"frozen_via": frozen_via}),
         "frozen_via": frozen_via,
         "operation_key": operation_key,
+        "audit_snapshot_sha256": audit_snapshot_sha256,
     }
     # One retry on an empty RETURNING: a concurrent appender took our seq.
     # The Redis locks make this near-impossible, but the constraint is the

@@ -28,6 +28,10 @@ from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import Settings, get_settings
 from wnba_oracle.db.engine import get_engine
 from wnba_oracle.features.provenance import feature_module_sha
+from wnba_oracle.lineage.freeze_snapshot import (
+    build_freeze_audit_snapshot,
+    persist_freeze_audit_snapshot,
+)
 from wnba_oracle.modeling.artifact import eb_predict_one as _eb_predict_one
 from wnba_oracle.modeling.policy import ModelPolicy
 from wnba_oracle.modeling.prediction import (
@@ -418,6 +422,15 @@ def _build_specs(
         is_anchor_by_pid=preds.is_anchor_by_pid,
     )
 
+    for pid, projection in projection_by_pid.items():
+        audit = preds.prediction_audit_by_pid.get(pid)
+        if audit is None:
+            continue
+        projection["_prediction_audit"] = {
+            **audit,
+            "final_optimizer_score": float(adjusted.get(pid, 0.0)),
+        }
+
     return samps, fields, projection_by_pid
 
 
@@ -624,6 +637,7 @@ def _freeze_recommendation(
     frozen_via_override: str | None,
     scoring_provenance: ScoringProvenance,
     source_assurance: dict,
+    audit_snapshot_sha256: str | None = None,
 ) -> tuple[bool, str]:
     policy = scoring_provenance.model_policy
     payout_curve_payload = {
@@ -676,6 +690,7 @@ def _freeze_recommendation(
         serving_knobs=serving_knobs_payload,
         model_provenance=scoring_provenance.to_payload(),
         source_assurance=source_assurance,
+        audit_snapshot_sha256=audit_snapshot_sha256,
         via=frozen_via_override,
     )
     if frozen:
@@ -943,6 +958,33 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         finding_triggers=assurance_finding_triggers,
         assessment_error_type=(schema_assessment_error_type or capture_assessment_error_type),
     )
+    audit_snapshot_sha256: str | None = None
+    try:
+        with get_engine().begin() as conn:
+            audit_snapshot = build_freeze_audit_snapshot(
+                slate_date=sd,
+                model_sha=model_sha,
+                frozen_at=now_utc,
+                enrichment_rows=assurance_rows,
+                projection_by_pid=projection_by_pid,
+                scoring_provenance=scoring_provenance.to_payload(),
+                source_assurance=source_assurance,
+                freeze_context={
+                    "force_refreeze": force_refreeze,
+                    "frozen_via": frozen_via_override
+                    or ("job2_late_refreeze" if force_refreeze else "job2_first_fire"),
+                    "serving_knobs": {
+                        "max_per_team": cfg.max_per_team,
+                        "n_samples": cfg.n_samples,
+                        "n_field_lineups": cfg.n_field_lineups,
+                        "top_n_filter": cfg.top_n_filter,
+                    },
+                },
+                conn=conn,
+            )
+            audit_snapshot_sha256 = persist_freeze_audit_snapshot(conn, audit_snapshot)
+    except Exception as exc:
+        log.warning("freeze_audit_snapshot_failed", error_type=type(exc).__name__)
     frozen, status = _freeze_recommendation(
         slate_date=sd,
         model_sha=model_sha,
@@ -954,6 +996,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         frozen_via_override=frozen_via_override,
         scoring_provenance=scoring_provenance,
         source_assurance=source_assurance,
+        audit_snapshot_sha256=audit_snapshot_sha256,
     )
     if frozen:
         _record_projected_ownership_safe(sd, fields)

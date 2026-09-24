@@ -65,6 +65,21 @@ def test_worker_once_still_fails_when_poll_and_failure_audit_fail(
     sleep.assert_not_awaited()
 
 
+def test_run_worker_passes_explicit_refreeze_override_to_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NFL_RECOMMENDATIONS_ENABLED", "1")
+    monkeypatch.setattr(cli, "_engine", Mock())
+    monkeypatch.setattr(cli, "RecommendationStore", Mock(return_value=Mock()))
+    monkeypatch.setattr(cli, "RecommendationPipeline", Mock())
+    poll = AsyncMock(return_value=None)
+    monkeypatch.setattr(cli, "_worker_once", poll)
+
+    assert asyncio.run(cli._run_worker(True, 30, date(2026, 9, 9), allow_refreeze=True)) == 0
+
+    assert poll.await_args.kwargs["allow_refreeze"] is True
+
+
 def test_prune_data_retention_removes_only_expired_files(tmp_path) -> None:
     obs = tmp_path / "data" / "raw" / "observations" / "ab"
     obs.mkdir(parents=True)

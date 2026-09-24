@@ -253,6 +253,20 @@ write-capable database credentials and provider session environment. Run
 service starts. A worker restart is bounded by the worker command's retry and
 backoff policy, and failure must leave the prior frozen recommendation intact.
 
+Once a slate has frozen successfully, the worker treats that published lineup
+as terminal and does not re-freeze the same day on later poll cycles. A
+deliberate operator re-freeze still exists via
+`nfl-pipeline worker --allow-refreeze`; ordinary scheduled runs should never
+replace an already-published lineup.
+
+Deadline alerting is GitHub Actions-based, not Railway-hosted:
+`.github/workflows/nfl-t40-watchdog.yml` polls every 15 minutes inside NFL
+kickoff windows (UTC crons in the workflow), combines the
+public nflverse schedule's kickoff time with `RecommendationStore` freeze/run
+state, and opens or updates one `nfl-ops-guard` issue if no freeze exists by
+the post-T-40 grace deadline. It needs only `NFL_DATABASE_URL` and
+`NFL_PG_SSL_ROOT_CERT`; no Real Sports session is required.
+
 The repeatable local image check is `make -C nfl-oracle
 docker-production-smoke`. It builds the image and invokes `nfl-pipeline
 --help` without a database or secret. No command in this runbook submits a

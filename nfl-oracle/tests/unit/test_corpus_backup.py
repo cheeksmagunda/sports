@@ -180,6 +180,28 @@ def test_restore_cli_validates_a_real_snapshot(
         sys.argv = argv_backup
     out = capsys.readouterr().out
     assert "verified corpus backup" in out
+    assert "validation only" in out
+
+
+def test_restore_apply_round_trips_real_snapshot_into_empty_store(tmp_path: Path) -> None:
+    backup_corpus = _import("backup_corpus")
+    restore_corpus = _import("restore_corpus")
+    source_engine = _seeded_engine(tmp_path)
+    out_dir = tmp_path / "backup"
+    backup_corpus.export_corpus(source_engine, out_dir)
+
+    restored_db = tmp_path / "restored.db"
+    restored = restore_corpus.apply_snapshot(
+        out_dir,
+        f"sqlite:///{restored_db}",
+        migrate_first=True,
+    )
+
+    assert restored == {"artifacts": 2, "freezes": 1, "runs": 0}
+    restored_store = RecommendationStore(create_engine(f"sqlite:///{restored_db}"))
+    assert restored_store.latest(NOW.date()) is not None
+    assert restored_store.latest_artifact(f"prepared:{NOW.date().isoformat()}") is not None
+    assert restored_store.latest_artifact(f"dayclose_grade:{NOW.date().isoformat()}") is not None
 
 
 def test_restore_cli_reports_failure_for_missing_snapshot(
@@ -207,6 +229,34 @@ def test_backup_main_reports_not_configured_without_database_url(
     assert "not_configured" in err
     assert "NFL_BACKUP_DATABASE_URL" in err
     assert "#172" in err
+
+
+def test_restore_main_requires_restore_database_url_for_apply(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backup_corpus = _import("backup_corpus")
+    restore_corpus = _import("restore_corpus")
+    engine = _seeded_engine(tmp_path)
+    out_dir = tmp_path / "backup"
+    backup_corpus.export_corpus(engine, out_dir)
+    monkeypatch.delenv("NFL_DATABASE_RESTORE_URL", raising=False)
+    monkeypatch.delenv("NFL_DATABASE_URL", raising=False)
+
+    argv_backup = sys.argv
+    sys.argv = [
+        "restore_corpus.py",
+        "--snapshot-dir",
+        str(out_dir),
+        "--apply",
+        "--confirm-restore",
+        "RESTORE_CORPUS",
+    ]
+    try:
+        with pytest.raises(SystemExit):
+            restore_corpus.main()
+    finally:
+        sys.argv = argv_backup
+    assert "NFL_DATABASE_RESTORE_URL or NFL_DATABASE_URL is required" in capsys.readouterr().err
 
 
 def test_validate_snapshot_accepts_csv_fields_over_default_limit(tmp_path: Path) -> None:

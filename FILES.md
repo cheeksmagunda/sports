@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 846 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -57,6 +57,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - .github/workflows/model-research-benchmark.yml -- GitHub Actions workflow
 - .github/workflows/nfl-corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/nfl-dayclose.yml -- GitHub Actions workflow
+- .github/workflows/nfl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
 - .github/workflows/secret-audit.yml -- GitHub Actions workflow
 - .github/workflows/watchdog-monitor.yml -- GitHub Actions workflow
@@ -177,11 +178,12 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/scripts/hydrate_identity_fixtures.py -- Offline: build an IdentityMap summary from Corpus G / value_labels fixtures.
 - nfl-oracle/scripts/nfl_corpus_backup_common.py -- Integrity helpers shared by the NFL corpus backup and restore entry points.
 - nfl-oracle/scripts/nfl_dayclose_gate.py -- Session-free gate: is there an NFL slate inside the day-close sweep window?
+- nfl-oracle/scripts/nfl_t40_watchdog.py -- Scheduled NFL T-40 freeze watchdog.
 - nfl-oracle/scripts/nfl_weekclose_gate.py -- Session-free gate: should the NFL week-close job run now?
 - nfl-oracle/scripts/postgres_store_smoke.py -- Exercise NFL recommendation storage against a temporary local PostgreSQL.
 - nfl-oracle/scripts/production_container_smoke.py -- Build and smoke-test the NFL production image without secrets or a database.
 - nfl-oracle/scripts/research_client_smoke.py -- Offline research FastAPI client smoke (observation only; no contest entry).
-- nfl-oracle/scripts/restore_corpus.py -- Validate a verified NFL corpus backup snapshot.
+- nfl-oracle/scripts/restore_corpus.py -- Validate and explicitly restore a verified NFL corpus backup snapshot.
 - nfl-oracle/scripts/seed_storage_state.py -- Materialize scraper/storage_state.json from REALSPORTS_STORAGE_STATE_B64GZ.
 
 ## nfl-oracle/src/nfl_oracle/
@@ -286,6 +288,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/recommendations/schema.py -- Validated recommendation inputs. Research and submission gates remain separate.
 - nfl-oracle/src/nfl_oracle/recommendations/sources.py -- Public NFL context captures with immutable, honest observation clocks.
 - nfl-oracle/src/nfl_oracle/recommendations/store.py -- NFL-owned append-only decisions on the shared transaction infrastructure.
+- nfl-oracle/src/nfl_oracle/recommendations/watchdog.py -- NFL T-40 freeze watchdog.
 - nfl-oracle/src/nfl_oracle/recommendations/weekclose.py -- Week-close punch-list producer: audit a full NFL week's freezes, grades,
 
 ## nfl-oracle/src/nfl_oracle/replay/
@@ -422,10 +425,12 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_recommendation_grading.py
 - nfl-oracle/tests/unit/test_recommendation_model_optimizer.py
 - nfl-oracle/tests/unit/test_recommendation_model_safety.py
+- nfl-oracle/tests/unit/test_recommendation_model_ttl.py
 - nfl-oracle/tests/unit/test_recommendation_multi_game_slate.py -- The decision path must survive a full Sunday, not just a one-game slate.
 - nfl-oracle/tests/unit/test_recommendation_pool_denominator.py -- Pool completeness must be measured against games that can still be drafted.
 - nfl-oracle/tests/unit/test_recommendation_provider.py
 - nfl-oracle/tests/unit/test_recommendation_store.py
+- nfl-oracle/tests/unit/test_recommendation_watchdog.py
 - nfl-oracle/tests/unit/test_redact.py -- Tests for Corpus G identity redaction.
 - nfl-oracle/tests/unit/test_replay_backtest.py
 - nfl-oracle/tests/unit/test_replay_harness.py -- Unit tests for nfl_oracle.replay.harness.
@@ -503,7 +508,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/src/oracle_core/cache.py -- JSON TTL caching over a technical key-value capability.
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
-- packages/oracle-core/src/oracle_core/dossier.py -- Provider-neutral dossier entry and gap schema for contest analysis.
+- packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
 - packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
 - packages/oracle-core/src/oracle_core/jobs.py -- Generic job registration, lifecycle, role validation, and execution.
@@ -521,6 +526,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/tests/test_browser.py
 - packages/oracle-core/tests/test_config.py
 - packages/oracle-core/tests/test_dayclose.py
+- packages/oracle-core/tests/test_dossier.py
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
 - packages/oracle-core/tests/test_jobs.py
@@ -693,6 +699,8 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/migrations/versions/20260820_0009_freeze_operation_key.py -- Add semantic idempotency keys to append-only freezes.
 - wnba-oracle/migrations/versions/20260820_0010_job_runs.py -- Add durable job lifecycle heartbeats.
 - wnba-oracle/migrations/versions/20260919_0011_external_access_windows.py -- Add durable external account access windows.
+- wnba-oracle/migrations/versions/20260920_0012_canonical_player_identities.py -- Persist canonical Real Sports -> stats.wnba.com player identities.
+- wnba-oracle/migrations/versions/20260920_0013_freeze_audit_snapshots.py -- Add immutable freeze audit snapshot bindings.
 
 ## wnba-oracle/models/
 - wnba-oracle/models/.gitkeep
@@ -782,6 +790,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/api/app.py -- FastAPI app. Read-only surface over the frozen lineup.
 - wnba-oracle/src/wnba_oracle/api/dossier.py -- Read-only API endpoint for the post-slate dossier (#35 phase 3, #39).
 - wnba-oracle/src/wnba_oracle/api/lineup.py -- Read-only API endpoints for the frozen lineup.
+- wnba-oracle/src/wnba_oracle/api/results.py -- Read-only API endpoint over realized Real Sports slate results.
 - wnba-oracle/src/wnba_oracle/api/slate.py -- Read-only slate-timing endpoint for the frontend countdown (D104).
 - wnba-oracle/src/wnba_oracle/api/watchdog_router.py -- Operator-facing watchdog surface.
 
@@ -813,6 +822,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/eval/conformal.py -- Mondrian Conformalized Quantile Regression (CQR).
 - wnba-oracle/src/wnba_oracle/eval/contest_score.py -- Canonical realized contest scoring for offline evaluation.
 - wnba-oracle/src/wnba_oracle/eval/cv.py -- Walk-forward purged + embargoed cross-validation.
+- wnba-oracle/src/wnba_oracle/eval/identity_coverage.py -- Identity-aware prediction-to-outcome joins with explicit coverage reporting.
 - wnba-oracle/src/wnba_oracle/eval/metrics.py -- Calibration-first metrics: CRPS, reliability, ECE, quantile loss.
 - wnba-oracle/src/wnba_oracle/eval/multiple_comparisons.py -- Multiple-comparisons guard for the rotation gate (#MC, D63).
 
@@ -834,11 +844,17 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/ingest/cache.py -- Lightweight file-system cache for ingest responses.
 - wnba-oracle/src/wnba_oracle/ingest/contest_stats.py -- Real Sports contest endpoint adapters: /stats + /entries.
 - wnba-oracle/src/wnba_oracle/ingest/identity.py -- Resolve Real Sports player_id → stats.wnba.com (`nba_api`) player_id.
+- wnba-oracle/src/wnba_oracle/ingest/identity_map.py -- Canonical Real Sports -> stats.wnba.com identity persistence helpers.
 - wnba-oracle/src/wnba_oracle/ingest/minutes_backfill.py -- Refresh wnba_game_logs from stats.wnba.com (nba_api).
 - wnba-oracle/src/wnba_oracle/ingest/minutes_features.py -- Per-player minutes features from stats.wnba.com game logs (D55).
 - wnba-oracle/src/wnba_oracle/ingest/odds.py -- The Odds API client for `basketball_wnba`.
 - wnba-oracle/src/wnba_oracle/ingest/realsports.py -- Real Sports (web.realapp.com) WNBA scraper.
 - wnba-oracle/src/wnba_oracle/ingest/rotowire.py -- RotoWire WNBA lineup scraper.
+
+## wnba-oracle/src/wnba_oracle/lineage/
+- wnba-oracle/src/wnba_oracle/lineage/__init__.py -- WNBA slate lineage and audit helpers.
+- wnba-oracle/src/wnba_oracle/lineage/audit.py -- Read-only slate lineage reconstruction and expanded post-slate dossier.
+- wnba-oracle/src/wnba_oracle/lineage/freeze_snapshot.py -- Immutable freeze-audit snapshot capture for new WNBA freezes.
 
 ## wnba-oracle/src/wnba_oracle/modeling/
 - wnba-oracle/src/wnba_oracle/modeling/__init__.py -- WNBA-owned model contracts and deterministic decision primitives.
@@ -975,6 +991,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_field_measured_ownership.py -- Field-ownership model: measured-drafts path (D86).
 - wnba-oracle/tests/unit/test_field_stack_aware.py -- Stack-aware correlated field simulation.
 - wnba-oracle/tests/unit/test_freeze_append_fix.py -- Regression tests for the 2026-06-13 freeze outage.
+- wnba-oracle/tests/unit/test_freeze_audit_snapshot.py
 - wnba-oracle/tests/unit/test_freeze_idempotency.py -- Lock the true-freeze semantics in job2._freeze.
 - wnba-oracle/tests/unit/test_frozen_append.py -- D82: append-only freeze writes in job2._freeze.
 - wnba-oracle/tests/unit/test_game_script.py -- Game-script tier multipliers + blowout penalty.
@@ -982,6 +999,8 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_game_script_wired.py -- Game-script (blowout) minutes redistribution wired into job2._build_specs.
 - wnba-oracle/tests/unit/test_game_stack.py -- Hard anti-stacking policy in the optimizer.
 - wnba-oracle/tests/unit/test_head_tier0.py -- D69 / Phase 2b: the D63 trained-head Tier-0 path in job2._build_specs.
+- wnba-oracle/tests/unit/test_identity_coverage.py
+- wnba-oracle/tests/unit/test_identity_migrations.py
 - wnba-oracle/tests/unit/test_identity_resolver.py -- Unit tests for the identity resolver. No network: uses the static catalog.
 - wnba-oracle/tests/unit/test_import_boundaries.py -- Regression tests for static infrastructure and model import boundaries.
 - wnba-oracle/tests/unit/test_injury_cascade.py -- Injury-cascade minutes redistribution.
@@ -994,6 +1013,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_knob_shadow.py -- Knob-overlay shadow harness (2026-07-04, follow-up to model shadow D95).
 - wnba-oracle/tests/unit/test_late_refreeze.py -- D75: late re-freeze path in job2._freeze(force=True).
 - wnba-oracle/tests/unit/test_leaderboard_labels.py -- D85: supplemental slate_labels from top-20 finisher lineups.
+- wnba-oracle/tests/unit/test_lineage_audit.py
 - wnba-oracle/tests/unit/test_lineup_history.py -- D82: append-only lineup API surface.
 - wnba-oracle/tests/unit/test_live_ownership.py -- #38/F6: same-day live ownership capture gating and safety.
 - wnba-oracle/tests/unit/test_logging_httpx_redact.py -- httpx logs the full request URL (incl. query-string secrets like The Odds
@@ -1027,6 +1047,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_recompose.py -- predict_real_score recompose helpers + fallback (D63, Phase 2).
 - wnba-oracle/tests/unit/test_refreeze_lock_gate.py -- D83: the late re-freeze lock gate.
 - wnba-oracle/tests/unit/test_resolve_ops_window.py
+- wnba-oracle/tests/unit/test_results_api.py -- Read-only results API over realized Real Sports slate outcomes (issue #34).
 - wnba-oracle/tests/unit/test_rolling.py -- Rolling-window tests against a synthetic per-player game log.
 - wnba-oracle/tests/unit/test_rotowire_parse.py -- RotoWire HTML parse coverage (D100 fix).
 - wnba-oracle/tests/unit/test_rotowire_url.py -- D74: RotoWire URL + CSS selector fix.

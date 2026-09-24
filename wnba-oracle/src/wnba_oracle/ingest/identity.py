@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import csv
 import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import polars as pl
 
@@ -25,6 +27,22 @@ log = get_logger("oracle.ingest.identity")
 
 REPO_ROOT = resolve_project_root(__file__)
 OVERRIDES_PATH = REPO_ROOT / "data" / "identity_overrides.csv"
+
+ResolutionProvenance = Literal[
+    "provider_nba_id",
+    "explicit_override",
+    "normalized_name_fallback",
+]
+ResolutionStatus = Literal["resolved", "ambiguous", "unresolved"]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolutionOutcome:
+    status: ResolutionStatus
+    wnba_player_id: int | None = None
+    provenance: ResolutionProvenance | None = None
+    catalog_full_name: str | None = None
+    matched_candidate: str | None = None
 
 
 def _normalize_name(n: str) -> str:
@@ -65,11 +83,15 @@ class Resolver:
 
         catalog = list(players.get_wnba_players())
         self._by_norm_name: dict[str, list[dict[str, object]]] = {}
+        self._catalog_by_id: dict[int, dict[str, object]] = {}
         for p in catalog:
             key = _normalize_name(str(p.get("full_name", "")))
             if not key:
                 continue
             self._by_norm_name.setdefault(key, []).append(p)
+            pid_val = p.get("id")
+            if isinstance(pid_val, int):
+                self._catalog_by_id[pid_val] = p
         self._overrides = load_overrides()
         log.info(
             "identity_resolver_loaded",
@@ -87,12 +109,44 @@ class Resolver:
         team: str = "",
         nba_id: int | None = None,
     ) -> int | None:
+        outcome = self.resolve_with_outcome(
+            real_sports_id,
+            display_name=display_name,
+            first_name=first_name,
+            last_name=last_name,
+            team=team,
+            nba_id=nba_id,
+        )
+        return outcome.wnba_player_id
+
+    def resolve_with_outcome(
+        self,
+        real_sports_id: str,
+        *,
+        display_name: str,
+        first_name: str = "",
+        last_name: str = "",
+        team: str = "",
+        nba_id: int | None = None,
+    ) -> ResolutionOutcome:
         # 1) explicit override
         if real_sports_id in self._overrides:
-            return self._overrides[real_sports_id]
+            player_id = self._overrides[real_sports_id]
+            return ResolutionOutcome(
+                status="resolved",
+                wnba_player_id=player_id,
+                provenance="explicit_override",
+                catalog_full_name=self.catalog_full_name(player_id),
+            )
         # 2) trust the platform-provided nbaId when present
         if nba_id is not None:
-            return int(nba_id)
+            player_id = int(nba_id)
+            return ResolutionOutcome(
+                status="resolved",
+                wnba_player_id=player_id,
+                provenance="provider_nba_id",
+                catalog_full_name=self.catalog_full_name(player_id),
+            )
         # 3) name match — try full, first+last, last alone
         candidates: list[str] = []
         if first_name and last_name:
@@ -107,11 +161,29 @@ class Resolver:
             if len(matches) == 1:
                 pid_val = matches[0].get("id")
                 if isinstance(pid_val, int):
-                    return pid_val
+                    return ResolutionOutcome(
+                        status="resolved",
+                        wnba_player_id=pid_val,
+                        provenance="normalized_name_fallback",
+                        catalog_full_name=str(matches[0].get("full_name") or "") or None,
+                        matched_candidate=name,
+                    )
             # If multiple matches, the team disambiguates if we had it.
             # nba_api static catalog doesn't carry current team, so we have
             # to defer ambiguity to the override file.
-        return None
+            if len(matches) > 1:
+                return ResolutionOutcome(
+                    status="ambiguous",
+                    matched_candidate=name,
+                )
+        return ResolutionOutcome(status="unresolved")
+
+    def catalog_full_name(self, player_id: int) -> str | None:
+        player = self._catalog_by_id.get(int(player_id))
+        if player is None:
+            return None
+        full_name = str(player.get("full_name") or "").strip()
+        return full_name or None
 
 
 def write_unresolved_log(

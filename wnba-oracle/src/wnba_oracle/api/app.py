@@ -56,13 +56,14 @@ def create_app(
 
     from wnba_oracle.api.dossier import router as dossier_router
     from wnba_oracle.api.lineup import router as lineup_router
+    from wnba_oracle.api.results import router as results_router
     from wnba_oracle.api.slate import router as slate_router
     from wnba_oracle.api.watchdog_router import router as watchdog_router
 
     app = create_service(
         ServiceMetadata(name="wnba-oracle", version=__version__),
         health_contributors=health_contributors,
-        routers=[lineup_router, slate_router, watchdog_router, dossier_router],
+        routers=[lineup_router, results_router, slate_router, watchdog_router, dossier_router],
         title="WNBA Oracle API",
         docs_url="/docs",
         redoc_url=None,

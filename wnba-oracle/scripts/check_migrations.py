@@ -17,8 +17,8 @@ from wnba_oracle.common.db_utils import normalize_postgres_url
 
 WNBA_ROOT = Path(__file__).resolve().parents[1]
 SAFE_HOSTS = {"127.0.0.1", "localhost", "postgres"}
-PREVIOUS_REVISION = "20260820_0010"
-HEAD_REVISION = "20260919_0011"
+PREVIOUS_REVISION = "20260919_0011"
+HEAD_REVISION = "20260920_0013"
 
 
 def _database_url(base_url: sa.URL, database: str) -> str:
@@ -53,6 +53,8 @@ def _verify_head(database_url: str) -> None:
             raise RuntimeError(f"expected Alembic head {HEAD_REVISION}, found {revision}")
         if "job_runs" not in tables or "frozen_lineups" not in tables:
             raise RuntimeError("expected runtime tables are missing after migration")
+        if "canonical_player_identities" not in tables:
+            raise RuntimeError("expected canonical_player_identities after migration")
     finally:
         engine.dispose()
 

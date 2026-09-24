@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.db.engine import get_engine
+from wnba_oracle.ingest.identity_map import persist_canonical_identity_mappings
 
 log = get_logger("oracle.job1")
 
@@ -95,6 +96,20 @@ def _preserve_tipped_identity(
     return preserved
 
 
+def _job1_upsert_params(row: dict) -> dict:
+    return {
+        "slate_date": row["slate_date"],
+        "player_id": row["player_id"],
+        "real_sports_player_id": row["real_sports_player_id"],
+        "name": row["name"],
+        "team": row["team"],
+        "opponent": row["opponent"],
+        "position": row["position"],
+        "card_boost": row["card_boost"],
+        "features_json": row["features_json"],
+    }
+
+
 def _replace_enrichment(
     conn,
     slate_date: str,
@@ -118,7 +133,27 @@ def _replace_enrichment(
     rows_to_write = _preserve_tipped_identity(rows, existing, now_utc=current_time)
     conn.execute(JOB1_DELETE_SLATE, {"slate_date": slate_date})
     for row in rows_to_write:
-        conn.execute(JOB1_UPSERT, row)
+        conn.execute(JOB1_UPSERT, _job1_upsert_params(row))
+    canonical_rows = [
+        mapping
+        for row in rows_to_write
+        if (mapping := row.get("_canonical_identity_mapping")) is not None
+    ]
+    if canonical_rows:
+        try:
+            with conn.begin_nested():
+                persist_canonical_identity_mappings(
+                    conn,
+                    canonical_rows,
+                    seen_at=current_time,
+                )
+        except Exception as exc:
+            log.warning(
+                "job1_identity_persist_failed",
+                slate_date=slate_date,
+                reason=str(exc)[:160],
+                n_rows=len(canonical_rows),
+            )
     return len(rows_to_write)
 
 

@@ -135,6 +135,41 @@ def read_game_identity(engine: sa.Engine | None = None) -> pl.DataFrame:
     return pl.from_dicts([dict(r._mapping) for r in rows])
 
 
+def read_canonical_player_identities(engine: sa.Engine | None = None) -> pl.DataFrame:
+    """Canonical Real Sports -> stats.wnba.com identity rows.
+
+    Keyed by Real Sports player id. The mapping is WNBA-owned, append-safe, and
+    written from the ordinary ingestion path whenever the existing resolver can
+    resolve a player unambiguously.
+    """
+    eng = engine or get_engine()
+    q = text(
+        "SELECT real_sports_player_id, wnba_player_id, provenance, provider_nba_id, "
+        "real_sports_display_name, real_sports_first_name, real_sports_last_name, "
+        "real_sports_team, wnba_full_name, first_seen_at, last_seen_at "
+        "FROM canonical_player_identities ORDER BY real_sports_player_id"
+    )
+    with eng.connect() as conn:
+        rows = conn.execute(q).fetchall()
+    if not rows:
+        return pl.DataFrame(
+            schema={
+                "real_sports_player_id": pl.Utf8,
+                "wnba_player_id": pl.Int64,
+                "provenance": pl.Utf8,
+                "provider_nba_id": pl.Int64,
+                "real_sports_display_name": pl.Utf8,
+                "real_sports_first_name": pl.Utf8,
+                "real_sports_last_name": pl.Utf8,
+                "real_sports_team": pl.Utf8,
+                "wnba_full_name": pl.Utf8,
+                "first_seen_at": pl.Datetime(time_zone="UTC"),
+                "last_seen_at": pl.Datetime(time_zone="UTC"),
+            }
+        )
+    return pl.from_dicts([dict(r._mapping) for r in rows])
+
+
 def read_game_logs(engine: sa.Engine | None = None) -> pl.DataFrame:
     """WNBA per-game box scores from stats.wnba.com via nba_api.
 
