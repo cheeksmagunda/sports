@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-09 (Week 1 of the roadmap approved under #135; issue #136)
+Last verified: 2026-09-24 (roadmap progress section added; application state unchanged since 2026-09-09)
 
 This file records application state only.
 
@@ -44,3 +44,37 @@ This file records application state only.
 - No contest entry code in this package. `contract.gates.NhlAuditReport` and
   `scheduler.freeze.FreezeCycleRecord` both carry an explicit
   `contest_entry: False`.
+
+## Roadmap progress
+
+Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
+(#135 and #148 closed; per root `AGENTS.md`, roadmaps live in app docs).
+
+- **Week 1 (contract and corpus skeleton): done.** #136, PR #137. This is the
+  scaffold described under Application state.
+- **Week 2 (live contract audit, real corpus, baseline predictions): not
+  started on `main`.** Operator authorized live, read-only Real Sports
+  contact for NHL on 2026-09-12 using the existing shared session: no new
+  credential type, no contest entry. Real Sports hosts NFL, WNBA, and NHL on
+  one platform with contest IDs from one global sequence, so this is the
+  existing session pointed at NHL's sport path. Scope when it starts:
+  1. Read-only `nhl_oracle.ingest.realsports` client (new code adapted from
+     the NFL pattern, no cross-sport import); resolve contest format
+     (five-card-ordered vs. roster-construction), lock scope (per-contest vs.
+     per-game), slot multipliers, boost regime, and goalie eligibility from
+     live evidence; persist redacted fixtures via `NhlCorpusStore`; run
+     `contract.gates` against the real fixtures and update
+     `NhlContestContract` defaults to the resolved facts.
+  2. Populate the raw NHL corpus with coverage denominators (games captured
+     / scheduled, players resolved / seen).
+  3. Chronological baselines adapted from NFL's `baselines/` + walk-forward
+     pattern, `observation_only: True`.
+  Exit check: contract facts recorded (or explicitly open with a reason),
+  gates pass on at least one real redacted fixture, coverage report,
+  nhl/nfl/wnba test suites plus lint, typecheck, and boundaries green.
+  Must run from the Codespace (the only Mac-reachable home of the Real Sports
+  session). Unlanded prior attempt: local worktree
+  `.claude/worktrees/nhl-week2` (branch `chat/nhl-week2-live-audit`, tip
+  7b3aad3, uncommitted discovery/redact/realsports ingest modules and a test);
+  check it before starting over.
+- **Weeks 3+ (roadmap steps 3 to 6): not started.**
