@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 855 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -794,7 +794,7 @@ Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/gener
 ## wnba-oracle/src/wnba_oracle/api/
 - wnba-oracle/src/wnba_oracle/api/__init__.py
 - wnba-oracle/src/wnba_oracle/api/app.py -- FastAPI app. Read-only surface over the frozen lineup.
-- wnba-oracle/src/wnba_oracle/api/dossier.py -- Read-only API endpoint for the post-slate dossier (#35 phase 3, #39).
+- wnba-oracle/src/wnba_oracle/api/dossier.py -- Read-only API endpoint for the unified post-slate dossier (#35 phase 3, #39).
 - wnba-oracle/src/wnba_oracle/api/lineup.py -- Read-only API endpoints for the frozen lineup.
 - wnba-oracle/src/wnba_oracle/api/results.py -- Read-only API endpoint over realized Real Sports slate results.
 - wnba-oracle/src/wnba_oracle/api/slate.py -- Read-only slate-timing endpoint for the frontend countdown (D104).
@@ -861,6 +861,7 @@ Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/lineage/__init__.py -- WNBA slate lineage and audit helpers.
 - wnba-oracle/src/wnba_oracle/lineage/audit.py -- Read-only slate lineage reconstruction and expanded post-slate dossier.
 - wnba-oracle/src/wnba_oracle/lineage/freeze_snapshot.py -- Immutable freeze-audit snapshot capture for new WNBA freezes.
+- wnba-oracle/src/wnba_oracle/lineage/postmortem.py -- Pure composition layer for the unified post-slate dossier (#35 phase 3).
 
 ## wnba-oracle/src/wnba_oracle/modeling/
 - wnba-oracle/src/wnba_oracle/modeling/__init__.py -- WNBA-owned model contracts and deterministic decision primitives.
@@ -1068,6 +1069,7 @@ Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_slate_api.py -- D104: /slate/{date} timing endpoint feeding the tip-relative countdown.
 - wnba-oracle/tests/unit/test_slate_clock.py
 - wnba-oracle/tests/unit/test_slate_meta.py -- D83: slate timing capture (job1) feeding the late-refreeze lock gate.
+- wnba-oracle/tests/unit/test_slate_postmortem.py -- #35 phase 3: unified post-slate dossier composition and failure paths.
 - wnba-oracle/tests/unit/test_slot_scheme.py -- Pin the WNBA Real Sports slot multiplier scheme.
 - wnba-oracle/tests/unit/test_smoke.py -- Sanity tests that the package imports and the api app builds.
 - wnba-oracle/tests/unit/test_source_assurance.py -- Observational source assurance must never influence recommendation math.
