@@ -5,6 +5,29 @@ Last verified: 2026-09-24T20:30:00Z
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
 
+## Configuration audit, layers 2-5 (2026-09-24 ~20:30 UTC, issue #239)
+
+Names and `sha256[:8]` only, read-only against production. Open production
+risks, none changed by this audit:
+
+- Project shared variable `GITHUB_TOKEN` exists (40 characters, consistent
+  with a classic PAT) and no service references it. Unaccounted credential
+  with unknown expiry.
+- Project shared variable `WNBA_ORACLE_MODEL_ARTIFACT_SHA` hashes `bd0ba39a`
+  and no service references it; `cron-job1`, `cron-job1-late`, and `cron-job2`
+  hold literal copies hashing `2e894c6c`, which matches the Actions variable
+  `WNBA_EXPECTED_MODEL_SHA`. The shared copy is stale.
+- `ODDS_API_KEY`: Railway shared variable (referenced by `cron-job1` and
+  `cron-job1-late`) hashes `93571b1a`; the Actions secret hashed `d6798b68`
+  in `secret-audit` run 35426281058 (2026-09-19; secret last updated
+  2026-08-20). Two different keys; both currently authenticate.
+- `WATCHDOG_PING_URL` (read by `scheduler/watchdog.py`) is not set on any
+  service, so app-side critical events do not ping an external monitor.
+- `ENV`, `LOG_LEVEL`, `TZ`, `PYTHONUNBUFFERED` are `${{shared.*}}` references
+  on `api`, `cron-job1`, `cron-job2` but equal-valued literals on
+  `cron-job1-late`, `cron-dayclose`, `backfill-enrichment`. `api`
+  `DATABASE_PUBLIC_URL` is a literal, not a reference.
+
 ## Read-only results endpoint (issue #34, 2026-09-20)
 
 Added `GET /results/{slate_date}` (`wnba_oracle/api/results.py`) so
