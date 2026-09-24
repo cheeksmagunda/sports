@@ -220,6 +220,10 @@ documentation is, and that happens before the PR merges, not after.
 - Current deployments, active source commits, service identifiers, schedules,
   artifact identifiers, incidents, and production risks belong in the child
   `STATUS.md`. Development progress and history belong in GitHub Issues and PRs.
+- A sport application's multi-milestone roadmap is documentation, not an
+  issue: the plan lives in that application's `README.md` (Roadmap section)
+  and milestone progress in its `STATUS.md`. Each milestone's scoped
+  implementation work still gets its own issue when it starts.
 - Decision rationale belongs in issues, PRs, tests, code comments, or commits.
   Do not create competing markdown ledgers.
 - `AGENTS.md` is the only agent-instruction format in this repository. Each
