@@ -38,7 +38,7 @@ from wnba_oracle.ingest.realsports import discover_wnba_contest_id
 
 log = get_logger("oracle.dayclose")
 
-DEFAULT_WALK_WINDOW = 12  # cover yesterday + the prior day's residue
+DEFAULT_WALK_WINDOW = 12  # top_cid (yesterday) down through the prior days' residue
 
 # _auto_record_placement() is only ever invoked directly for "yesterday" --
 # once a slate_date stops being previous_slate_date() no future run revisits
@@ -529,7 +529,16 @@ def run() -> JobResult:
     else:
         outcomes["contest_discovery"] = {"status": "success", "contest_id": top_cid}
 
-        start_id = top_cid - 1
+        # The walk starts AT top_cid, inclusive (issue #243). At the ~06:00 UTC
+        # day-close dispatch, the newest contest the stats endpoint validates
+        # as WNBA is yesterday's own contest (the next slate's contest is not
+        # listed yet). Starting at top_cid - 1 skipped exactly that contest, so
+        # yesterday's slate_labels/contest_leaderboards were never written on
+        # its own night: placement_capture degraded every run, and the
+        # catch-up sweep only recorded it one day late, when the next night's
+        # top_cid had moved on (production logs 2026-09-21 to 2026-09-24:
+        # top_cid 2180/2185/2187/2192, each the processed slate's contest).
+        start_id = top_cid
         stop_id = max(1, top_cid - walk_window)
         log.info(
             "dayclose_walk",

@@ -38,6 +38,7 @@ from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.ingest.contest_stats import (
     ContestLabel,
+    ContestNotFinalized,
     ContestRetryExhausted,
     ContestUnavailable,
     LeaderboardEntry,
@@ -263,16 +264,27 @@ def run_historical_backfill(
     refresh = _force_reauth(device_uuid, device_name)
     n_success = 0
     n_unavailable = 0
+    n_not_finalized = 0
     n_auth_failed = 0
     n_retry_exhausted = 0
     n_lb_entries = 0
     with httpx.Client(timeout=20.0) as client:
         for cid in _iter_contest_ids(start_id, stop_id):
             try:
-                labels = fetch_contest_stats(cid, headers, client, refresh_headers=refresh)
+                labels = fetch_contest_stats(
+                    cid, headers, client, refresh_headers=refresh, require_finalized=True
+                )
             except ContestUnavailable as exc:
                 log.info("skip_stats", contest_id=cid, reason=str(exc))
                 n_unavailable += 1
+                time.sleep(pause_seconds)
+                continue
+            except ContestNotFinalized as exc:
+                # Pre-game / in-progress values must never land in
+                # slate_labels or contest_leaderboards (issue #243); the next
+                # overlapping walk re-reads this contest once it is final.
+                log.info("skip_not_finalized", contest_id=cid, reason=str(exc))
+                n_not_finalized += 1
                 time.sleep(pause_seconds)
                 continue
             except PlatformAuthRequired:
@@ -331,6 +343,7 @@ def run_historical_backfill(
         "historical_backfill_done",
         n_success=n_success,
         n_unavailable=n_unavailable,
+        n_not_finalized=n_not_finalized,
         n_auth_failed=n_auth_failed,
         n_retry_exhausted=n_retry_exhausted,
         n_lb_entries=n_lb_entries,
