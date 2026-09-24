@@ -20,6 +20,31 @@ never replaces an existing volume copy and `resolve_schedule_csv_path` prefers
 the volume, so a worker whose volume already holds the older gametime-less
 CSV keeps `kickoff_at=None` everywhere and the pregate stays inert (current
 behavior) until that volume file is refreshed.
+## Production pipeline backtested walk-forward on Corpus G (2026-09-24, issue #280)
+First real-archive backtest of the actual production path (`fit_model` over
+`attach_enrichment`/`enrich_historical_rows`, `predict`, production `optimize`),
+via `nfl_oracle.replay.production_backtest` (`make production-backtest`).
+Local run, uncommitted worktree; 37,710 Corpus G rows (2024-2025), nflverse
+2024-2025 context snapshot captured 2026-09-24. Zero-boost scoring, slots
+2.0/1.8/1.6/1.4/1.2, hindsight = top five realized values in the same pool.
+Retrain once per NFL week on rows final before that week's first kickoff;
+prior bank per slate uses rows final before that slate. Selected estimator was
+`ridge` on every slate (#212).
+| slice | n slates | mean | median | min | max | paired naive EWMA mean |
+|-------|----------|------|--------|-----|-----|------------------------|
+| production, per game | 554 | 67.9% | 69.4% | 17.6% | 99.2% | 65.6% (prod better on 307/554) |
+| production, per ET day | 125 | 64.0% | 65.5% | 24.2% | 89.2% | 63.2% (prod better on 65/125) |
+| ridge without context features, per game | 554 | 51.7% | 52.2% | 6.5% | 91.7% | 65.6% |
+Field reference (Corpus C, visible winner vs visible-pool hindsight): 97.5%
+zero-boost (4 contests), 79.9% all 91. Not the same denominator: our
+hindsight is over the full Corpus G game pool, so the field numbers are an
+easier ratio. Caveats: context is retrospective_reconstructed (not
+point-in-time); no live injury/inactive or odds/weather inputs (DNP rows are
+removed from the pool, which is generous); training uses the wall clock with a
+data cutoff because archive capture clocks are retrospective; optimizer
+simulations are diagnostics only and samples are compacted to their mean
+(tested to select the identical lineup); 16 early per-game slates skipped for
+insufficient history.
 
 ## Stopped using GitHub issues as permanent ledgers/incident trackers (2026-09-24, issue #283, PR #284)
 
