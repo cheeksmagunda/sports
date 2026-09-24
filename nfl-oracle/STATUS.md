@@ -1,5 +1,28 @@
 # Status
 
+## Stopped using GitHub issues as permanent ledgers/incident trackers (2026-09-24, issue #283, PR #284)
+
+`dayclose-ledger` (used by `nfl-dayclose.yml`/`nfl-weekclose.yml`), and WNBA's
+`wnba-dayclose-verify.yml` and `watchdog-monitor.yml`, previously used
+GitHub issues as permanent application state: a "results ledger" issue
+appended to forever with no close path, and a "guard" issue opened on
+failure with no code path to ever close it again even after a healthy run.
+WNBA's guard issue additionally collided across two unrelated workflows that
+shared the `ops-guard` label with no title check.
+
+Fixed: results digests now post to the job's `$GITHUB_STEP_SUMMARY`, not an
+issue. Guard/incident issues are matched on label **and** exact title
+together, and close themselves with a resolution comment on the next healthy
+run. `watchdog-monitor.yml` also now separates a probe *execution* failure
+from a real *production* alert into two distinct trackers, and captures the
+probe's stdout/stderr into its fallback report instead of failing silently.
+
+`nfl-dayclose.yml`/`nfl-weekclose.yml` needed no changes (only the shared
+`dayclose-ledger` action changed); #143 (NFL results ledger) and #144 (NFL
+production operations) retire under this new model the same way #2 and #243
+do on the WNBA side. #143 and #2 were closed directly (nothing writes to them
+going forward); #144 and #243 close themselves on their next healthy run.
+
 ## GitHub Actions billing outage and T-40 readiness recovery (2026-09-20 to 2026-09-24, issue #281)
 
 `cheeksmagunda`'s GitHub account was billing-locked from around 2026-09-20

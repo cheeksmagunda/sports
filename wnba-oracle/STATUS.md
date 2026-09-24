@@ -1,9 +1,33 @@
 # Status
 
-Last verified: 2026-09-24T17:45:00Z
+Last verified: 2026-09-24T18:15:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## Stopped using GitHub issues as permanent ledgers/incident trackers (2026-09-24, issue #283, PR #284)
+
+`wnba-dayclose-verify.yml` and `watchdog-monitor.yml` previously used issues
+as permanent application state: #2 (WNBA results ledger) was appended to
+forever with no close path, and #243 (WNBA Oracle watchdog alert) had no
+code path to close itself even after a healthy run; the two workflows also
+silently shared one issue by label only (`ops-guard`, no title check), so a
+day-close report could land in what was meant to be the watchdog's own
+alert issue and vice versa.
+
+Fixed via the shared `dayclose-ledger` composite action (NFL already used
+it; WNBA's inlined copy of the same logic was replaced with it for parity):
+results digests now post to the job's step summary, not an issue; the guard
+issue is matched on label and exact title together; it now closes itself
+with a resolution comment on the next healthy run.
+`watchdog-monitor.yml` also separates a probe *execution* failure from a
+real *production* alert into two distinct, independently closeable
+trackers, and captures the probe's stdout/stderr into its fallback report
+instead of failing silently, in case it crashes again.
+
+#2 was closed directly (nothing writes to it going forward). #243 will
+close itself the next time `watchdog-monitor` runs clean under the new
+logic; it does not need a manual close.
 
 ## 2026-09-24 update: billing outage recovery, T-40 readiness (issue #281)
 
