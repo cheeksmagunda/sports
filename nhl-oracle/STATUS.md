@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-25 (pre-boost re-audit #325; continues #299 live contract)
+Last verified: 2026-09-25 CT (pre-boost live re-audit #325; continues #299)
 
 This file records application state only.
 
@@ -67,20 +67,22 @@ Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
   slate players for boost/goalie):
   - format: `five_card_ordered` (lineupSize=5, defaultMultipliers length 5)
   - lock_scope: `per_contest` (contest-level `isLocked`)
-  - boost_regime: `none` (pre-boost). Current-slate game player cards on day
-    `2026-09-24` had **no** `multiplierBonus`/`cardBoost` fields (772/772).
-    Slate covered **22** unique teams (not all 32). Operator rule: until
-    every NHL team has had a game, there are no card boosts; do not design
-    picker logic around boosts. Historical contest 1901 draftStats did show
-    nonzero `multiplierBonus` (later-window / scored contest); discovery
-    notes that but does not apply it to the live default (#325 corrects
-    #299/#308 `flat`).
+  - boost_regime: `none` (pre-boost). Live re-audit 2026-09-25 CT: current
+    slate day `2026-09-25`, 4 games / **8** teams, **244/244** game player
+    cards with **no** `multiplierBonus`/`cardBoost` fields; discovery notes
+    pre-boost and ignores historical 1901 draftStats nonzero bonuses.
+    Prior #299 corpus day `2026-09-24` was 11 games / 22 teams / 772/772
+    cards without boost fields. Operator rule: until every NHL team has had
+    a game, there are no card boosts; do not design picker logic around
+    boosts. #325 corrects #299/#308 `flat`.
   - score_value_label: `value` (contest draftStats)
   - goalie_eligible: `True` (position `G` on live player cards)
   - slot_multipliers: `(2.0, 1.8, 1.6, 1.4, 1.2)`
   Coverage at #299 audit: games captured/scheduled 11/11; players
   resolved/seen from the scored contest pool (draftStats). Gates passed on
-  the redacted fixture.
+  the redacted fixture. Coverage at #325 live re-audit: games 4/4;
+  players_resolved/seen 30/30 (scored contest pool); live cards inspected
+  for boosts 244; `gates_ok=true`; `contest_entry=false`.
   Still not started in Week 2: chronological baselines adapted from NFL
   `baselines/` + walk-forward (`observation_only: True`).
 - **Weeks 3+ (roadmap steps 3 to 6): not started.**
