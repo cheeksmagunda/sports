@@ -14,6 +14,7 @@ Pipeline:
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 from dataclasses import dataclass
@@ -97,6 +98,49 @@ __all__ = [
     "parse_game_time",
     "rotowire_patch",
 ]
+
+
+# Fail closed when RotoWire is empty inside the ~30h pre-tip window where
+# expected lineups should already be posted (#319). Outside that window an
+# empty scrape is normal (contest opened early; no games on the page yet).
+_ROTOWIRE_NEAR_TIP = dt.timedelta(hours=30)
+
+
+def _rotowire_near_tip(slate_date: str, now_utc: dt.datetime | None = None) -> bool:
+    """True when starters are expected for this slate (tip within 30h)."""
+    now_utc = now_utc or dt.datetime.now(dt.UTC)
+    try:
+        from wnba_oracle.scheduler.job2_io import _load_slate_lock_time
+
+        tip = _load_slate_lock_time(slate_date)
+    except Exception:
+        tip = None
+    if tip is None:
+        # No tip yet: do not fail the morning seed on an off-day empty page.
+        return False
+    if tip.tzinfo is None:
+        tip = tip.replace(tzinfo=dt.UTC)
+    tip = tip.astimezone(dt.UTC)
+    return now_utc >= (tip - _ROTOWIRE_NEAR_TIP)
+
+
+def _rotowire_empty_degraded(slate_date: str, lineups: list) -> tuple[str, ...]:
+    """Fail closed near tip when RotoWire returned no starters; else warn only."""
+    if lineups:
+        return ()
+    if _rotowire_near_tip(slate_date):
+        log.error(
+            "job1_rotowire_empty_near_tip",
+            slate_date=slate_date,
+            note="starters expected within 30h of tip; empty RotoWire is fail-closed",
+        )
+        return ("rotowire_empty_near_tip",)
+    log.warning(
+        "job1_rotowire_empty_before_window",
+        slate_date=slate_date,
+        note="no lineups yet; tip still outside RotoWire expected window",
+    )
+    return ()
 
 
 @dataclass(frozen=True)
@@ -415,6 +459,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
     except Exception as exc:
         log.warning("job1_lineups_failed", reason=str(exc))
         lineups = []
+    rotowire_degraded = _rotowire_empty_degraded(sd, lineups)
 
     # D74/D80: player_points props from The Odds API per-event endpoint, scoped
     # to tonight's slate window. Sportsbook props encode injury news, role, and
@@ -632,7 +677,9 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         n_lineups=len(lineups),
         persisted=persisted,
     )
-    return Job1Result(sd, len(pool), len(odds), len(lineups), persisted, tuple(degraded))
+    return Job1Result(
+        sd, len(pool), len(odds), len(lineups), persisted, tuple(degraded) + rotowire_degraded
+    )
 
 
 def run_lite(slate_date: str | None = None) -> Job1Result:
@@ -661,6 +708,20 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
             degraded_reasons=("rotowire_fetch_failed",),
         )
     if not lineups or not settings.database_url:
+        if not lineups and _rotowire_near_tip(sd):
+            log.error(
+                "job1_lite_rotowire_empty_near_tip",
+                slate_date=sd,
+                n_lineups=0,
+            )
+            return Job1Result(
+                sd,
+                0,
+                0,
+                0,
+                0,
+                degraded_reasons=("rotowire_empty_near_tip",),
+            )
         log.warning("job1_lite_noop", slate_date=sd, n_lineups=len(lineups))
         return Job1Result(sd, 0, 0, len(lineups), 0)
     idx = _index_rotowire(lineups)

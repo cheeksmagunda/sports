@@ -653,3 +653,56 @@ def test_route_order_today_before_slate_param() -> None:
         "/watchdog/today must be declared before /watchdog/{slate_date} or it "
         "will be shadowed at runtime."
     )
+
+
+def test_enrichment_fresh_at_1307_no_event() -> None:
+    """Observed job1 captures finish ~13:04-13:08; floor is 13:00 (#319)."""
+    fresh = dt.datetime(2026, 5, 27, 13, 7, tzinfo=dt.UTC)
+    eng = _engine_for_enrichment_check(60, last_captured=fresh, frozen_row=None)
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
+        events = watchdog._check_enrichment_freshness(
+            "2026-05-27", now_utc=dt.datetime(2026, 5, 27, 20, 30, tzinfo=dt.UTC)
+        )
+    assert events == []
+
+
+def test_enrichment_stale_quiet_when_freeze_far() -> None:
+    """Multi-day open: morning capture must not warn while tip is days out."""
+    stale = dt.datetime(2026, 9, 25, 9, 0, tzinfo=dt.UTC)
+    eng = _engine_for_enrichment_check(124, last_captured=stale, frozen_row=None)
+    far_deadline = dt.datetime(2026, 9, 27, 16, 20, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog_checks, "get_engine", return_value=eng),
+        patch.object(watchdog_checks, "_slate_freeze_deadline", return_value=far_deadline),
+    ):
+        events = watchdog._check_enrichment_freshness(
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 25, 20, 30, tzinfo=dt.UTC)
+        )
+    assert events == []
+
+
+def test_rotowire_empty_quiet_before_lineup_window() -> None:
+    """Fri open / Sun tip: zero starters before T-30h is not a scrape failure."""
+    eng = _engine_with_feature_counts(124, 80, 0)
+    tip = dt.datetime(2026, 9, 27, 17, 0, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog_checks, "get_engine", return_value=eng),
+        patch.object(watchdog_checks, "_slate_lock_time", return_value=tip),
+    ):
+        events = watchdog._check_feature_content(
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 25, 20, 0, tzinfo=dt.UTC)
+        )
+    assert {e.trigger for e in events} == set()
+
+
+def test_rotowire_empty_warns_inside_lineup_window() -> None:
+    eng = _engine_with_feature_counts(124, 80, 0)
+    tip = dt.datetime(2026, 9, 27, 17, 0, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog_checks, "get_engine", return_value=eng),
+        patch.object(watchdog_checks, "_slate_lock_time", return_value=tip),
+    ):
+        events = watchdog._check_feature_content(
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 26, 12, 0, tzinfo=dt.UTC)
+        )
+    assert {e.trigger for e in events} == {"rotowire_empty"}

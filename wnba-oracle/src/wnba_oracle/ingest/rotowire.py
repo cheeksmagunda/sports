@@ -67,6 +67,34 @@ def _list_is_confirmed(list_el: Any) -> bool:
     return "confirmed" in status_el.get_text(" ", strip=True).lower()
 
 
+# Empty-page classifiers. RotoWire SSRs these strings when the slate has no
+# games yet, or when a future day is subscriber-gated. Distinguishing them
+# from a silent parse miss lets job1/watchdog fail closed near tip without
+# paging on a multi-day contest that opened before lineups exist (#319).
+_NO_GAMES_MARKERS = (
+    "there are no games on the wnba schedule today",
+    "there are no games on the nba schedule today",
+)
+_PAYWALL_MARKERS = (
+    "schedule is reserved for rotowire subscribers",
+    "tomorrow's schedule is reserved for rotowire subscribers",
+)
+
+
+def empty_lineups_reason(html: str) -> str:
+    """Classify why parse_lineups_html returned no rows.
+
+    Returns one of: ``no_games_scheduled``, ``subscriber_paywall``,
+    ``parse_empty``.
+    """
+    lowered = (html or "").lower()
+    if any(m in lowered for m in _NO_GAMES_MARKERS):
+        return "no_games_scheduled"
+    if any(m in lowered for m in _PAYWALL_MARKERS):
+        return "subscriber_paywall"
+    return "parse_empty"
+
+
 def fetch_lineups(
     *,
     use_cache: bool = True,
@@ -77,6 +105,9 @@ def fetch_lineups(
     Schema: returns one LineupEntry per (game, team, starter_slot 1..5).
     Players RotoWire flags as IL/DTD/OUT have `injury_status` set; pickers
     should drop or downweight accordingly.
+
+    An empty return is intentional on off-days (no games) and on subscriber-
+    gated future dates. The ``rotowire_empty`` warning log includes ``reason``.
     """
     if use_cache:
         cached = cache_get(URL, None, ttl_s=cache_ttl_s)
@@ -93,6 +124,9 @@ def fetch_lineups(
         )
         r.raise_for_status()
     entries = parse_lineups_html(r.text)
+    if not entries:
+        reason = empty_lineups_reason(r.text)
+        log.warning("rotowire_empty", reason=reason, url=URL, html_bytes=len(r.text))
     if use_cache:
         cache_put(URL, None, {"entries": [e.__dict__ for e in entries]})
     return entries

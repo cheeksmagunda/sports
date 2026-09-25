@@ -1,9 +1,33 @@
 # Status
 
-Last verified: 2026-09-25T06:00:00Z
+Last verified: 2026-09-25T21:45:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## rotowire_empty + enrichment_stale (#319)  -  2026-09-25
+
+- **Symptom:** `/watchdog/today` warn with `rotowire_empty` (124-player pool,
+  zero `is_starter`) and `enrichment_stale` (last capture 13:07 UTC vs old
+  13:30 floor) for slate `2026-09-25` whose `first_tip_utc` is Sunday
+  `2026-09-27T17:00:00Z` (freeze target 16:20 UTC / 11:20 AM CT).
+- **Root cause:** Real Sports opened the Sunday contest on Friday. RotoWire
+  correctly SSRs "no games on the WNBA schedule today," so `fetch_lineups()`
+  returned [] and job1_lite nooped all day. Watchdog treated that as scrape
+  or join failure. Separately, `enrichment_stale` used a 13:30 UTC floor while
+  every healthy job1 finishes ~13:04-13:08, and did not skip when freeze was
+  still days away.
+- **Code fix:** classify empty RotoWire HTML (`no_games_scheduled` /
+  `subscriber_paywall` / `parse_empty`); gate `rotowire_empty` until ~30h
+  before tip; fail closed (`rotowire_empty_near_tip`) inside that window;
+  move freshness floor to 13:00 UTC and skip when freeze is >6h away.
+- **Sunday residual:** starters still depend on Sunday ~13:00 UTC job1 (and
+  job1_lite) seeing same-day RotoWire lineups for the tip-day slate_date.
+  Historical `watchdog_events` rows for 2026-09-25 remain until the slate
+  rolls; new fires of these two triggers are suppressed outside the window.
+  Parser DOM (`div.lineup.is-nba`) still matches sister sports with live
+  games (verified MLB); WNBA page is empty only because there are no games
+  today.
 
 ## optimizer_leverage_weight evidence gate (#289)  -  2026-09-25
 
