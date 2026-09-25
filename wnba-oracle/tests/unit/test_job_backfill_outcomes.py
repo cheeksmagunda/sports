@@ -200,7 +200,9 @@ def test_main_accepts_nonempty_polars_game_logs() -> None:
         patch.object(job_backfill, "build_opp_dvp_lookup", return_value={}),
         patch.object(job_backfill.psycopg, "connect", return_value=connection),
         patch.object(job_backfill, "_get_all_slate_dates", return_value=[SLATE_WITH_EXISTING]),
-        patch.object(job_backfill, "_get_existing_enrichment_dates", return_value={SLATE_WITH_EXISTING}),
+        patch.object(
+            job_backfill, "_get_existing_enrichment_dates", return_value={SLATE_WITH_EXISTING}
+        ),
         patch.object(job_backfill, "_get_name_to_team_map", return_value={}),
         patch.object(job_backfill, "build_head_feature_lookup", return_value={}),
         patch.object(job_backfill, "_process_existing_slate", existing_processor),
