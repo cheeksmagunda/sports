@@ -1,5 +1,57 @@
 # Status
 
+## Sunday 2026-09-27 T-40 readiness (2026-09-25 ~16:30 CT, issue #156)
+
+Evidence-only pass against production + live `main` (PR #270 already merged
+2026-09-24T20:11Z as `848b2b8858`). No Railway var mutations. No leverage
+changes. No retrain required.
+
+### Model age vs TTL (Sunday clears)
+
+- Active model `trained_at=2026-09-25T02:57:26.663677Z`,
+  `activated_at=2026-09-25T03:01:58.869306+00:00`, sha8 `4406c87e`,
+  `training_rows=37692`, `model_max_age_days=8`.
+- Age now ~0.77d; age at Sunday T-40 (`2026-09-27T16:20:00Z` /
+  `2026-09-27T11:20:00-05:00`) ~2.56d. Fixed 8-day backstop clears.
+- Week-aware gate: Sunday week boundary `2026-09-22T04:00:00+00:00`
+  (Tuesday 00:00 ET). `model_staleness_reason(... decision_at=Sunday T-40 ...)`
+  returned `None` (`sunday_clears=True`). No `nfl-pipeline train --force`.
+
+### Deadline alerting (shipped, live)
+
+- On main: `.github/workflows/nfl-t40-watchdog.yml` +
+  `nfl_oracle.recommendations.watchdog` + `nfl-oracle/scripts/nfl_t40_watchdog.py`
+  (from #270). Workflow state `active`.
+- Latest scheduled run `36094372644` (2026-09-25T04:25Z CT window /
+  04:25Z UTC) conclusion `success`, output
+  `status=no_slate reason=no_scheduled_games day=2026-09-25` (Friday, expected).
+  Secrets path is configured (run got past `not_configured`).
+
+### Freeze-once / no endless re-freeze (on main)
+
+- `_already_frozen` + `detail_code=already_frozen_for_slate` in
+  `nfl_oracle.recommendations.cli` on main; deliberate bypass only via
+  `nfl-pipeline worker --allow-refreeze`. Landed in #270
+  (`848b2b8858`, 2026-09-24T20:11Z). Covered by
+  `nfl-oracle/tests/unit/test_worker_terminal_state.py`.
+
+### Real Sports session health (names/presence only)
+
+- NFL worker: `REALSPORTS_STORAGE_STATE_B64GZ` **sealed** but present
+  (visible from inside container). `sha256[:8]=c4a729e2` (matches STATUS
+  canonical). Volume `data/scraper/storage_state.json` mode `0600`;
+  `request_token_cache.json` refreshed `2026-09-25T21:26:11Z` with required
+  header names present. In-app `headers_or_capture()` succeeded. Worker
+  Online, polling `waiting_or_locked` (no Friday slate). Verdict: **healthy**.
+- WNBA crons/API: `REALSPORTS_STORAGE_STATE_B64GZ` present on `cron-job1`
+  and `cron-dayclose` with same `sha256[:8]=c4a729e2`. Today's
+  `seed_storage_state: derived session materialized with mode 0600` on
+  cron-job1 (13:01Z) and dayclose (06:03Z). Public API
+  `https://api-production-7033.up.railway.app/health` -> `{"status":"ok"}`;
+  `/watchdog/today` -> `status=warn` for `enrichment_stale` only (not an
+  auth/session failure). Verdict: **healthy** (structure + seed + API),
+  with a separate enrichment freshness warn.
+
 ## Corpus C contest-pool replay: production vs the visible winner on one denominator (2026-09-25, issue #280)
 
 Follow-on to the production backtest section below (same pipeline, same
