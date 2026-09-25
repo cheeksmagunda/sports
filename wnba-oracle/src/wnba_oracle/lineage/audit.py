@@ -32,6 +32,13 @@ from wnba_oracle.api.results import _top_value
 from wnba_oracle.db.engine import get_api_engine
 from wnba_oracle.dossier import DEFAULT_SLOTS, build_dossier
 from wnba_oracle.lineage.freeze_snapshot import FREEZE_AUDIT_SNAPSHOT_SELECT
+from wnba_oracle.lineage.postmortem import (
+    finalize_dossier,
+    identity_map,
+    load_game_logs,
+    normalize_pid,
+    source_status,
+)
 from wnba_oracle.modeling.provenance import (
     canonical_enrichment_payload,
     enrichment_sequence_payload,
@@ -915,7 +922,23 @@ def build_slate_audit(
             "rows": [],
         }
     placement = placement_rows[0] if placement_rows else None
+    pool_ids = {
+        pid
+        for pid in (normalize_pid(row.get("real_sports_player_id")) for row in enrichment_rows)
+        if pid is not None
+    }
+    resolved_ids = identity_map(identity_rows)
     contest_results = {
+        "leaderboard_status": {
+            "status": "available"
+            if leaderboard_rows
+            else "pending"
+            if not results_rows
+            else "unavailable",
+            "reason": None if leaderboard_rows else "contest_leaderboards_not_captured_for_slate",
+            "captured_rows": len(leaderboard_rows),
+            "returned_rows": min(len(leaderboard_rows), 20),
+        },
         "leaderboard": [
             {
                 **row,
@@ -937,33 +960,26 @@ def build_slate_audit(
         "slate_date": slate_date,
         "model_sha": freeze.get("model_sha"),
         "sources": {
-            "realsports": {
-                "status": source_assurance.get("assessment_status", "unknown"),
-                "evidence": source_assurance.get("observations", {}).get("realsports"),
-                "captured_window": source_assurance.get("capture"),
-            },
-            "rotowire": {
-                "status": source_assurance.get("assessment_status", "unknown"),
-                "evidence": source_assurance.get("observations", {}).get("rotowire"),
-            },
-            "the_odds_api": {
-                "status": source_assurance.get("assessment_status", "unknown"),
-                "evidence": source_assurance.get("observations", {}).get("the_odds_api"),
-            },
-            "wnba_stats": {
-                "status": source_assurance.get("assessment_status", "unknown"),
-                "evidence": source_assurance.get("observations", {}).get("wnba_stats"),
-            },
+            "realsports": source_status(source_assurance, "realsports"),
+            "rotowire": source_status(source_assurance, "rotowire"),
+            "the_odds_api": source_status(source_assurance, "the_odds_api"),
+            "wnba_stats": source_status(source_assurance, "wnba_stats"),
             "model_artifact": artifact_contract,
             "identity_mapping": {
                 "status": "available" if identity_rows else "unavailable",
                 "rows": identity_rows,
+                "coverage": {
+                    "pool_players": len(pool_ids),
+                    "resolved": len(pool_ids & set(resolved_ids)),
+                    "unresolved": sorted(pool_ids - set(resolved_ids), key=_pid_sort_key),
+                },
                 "reason": None
                 if identity_rows
                 else "canonical identity mapping was not yet persisted or is unavailable in this schema",
             },
             "payout_archive": {
-                "status": "available" if payout_curve else "unavailable",
+                "status": "available" if payout_curve else "not_captured",
+                "reason": None if payout_curve else "frozen_lineups.lineup.payout_curve_absent",
                 "source": "frozen_lineups.lineup.payout_curve",
             },
         },
@@ -983,7 +999,8 @@ def build_slate_audit(
         },
         "prediction_paths": prediction_section,
         "optimizer": {
-            "status": "available" if model_provenance else "unavailable",
+            "status": "available" if model_provenance else "not_captured",
+            "reason": None if model_provenance else "frozen_lineups.lineup.model_provenance_absent",
             "model_provenance": model_provenance,
             "serving_knobs": serving_knobs,
             "payout_curve": payout_curve,
@@ -1007,7 +1024,12 @@ def build_slate_audit(
         "realized_player_results": _results_sections(results_rows),
         "contest_results": contest_results,
         "our_outcome": {
-            "status": "available" if placement else "partial",
+            "status": "available"
+            if placement
+            else "pending"
+            if not results_rows
+            else "unavailable",
+            "reason": None if placement else "contest_placements_row_not_recorded_for_slate",
             "entry_rank": _int(placement.get("entry_rank")) if placement else None,
             "entry_count": _int(placement.get("entry_count")) if placement else None,
             "entry_score": _float(placement.get("entry_score")) if placement else None,
@@ -1058,8 +1080,18 @@ def build_post_slate_dossier(
         return None
     payload: dict[str, Any] = {}
     legacy = audit.get("legacy_dossier")
+    realized = audit.get("realized_player_results") or {}
     if isinstance(legacy, Mapping):
         payload.update(dict(legacy))
+        payload["entries_status"] = {"status": "available", "reason": None}
+    else:
+        payload["entries_status"] = {
+            "status": "pending" if realized.get("status") != "available" else "unavailable",
+            "reason": (
+                "committed/field_best/theoretical_ceiling entries require a frozen lineup, "
+                "a captured contest leaderboard, and realized slate_labels"
+            ),
+        }
     payload.update(
         {
             "slate_date": slate_date,
@@ -1078,4 +1110,50 @@ def build_post_slate_dossier(
             "slate_meta": audit.get("slate_meta"),
         }
     )
-    return payload
+    frozen_lineup = audit.get("frozen_lineup") or {}
+    lineup_payload = _mapping(frozen_lineup.get("lineup"))
+    selected_ids = [
+        pid
+        for pid in (normalize_pid(value) for value in _sequence(lineup_payload.get("player_ids")))
+        if pid is not None
+    ]
+    eng = engine or get_api_engine()
+    identity_rows = list(
+        _sequence((audit.get("sources") or {}).get("identity_mapping", {}).get("rows"))
+    )
+    mapping = identity_map(identity_rows)
+    # The pool identity lookup is keyed off job1_enrichment; when those rows
+    # are gone (retention, purge) the committed five would otherwise read as
+    # identity_unresolved even though canonical_player_identities has them.
+    unmapped = [pid for pid in selected_ids if pid not in mapping]
+    if unmapped:
+        with eng.connect() as identity_conn:
+            identity_rows.extend(
+                _identity_resolution_rows(
+                    identity_conn, [{"real_sports_player_id": pid} for pid in unmapped]
+                )
+            )
+        mapping = identity_map(identity_rows)
+    wnba_ids = [mapping[pid] for pid in selected_ids if pid in mapping]
+    game_log_rows, game_log_error = load_game_logs(eng, slate_date, wnba_ids)
+    prediction_paths = audit.get("prediction_paths") or {}
+    snapshot_players = (
+        _sequence(prediction_paths.get("rows"))
+        if prediction_paths.get("status") == "captured_in_immutable_snapshot"
+        else None
+    )
+    return finalize_dossier(
+        payload,
+        snapshot_players=snapshot_players,
+        result_rows=_sequence(realized.get("rows")),
+        game_log_rows=game_log_rows,
+        game_log_error=game_log_error,
+        identity_rows=identity_rows,
+    )
+
+
+def _pid_sort_key(value: str) -> tuple[int, str]:
+    try:
+        return (int(value), value)
+    except ValueError:
+        return (1 << 62, value)
