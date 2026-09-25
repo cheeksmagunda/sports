@@ -274,7 +274,7 @@ operator re-uploads snapshots to any configured static project:
 | Claude/Codex/Copilot/Grok snapshot differs from repo | Snapshot drifted | Fetch live via GitHub connector |
 | `make setup` fails | Locked deps changed | Check if you're on latest `main` |
 | Tests fail in CLI but pass in Codespace | Different Python/uv version | Run `uv sync --frozen --reinstall` |
-| Railway commands fail | CLI not authenticated | Run `railway login` or check `RAILWAY_API_TOKEN` / `RAILWAY_TOKEN` (exactly one) |
+| Railway commands fail | CLI not authenticated | Prefer synced Mac CLI session (`scripts/sync-railway-session-to-codespace`); wrap with `scripts/codespace-railway-env`; never both `RAILWAY_API_TOKEN` and `RAILWAY_TOKEN` |
 | Codespaces secret looks unset (`RAILWAY_API_TOKEN`, `REALSPORTS_STORAGE_STATE_B64GZ`) | Non-login shell | Codespaces secrets reach login shells only; use `bash -l` or `gh codespace ssh`, not a bare non-login command |
 | `scripts/auth-check APP --live` reports Real Sports "not configured" | Session not propagated to this surface | Compare `sha256[:8]` of the copies (Railway service var, Actions secret, Codespaces secret) against the canonical value; never compare by printing values |
 
@@ -294,6 +294,28 @@ logs, variable changes) run **from inside the GitHub Codespace**, after
 Railway from the operator Mac, and do not use `SPORTS_ALLOW_LOCAL_RAILWAY` as
 the normal path.
 
+### Canonical auth: synced Mac CLI session
+
+Canonical Codespace Railway auth is a **synced Mac `~/.railway` CLI OAuth
+session** (accessToken / refreshToken), not the Codespaces secret. The Mac
+session (`railway whoami` as Cheeks Magunda) is the source of truth. Sync it
+into the Codespace with:
+
+```bash
+# On the operator Mac (after Codespace create or rebuild):
+scripts/sync-railway-session-to-codespace
+# or: scripts/sync-railway-session-to-codespace fluffy-zebra-g4gqq746477q2jg
+```
+
+That packs `$HOME/.railway` (locks excluded) into the Codespace `$HOME/.railway`,
+chmods private, and links `nfl-oracle-staging` / `production` /
+`nfl-oracle-worker` under `/workspaces/sports` via the helper below.
+
+The Codespaces secret `RAILWAY_API_TOKEN` may still be present (and even look
+valid by length) but often returns Unauthorized. **Do not ask the operator to
+mint a new API token when the Mac CLI session works.** Re-sync the session
+instead. Only refresh `RAILWAY_API_TOKEN` if no CLI session can be restored.
+
 ### Headless SSH gotcha (read this)
 
 `gh codespace ssh` often has **no** `RAILWAY_*` in the process environment even
@@ -310,16 +332,19 @@ scripts/codespace-railway-env -- railway whoami
 scripts/codespace-railway-env -- railway status
 ```
 
-The helper loads `RAILWAY_API_TOKEN` from the environment or `.env-secrets`
-(without bash mangling), unsets `RAILWAY_TOKEN`, asserts `whoami`, then execs
-your command. If the Codespaces API token is rejected, it falls back to a
-logged-in `~/.railway` CLI session when present. If both fail, refresh the
-Codespaces secret `RAILWAY_API_TOKEN` (Railway dashboard account token).
+The helper prefers a working `~/.railway` CLI session first (when config has
+access/refresh tokens), tries `RAILWAY_API_TOKEN` from the environment or
+`.env-secrets` only if the session is missing or whoami fails, always unsets
+`RAILWAY_TOKEN`, asserts `whoami`, logs which path won (never prints token
+values), then execs your command. If both fail, re-sync the Mac CLI session
+(`scripts/sync-railway-session-to-codespace`); refresh the Codespaces
+`RAILWAY_API_TOKEN` only as a last resort.
 
 Pattern:
 
 1. Wake the Codespace with Mac `gh` (`gh codespace ssh -c <name> --` or the
-   VS Code / Cursor remote).
+   VS Code / Cursor remote). After a rebuild, re-run
+   `scripts/sync-railway-session-to-codespace` from the Mac.
 2. Run Railway only through `scripts/codespace-railway-env -- ...` (or
    `eval "$(scripts/codespace-railway-env --print-exports)"` then `railway`).
 3. If `railway ssh` fails on host key, register the Codespace host key with
@@ -333,9 +358,7 @@ scripts/codespace-railway-env -- railway ssh --service nfl-oracle-worker -- \
 ```
 
 Do not rely on `railway ssh --session` / tmux unless the worker image has
-tmux. Prefer a long SSH or worker-side nohup for long jobs.
-
-## Codespace stay-awake around slates
+tmux. Prefer a long SSH or worker-side nohup for long jobs.## Codespace stay-awake around slates
 
 Keep the Codespace **Available** around live slate / lock windows (NFL TNF,
 WNBA tip windows, etc.). Wake-and-hold; do not assume Shutdown self-heals
