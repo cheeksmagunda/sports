@@ -292,7 +292,9 @@ def main() -> int:
     log.info("backfill_loading_game_logs")
     game_logs = read_game_logs()
     log.info("backfill_game_logs_loaded", n_rows=len(game_logs))
-    if not game_logs:
+    # read_game_logs() returns a Polars DataFrame in production; tests may stub a
+    # list. `if not game_logs` raises TypeError on DataFrame (issue #279 crash).
+    if len(game_logs) == 0:
         log.error("backfill_failed", reason="game_log_corpus_empty")
         return 1
 
