@@ -1,0 +1,12 @@
+{
+  "info": {
+    "lineupSize": 5,
+    "defaultMultipliers": [
+      2.0,
+      1.8,
+      1.6,
+      1.4,
+      1.2
+    ]
+  }
+}

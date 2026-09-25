@@ -1,0 +1,12 @@
+{
+  "info": {
+    "isLocked": false,
+    "contest": {
+      "id": 9001,
+      "sport": "nhl",
+      "additionalInfo": {
+        "lineupSize": 5
+      }
+    }
+  }
+}
