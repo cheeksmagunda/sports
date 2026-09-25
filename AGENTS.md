@@ -140,6 +140,7 @@ documentation is, and that happens before the PR merges, not after.
 - Required operational interfaces are ordinary files, process environment
   variables, shell commands, documented CLIs, and HTTPS APIs.
 - The Codespace is the persistent Git authentication and push surface. The
+- Railway mutations and Real Sports runner work run from the Codespace login shell with `RAILWAY_API_TOKEN` / `REALSPORTS_STORAGE_STATE_B64GZ` (never both Railway token kinds; postStart unsets `RAILWAY_TOKEN` when the API token is set). Mac wakes the Codespace; it is not the Railway or Real Sports host. Keep the Codespace Available around live slate windows. Full contract: root `ENTRY_POINTS.md` **Railway from the Codespace** and **Codespace stay-awake around slates** (issues #300 / #302).
   operator Mac keeps only the native `gh` access needed to open the Codespace
   and may edit a local checkout. Use `scripts/codespace-push` to transfer the
   local worktree diff and perform commit and push inside the Codespace. Do not

@@ -312,3 +312,22 @@ explicit GitHub Actions repair paths. Full checklist lives in `STATUS.md`.
 Shadow only: Corpus G coverage refresh → label/baseline recompute → status
 artifact; no contest entry; no recreate-blind Codespace; device secrets are
 `NFL_DEVICE_UUID` / `NFL_DEVICE_NAME` only (never git).
+
+
+### Forced model retrain (worker volume)
+
+Run from the Codespace only (see root `ENTRY_POINTS.md` **Railway from the
+Codespace**). Keep that Codespace Available around the slate window. The
+worker image exposes `nfl-pipeline` on `/opt/venv/bin`, not on a bare PATH.
+
+```bash
+unset RAILWAY_TOKEN
+railway whoami   # must show the operator Railway account
+railway ssh --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
+```
+
+Do not train on a bare Codespace checkout, and do not use Mac
+`SPORTS_ALLOW_LOCAL_RAILWAY` for this. Respect the T-40 / slate-lock window
+documented in `STATUS.md` before forcing a rebuild on a live slate.
+
