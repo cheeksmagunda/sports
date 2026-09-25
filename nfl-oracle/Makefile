@@ -1,6 +1,6 @@
 # NFL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules contest-dry-run walk-forward-report production-backtest contest-pool-replay docker-research-build docker-research-smoke docker-production-smoke postgres-store-smoke
+.PHONY: help setup install test lint typecheck fmt baselines daily-shadow strategy-schema hydrate-identity provider-status auth-presence research-serve research-smoke cache-schedules contest-dry-run walk-forward-report production-backtest contest-pool-replay picker-knob-sweep docker-research-build docker-research-smoke docker-production-smoke postgres-store-smoke
 
 UV_RUN = uv run --frozen --package nfl-oracle
 
@@ -24,6 +24,7 @@ help:
 	@echo "  make walk-forward-report - baselines vs feature_ridge eval report (fixtures → artifacts/)"
 	@echo "  make production-backtest CONTEXT_SNAPSHOT=<path> - walk-forward replay of fit_model/predict/optimize on data/raw/corpus_g (#280)"
 	@echo "  make contest-pool-replay CONTEXT_SNAPSHOT=<path> - same replay on each Corpus C contest's visible pool and boosts, vs the visible winner (#280)"
+	@echo "  make picker-knob-sweep CONTEXT_SNAPSHOT=<path> OUT=<json> - shared-fit sweep of boost-rank / position-calibration knobs (#280)"
 	@echo "  make docker-research-smoke - build nfl-oracle-local research image if docker available (skip ok)"
 	@echo "  make docker-production-smoke - build production image and verify CLI entrypoint (skip ok)"
 	@echo "  make postgres-store-smoke - exercise migration, append-only, and backup on temporary PostgreSQL"
@@ -90,6 +91,11 @@ production-backtest:
 
 contest-pool-replay:
 	$(UV_RUN) nfl-contest-pool-replay --history-root data/raw/corpus_g --contest-root data/raw/corpus_c --context-snapshot $(CONTEXT_SNAPSHOT) $(BACKTEST_ARGS)
+
+picker-knob-sweep:
+	@test -n "$(CONTEXT_SNAPSHOT)" || (echo "CONTEXT_SNAPSHOT required" >&2; exit 2)
+	@test -n "$(OUT)" || (echo "OUT required" >&2; exit 2)
+	$(UV_RUN) python scripts/sweep_picker_knobs.py --history-root data/raw/corpus_g --contest-root data/raw/corpus_c --context-snapshot $(CONTEXT_SNAPSHOT) --out $(OUT) $(BACKTEST_ARGS)
 
 # Local research Docker (observation-only). Skips cleanly when docker is absent.
 # Does not touch WNBA Railway configs. No secrets required.

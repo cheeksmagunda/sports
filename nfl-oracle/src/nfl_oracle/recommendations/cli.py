@@ -36,6 +36,7 @@ from nfl_oracle.common.logging import get_logger
 from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
+from nfl_oracle.recommendations.picker_knobs import picker_knobs_from_env
 from nfl_oracle.recommendations.pipeline import (
     ModelBundle,
     PipelinePolicy,
@@ -253,7 +254,10 @@ def _policy() -> PipelinePolicy:
         "true",
         "yes",
     }
-    return PipelinePolicy(recommendations_enabled=enabled)
+    return PipelinePolicy(
+        recommendations_enabled=enabled,
+        picker=picker_knobs_from_env(),
+    )
 
 
 def _already_frozen(store: RecommendationStore, day: date) -> bool:

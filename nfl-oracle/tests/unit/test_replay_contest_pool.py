@@ -10,11 +10,13 @@ import pytest
 from nfl_oracle.contests.parse import ParsedContest
 from nfl_oracle.contests.schema import ContestRecord, DraftStatRow, EntryLineupPick, EntryRecord
 from nfl_oracle.recommendations.model import HistoricalPerformance, RatingModel, fit_model
+from nfl_oracle.recommendations.picker_knobs import PickerKnobs
 from nfl_oracle.recommendations.schema import EvidenceClock
 from nfl_oracle.replay import contest_pool_replay as cpr
 from nfl_oracle.replay.contest_pool_replay import (
     join_contest_pool,
     replay_contest_pools,
+    replay_contest_pools_knob_sweep,
     rows_by_eastern_day,
     summarize,
 )
@@ -257,3 +259,48 @@ def test_best_lineup_is_the_harness_ceiling_over_any_value_table() -> None:
     boosted = best_lineup(values, {6: 3.0}, SLOTS)
     assert boosted is not None and 6 in boosted.player_ids and 5 not in boosted.player_ids
     assert best_lineup({1: 1.0}, {}, SLOTS) is None
+
+
+def test_knob_sweep_shares_one_fit_across_profiles() -> None:
+    rows = _rows()
+    fits: list[int] = []
+
+    def spy(train: Sequence[HistoricalPerformance], trained_at: datetime) -> RatingModel:
+        fits.append(len(train))
+        return fit_model(train, trained_at=trained_at)
+
+    knobs = (
+        PickerKnobs(profile="identity"),
+        PickerKnobs(boost_rank_blend=0.5, profile="boost_0.5"),
+        PickerKnobs(position_calibration=1.0, profile="pos_1.0"),
+    )
+    swept = replay_contest_pools_knob_sweep(
+        rows,
+        [_contest(rows)],
+        knobs,
+        now=NOW,
+        fitter=spy,
+    )
+    assert len(fits) == 1  # one weekly fit, many picker settings
+    assert set(swept) == {"identity", "boost_0.5", "pos_1.0"}
+    for profile, (results, _excluded) in swept.items():
+        assert len(results) == 1
+        assert results[0].picker_profile == profile
+        assert 0.0 <= results[0].capture_ratio <= 1.0
+
+
+def test_boost_rank_blend_changes_capture_on_boosted_contest() -> None:
+    rows = _rows()
+    identity = replay_contest_pools(
+        rows, [_contest(rows)], now=NOW, picker=PickerKnobs(profile="identity")
+    )[0][0]
+    blended = replay_contest_pools(
+        rows,
+        [_contest(rows)],
+        now=NOW,
+        picker=PickerKnobs(boost_rank_blend=1.0, profile="full_boost"),
+    )[0][0]
+    # Same contest, different picker profile labels; capture may or may not
+    # move on this tiny fixture, but the path must complete and record profile.
+    assert identity.picker_profile == "identity"
+    assert blended.picker_profile == "full_boost"

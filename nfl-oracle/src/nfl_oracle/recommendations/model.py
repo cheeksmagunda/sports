@@ -92,6 +92,9 @@ class RatingModel(Record):
     selected_estimator: EstimatorName = "ridge"
     feature_coverage: dict[str, float] = Field(default_factory=dict)
     ablation_evaluation: dict[str, float | int | str] = Field(default_factory=dict)
+    # Mean holdout residual (actual - predicted) by position; used by picker
+    # position calibration (#280). Empty when holdout had no conditional rows.
+    position_residual_bias: dict[str, float] = Field(default_factory=dict)
     context_feature_names: tuple[str, ...] = ()
     feature_names: tuple[str, ...] = (
         "intercept",
@@ -453,6 +456,7 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     baseline_position: list[float] = []
     baseline_global: list[float] = []
     ablation_errors: list[float] = []
+    residuals_by_position: dict[str, list[float]] = {}
     train_values = [record.value for record in train if not record.did_not_play]
     global_mean = mean(train_values) if train_values else 0.0
     position_values: dict[str, list[float]] = {}
@@ -467,7 +471,10 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
         features = bank.vector(
             row.player_id, row.role or row.position, row.external_id
         ) + _context_vector(row.context_features, names)
-        errors.append(row.value - fitted.predict([features])[0])
+        residual = row.value - fitted.predict([features])[0]
+        errors.append(residual)
+        role = row.role or row.position
+        residuals_by_position.setdefault(role, []).append(residual)
         ablation_features = bank.vector(row.player_id, row.role or row.position, row.external_id)
         ablation_errors.append(row.value - ablation_fit.predict([ablation_features])[0])
         baseline_player.append(row.value - features[1])
@@ -541,6 +548,9 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
         for row in train
         if row.context_features and not row.did_not_play
     )
+    position_bias = {
+        position: mean(values) for position, values in residuals_by_position.items() if values
+    }
     return RatingModel(
         trained_at=now,
         training_rows=len(ordered),
@@ -550,6 +560,7 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
         residuals=tuple(selected_errors),
         selected_estimator=selected_estimator,
         feature_coverage=feature_coverage,
+        position_residual_bias=position_bias,
         ablation_evaluation={
             "with_context_mae": mean(abs(e) for e in errors),
             "without_context_mae": mean(abs(e) for e in ablation_errors),

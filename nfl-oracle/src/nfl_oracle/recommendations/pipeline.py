@@ -29,6 +29,7 @@ from nfl_oracle.recommendations.optimizer import (
     ScoringPolicy,
     optimize,
 )
+from nfl_oracle.recommendations.picker_knobs import PickerKnobs, apply_picker_knobs
 from nfl_oracle.recommendations.provider import NFLReader
 from nfl_oracle.recommendations.schema import Contest, Record, Slate, fingerprint, utc
 from nfl_oracle.recommendations.store import RecommendationStore
@@ -40,6 +41,7 @@ class PipelinePolicy(Record):
     input_max_age_seconds: int = Field(default=900, ge=60, le=900)
     model_max_age_days: int = Field(default=8, ge=1, le=30)
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
+    picker: PickerKnobs = Field(default_factory=PickerKnobs)
     contest_entry: Literal[False] = False
 
 
@@ -225,6 +227,12 @@ class RecommendationPipeline:
         }
         projections = predict(
             slate, bundle.model, bundle.history, decision_at=now, context=adjustments
+        )
+        projections = apply_picker_knobs(
+            projections,
+            slate,
+            knobs=self.policy.picker,
+            position_bias=bundle.model.position_residual_bias,
         )
         lineup = optimize(
             slate,

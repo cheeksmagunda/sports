@@ -18,6 +18,7 @@ from typing import Any
 from nfl_oracle.contests.parse import iter_contests
 from nfl_oracle.contests.store import ContestStore
 from nfl_oracle.recommendations.optimizer import OptimizerConfig
+from nfl_oracle.recommendations.picker_knobs import PickerKnobs
 from nfl_oracle.replay.contest_pool_replay import (
     ContestPool,
     replay_contest_pools,
@@ -55,6 +56,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Keep full residual sample vectors in the optimizer (slow; same lineup).",
     )
+    parser.add_argument(
+        "--boost-rank-blend",
+        type=float,
+        default=0.0,
+        help="Blend projected values toward boost-rank alignment within each slate (0..1).",
+    )
+    parser.add_argument(
+        "--position-calibration",
+        type=float,
+        default=0.0,
+        help="Apply holdout per-position residual bias with this weight (0..1).",
+    )
+    parser.add_argument(
+        "--picker-profile",
+        default="identity",
+        help="Label recorded on each result for this knob setting.",
+    )
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
     return parser
 
@@ -78,6 +96,11 @@ def main(argv: list[str] | None = None) -> int:
         print(line, file=sys.stderr, flush=True)
 
     started = datetime.now(UTC)
+    picker = PickerKnobs(
+        boost_rank_blend=args.boost_rank_blend,
+        position_calibration=args.position_calibration,
+        profile=args.picker_profile,
+    )
     results, excluded = replay_contest_pools(
         inputs.enriched,
         contests,
@@ -85,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         team_keys=inputs.team_keys,
         optimizer_config=OptimizerConfig(simulations=args.simulations),
         compact_samples=not args.full_samples,
+        picker=picker,
         progress=progress,
     )
     summary = summarize(results, excluded)
@@ -92,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         "kind": "production_pipeline_contest_pool_replay",
         "issue": 280,
         "retrain": args.retrain,
+        "picker": picker.model_dump(mode="json"),
         "contests_with_field_evidence": len(contests),
         "history_rows": len(inputs.rows),
         "history_excluded": inputs.history_excluded,

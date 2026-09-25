@@ -229,7 +229,20 @@ make -C nfl-oracle contest-pool-replay CONTEXT_SNAPSHOT=/path/to/context.json \
 
 ## Local commands
 
-```sh
+```
+
+Shared-fit picker knob sweep (boost-rank blend / position calibration) against
+the same Corpus C denominator:
+
+```bash
+make -C nfl-oracle picker-knob-sweep CONTEXT_SNAPSHOT=/path/to/context.json \
+  OUT=/tmp/picker_knob_sweep.json
+```
+
+Production defaults stay identity. Measured Railway flips use
+`NFL_PICKER_BOOST_RANK_BLEND` / `NFL_PICKER_PROFILE` (see STATUS.md, Refs #280).
+
+sh
 make test
 make lint
 make typecheck

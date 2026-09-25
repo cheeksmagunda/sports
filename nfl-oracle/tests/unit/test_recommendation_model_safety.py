@@ -164,3 +164,12 @@ def test_drop_ambiguous_identity_rows_is_a_no_op_when_identities_are_clean() -> 
     kept, audit = drop_ambiguous_identity_rows(history)
     assert kept == tuple(history)
     assert audit == {"ambiguous_identity_players": 0, "ambiguous_identity_rows": 0}
+
+
+def test_fit_model_records_position_residual_bias_from_holdout() -> None:
+    model = fit_model(rows(), trained_at=BASE + timedelta(days=8))
+    assert isinstance(model.position_residual_bias, dict)
+    # Holdout is chronological 20%; tiny fixture may leave it empty or populated.
+    for key, value in model.position_residual_bias.items():
+        assert isinstance(key, str) and key
+        assert isinstance(value, float)
