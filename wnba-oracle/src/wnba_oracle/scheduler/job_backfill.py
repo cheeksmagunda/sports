@@ -327,7 +327,7 @@ def main() -> int:
 
     for i, slate_date in enumerate(all_dates):
         try:
-            head_feats = build_head_feature_lookup(game_logs, slate_date=slate_date)
+            head_feats = build_head_feature_lookup(game_logs, slate_date=slate_date.isoformat())
         except Exception as exc:
             failed_feature_builds += 1
             log.warning(
