@@ -1,11 +1,11 @@
 # Status
 
-Last verified: 2026-09-25T04:59:00Z
+Last verified: 2026-09-25T05:30:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
 
-## backfill-enrichment recovery (#279 build, #310 runtime TypeError) — 2026-09-25 ~04:59 UTC
+## backfill-enrichment recovery (#279 / #310 / #312)  -  2026-09-25
 
 Live verification from Codespace Railway CLI (`scripts/codespace-railway-env`,
 CLI session as Cheeks Magunda):
@@ -25,12 +25,17 @@ CLI session as Cheeks Magunda):
   `if not game_logs` on a Polars DataFrame; now `len(game_logs) == 0`. Deploy
   `215229c9` logs show **no** TypeError / DataFrame-ambiguity
   (`backfill_game_logs_loaded n_rows=18504`, then opp-DvP built).
-- **Current remaining blocker (#312):** deploy `215229c9` ended `CRASHED`
-  because the backfill job exited 1: every slate hit
-  `backfill_head_feats_failed error_type="AttributeError"` (226/226 feature
-  builds failed, 0 inserts). Separate from the interpreter / Polars-truthiness
-  fixes. `seed_storage_state` warns that the derived Real Sports session is
-  not configured on this service (no `REALSPORTS_STORAGE_STATE_B64GZ`).
+- **AttributeError (#312):** root cause was the #310 mypy follow-up calling
+  `slate_date.isoformat()` in `job_backfill.main` while
+  `slate_labels.slate_date` is VARCHAR (psycopg returns `str`). That raised
+  `AttributeError: 'str' object has no attribute 'isoformat'` for all 226
+  slates on deploy `215229c9`. Fix: normalize DATE and VARCHAR values to ISO
+  text via `_as_iso_slate_date` so head-feature builds and the
+  existing-enrichment membership check share one type. Unit coverage in
+  `test_job_backfill_slate_dates.py`. Redeploy status recorded after merge.
+- **Real Sports session on backfill-enrichment:** service previously lacked
+  `REALSPORTS_STORAGE_STATE_B64GZ` (`has_realsports_creds=false`). Prefer copy
+  from `cron-job1` in the same project when attaching (names only; never mint).
   Full historical backfill remains an authorized one-shot via
   `wnba-backfill-enrichment.yml`, not a routine auto-deploy.
 

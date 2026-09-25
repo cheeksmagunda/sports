@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 875 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 876 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1049,6 +1049,7 @@ Generated from `git ls-files`. 875 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_job1_pool_gate.py -- D84: degraded job1 pool is a hard error, not a quiet log line.
 - wnba-oracle/tests/unit/test_job2_name_fallback.py -- D50: the frozen lineup must never ship a `Player <id>` placeholder when a
 - wnba-oracle/tests/unit/test_job_backfill_outcomes.py -- Truthful completion semantics for the on-demand enrichment backfill.
+- wnba-oracle/tests/unit/test_job_backfill_slate_dates.py -- Regression: slate_date type normalization for backfill (#312).
 - wnba-oracle/tests/unit/test_job_runtime.py -- WNBA registration, heartbeat, and dead-man surface tests.
 - wnba-oracle/tests/unit/test_knob_shadow.py -- Knob-overlay shadow harness (2026-07-04, follow-up to model shadow D95).
 - wnba-oracle/tests/unit/test_late_refreeze.py -- D75: late re-freeze path in job2._freeze(force=True).

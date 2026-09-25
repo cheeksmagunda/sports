@@ -37,6 +37,27 @@ from wnba_oracle.features.serving_features import (
 log = get_logger("oracle.job_backfill")
 
 
+def _as_iso_slate_date(value: dt.date | dt.datetime | str | None) -> str | None:
+    """Normalize Postgres slate_date values to ISO YYYY-MM-DD text.
+
+    ``slate_labels.slate_date`` is VARCHAR (psycopg returns ``str``);
+    ``job1_enrichment.slate_date`` is DATE (psycopg returns ``datetime.date``).
+    Callers that assume one type and call ``.isoformat()`` crash with
+    AttributeError on the other (issue #312 after the #310 mypy fix).
+    """
+    if value is None:
+        return None
+    if isinstance(value, dt.datetime):
+        return value.date().isoformat()
+    if isinstance(value, dt.date):
+        return value.isoformat()
+    s = str(value).strip()
+    if not s:
+        return None
+    # Already ISO text (or close enough for lexicographic compares / binds).
+    return s[:10]
+
+
 def _normalize_name(name: str) -> str:
     if not name:
         return ""
@@ -88,19 +109,29 @@ WHERE slate_date = :slate_date AND player_id = :player_id
 """)
 
 
-def _get_all_slate_dates(conn: psycopg.Connection) -> list[dt.date]:
+def _get_all_slate_dates(conn: psycopg.Connection) -> list[str]:
     with conn.cursor() as cur:
         cur.execute("""
             SELECT DISTINCT slate_date FROM slate_labels
             WHERE real_score IS NOT NULL ORDER BY slate_date
         """)
-        return [r[0] for r in cur.fetchall()]
+        out: list[str] = []
+        for (raw,) in cur.fetchall():
+            iso = _as_iso_slate_date(raw)
+            if iso is not None:
+                out.append(iso)
+        return out
 
 
-def _get_existing_enrichment_dates(conn: psycopg.Connection) -> set[dt.date]:
+def _get_existing_enrichment_dates(conn: psycopg.Connection) -> set[str]:
     with conn.cursor() as cur:
         cur.execute("SELECT DISTINCT slate_date FROM job1_enrichment")
-        return {r[0] for r in cur.fetchall()}
+        out: set[str] = set()
+        for (raw,) in cur.fetchall():
+            iso = _as_iso_slate_date(raw)
+            if iso is not None:
+                out.add(iso)
+        return out
 
 
 def _get_name_to_team_map(conn: psycopg.Connection) -> dict:
@@ -327,13 +358,14 @@ def main() -> int:
 
     for i, slate_date in enumerate(all_dates):
         try:
-            head_feats = build_head_feature_lookup(game_logs, slate_date=slate_date.isoformat())
+            head_feats = build_head_feature_lookup(game_logs, slate_date=slate_date)
         except Exception as exc:
             failed_feature_builds += 1
             log.warning(
                 "backfill_head_feats_failed",
                 slate_date=slate_date,
                 error_type=type(exc).__name__,
+                error=str(exc)[:240],
             )
             continue
 

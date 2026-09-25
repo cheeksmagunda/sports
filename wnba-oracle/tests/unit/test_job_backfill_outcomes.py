@@ -29,12 +29,12 @@ def _run_backfill(
         patch.object(
             job_backfill,
             "_get_all_slate_dates",
-            return_value=[SLATE_WITH_EXISTING, HISTORICAL_SLATE],
+            return_value=[SLATE_WITH_EXISTING.isoformat(), HISTORICAL_SLATE.isoformat()],
         ),
         patch.object(
             job_backfill,
             "_get_existing_enrichment_dates",
-            return_value={SLATE_WITH_EXISTING},
+            return_value={SLATE_WITH_EXISTING.isoformat()},
         ),
         patch.object(job_backfill, "_get_name_to_team_map", return_value={}),
         patch.object(job_backfill, "build_head_feature_lookup", return_value={}),
@@ -45,14 +45,14 @@ def _run_backfill(
     return exit_code, connection, logger
 
 
-def test_existing_enrichment_dates_preserve_database_date_type() -> None:
+def test_existing_enrichment_dates_normalize_to_iso_strings() -> None:
     connection = MagicMock()
     cursor = connection.cursor.return_value.__enter__.return_value
     cursor.fetchall.return_value = [(SLATE_WITH_EXISTING,)]
 
     dates = job_backfill._get_existing_enrichment_dates(connection)
 
-    assert dates == {SLATE_WITH_EXISTING}
+    assert dates == {SLATE_WITH_EXISTING.isoformat()}
     cursor.execute.assert_called_once_with("SELECT DISTINCT slate_date FROM job1_enrichment")
 
 
