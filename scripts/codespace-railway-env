@@ -8,9 +8,13 @@ with a login shell. Codespaces still writes user secrets to
 ``/workspaces/.codespaces/shared/.env-secrets``. Loading that file with bash
 ``.`` can mangle values; this helper loads them in Python.
 
-If both ``RAILWAY_API_TOKEN`` (account) and ``RAILWAY_TOKEN`` (project/CI) are
-set, the Railway CLI returns Unauthorized. This helper always drops
-``RAILWAY_TOKEN`` when an account token or CLI session will be used.
+Canonical auth is a synced Mac ``~/.railway`` CLI OAuth session (accessToken /
+refreshToken). The Codespaces secret ``RAILWAY_API_TOKEN`` may be present but
+Unauthorized; prefer the CLI session first, and only try the API token if the
+session is missing or whoami fails. If both ``RAILWAY_API_TOKEN`` (account) and
+``RAILWAY_TOKEN`` (project/CI) are set, the Railway CLI returns Unauthorized.
+This helper always drops ``RAILWAY_TOKEN`` when an account token or CLI session
+will be used.
 
 Usage
 -----
@@ -18,12 +22,14 @@ Usage
   scripts/codespace-railway-env -- railway ssh --service nfl-oracle-worker -- bash -lc '...'
   eval "$(scripts/codespace-railway-env --print-exports)"   # then run railway yourself
 
-Exit codes: 0 ok, 2 usage, 3 secrets missing, 4 whoami failed (refresh Codespaces
-``RAILWAY_API_TOKEN`` or restore a CLI session under ``~/.railway``).
+Exit codes: 0 ok, 2 usage, 3 secrets missing, 4 whoami failed (restore a CLI
+session via scripts/sync-railway-session-to-codespace, or refresh Codespaces
+``RAILWAY_API_TOKEN`` only if no session works).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -39,6 +45,7 @@ SECRETS_CANDIDATES = (
     Path("/workspaces/.codespaces/shared/.env-secrets"),
     Path.home() / ".codespaces" / "shared" / ".env-secrets",
 )
+RAILWAY_CONFIG = Path.home() / ".railway" / "config.json"
 UUID_RE = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -89,6 +96,23 @@ def load_api_token() -> str | None:
     return None
 
 
+def cli_session_present(config_path: Path | None = None) -> bool:
+    """True when ~/.railway/config.json has usable OAuth access/refresh tokens."""
+    path = config_path if config_path is not None else RAILWAY_CONFIG
+    if not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    user = data.get("user") if isinstance(data, dict) else None
+    if not isinstance(user, dict):
+        return False
+    access = (user.get("accessToken") or user.get("token") or "").strip()
+    refresh = (user.get("refreshToken") or "").strip()
+    return bool(access or refresh)
+
+
 def whoami(env: dict[str, str]) -> tuple[bool, str]:
     railway = shutil.which("railway")
     if railway is None:
@@ -104,39 +128,94 @@ def whoami(env: dict[str, str]) -> tuple[bool, str]:
     return result.returncode == 0, text.strip()
 
 
-def build_env() -> dict[str, str]:
+def prefer_auth_order(
+    *,
+    session_ok: bool,
+    api_token_present: bool,
+) -> list[str]:
+    """Return preference order labels: 'cli-session' then optionally 'api-token'."""
+    order: list[str] = []
+    if session_ok:
+        order.append("cli-session")
+    if api_token_present:
+        order.append("api-token")
+    return order
+
+
+def build_env(
+    *,
+    whoami_fn=whoami,
+    session_present_fn=cli_session_present,
+    load_api_token_fn=load_api_token,
+) -> dict[str, str]:
     env = os.environ.copy()
     # Never both token kinds.
     env.pop("RAILWAY_TOKEN", None)
 
-    api = load_api_token()
-    if api:
-        env["RAILWAY_API_TOKEN"] = api
-        ok, detail = whoami(env)
-        if ok:
-            print(f"codespace-railway-env: auth ok via RAILWAY_API_TOKEN ({detail.splitlines()[0] if detail else 'whoami'})", file=sys.stderr)
-            return env
-        print(
-            "codespace-railway-env: RAILWAY_API_TOKEN present but whoami failed; "
-            "trying CLI session (~/.railway)",
-            file=sys.stderr,
-        )
-        # Fall through to session-only
-        env.pop("RAILWAY_API_TOKEN", None)
+    session_ok = session_present_fn()
+    api = load_api_token_fn()
+    order = prefer_auth_order(
+        session_ok=session_ok, api_token_present=bool(api)
+    )
 
-    ok, detail = whoami(env)
+    for path_name in order:
+        trial = env.copy()
+        trial.pop("RAILWAY_TOKEN", None)
+        if path_name == "cli-session":
+            trial.pop("RAILWAY_API_TOKEN", None)
+            ok, detail = whoami_fn(trial)
+            if ok:
+                print(
+                    "codespace-railway-env: auth ok via CLI session "
+                    f"({detail.splitlines()[0] if detail else 'whoami'})",
+                    file=sys.stderr,
+                )
+                # Keep API token out of the child so session stays authoritative.
+                env.pop("RAILWAY_API_TOKEN", None)
+                return env
+            print(
+                "codespace-railway-env: CLI session present but whoami failed; "
+                "trying RAILWAY_API_TOKEN if available",
+                file=sys.stderr,
+            )
+            continue
+
+        if path_name == "api-token" and api:
+            trial["RAILWAY_API_TOKEN"] = api
+            ok, detail = whoami_fn(trial)
+            if ok:
+                env["RAILWAY_API_TOKEN"] = api
+                print(
+                    "codespace-railway-env: auth ok via RAILWAY_API_TOKEN "
+                    f"({detail.splitlines()[0] if detail else 'whoami'})",
+                    file=sys.stderr,
+                )
+                return env
+            print(
+                "codespace-railway-env: RAILWAY_API_TOKEN present but whoami failed",
+                file=sys.stderr,
+            )
+
+    # Final attempt: bare env (no API token) in case session files exist but
+    # detection missed them, or railway is somehow already authenticated.
+    bare = env.copy()
+    bare.pop("RAILWAY_API_TOKEN", None)
+    bare.pop("RAILWAY_TOKEN", None)
+    ok, detail = whoami_fn(bare)
     if ok:
+        env.pop("RAILWAY_API_TOKEN", None)
         print(
-            f"codespace-railway-env: auth ok via CLI session ({detail.splitlines()[0] if detail else 'whoami'})",
+            "codespace-railway-env: auth ok via CLI session "
+            f"({detail.splitlines()[0] if detail else 'whoami'})",
             file=sys.stderr,
         )
         return env
 
     fail(
-        "railway whoami failed. Refresh the Codespaces secret RAILWAY_API_TOKEN "
-        "(account token from Railway dashboard), or restore a logged-in "
-        "~/.railway session on this Codespace. Detail: "
-        + (detail or "no output"),
+        "railway whoami failed. Restore a logged-in ~/.railway session on this "
+        "Codespace (from Mac: scripts/sync-railway-session-to-codespace), or "
+        "refresh the Codespaces secret RAILWAY_API_TOKEN only if no session "
+        "works. Detail: " + (detail or "no output"),
         4,
     )
     raise AssertionError("unreachable")
@@ -161,12 +240,9 @@ def main() -> None:
     env = build_env()
 
     if print_exports:
-        # Safe for eval: only export/unset lines, never echo secret values.
+        # Safe for eval: only export/unset lines, never echo secret values
+        # except the export itself when the API-token path won.
         if "RAILWAY_API_TOKEN" in env:
-            # Re-read through load so we do not print the value; emit a
-            # pointer instruction instead when used incorrectly.
-            # For eval we must export the value. Callers who use
-            # --print-exports accept that the child shell will hold it.
             import shlex
 
             print(f"export RAILWAY_API_TOKEN={shlex.quote(env['RAILWAY_API_TOKEN'])}")

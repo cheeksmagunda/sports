@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 855 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -553,6 +553,7 @@ Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/gener
 - scripts/devcontainer-poststart.sh -- Shell script
 - scripts/generate_file_manifest.py -- Regenerate FILES.md: a one-line-per-file manifest of every tracked file.
 - scripts/prune-merged-branches.sh -- Shell script
+- scripts/sync-railway-session-to-codespace
 - scripts/with-secrets
 - scripts/write-path-check
 
@@ -560,6 +561,7 @@ Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/gener
 - scripts/tests/test_check_applications.py
 - scripts/tests/test_check_dev_services.py
 - scripts/tests/test_check_issue_link.py
+- scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 
 ## wnba-oracle/
 - wnba-oracle/.agent.md -- WNBA Oracle Instructions

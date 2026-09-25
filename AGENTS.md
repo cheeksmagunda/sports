@@ -148,7 +148,7 @@ documentation is, and that happens before the PR merges, not after.
   repository secrets; Codespaces secrets are injected only into the Codespace
   container, where interactive shells unset the built-in `GITHUB_TOKEN` so web
   and SSH sessions share the `gh` login.
-- Railway mutations and Real Sports runner work run from the Codespace via `scripts/codespace-railway-env` (loads Codespaces secrets from env or `.env-secrets`, never both Railway token kinds). Mac wakes the Codespace; it is not the Railway or Real Sports host. Keep the Codespace Available around live slate windows. Full contract: root `ENTRY_POINTS.md` **Railway from the Codespace** (issues #300 / #302 / this issue).
+- Railway mutations and Real Sports runner work run from the Codespace via `scripts/codespace-railway-env` (CLI session first, API token fallback, never both Railway token kinds). Canonical auth is a Mac `~/.railway` session synced with `scripts/sync-railway-session-to-codespace`; do not mint `RAILWAY_API_TOKEN` when that session works. Mac wakes the Codespace; it is not the Railway or Real Sports host. Keep the Codespace Available around live slate windows. Full contract: root `ENTRY_POINTS.md` **Railway from the Codespace** (issues #300 / #302 / #306).
 - One `gh` identity on every surface, not just the Codespace (issue #235):
   `gh` prefers an env `GH_TOKEN`/`GITHUB_TOKEN` over the native keyring
   `gh auth login`, and a local agent CLI (Claude Code, Codex CLI, Copilot CLI)

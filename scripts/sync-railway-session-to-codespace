@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Sync the Mac Railway CLI OAuth session (~/.railway) into a GitHub Codespace,
+# then link nfl-oracle-staging / production / nfl-oracle-worker under
+# /workspaces/sports via scripts/codespace-railway-env.
+#
+# Run this on the operator Mac (not inside the Codespace). After a Codespace
+# rebuild, re-run to restore the CLI session. Do not mint RAILWAY_API_TOKEN
+# when this session works.
+#
+# Usage:
+#   scripts/sync-railway-session-to-codespace [CODESPACE_NAME]
+#   CODESPACE_NAME=fluffy-zebra-g4gqq746477q2jg scripts/sync-railway-session-to-codespace
+#
+# Default Codespace: fluffy-zebra-g4gqq746477q2jg (or $CODESPACE_NAME).
+#
+# What it does:
+#   1. Tar $HOME/.railway (exclude *.lock) into the Codespace $HOME/.railway
+#   2. chmod 700/600 so the directory and config stay private
+#   3. On the Codespace, run railway link for project nfl-oracle-staging,
+#      environment production, service nfl-oracle-worker under /workspaces/sports
+#      through scripts/codespace-railway-env (session-first auth)
+#
+# Never prints token values.
+
+set -euo pipefail
+
+DEFAULT_CS="${CODESPACE_NAME:-fluffy-zebra-g4gqq746477q2jg}"
+CS_NAME="${1:-$DEFAULT_CS}"
+SRC_DIR="${HOME}/.railway"
+TMP_TAR="$(mktemp -t railway-session.XXXXXX.tar)"
+trap 'rm -f "$TMP_TAR"' EXIT
+
+if [[ ! -d "$SRC_DIR" ]]; then
+  echo "sync-railway-session-to-codespace: missing $SRC_DIR (run railway login on Mac first)" >&2
+  exit 2
+fi
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "sync-railway-session-to-codespace: gh CLI required" >&2
+  exit 2
+fi
+
+if ! command -v railway >/dev/null 2>&1; then
+  echo "sync-railway-session-to-codespace: warning: railway CLI not on Mac PATH (Codespace still needs it)" >&2
+fi
+
+echo "sync-railway-session-to-codespace: packing $SRC_DIR (locks excluded) -> Codespace $CS_NAME" >&2
+# Pack contents, not the directory name, so extract lands cleanly in $HOME/.railway
+tar -C "$SRC_DIR" \
+  --exclude='*.lock' \
+  --exclude='._*' \
+  -cf "$TMP_TAR" .
+
+# Ensure remote dir exists, extract, chmod private
+gh codespace ssh -c "$CS_NAME" -- bash -s <<REMOTE_SETUP
+set -euo pipefail
+mkdir -p "\$HOME/.railway"
+chmod 700 "\$HOME/.railway"
+REMOTE_SETUP
+
+# Stream the tar over SSH (no local secret echo)
+gh codespace ssh -c "$CS_NAME" -- 'tar -C "$HOME/.railway" -xf - && chmod 700 "$HOME/.railway" && find "$HOME/.railway" -type f -exec chmod 600 {} + && find "$HOME/.railway" -type d -exec chmod 700 {} +' < "$TMP_TAR"
+
+echo "sync-railway-session-to-codespace: session files installed; linking nfl-oracle under /workspaces/sports" >&2
+
+# Prefer the helper from the main Codespace checkout; fall back to PATH railway
+# if the helper is not present yet (pre-merge Codespace).
+gh codespace ssh -c "$CS_NAME" -- bash -s <<'REMOTE_LINK'
+set -euo pipefail
+HELPER=""
+for candidate in \
+  /workspaces/sports/scripts/codespace-railway-env \
+  /tmp/sports-railway-auth/scripts/codespace-railway-env
+do
+  if [[ -x "$candidate" ]]; then
+    HELPER="$candidate"
+    break
+  fi
+done
+
+link_cmd=(railway link -p nfl-oracle-staging -e production -s nfl-oracle-worker)
+cd /workspaces/sports
+
+if [[ -n "$HELPER" ]]; then
+  echo "sync-railway-session-to-codespace: using helper $HELPER" >&2
+  "$HELPER" -- railway whoami
+  "$HELPER" -- "${link_cmd[@]}"
+  "$HELPER" -- railway status
+else
+  echo "sync-railway-session-to-codespace: helper missing; using bare railway (unset RAILWAY_TOKEN)" >&2
+  unset RAILWAY_TOKEN || true
+  unset RAILWAY_API_TOKEN || true
+  railway whoami
+  "${link_cmd[@]}"
+  railway status
+fi
+REMOTE_LINK
+
+echo "sync-railway-session-to-codespace: done for $CS_NAME" >&2
