@@ -45,6 +45,20 @@ data cutoff because archive capture clocks are retrospective; optimizer
 simulations are diagnostics only and samples are compacted to their mean
 (tested to select the identical lineup); 16 early per-game slates skipped for
 insufficient history.
+## Configuration audit, layers 2-5 (2026-09-24 ~20:30 UTC, issue #239)
+Names and `sha256[:8]` only, read-only against production.
+- `nfl-oracle-worker` `REALSPORTS_STORAGE_STATE_B64GZ` is present but
+  currently **sealed**: `get_service_config` counts 5 variables, the unrendered
+  GraphQL listing returns this key as `null`, and `railway variables` omits it.
+  Its hash could not be re-verified this session (last verified `c4a729e2`
+  on 2026-09-19 from inside the container). The canonical shared value and
+  the Codespaces and Actions copies all hash `c4a729e2` today.
+- `NFL_DATABASE_URL` on both services is a reference
+  (`${{Postgres.DATABASE_URL}}`), single-sourced. `NFL_DEVICE_NAME` and
+  `NFL_DEVICE_UUID` are identical literals on both services (the project has
+  no shared variables); `NFL_DEVICE_UUID` holds a placeholder string, not a
+  device UUID.
+- `nfl-oracle/.env.example` now declares every name the NFL code reads.
 
 ## Stopped using GitHub issues as permanent ledgers/incident trackers (2026-09-24, issue #283, PR #284)
 
