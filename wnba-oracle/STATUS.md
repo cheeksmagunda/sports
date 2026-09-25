@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-24T18:15:00Z
+Last verified: 2026-09-24T20:30:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -49,7 +49,8 @@ instead of failing silently, in case it crashes again.
 
 #2 was closed directly (nothing writes to it going forward). #243 will
 close itself the next time `watchdog-monitor` runs clean under the new
-logic; it does not need a manual close.
+logic (title and label match verified); it does not need a manual close,
+but it cannot run clean until the dayclose fix below is deployed.
 
 ## 2026-09-24 update: billing outage recovery, T-40 readiness (issue #281)
 
@@ -69,12 +70,28 @@ issue). Operator restored billing 2026-09-24. Re-checked live this session:
   responded clean: no watchdog events today, tonight's slate has
   `first_tip_utc=2026-09-24T23:00:00Z`, `freeze_target_utc=2026-09-24T22:20:00Z`,
   `picks_paused=false`.
-- New, not yet root-caused: the `watchdog-monitor` GitHub Actions workflow's
-  own probe script (`wnba-oracle/scripts/watchdog_monitor.py`) crashed (exit
-  1, under 2s, no report) on today's rerun, which is why it still fails CI
-  and why #243 stays open. That is a probe-script failure, not a live alert;
-  the manual checks above are clean. Worth a fresh look before trusting the
-  next scheduled run.
+- Corrected 2026-09-24T20:30Z: the `watchdog-monitor` run at 17:40Z was not
+  a probe crash. `watchdog_monitor.py` exits 1 for a legitimate
+  `status=alert` finding and prints nothing to stdout, so exit 1 in under
+  2s with no console output is its normal alert shape; the 18:17Z and
+  19:19Z runs (after PR #284 and `4212880`) completed the probe, wrote a full
+  report, and routed it to #243 correctly. No `ops-guard-probe` issue has
+  ever been opened. The live alert is real (see next bullet).
+- Root cause of #243 (every dayclose `degraded` since at least 2026-09-19,
+  verified from `cron-dayclose` structured logs 2026-09-21 to 2026-09-24):
+  `job_dayclose.run()` walked contest ids from `top_cid - 1`, but at the
+  06:00Z dispatch `top_cid` is yesterday's own contest (2180, 2185, 2187,
+  2192 were each the processed slate's contest). Yesterday's labels and
+  top-20 board were therefore never ingested on its own night, so
+  `placement_capture` returned `missing_labels_or_leaderboard` every run and
+  `placement_catchup` recorded it one day late. Fix (walk from `top_cid`
+  inclusive) is drafted, pending a PR against #243, together with a
+  finalization guard: the walk now skips (`skip_not_finalized`) any contest
+  whose payload lacks `isFinalized: true`, so pre-game labels are never
+  written. Until it deploys to `cron-dayclose`
+  before a 06:00Z dispatch, every dayclose stays `degraded` and #243 stays
+  open. Unverified: whether yesterday's `/entries` board is already
+  populated at 06:00Z (the next night's walk has always found 20 entries).
 
 ## Live operational snapshot (as of 2026-09-19T09:46:42Z; superseded in part above)
 
