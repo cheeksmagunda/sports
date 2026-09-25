@@ -1,16 +1,24 @@
 # Status
 
-Last verified: 2026-09-25T06:00:00Z
+Last verified: 2026-09-25T21:25:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## optimizer_leverage_weight sweep decision (#317) - 2026-09-25
+
+- The leak-free GitHub Actions benchmark run [36133177919](https://github.com/cheeksmagunda/sports/actions/runs/36133177919) succeeded at about 2026-09-25 07:31 CT. Its `model-research-benchmark-merged` artifact contains `MODEL_RESEARCH_BENCHMARK.md` and `benchmark_results.json` covering 109 slates.
+- The compiled production baseline uses `optimizer_leverage_weight=0.28`. The only leverage challenger in the default grid was `knob:leverage_weight_0.2`: paired score W/T/L was approximately 9/92/8 versus baseline, mean score delta was approximately -0.036, and payout was flat. This provides no flip signal.
+- Decision: keep `optimizer_leverage_weight=0.28`. No Railway variable change is needed, and `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` already remains `0.28`, so no config code update is needed.
+- The dedicated E1 leverage matrix (`0.0`, `0.14`, `0.28`, `0.40`) was not run. It remains an optional follow-up; picker-knob work is proceeding in parallel under #280 and #37.
 
 ## optimizer_leverage_weight evidence gate (#289)  -  2026-09-25
 
 - **Live knob:** `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` remains
   `0.28` (no production knob change; public API had no slate timing for
-  2026-09-25 at verification, but operator sign-off is still required for any
-  live flip). Railway `OPTIMIZER_LEVERAGE_WEIGHT` was not mutated in this fix.
+  2026-09-25 at verification; standing authorization for justified picker-knob
+  changes is documented in commit `3ec2bad` and issue #37. Railway
+  `OPTIMIZER_LEVERAGE_WEIGHT` was not mutated in this fix.
 - **Root cause:** `scripts/build_model_research_benchmark.py`
   `_precompute_slates` (shared by `model_tournament.py`) patched
   `job2._load_measured_drafts` to each slate's own post-lock `slate_labels.drafts`.
