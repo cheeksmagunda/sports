@@ -99,7 +99,7 @@ def _check_enrichment_freshness(
     The 20:00 UTC gate assumes an evening slate. An early tip-off (first
     tip before ~17:00 UTC, D93 tip-relative freeze) already froze hours
     before this check ever runs, on whatever was fresh at that time --
-    checking against a fixed 13:30 UTC floor at 20:00 UTC is a guaranteed
+    checking against a fixed 13:00 UTC floor at 20:00 UTC is a guaranteed
     false positive for those slates. Skip once a lineup is already frozen;
     the freeze already happened on today's universe by definition.
     """
@@ -116,8 +116,17 @@ def _check_enrichment_freshness(
         return []  # no_job1_pool already covers the empty case
     if last_captured.tzinfo is None:
         last_captured = last_captured.replace(tzinfo=dt.UTC)
-    fresh_floor = now_utc.replace(hour=13, minute=30, second=0, microsecond=0)
+    # Match the observed ~13:00 UTC cron fire (captures land 13:04-13:08).
+    # The old 13:30 floor false-positived every healthy morning capture (#319).
+    fresh_floor = now_utc.replace(hour=13, minute=0, second=0, microsecond=0)
     if last_captured >= fresh_floor:
+        return []
+    # Multi-day open (Fri pool / Sun tip): do not warn about morning
+    # capture age while freeze is still far away.
+    from wnba_oracle.common.settings import get_settings
+
+    deadline = _slate_freeze_deadline(slate_date, get_settings())
+    if deadline is not None and (deadline - now_utc) > ENRICHMENT_STALE_HORIZON:
         return []
     return [
         WatchdogEvent(
@@ -225,6 +234,43 @@ def _slate_freeze_deadline(slate_date: str, settings: object) -> dt.datetime | N
     except Exception as exc:
         log.warning("watchdog_freeze_deadline_failed", reason=str(exc)[:120])
         return None
+
+
+# RotoWire posts expected lineups ~24-30h before tip. Before that window,
+# an empty is_starter column is normal for multi-day contests that open
+# early (e.g. Fri open / Sun tip), not a scrape/join failure (#319).
+ROTOWIRE_LINEUP_LEAD = dt.timedelta(hours=30)
+# enrichment_stale is meant to catch a silent job1 miss near freeze, not
+# page while the tip is still days away on the same open slate_date.
+ENRICHMENT_STALE_HORIZON = dt.timedelta(hours=6)
+
+
+def _slate_lock_time(slate_date: str) -> dt.datetime | None:
+    """Best-effort first tip / contest lock from slate_meta."""
+    try:
+        from wnba_oracle.scheduler.job2_io import _load_slate_lock_time
+
+        tip = _load_slate_lock_time(slate_date)
+    except Exception as exc:
+        log.warning("watchdog_slate_lock_failed", reason=str(exc)[:120])
+        return None
+    if tip is None:
+        return None
+    if tip.tzinfo is None:
+        tip = tip.replace(tzinfo=dt.UTC)
+    return tip.astimezone(dt.UTC)
+
+
+def _rotowire_starters_expected(slate_date: str, now_utc: dt.datetime) -> bool:
+    """True when RotoWire lineups should already exist for this slate.
+
+    Unknown tip fails closed (expect starters) so a missing slate_meta row
+    cannot silence a real scrape break on tip day.
+    """
+    tip = _slate_lock_time(slate_date)
+    if tip is None:
+        return True
+    return now_utc >= (tip - ROTOWIRE_LINEUP_LEAD)
 
 
 def _check_freeze(slate_date: str, *, now_utc: dt.datetime | None = None) -> list[WatchdogEvent]:
@@ -361,11 +407,18 @@ def _check_model_artifact(
     return []
 
 
-def _check_feature_content(slate_date: str) -> list[WatchdogEvent]:
+def _check_feature_content(
+    slate_date: str, *, now_utc: dt.datetime | None = None
+) -> list[WatchdogEvent]:
     """Warn when the pool is full but a whole upstream feed is empty -- the
     silent-degradation class the row-count checks miss (D100 shape). Empty odds
     drops the game-script tilt; zero RotoWire starters means lineups never
-    parsed/joined (the confirmed-starter signal is dark)."""
+    parsed/joined (the confirmed-starter signal is dark).
+
+    ``rotowire_empty`` only fires once starters are expected (~30h before tip).
+    Earlier empties are normal when a contest opens before RotoWire posts
+    lineups (#319)."""
+    now_utc = now_utc or dt.datetime.now(dt.UTC)
     eng = get_engine()
     with eng.connect() as conn:
         row = conn.execute(FEATURE_CONTENT_Q, {"sd": slate_date}).first()
@@ -384,7 +437,7 @@ def _check_feature_content(slate_date: str) -> list[WatchdogEvent]:
                 payload={"pool": n, "note": "no vegas_total on any row; game-script tilt off"},
             )
         )
-    if n_starter == 0:
+    if n_starter == 0 and _rotowire_starters_expected(slate_date, now_utc):
         out.append(
             WatchdogEvent(
                 slate_date=slate_date,

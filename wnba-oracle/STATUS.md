@@ -1,16 +1,55 @@
 # Status
 
-Last verified: 2026-09-25T21:25:00Z
+Last verified: 2026-09-25T21:55:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## rotowire_empty + enrichment_stale (#319)  -  2026-09-25
+
+- **Symptom:** `/watchdog/today` warn with `rotowire_empty` (124-player pool,
+  zero `is_starter`) and `enrichment_stale` (last capture 13:07 UTC vs old
+  13:30 floor) for slate `2026-09-25` whose `first_tip_utc` is Sunday
+  `2026-09-27T17:00:00Z` (freeze target 16:20 UTC / 11:20 AM CT).
+- **Root cause:** Real Sports opened the Sunday contest on Friday. RotoWire
+  correctly SSRs "no games on the WNBA schedule today," so `fetch_lineups()`
+  returned [] and job1_lite nooped all day. Watchdog treated that as scrape
+  or join failure. Separately, `enrichment_stale` used a 13:30 UTC floor while
+  every healthy job1 finishes ~13:04-13:08, and did not skip when freeze was
+  still days away.
+- **Live evidence (2026-09-25 ~4:45 PM CT):** `cron-job1` deploy `48d3ba01`
+  logged `n_rotowire=0` / `n_lineups=0` / pool 124 / capture 13:07:04Z then
+  `watchdog_event trigger=rotowire_empty`. Public
+  `https://api-production-7033.up.railway.app/watchdog/today` still returns
+  those historical warns plus `enrichment_stale` (floor still 13:30 on the
+  pre-fix image). Live RotoWire HTML classifies as `no_games_scheduled`
+  (327471 bytes, 0 parsed lineups). Slate tip/freeze unchanged.
+- **Code fix:** classify empty RotoWire HTML (`no_games_scheduled` /
+  `subscriber_paywall` / `parse_empty`); gate `rotowire_empty` until ~30h
+  before tip; fail closed (`rotowire_empty_near_tip`) inside that window;
+  move freshness floor to 13:00 UTC and skip when freeze is >6h away.
+- **API clear path:** `/watchdog/{slate_date}` and `/watchdog/today` now
+  drive `events`/`status` from a live `evaluate_watchdog()` re-check (no
+  persist). Historical rows remain under `history` for forensics, so tip-
+  window false positives cannot sticky-warn the phone curl after the gates
+  deploy.
+- **Sunday residual:** starters still depend on Sunday ~13:00 UTC job1 (and
+  job1_lite) seeing same-day RotoWire lineups for the tip-day slate_date.
+  New fires of `rotowire_empty` / `enrichment_stale` stay suppressed outside
+  the tip / freeze windows after deploy. Parser DOM still matches sister
+  sports with live games; WNBA page is empty only because there are no games
+  today.
+- **Real Sports session (2026-09-25 ~4:50 PM CT):** `REALSPORTS_STORAGE_STATE_B64GZ`
+  present on `cron-job1`, `cron-job1-late`, `backfill-enrichment`, and
+  `cron-dayclose` (len=9248 each). `auth-check-live`: derived session payload
+  structure valid; live checks passed. Names/presence only; value not logged.
 
 ## optimizer_leverage_weight sweep decision (#317) - 2026-09-25
 
 - The leak-free GitHub Actions benchmark run [36133177919](https://github.com/cheeksmagunda/sports/actions/runs/36133177919) succeeded at about 2026-09-25 07:31 CT. Its `model-research-benchmark-merged` artifact contains `MODEL_RESEARCH_BENCHMARK.md` and `benchmark_results.json` covering 109 slates.
 - The compiled production baseline uses `optimizer_leverage_weight=0.28`. The only leverage challenger in the default grid was `knob:leverage_weight_0.2`: paired score W/T/L was approximately 9/92/8 versus baseline, mean score delta was approximately -0.036, and payout was flat. This provides no flip signal.
-- Decision: keep `optimizer_leverage_weight=0.28`. No Railway variable change is needed, and `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` already remains `0.28`, so no config code update is needed.
-- The dedicated E1 leverage matrix (`0.0`, `0.14`, `0.28`, `0.40`) was not run. It remains an optional follow-up; picker-knob work is proceeding in parallel under #280 and #37.
+- Decision: keep `optimizer_leverage_weight=0.28`. No Railway variable change is needed, and `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` already remains `0.28`, so no config code update is needed. Live Railway `cron-job2` confirms `OPTIMIZER_LEVERAGE_WEIGHT=0.28`.
+- The dedicated E1 leverage matrix (`0.0`, `0.14`, `0.28`, `0.40`) was not run. It remains an optional follow-up; picker-knob work is proceeding in parallel under #280 and #37. Full matrix is ~86 CPU-hours at default samples; not justified pre-Sunday given flat default-grid signal.
 
 ## optimizer_leverage_weight evidence gate (#289)  -  2026-09-25
 
@@ -28,9 +67,10 @@ not exposed by the read-only checks available during this audit.
   (`wnba_oracle.eval.point_in_time.causal_drafts_for_slate`); optional
   `--leak-same-slate-ownership` keeps the old path for diagnostics only.
   Unit tests pin the guard. Walk-forward already had the same rule.
-- **Still open:** leak-free leverage/contrarian sweep (experiment E1 from the
-  #38 closing report) before keep-or-revert of `0.28`. Tracked as a follow-up
-  issue from #289.
+- **Decision (via #317):** default-grid leak-free challenger
+  `knob:leverage_weight_0.2` showed no flip vs 0.28 (see sweep section above).
+  Keep `0.28`. Dedicated E1 matrix (`0.0/0.14/0.28/0.40`) remains optional;
+  Railway `OPTIMIZER_LEVERAGE_WEIGHT` unchanged at `0.28`.
 
 
 ## backfill-enrichment recovery (#279 / #310 / #312)  -  2026-09-25

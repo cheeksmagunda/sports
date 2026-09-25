@@ -85,12 +85,16 @@ def get_watchdog_for_slate(
         description="Minimum severity to surface (warn|error|critical).",
     ),
 ) -> dict[str, Any]:
-    """Return all watchdog events for the slate at or above the
-    requested minimum severity, ordered most-recent-first.
+    """Return *active* watchdog findings for the slate.
 
     Severity ordering: warn < error < critical. ``severity_min=warn``
     returns everything; ``severity_min=critical`` returns only the
     flag-this-fast events.
+
+    ``events`` / ``status`` come from a live re-evaluation of the pipeline
+    checks (no persist). Historical ``watchdog_events`` rows are still
+    returned as ``history`` so a tip-window false positive cannot sticky-
+    warn the phone curl after the underlying condition cleared (#319).
     """
     severity_rank = {"warn": 0, "error": 1, "critical": 2}
     min_rank = severity_rank[severity_min]
@@ -100,6 +104,22 @@ def get_watchdog_for_slate(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    from wnba_oracle.scheduler.watchdog import evaluate_watchdog
+
+    live_raw = evaluate_watchdog(slate_date, check_config_drift=False)
+    events = []
+    for ev in live_raw:
+        if severity_rank.get(ev.severity, 0) < min_rank:
+            continue
+        events.append(
+            {
+                "trigger": ev.trigger,
+                "severity": ev.severity,
+                "payload": ev.payload,
+                "created_at": None,
+            }
+        )
+
     q = text(
         "SELECT trigger, severity, payload_json, created_at "
         "FROM watchdog_events WHERE slate_date = :sd "
@@ -108,12 +128,12 @@ def get_watchdog_for_slate(
     with eng.connect() as conn:
         rows = list(conn.execute(q, {"sd": slate_date}))
 
-    events = []
+    history = []
     for r in rows:
         m = r._mapping
         if severity_rank.get(m["severity"], 0) < min_rank:
             continue
-        events.append(
+        history.append(
             {
                 "trigger": m["trigger"],
                 "severity": m["severity"],
@@ -126,6 +146,7 @@ def get_watchdog_for_slate(
         "slate_date": slate_date,
         "checked_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "events": events,
+        "history": history,
         "status": _summarize(events),
     }
 

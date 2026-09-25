@@ -1,4 +1,4 @@
-"""Watchdog trigger logic — pure function tests against a mocked engine."""
+"""Watchdog trigger logic  -  pure function tests against a mocked engine."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def test_no_job1_pool_triggers_critical() -> None:
 
 
 def test_small_pool_triggers_error() -> None:
-    """D84: escalated from warn — a sub-10 pool is an ingest failure."""
+    """D84: escalated from warn  -  a sub-10 pool is an ingest failure."""
     with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_pool_count(7)):
         events = watchdog._check_pool("2026-05-27")
     assert len(events) == 1
@@ -76,7 +76,7 @@ def test_small_pool_triggers_error() -> None:
 
 
 def test_single_team_pool_triggers_critical() -> None:
-    """D84: the 2026-06-08 morning shape — rows exist, one team."""
+    """D84: the 2026-06-08 morning shape  -  rows exist, one team."""
     eng = _engine_with_pool_count(12, n_teams=1)
     with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_pool("2026-05-27")
@@ -282,7 +282,7 @@ def test_no_frozen_lineup_before_22utc_no_event() -> None:
 
 
 def test_no_frozen_lineup_quiet_for_past_slate() -> None:
-    """Backfill / historical query — don't false-positive when the slate
+    """Backfill / historical query  -  don't false-positive when the slate
     is yesterday and the check happens to fire today."""
     with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(None)):
         events = watchdog._check_freeze(
@@ -653,3 +653,113 @@ def test_route_order_today_before_slate_param() -> None:
         "/watchdog/today must be declared before /watchdog/{slate_date} or it "
         "will be shadowed at runtime."
     )
+
+
+def test_enrichment_fresh_at_1307_no_event() -> None:
+    """Observed job1 captures finish ~13:04-13:08; floor is 13:00 (#319)."""
+    fresh = dt.datetime(2026, 5, 27, 13, 7, tzinfo=dt.UTC)
+    eng = _engine_for_enrichment_check(60, last_captured=fresh, frozen_row=None)
+    with patch.object(watchdog_checks, "get_engine", return_value=eng):
+        events = watchdog._check_enrichment_freshness(
+            "2026-05-27", now_utc=dt.datetime(2026, 5, 27, 20, 30, tzinfo=dt.UTC)
+        )
+    assert events == []
+
+
+def test_enrichment_stale_quiet_when_freeze_far() -> None:
+    """Multi-day open: morning capture must not warn while tip is days out."""
+    stale = dt.datetime(2026, 9, 25, 9, 0, tzinfo=dt.UTC)
+    eng = _engine_for_enrichment_check(124, last_captured=stale, frozen_row=None)
+    far_deadline = dt.datetime(2026, 9, 27, 16, 20, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog_checks, "get_engine", return_value=eng),
+        patch.object(watchdog_checks, "_slate_freeze_deadline", return_value=far_deadline),
+    ):
+        events = watchdog._check_enrichment_freshness(
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 25, 20, 30, tzinfo=dt.UTC)
+        )
+    assert events == []
+
+
+def test_rotowire_empty_quiet_before_lineup_window() -> None:
+    """Fri open / Sun tip: zero starters before T-30h is not a scrape failure."""
+    eng = _engine_with_feature_counts(124, 80, 0)
+    tip = dt.datetime(2026, 9, 27, 17, 0, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog_checks, "get_engine", return_value=eng),
+        patch.object(watchdog_checks, "_slate_lock_time", return_value=tip),
+    ):
+        events = watchdog._check_feature_content(
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 25, 20, 0, tzinfo=dt.UTC)
+        )
+    assert {e.trigger for e in events} == set()
+
+
+def test_rotowire_empty_warns_inside_lineup_window() -> None:
+    eng = _engine_with_feature_counts(124, 80, 0)
+    tip = dt.datetime(2026, 9, 27, 17, 0, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog_checks, "get_engine", return_value=eng),
+        patch.object(watchdog_checks, "_slate_lock_time", return_value=tip),
+    ):
+        events = watchdog._check_feature_content(
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 26, 12, 0, tzinfo=dt.UTC)
+        )
+    assert {e.trigger for e in events} == {"rotowire_empty"}
+
+
+def test_watchdog_today_uses_live_eval_not_history() -> None:
+    """Sticky historical warns must not drive /watchdog/today status (#319)."""
+    from fastapi.testclient import TestClient
+
+    from wnba_oracle.api.app import create_app
+    from wnba_oracle.common.settings import Settings
+
+    historical = {
+        "trigger": "rotowire_empty",
+        "severity": "warn",
+        "payload_json": {"pool": 124},
+        "created_at": dt.datetime(2026, 9, 25, 19, 10, tzinfo=dt.UTC),
+    }
+
+    class _Row:
+        def __init__(self, mapping):
+            self._mapping = mapping
+
+    class _Result:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def __iter__(self):
+            return iter(self._rows)
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, *args, **kwargs):
+            return _Result([_Row(historical)])
+
+    class _Eng:
+        def connect(self):
+            return _Conn()
+
+    app = create_app(settings=Settings(DATABASE_URL="postgresql://test"))
+    with (
+        patch("wnba_oracle.api.watchdog_router.get_engine", return_value=_Eng()),
+        patch(
+            "wnba_oracle.scheduler.watchdog.evaluate_watchdog",
+            return_value=[],
+        ),
+    ):
+        client = TestClient(app)
+        resp = client.get("/watchdog/2026-09-25")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["events"] == []
+    assert len(body["history"]) == 1
+    assert body["history"][0]["trigger"] == "rotowire_empty"

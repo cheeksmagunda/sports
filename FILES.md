@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 881 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 882 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1095,6 +1095,7 @@ Generated from `git ls-files`. 881 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_resolve_ops_window.py
 - wnba-oracle/tests/unit/test_results_api.py -- Read-only results API over realized Real Sports slate outcomes (issue #34).
 - wnba-oracle/tests/unit/test_rolling.py -- Rolling-window tests against a synthetic per-player game log.
+- wnba-oracle/tests/unit/test_rotowire_empty_reason.py -- Classify empty RotoWire HTML (#319).
 - wnba-oracle/tests/unit/test_rotowire_parse.py -- RotoWire HTML parse coverage (D100 fix).
 - wnba-oracle/tests/unit/test_rotowire_url.py -- D74: RotoWire URL + CSS selector fix.
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
@@ -1119,7 +1120,7 @@ Generated from `git ls-files`. 881 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_train_cli.py
 - wnba-oracle/tests/unit/test_upcoming_games_pool.py -- D109: scope the optimizer pool to games that have not tipped yet.
 - wnba-oracle/tests/unit/test_verify_durable_job.py -- Tests for bounded durable job verification.
-- wnba-oracle/tests/unit/test_watchdog.py -- Watchdog trigger logic — pure function tests against a mocked engine.
+- wnba-oracle/tests/unit/test_watchdog.py -- Watchdog trigger logic  -  pure function tests against a mocked engine.
 - wnba-oracle/tests/unit/test_watchdog_monitor_ops.py -- Schedule-aware tests for the independent production monitor.
 - wnba-oracle/tests/unit/test_workflow_setup_contract.py -- Keep independent hosted jobs on the same portable Python contract.
 
