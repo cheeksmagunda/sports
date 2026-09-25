@@ -1,5 +1,70 @@
 # Status
 
+## Sunday 2026-09-27 win-ready boost-aware projection + T-40 alert gap (2026-09-25 ~17:00 CT, issue #327)
+
+Follow-on after the #156 evidence pass and operator board-clear of #156/#280.
+No Railway variable mutations. No `nfl-pipeline train --force` (active model still
+clears Sunday T-40).
+
+### Live health (rechecked)
+
+- `nfl-oracle` + `nfl-oracle-worker` Online on `nfl-oracle-staging` / production.
+- Public API `https://nfl-oracle-production.up.railway.app/health` -> ok.
+- `/slate/2026-09-27` -> `waiting_for_t40`, `next_freeze=2026-09-27T16:20:00+00:00`
+  (11:20 AM CT), `cutoff_at=2026-09-27T17:00:00+00:00` (noon CT tip), disk
+  `percent_used=33.8` status ok (~1.83 GB of 4.9 GB on the worker volume).
+
+### Model age
+
+- Active `sha8=4406c87e`, `trained_at=2026-09-25T02:57:26.663677+00:00`,
+  `training_rows=37692`, `selected_estimator=ridge`, `model_max_age_days=8`.
+- Age now ~0.79d; age at Sunday T-40 ~2.56d. `model_staleness_reason` -> `None`
+  at both now and Sunday T-40. No retrain.
+
+### Real Sports session (names/presence only)
+
+- `REALSPORTS_STORAGE_STATE_B64GZ` present, `sha256[:8]=c4a729e2`.
+- Volume `data/scraper/storage_state.json` mode `0600` (cookie list empty after
+  materialize; token cache carries the live header names).
+- `request_token_cache.json` mode `0600` with required header names
+  (`real-session-token`, `real-request-token`, `real-device-*`, etc.), refreshed
+  around deploy. Verdict: **healthy enough for Sunday** (token cache path);
+  empty cookie jar is residual risk if capture is forced to rebuild from
+  storage_state alone.
+
+### Multi-game freeze path
+
+- Draftable-only pool completeness remains on main (`provider.py` filters
+  `kickoff_at > now` before roster/search; `incomplete_player_pool` still fails
+  closed for a genuinely unobserved draftable player). Landed originally in
+  #158 / #156 program.
+
+### T-40 alert gap (found + patched)
+
+- Worker volume `schedules.csv` still lacked the `gametime` column (pre-#267
+  copy). Offline pregate stayed inert; Actions T-40 watchdog would have
+  returned `schedule_missing_gametime` / `unresolved` and **not alerted**.
+- Operational fix: volume schedule force-refreshed from the committed
+  `nfl-oracle/data/schedule/schedules.csv` (6,771 rows, all with `gametime`;
+  Sunday 2026-09-27 has 14 games).
+- Code fix on this branch: `evaluate_t40_deadline` falls back to the worker
+  run's `details.next_freeze` / `cutoff_at` when offline gametime is missing,
+  so a lagging volume copy cannot silence Sunday alerts.
+
+### Win push: boost-aware projection (#327, former #280 follow-on)
+
+- New `nfl_oracle.recommendations.boost_projection.apply_boost_aware_projections`
+  adds `boost_signal_per_point` (default `0.25`) Real-value lift to conditional
+  samples proportional to `card_boost` when `boost_regime=provider_boosts_present`.
+  Zero-boost slates unchanged. Wired into `RecommendationPipeline.prepare` and
+  the contest-pool replay harness. `PipelinePolicy.boost_signal_per_point` is the
+  evidence-gated knob (commit `3ec2bad` / former #37 authority; not a Railway env).
+- Unit pins: `tests/unit/test_boost_projection.py`, plus watchdog fallback case.
+- Residual: full Corpus C contest-pool re-measure of the new default still
+  outstanding against a context snapshot (same harness as #318); position
+  calibration remains the next candidate after that number.
+
+
 ## Sunday 2026-09-27 T-40 readiness (2026-09-25 ~16:30 CT, issue #156)
 
 Evidence-only pass against production + live `main` (PR #270 already merged

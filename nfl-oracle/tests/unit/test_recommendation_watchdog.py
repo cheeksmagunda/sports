@@ -119,3 +119,25 @@ def test_watchdog_surfaces_schedule_rows_that_lack_gametime() -> None:
 
     assert report.status == "unresolved"
     assert report.reason == "schedule_missing_gametime"
+
+
+def test_watchdog_falls_back_to_worker_run_next_freeze_when_gametime_missing() -> None:
+    report = evaluate_t40_deadline(
+        day=DAY,
+        games=_games(gametime="", late_gametime=""),
+        frozen=None,
+        latest_run={
+            "status": "waiting",
+            "detail_code": "waiting_for_t40",
+            "details": {
+                "next_freeze": "2026-09-20T16:20:00+00:00",
+                "cutoff_at": "2026-09-20T17:00:00+00:00",
+            },
+        },
+        checked_at=datetime(2026, 9, 20, 16, 35, tzinfo=UTC),
+        grace_minutes=10,
+    )
+
+    assert report.status == "alert"
+    assert report.reason == "no_freeze_by_deadline"
+    assert report.freeze_due_at == datetime(2026, 9, 20, 16, 20, tzinfo=UTC)
