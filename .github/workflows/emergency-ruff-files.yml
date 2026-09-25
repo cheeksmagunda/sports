@@ -1,0 +1,47 @@
+name: emergency-ruff-files
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to format and push
+        required: true
+        default: fix/280-boost-aware-projection
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Format nfl-oracle and regenerate FILES.md
+        run: |
+          set -eux
+          uv sync --frozen --package nfl-oracle --extra dev
+          uv run --frozen --package nfl-oracle --extra dev ruff format \
+            nfl-oracle/scripts/sweep_picker_knobs.py \
+            nfl-oracle/src/nfl_oracle/recommendations/picker_knobs.py \
+            nfl-oracle/src/nfl_oracle/replay/contest_pool_replay.py
+          python3 scripts/generate_file_manifest.py
+          python3 scripts/generate_file_manifest.py --check
+          uv run --frozen --package nfl-oracle --extra dev ruff format --check \
+            nfl-oracle/scripts/sweep_picker_knobs.py \
+            nfl-oracle/src/nfl_oracle/recommendations/picker_knobs.py \
+            nfl-oracle/src/nfl_oracle/replay/contest_pool_replay.py
+      - name: Commit and push
+        run: |
+          set -eux
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'no changes'
+            exit 0
+          fi
+          git commit -m "chore: regenerate FILES.md + ruff format picker knobs (Refs #327)"
+          git push origin HEAD:${{ inputs.branch }}
