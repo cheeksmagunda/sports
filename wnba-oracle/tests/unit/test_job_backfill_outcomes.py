@@ -160,3 +160,52 @@ def test_backfill_empty_eligible_slate_set_fails_truthfully() -> None:
     assert exit_code == 1
     connection.close.assert_called_once()
     logger.error.assert_called_once_with("backfill_failed", reason="eligible_slate_set_empty")
+
+
+def test_main_rejects_empty_polars_game_logs() -> None:
+    """Production read_game_logs returns a Polars DataFrame; empty must exit 1.
+
+    `if not game_logs` raises TypeError on DataFrame (2026-09-25 #279 crash).
+    """
+    import polars as pl
+
+    logger = MagicMock()
+    settings = MagicMock(log_level="INFO", database_url="postgresql://test")
+    with (
+        patch.object(job_backfill, "log", logger),
+        patch.object(job_backfill, "get_settings", return_value=settings),
+        patch.object(job_backfill, "configure_logging"),
+        patch.object(job_backfill, "read_game_logs", return_value=pl.DataFrame()),
+    ):
+        assert job_backfill.main() == 1
+    logger.error.assert_any_call("backfill_failed", reason="game_log_corpus_empty")
+
+
+def test_main_accepts_nonempty_polars_game_logs() -> None:
+    """Non-empty Polars DataFrame must not raise on the empty-corpus gate."""
+    import polars as pl
+
+    connection = MagicMock()
+    logger = MagicMock()
+    settings = MagicMock(log_level="INFO", database_url="postgresql://test")
+    existing_processor = MagicMock(return_value=1)
+    historical_processor = MagicMock(return_value=1)
+    frame = pl.DataFrame({"game_id": ["g1"], "player_id": [1]})
+    with (
+        patch.object(job_backfill, "log", logger),
+        patch.object(job_backfill, "get_settings", return_value=settings),
+        patch.object(job_backfill, "configure_logging"),
+        patch.object(job_backfill, "read_game_logs", return_value=frame),
+        patch.object(job_backfill, "get_engine", return_value=MagicMock()),
+        patch.object(job_backfill, "build_opp_dvp_lookup", return_value={}),
+        patch.object(job_backfill.psycopg, "connect", return_value=connection),
+        patch.object(job_backfill, "_get_all_slate_dates", return_value=[SLATE_WITH_EXISTING]),
+        patch.object(
+            job_backfill, "_get_existing_enrichment_dates", return_value={SLATE_WITH_EXISTING}
+        ),
+        patch.object(job_backfill, "_get_name_to_team_map", return_value={}),
+        patch.object(job_backfill, "build_head_feature_lookup", return_value={}),
+        patch.object(job_backfill, "_process_existing_slate", existing_processor),
+        patch.object(job_backfill, "_process_historical_slate", historical_processor),
+    ):
+        assert job_backfill.main() == 0
