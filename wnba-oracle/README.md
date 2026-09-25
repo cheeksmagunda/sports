@@ -85,7 +85,10 @@ Historical enrichment backfill is isolated from source pushes: it has no cron,
 source auto-deploy, or restart loop, and the manual workflow accepts only an
 exact `main` commit with successful backend CI. The workflow then verifies a new
 successful durable backfill record, while partial, empty-input, and write
-failures return nonzero.
+failures return nonzero. Build recovery for `backfill-enrichment` must use a
+fresh source deploy through `wnba-oracle/Dockerfile` (`railway redeploy
+--from-source` or `serviceInstanceDeployV2`), not an image-reuse redeploy of a
+prior Railpack failure (issue #279).
 
 Scheduled watchdog, pre-freeze, and day-close verification steps retain a safe
 report and escalate before failing their workflow. Corpus backup keeps database
