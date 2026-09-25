@@ -185,6 +185,28 @@ make -C nfl-oracle walk-forward-report
 See [`artifacts/walk_forward_fixture_sample.md`](artifacts/walk_forward_fixture_sample.md)
 for a small fixture-scale comparison (observation only; not contest decision value).
 
+### Production-pipeline backtest (issue #280)
+
+`nfl_oracle.replay.production_backtest` replays the real production path
+(`fit_model` over `attach_enrichment`/`enrich_historical_rows`, then `predict`
+and the production `optimize`) walk-forward over finalized Corpus G games and
+reports the zero-boost capture ratio (our realized score / hindsight-best score
+over the same candidate pool and slots). Every row the model or the prior bank
+sees must be final strictly before the slate cutoff; `LeakageError` fails the
+run otherwise. Training uses the wall clock with a data cutoff, because Corpus G
+and nflverse capture clocks are retrospective; context is
+`retrospective_reconstructed`, never prospective proof.
+
+```sh
+# needs local data/raw/corpus_g plus a saved nflverse ContextSnapshot JSON
+make -C nfl-oracle production-backtest CONTEXT_SNAPSHOT=/path/to/context.json \
+  BACKTEST_ARGS="--grouping game --out /tmp/production_backtest.json"
+```
+
+`--grouping game` matches the naive per-game baseline in
+`nfl_oracle.replay.backtest`; `--grouping day` groups games by US/Eastern date.
+Current results live in `STATUS.md`.
+
 ## Local commands
 
 ```sh

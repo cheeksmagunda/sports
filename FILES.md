@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 849 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 852 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -295,6 +295,8 @@ Generated from `git ls-files`. 849 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/replay/__init__.py -- Replay the saved Corpus C contest archive against the verified scoring law.
 - nfl-oracle/src/nfl_oracle/replay/backtest.py -- Historical zero-boost projection backtests over Corpus G player games.
 - nfl-oracle/src/nfl_oracle/replay/harness.py -- Replay the saved Corpus C archive against the verified scoring law.
+- nfl-oracle/src/nfl_oracle/replay/production_backtest.py -- Walk-forward backtest of the actual production prediction pipeline (#280).
+- nfl-oracle/src/nfl_oracle/replay/production_backtest_cli.py -- CLI: walk-forward backtest of the production prediction pipeline (#280).
 
 ## nfl-oracle/src/nfl_oracle/service/
 - nfl-oracle/src/nfl_oracle/service/__init__.py -- Read-only nfl-oracle research service scaffold.
@@ -434,6 +436,7 @@ Generated from `git ls-files`. 849 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_redact.py -- Tests for Corpus G identity redaction.
 - nfl-oracle/tests/unit/test_replay_backtest.py
 - nfl-oracle/tests/unit/test_replay_harness.py -- Unit tests for nfl_oracle.replay.harness.
+- nfl-oracle/tests/unit/test_replay_production_backtest.py
 - nfl-oracle/tests/unit/test_research_api_draft_edges.py -- Additional research API + fixture honesty edges for draft readiness.
 - nfl-oracle/tests/unit/test_research_client_smoke.py -- Offline research_client_smoke script.
 - nfl-oracle/tests/unit/test_research_path_extras.py -- Extra research/service/strategy scaffolding tests.
