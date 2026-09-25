@@ -1674,3 +1674,7 @@ cause itself, landed the same day:
   `make check-boundaries` all pass. The emergency manual deletion performed
   during triage is now redundant going forward -- the hourly prune keeps the
   same directories bounded automatically.
+
+## Codespace Railway CLI hygiene (2026-09-24 CT)
+
+- Issue #302 / #300: Codespace is home for Railway CLI and Real Sports runner work; keep it Available around slate windows. Shells keep only `RAILWAY_API_TOKEN`; postStart unsets project `RAILWAY_TOKEN`. Ops contract lives in root `ENTRY_POINTS.md` and this README's forced-retrain snippet. Do not rediscover via chat.

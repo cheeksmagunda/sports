@@ -285,3 +285,46 @@ operator re-uploads snapshots to any configured static project:
 - **Local checkout?** Run `make setup` and `make test` to validate everything works
 - **Codespaces?** Use the button in README.md; devcontainer handles setup automatically
 - **Cloud project or mobile chat?** Upload the canonical snapshot bundle and always fetch live versions before working
+
+## Railway from the Codespace
+
+All Railway mutations and worker SSH (link, restart, redeploy, `train --force`,
+logs, variable changes) run **from inside the GitHub Codespace**, after
+`railway whoami` shows the operator account (Cheeks Magunda). Do not run
+Railway from the operator Mac, and do not use `SPORTS_ALLOW_LOCAL_RAILWAY` as
+the normal path.
+
+Pattern:
+
+1. Wake the Codespace with Mac `gh` (`gh codespace ssh -c <name> --` or the
+   VS Code / Cursor remote).
+2. Prefer a **login shell** so Codespaces user secrets inject
+   (`RAILWAY_API_TOKEN`, `REALSPORTS_STORAGE_STATE_B64GZ`).
+3. **Never both Railway token kinds in one shell.** If both
+   `RAILWAY_API_TOKEN` and `RAILWAY_TOKEN` are set, unset `RAILWAY_TOKEN` and
+   keep the API token. postStart does this for interactive shells; do not
+   delete the GitHub Actions project `RAILWAY_TOKEN` used by CI.
+4. If `railway ssh` fails on host key, register the Codespace host key with
+   `railway ssh keys add` (or import) before retrying.
+5. Worker CLIs live under `/opt/venv/bin` on the service image. Example NFL
+   forced retrain:
+
+```bash
+unset RAILWAY_TOKEN
+railway whoami
+railway ssh --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
+```
+
+Do not rely on `railway ssh --session` / tmux unless the worker image has
+tmux. Prefer a long SSH or worker-side nohup for long jobs.
+
+## Codespace stay-awake around slates
+
+Keep the Codespace **Available** around live slate / lock windows (NFL TNF,
+WNBA tip windows, etc.). Wake-and-hold; do not assume Shutdown self-heals
+mid-lock. Real Sports runner work (session storage, freeze helpers, local
+Playwright against production) uses the **same Codespace** as Railway CLI
+work: one home for devops and slate ops. Mac is for waking Codespace and
+write-path (`gh`), not for Railway or Real Sports as the primary host.
+

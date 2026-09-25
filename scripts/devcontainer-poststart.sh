@@ -35,9 +35,9 @@ done
 # Codespaces should inject only RAILWAY_API_TOKEN. If a project-scoped
 # RAILWAY_TOKEN is also present it can flip CLI auth to Unauthorized.
 for rc in "/home/vscode/.bashrc" "/home/vscode/.zshrc"; do
-  [ -f "" ] || continue
-  grep -qF "# sports: one railway identity in this codespace (#300)" "" && continue
-  printf "\n%s\n[ -n "\${PS1:-}" ] && [ -n "\${RAILWAY_API_TOKEN:-}" ] && unset RAILWAY_TOKEN\n"     "# sports: one railway identity in this codespace (#300)" >> ""
+  [ -f "$rc" ] || continue
+  grep -qF "# sports: one railway identity in this codespace (#300)" "$rc" && continue
+  printf "\n%s\n[ -n "\${PS1:-}" ] && [ -n "\${RAILWAY_API_TOKEN:-}" ] && unset RAILWAY_TOKEN\n"     "# sports: one railway identity in this codespace (#300)" >> "$rc"
 done
 # Also clear for this postStart process and child railway link jobs.
 if [ -n "${RAILWAY_API_TOKEN:-}" ]; then
