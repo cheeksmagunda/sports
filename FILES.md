@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 855 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 877 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 855 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -464,6 +466,7 @@ Generated from `git ls-files`. 855 tracked files. Regenerate with `scripts/gener
 ## nhl-oracle/
 - nhl-oracle/.agent.md -- NHL Oracle agent instructions
 - nhl-oracle/.env.example
+- nhl-oracle/.gitignore
 - nhl-oracle/AGENTS.md -- NHL Oracle agent instructions
 - nhl-oracle/CLAUDE.md -- NHL Oracle agent instructions
 - nhl-oracle/Makefile -- Build/test/lint entrypoints
@@ -471,13 +474,30 @@ Generated from `git ls-files`. 855 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/STATUS.md -- Status
 - nhl-oracle/pyproject.toml -- Package/tool configuration
 
+## nhl-oracle/data/audit/
+- nhl-oracle/data/audit/.gitkeep
+
+## nhl-oracle/data/catalog/
+- nhl-oracle/data/catalog/.gitkeep
+
+## nhl-oracle/data/raw/
+- nhl-oracle/data/raw/.gitkeep
+
+## nhl-oracle/scripts/
+- nhl-oracle/scripts/live_contract_audit.py -- CLI wrapper for nhl_oracle.ingest.audit (read-only).
+
 ## nhl-oracle/src/nhl_oracle/
 - nhl-oracle/src/nhl_oracle/__init__.py -- NHL Oracle application package.
 
+## nhl-oracle/src/nhl_oracle/common/
+- nhl-oracle/src/nhl_oracle/common/__init__.py -- NHL-owned shared helpers (paths, etc.).
+- nhl-oracle/src/nhl_oracle/common/paths.py -- Project-owned runtime path discovery for nhl-oracle.
+
 ## nhl-oracle/src/nhl_oracle/contract/
 - nhl-oracle/src/nhl_oracle/contract/__init__.py -- NHL contest contract shape and audit gates (observation only, pre-provider).
+- nhl-oracle/src/nhl_oracle/contract/discovery.py -- Infer NhlContestContract fields from Real Sports payloads.
 - nhl-oracle/src/nhl_oracle/contract/gates.py -- NHL contract audit gates (always observation only, never contest entry).
-- nhl-oracle/src/nhl_oracle/contract/schema.py -- Candidate NHL contest contract shape, pending live-provider confirmation.
+- nhl-oracle/src/nhl_oracle/contract/schema.py -- NHL contest contract shape confirmed against live Real Sports evidence.
 
 ## nhl-oracle/src/nhl_oracle/identity/
 - nhl-oracle/src/nhl_oracle/identity/__init__.py -- NHL player identity map and collision reconciliation.
@@ -485,20 +505,32 @@ Generated from `git ls-files`. 855 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/src/nhl_oracle/identity/reconcile.py -- Same-name identity collision reconciliation (offline, observation only).
 
 ## nhl-oracle/src/nhl_oracle/ingest/
-- nhl-oracle/src/nhl_oracle/ingest/__init__.py -- NHL raw payload provenance and persistence (pre-provider scaffold).
+- nhl-oracle/src/nhl_oracle/ingest/__init__.py -- NHL ingest: Real Sports client, redaction, and corpus provenance.
+- nhl-oracle/src/nhl_oracle/ingest/audit.py -- Read-only Real Sports NHL contract audit + redacted corpus seed.
 - nhl-oracle/src/nhl_oracle/ingest/provenance.py -- Redacted NHL raw payload persistence with sidecar provenance.
+- nhl-oracle/src/nhl_oracle/ingest/realsports.py -- Thin Real Sports HTTP client for NHL (read-only).
+- nhl-oracle/src/nhl_oracle/ingest/redact.py -- Redact identity fields from Real Sports NHL payloads before persistence.
 
 ## nhl-oracle/src/nhl_oracle/scheduler/
 - nhl-oracle/src/nhl_oracle/scheduler/__init__.py -- NHL freeze-cycle job skeleton (no live provider, no contest entry).
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
 
 ## nhl-oracle/tests/
+- nhl-oracle/tests/test_audit_fixtures.py
 - nhl-oracle/tests/test_contract_gates.py
 - nhl-oracle/tests/test_contract_schema.py
+- nhl-oracle/tests/test_discovery.py
 - nhl-oracle/tests/test_freeze_cycle.py
 - nhl-oracle/tests/test_identity_reconcile.py
 - nhl-oracle/tests/test_import.py
 - nhl-oracle/tests/test_provenance.py
+- nhl-oracle/tests/test_realsports_auth_bootstrap.py
+- nhl-oracle/tests/test_redact.py
+
+## nhl-oracle/tests/fixtures/realsports/
+- nhl-oracle/tests/fixtures/realsports/contest_draftinfo.json -- (test fixture data)
+- nhl-oracle/tests/fixtures/realsports/contest_meta.json -- (test fixture data)
+- nhl-oracle/tests/fixtures/realsports/game_players.json -- (test fixture data)
 
 ## packages/oracle-core/
 - packages/oracle-core/README.md -- oracle-core
