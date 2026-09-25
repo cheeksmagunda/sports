@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-25T05:30:00Z
+Last verified: 2026-09-25T05:40:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -32,12 +32,20 @@ CLI session as Cheeks Magunda):
   slates on deploy `215229c9`. Fix: normalize DATE and VARCHAR values to ISO
   text via `_as_iso_slate_date` so head-feature builds and the
   existing-enrichment membership check share one type. Unit coverage in
-  `test_job_backfill_slate_dates.py`. Redeploy status recorded after merge.
-- **Real Sports session on backfill-enrichment:** service previously lacked
-  `REALSPORTS_STORAGE_STATE_B64GZ` (`has_realsports_creds=false`). Prefer copy
-  from `cron-job1` in the same project when attaching (names only; never mint).
-  Full historical backfill remains an authorized one-shot via
-  `wnba-backfill-enrichment.yml`, not a routine auto-deploy.
+  `test_job_backfill_slate_dates.py`. Merged as `e6a40ab` (PR #314).
+- **Post-fix redeploy (#312):** Dockerfile `--from-source` deploy
+  `5d1f20d9` on `e6a40ab` reached Railway `SUCCESS` then `STOPPED` after the
+  one-shot job. Logs: `seed_storage_state` materialized, game logs
+  `n_rows=18504`, `serving_head_features_built` for all 226 slates,
+  `failed_feature_builds=0`, `failed_slates=0`, `job_completed status=success
+  exit_code=0` (~98s). No `AttributeError` / `backfill_head_feats_failed`.
+  `inserted=0` / `updated=0` (no enrichment rows needed write this run).
+- **Real Sports session on backfill-enrichment:** copied
+  `REALSPORTS_STORAGE_STATE_B64GZ` from `cron-job1` (name only; value not
+  logged). Seed path materialized the derived session. Cron dispatch still
+  reported `has_realsports_creds=false` (that flag tracks username/password,
+  not the B64GZ session blob). Full historical backfill remains an authorized
+  one-shot via `wnba-backfill-enrichment.yml`, not a routine auto-deploy.
 
 ## Configuration audit, layers 2-5 (2026-09-24 ~20:30 UTC, issue #239)
 
