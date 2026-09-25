@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-25T21:45:00Z
+Last verified: 2026-09-25T21:50:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -17,17 +17,24 @@ not exposed by the read-only checks available during this audit.
   or join failure. Separately, `enrichment_stale` used a 13:30 UTC floor while
   every healthy job1 finishes ~13:04-13:08, and did not skip when freeze was
   still days away.
+- **Live evidence (2026-09-25 ~4:45 PM CT):** `cron-job1` deploy `48d3ba01`
+  logged `n_rotowire=0` / `n_lineups=0` / pool 124 / capture 13:07:04Z then
+  `watchdog_event trigger=rotowire_empty`. Public
+  `https://api-production-7033.up.railway.app/watchdog/today` still returns
+  those historical warns plus `enrichment_stale` (floor still 13:30 on the
+  pre-fix image). Live RotoWire HTML classifies as `no_games_scheduled`
+  (327471 bytes, 0 parsed lineups). Slate tip/freeze unchanged.
 - **Code fix:** classify empty RotoWire HTML (`no_games_scheduled` /
   `subscriber_paywall` / `parse_empty`); gate `rotowire_empty` until ~30h
   before tip; fail closed (`rotowire_empty_near_tip`) inside that window;
   move freshness floor to 13:00 UTC and skip when freeze is >6h away.
 - **Sunday residual:** starters still depend on Sunday ~13:00 UTC job1 (and
   job1_lite) seeing same-day RotoWire lineups for the tip-day slate_date.
-  Historical `watchdog_events` rows for 2026-09-25 remain until the slate
-  rolls; new fires of these two triggers are suppressed outside the window.
-  Parser DOM (`div.lineup.is-nba`) still matches sister sports with live
-  games (verified MLB); WNBA page is empty only because there are no games
-  today.
+  Historical `watchdog_events` rows for 2026-09-25 remain visible on
+  `/watchdog/today` (API reads the table, no time filter) until the slate
+  rolls; new fires of these two triggers are suppressed outside the window
+  after deploy. Parser DOM still matches sister sports with live games;
+  WNBA page is empty only because there are no games today.
 
 ## optimizer_leverage_weight evidence gate (#289)  -  2026-09-25
 
