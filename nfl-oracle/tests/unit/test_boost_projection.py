@@ -121,7 +121,5 @@ def test_zero_boost_regime_is_noop() -> None:
 def test_disabled_signal_is_noop() -> None:
     slate = _slate(boost=3.0)
     projections = (_projection(1, 4.0), _projection(2, 5.0))
-    adjusted = apply_boost_aware_projections(
-        projections, slate, signal_per_boost_point=0.0
-    )
+    adjusted = apply_boost_aware_projections(projections, slate, signal_per_boost_point=0.0)
     assert [p.conditional_mean for p in adjusted] == [4.0, 5.0]

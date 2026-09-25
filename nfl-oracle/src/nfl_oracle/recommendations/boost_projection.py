@@ -64,8 +64,7 @@ def apply_boost_aware_projections(
                     "conditional_mean": conditional,
                     "mean": conditional * float(projection.availability_probability),
                     "samples": samples,
-                    "provenance": tuple(projection.provenance)
-                    + ("boost_aware_projection_signal",),
+                    "provenance": tuple(projection.provenance) + ("boost_aware_projection_signal",),
                 }
             )
         )

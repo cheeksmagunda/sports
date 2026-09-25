@@ -44,9 +44,7 @@ class PipelinePolicy(Record):
     input_max_age_seconds: int = Field(default=900, ge=60, le=900)
     model_max_age_days: int = Field(default=8, ge=1, le=30)
     # Additive Real-value lift per card_boost point on boosted slates (#327).
-    boost_signal_per_point: float = Field(
-        default=DEFAULT_BOOST_SIGNAL_PER_POINT, ge=0, le=2
-    )
+    boost_signal_per_point: float = Field(default=DEFAULT_BOOST_SIGNAL_PER_POINT, ge=0, le=2)
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
     contest_entry: Literal[False] = False
 
