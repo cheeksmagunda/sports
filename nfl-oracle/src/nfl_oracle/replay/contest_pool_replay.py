@@ -27,7 +27,7 @@ Honesty boundary, inherited from the harness: only the top twenty entries are
 visible. ``beats_visible_entries`` counts visible entries production's score
 exceeds; it is never a percentile of the full field. Pool players with no
 Corpus G row that day (all scored zero in the local archive) are dropped from
-the candidate pool and counted, which is slightly generous to production.
+ the candidate pool and counted, which is slightly generous to production.
 
 Read-only research: no provider calls, no contest entry, no store writes.
 """
@@ -54,6 +54,10 @@ from nfl_oracle.recommendations.optimizer import (
     OptimizerConfig,
     ScoringPolicy,
     optimize,
+)
+from nfl_oracle.recommendations.picker_knobs import (
+    PickerKnobs,
+    apply_picker_knobs,
 )
 from nfl_oracle.recommendations.schema import EvidenceClock, utc
 from nfl_oracle.replay.harness import (
@@ -126,6 +130,7 @@ class ContestPoolResult:
     visible_entries: int
     diversity_relaxed: bool
     naive_capture_ratio: float | None = None
+    picker_profile: str = "identity"
 
 
 @dataclass(frozen=True)
@@ -213,6 +218,7 @@ def replay_contest_pools(
     optimizer_config: OptimizerConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
+    picker: PickerKnobs | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> tuple[tuple[ContestPoolResult, ...], dict[str, int]]:
     """Walk-forward production replay restricted to each contest's visible pool.
@@ -224,6 +230,7 @@ def replay_contest_pools(
     """
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
+    knobs = picker or PickerKnobs()
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)
     excluded: dict[str, int] = defaultdict(int)
@@ -264,6 +271,7 @@ def replay_contest_pools(
                 team_keys=team_keys,
                 config=cfg,
                 compact_samples=compact_samples,
+                picker=knobs,
                 excluded=excluded,
             )
             if result is not None:
@@ -283,6 +291,7 @@ def _run_contest(
     team_keys: Mapping[int, str] | None,
     config: OptimizerConfig,
     compact_samples: bool,
+    picker: PickerKnobs,
     excluded: dict[str, int],
 ) -> ContestPoolResult | None:
     contest = pool.contest
@@ -326,6 +335,12 @@ def _run_contest(
         return None
     if compact_samples:
         projections = compact_projections(projections)
+    projections = apply_picker_knobs(
+        projections,
+        slate,
+        knobs=picker,
+        position_bias=model.position_residual_bias,
+    )
     try:
         lineup = optimize(
             slate,
@@ -406,6 +421,7 @@ def _run_contest(
         visible_entries=len(visible_scores),
         diversity_relaxed=lineup.diversity_relaxed,
         naive_capture_ratio=naive_capture,
+        picker_profile=picker.profile,
     )
 
 
@@ -440,3 +456,111 @@ def summarize(
         boosted=summarize_regime([r for r in results if not r.is_zero_boost]),
         excluded=dict(excluded or {}),
     )
+
+
+def capture_with_picker(
+    pool: ContestPool,
+    *,
+    rows: Sequence[HistoricalPerformance],
+    model: RatingModel,
+    fold: str,
+    now: datetime,
+    team_keys: Mapping[int, str] | None,
+    config: OptimizerConfig,
+    compact_samples: bool,
+    picker: PickerKnobs,
+) -> ContestPoolResult | None:
+    """Replay one contest under an explicit picker setting (shared-fit helper)."""
+    excluded: dict[str, int] = defaultdict(int)
+    return _run_contest(
+        pool,
+        rows=rows,
+        model=model,
+        fold=fold,
+        now=now,
+        team_keys=team_keys,
+        config=config,
+        compact_samples=compact_samples,
+        picker=picker,
+        excluded=excluded,
+    )
+
+
+def replay_contest_pools_knob_sweep(
+    rows: Sequence[HistoricalPerformance],
+    contests: Iterable[ParsedContest],
+    knobs_list: Sequence[PickerKnobs],
+    *,
+    fold_of: Callable[[ContestPool], Hashable] | None = None,
+    now: datetime | None = None,
+    team_keys: Mapping[int, str] | None = None,
+    optimizer_config: OptimizerConfig | None = None,
+    compact_samples: bool = True,
+    fitter: Fitter = _production_fit,
+    progress: Callable[[str], None] | None = None,
+) -> dict[str, tuple[tuple[ContestPoolResult, ...], dict[str, int]]]:
+    """One walk-forward fit, many picker settings. Keys are ``PickerKnobs.profile``."""
+    if not knobs_list:
+        raise ValueError("knobs_list_empty")
+    profiles = [k.profile for k in knobs_list]
+    if len(set(profiles)) != len(profiles):
+        raise ValueError("picker_profile_not_unique")
+    clock_now = utc(now or datetime.now(UTC))
+    cfg = optimizer_config or OptimizerConfig(simulations=100)
+    fold_key = fold_of or _default_fold
+    by_day = rows_by_eastern_day(rows)
+    excluded: dict[str, int] = defaultdict(int)
+    pools: list[ContestPool] = []
+    for contest in contests:
+        if not contest.draft_stats:
+            excluded["no_draft_stats"] += 1
+            continue
+        pool = join_contest_pool(contest, by_day.get(contest.contest.day, ()))
+        if pool is None:
+            excluded["no_corpus_g_rows_for_day"] += 1
+            continue
+        pools.append(pool)
+    folds: dict[Hashable, list[ContestPool]] = defaultdict(list)
+    for pool in pools:
+        folds[fold_key(pool)].append(pool)
+    results_by_profile: dict[str, list[ContestPoolResult]] = {k.profile: [] for k in knobs_list}
+    for key, fold_pools in sorted(folds.items(), key=lambda item: min(p.cutoff for p in item[1])):
+        fold_cutoff = min(pool.cutoff for pool in fold_pools)
+        fold_games = {game for pool in fold_pools for game in pool.day_game_ids}
+        train = rows_before(rows, cutoff=fold_cutoff, exclude_game_ids=fold_games)
+        train, _audit = drop_ambiguous_identity_rows(train)
+        assert_no_leakage(train, cutoff=fold_cutoff, slate_game_ids=fold_games)
+        try:
+            model = fitter(train, clock_now)
+        except ValueError as error:
+            if isinstance(error, LeakageError):
+                raise
+            excluded[f"fit:{error}"] += len(fold_pools)
+            continue
+        for pool in sorted(fold_pools, key=lambda p: (p.cutoff, p.contest_id)):
+            for knobs in knobs_list:
+                per_excluded: dict[str, int] = defaultdict(int)
+                result = _run_contest(
+                    pool,
+                    rows=rows,
+                    model=model,
+                    fold=str(key),
+                    now=clock_now,
+                    team_keys=team_keys,
+                    config=cfg,
+                    compact_samples=compact_samples,
+                    picker=knobs,
+                    excluded=per_excluded,
+                )
+                for reason, count in per_excluded.items():
+                    excluded[reason] += count
+                if result is not None:
+                    results_by_profile[knobs.profile].append(result)
+                    if progress is not None:
+                        progress(
+                            f"contest:{pool.contest_id} profile={knobs.profile} "
+                            f"capture={result.capture_ratio:.3f}"
+                        )
+    return {
+        profile: (tuple(results), dict(excluded)) for profile, results in results_by_profile.items()
+    }

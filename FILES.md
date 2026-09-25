@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 882 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -185,6 +185,7 @@ Generated from `git ls-files`. 882 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/scripts/research_client_smoke.py -- Offline research FastAPI client smoke (observation only; no contest entry).
 - nfl-oracle/scripts/restore_corpus.py -- Validate and explicitly restore a verified NFL corpus backup snapshot.
 - nfl-oracle/scripts/seed_storage_state.py -- Materialize scraper/storage_state.json from REALSPORTS_STORAGE_STATE_B64GZ.
+- nfl-oracle/scripts/sweep_picker_knobs.py -- Sweep picker knobs on Corpus C contest-pool replay (shared weekly fits).
 
 ## nfl-oracle/src/nfl_oracle/
 - nfl-oracle/src/nfl_oracle/__init__.py -- NFL Oracle application package.
@@ -283,6 +284,7 @@ Generated from `git ls-files`. 882 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
+- nfl-oracle/src/nfl_oracle/recommendations/picker_knobs.py -- Evidence-backed projection knobs applied after predict, before optimize (#280).
 - nfl-oracle/src/nfl_oracle/recommendations/pipeline.py -- NFL prepare, publish, and lock lifecycle on the shared durable store.
 - nfl-oracle/src/nfl_oracle/recommendations/provider.py -- Read-only, audited NFL collection. Never exposes an entry mutation method.
 - nfl-oracle/src/nfl_oracle/recommendations/schema.py -- Validated recommendation inputs. Research and submission gates remain separate.
@@ -417,6 +419,7 @@ Generated from `git ls-files`. 882 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
 - nfl-oracle/tests/unit/test_label_depth.py -- Max-season label-kind depth across the catalog (issue #189).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
+- nfl-oracle/tests/unit/test_picker_knobs.py -- Unit tests for boost-aware / position-calibration picker knobs (#280).
 - nfl-oracle/tests/unit/test_player_mean_and_coverage_matrix.py -- player_mean baseline + coverage matrix document helpers.
 - nfl-oracle/tests/unit/test_player_priors_scoring.py -- Player priors + shadow scoring scaffolds.
 - nfl-oracle/tests/unit/test_production_container.py
