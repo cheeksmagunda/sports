@@ -1,4 +1,4 @@
-"""Watchdog trigger logic — pure function tests against a mocked engine."""
+"""Watchdog trigger logic  -  pure function tests against a mocked engine."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def test_no_job1_pool_triggers_critical() -> None:
 
 
 def test_small_pool_triggers_error() -> None:
-    """D84: escalated from warn — a sub-10 pool is an ingest failure."""
+    """D84: escalated from warn  -  a sub-10 pool is an ingest failure."""
     with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_pool_count(7)):
         events = watchdog._check_pool("2026-05-27")
     assert len(events) == 1
@@ -76,7 +76,7 @@ def test_small_pool_triggers_error() -> None:
 
 
 def test_single_team_pool_triggers_critical() -> None:
-    """D84: the 2026-06-08 morning shape — rows exist, one team."""
+    """D84: the 2026-06-08 morning shape  -  rows exist, one team."""
     eng = _engine_with_pool_count(12, n_teams=1)
     with patch.object(watchdog_checks, "get_engine", return_value=eng):
         events = watchdog._check_pool("2026-05-27")
@@ -282,7 +282,7 @@ def test_no_frozen_lineup_before_22utc_no_event() -> None:
 
 
 def test_no_frozen_lineup_quiet_for_past_slate() -> None:
-    """Backfill / historical query — don't false-positive when the slate
+    """Backfill / historical query  -  don't false-positive when the slate
     is yesterday and the check happens to fire today."""
     with patch.object(watchdog_checks, "get_engine", return_value=_engine_with_freeze_row(None)):
         events = watchdog._check_freeze(
@@ -706,3 +706,60 @@ def test_rotowire_empty_warns_inside_lineup_window() -> None:
             "2026-09-25", now_utc=dt.datetime(2026, 9, 26, 12, 0, tzinfo=dt.UTC)
         )
     assert {e.trigger for e in events} == {"rotowire_empty"}
+
+
+def test_watchdog_today_uses_live_eval_not_history() -> None:
+    """Sticky historical warns must not drive /watchdog/today status (#319)."""
+    from fastapi.testclient import TestClient
+
+    from wnba_oracle.api.app import create_app
+    from wnba_oracle.common.settings import Settings
+
+    historical = {
+        "trigger": "rotowire_empty",
+        "severity": "warn",
+        "payload_json": {"pool": 124},
+        "created_at": dt.datetime(2026, 9, 25, 19, 10, tzinfo=dt.UTC),
+    }
+
+    class _Row:
+        def __init__(self, mapping):
+            self._mapping = mapping
+
+    class _Result:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def __iter__(self):
+            return iter(self._rows)
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, *args, **kwargs):
+            return _Result([_Row(historical)])
+
+    class _Eng:
+        def connect(self):
+            return _Conn()
+
+    app = create_app(settings=Settings(DATABASE_URL="postgresql://test"))
+    with (
+        patch("wnba_oracle.api.watchdog_router.get_engine", return_value=_Eng()),
+        patch(
+            "wnba_oracle.scheduler.watchdog.evaluate_watchdog",
+            return_value=[],
+        ),
+    ):
+        client = TestClient(app)
+        resp = client.get("/watchdog/2026-09-25")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["events"] == []
+    assert len(body["history"]) == 1
+    assert body["history"][0]["trigger"] == "rotowire_empty"

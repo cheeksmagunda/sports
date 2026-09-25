@@ -10,32 +10,32 @@ without log access.
 
 Triggers implemented (post-MVP, expand as the eval bundle grows):
 
-- ``no_job1_pool`` (critical) — slate_date has zero job1_enrichment rows
+- ``no_job1_pool`` (critical)  -  slate_date has zero job1_enrichment rows
   by the time the watchdog runs. Either cron-job1 failed or hasn't
   fired. The frontend will keep showing the countdown.
-- ``pool_too_small`` (error, escalated from warn in D84) — fewer than 10
+- ``pool_too_small`` (error, escalated from warn in D84)  -  fewer than 10
   enrichment rows (a normal WNBA slate has 60+ players). Indicates an
   ingest partial failure.
-- ``pool_degenerate_teams`` (critical, D84) — enrichment rows exist but
+- ``pool_degenerate_teams`` (critical, D84)  -  enrichment rows exist but
   span fewer than 2 distinct teams. No valid slate has one team; a raw
   row count can miss this shape.
-- ``enrichment_stale`` (warn, D84) — after 20:00 UTC the newest capture
+- ``enrichment_stale`` (warn, D84)  -  after 20:00 UTC the newest capture
   for today's slate predates the 13:00 UTC job1 fire window; job2 is
   about to freeze on yesterday's universe.
-- ``no_frozen_lineup`` (critical) — no frozen row by the slate's freeze
+- ``no_frozen_lineup`` (critical)  -  no frozen row by the slate's freeze
   deadline (first_tip - freeze_lead_minutes when slate_meta has a tip,
   else the legacy 22:00 UTC fallback). The tip-relative form catches an
   afternoon slate that would lock before the evening cron window. Manual
   fire likely needed.
-- ``missing_per_player`` (error) — frozen JSONB lacks the per_player
+- ``missing_per_player`` (error)  -  frozen JSONB lacks the per_player
   block. The frontend will render placeholder cards. Should be
   impossible after D36, but the check is cheap and protects against
   future regressions.
-- ``zero_expected_payout`` (warn) — lineup frozen with
+- ``zero_expected_payout`` (warn)  -  lineup frozen with
   ``expected_payout = 0``. Optimizer either returned a degenerate
   solution or the payout curve was misconfigured. Operator should
   skip the contest.
-- ``opponent_non_reciprocal`` (warn, #32) — job1_enrichment has a
+- ``opponent_non_reciprocal`` (warn, #32)  -  job1_enrichment has a
   ``(team, opponent)`` edge that isn't mirrored back (A names B, B doesn't
   name A). A post-tip re-capture can overwrite ``opponent`` with a team's
   next fixture from the Odds API; downstream stacking already degrades
@@ -260,6 +260,33 @@ def _ping_on_critical(events: list[WatchdogEvent]) -> None:
         log.warning("watchdog_ping_failed", error_type=type(exc).__name__)
 
 
+def evaluate_watchdog(
+    slate_date: str,
+    *,
+    now_utc: dt.datetime | None = None,
+    check_config_drift: bool = False,
+) -> list[WatchdogEvent]:
+    """Run pipeline checks without persisting (operator API live status).
+
+    ``/watchdog/today`` previously returned every historical ``watchdog_events``
+    row for the slate, so tip-window false positives stayed sticky until the
+    slate rolled (#319). Live evaluation drives the operator curl status;
+    writers still persist via ``run_watchdog``.
+    """
+    now_utc = now_utc or dt.datetime.now(dt.UTC)
+    events: list[WatchdogEvent] = []
+    events.extend(_check_pool(slate_date))
+    events.extend(_check_enrichment_freshness(slate_date, now_utc=now_utc))
+    events.extend(_check_enrichment_source(slate_date))
+    events.extend(_check_opponent_reciprocity(slate_date))
+    events.extend(_check_freeze(slate_date, now_utc=now_utc))
+    events.extend(_check_model_artifact(slate_date))
+    events.extend(_check_feature_content(slate_date, now_utc=now_utc))
+    if check_config_drift:
+        events.extend(_check_config_drift(slate_date))
+    return events
+
+
 def run_watchdog(
     slate_date: str,
     *,
@@ -286,7 +313,7 @@ def run_watchdog(
     events.extend(_check_opponent_reciprocity(slate_date))
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
     events.extend(_check_model_artifact(slate_date))
-    events.extend(_check_feature_content(slate_date))
+    events.extend(_check_feature_content(slate_date, now_utc=now_utc))
     if check_config_drift:
         events.extend(_check_config_drift(slate_date))
     if events:

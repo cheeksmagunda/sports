@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-25T21:55:00Z
+Last verified: 2026-09-25T22:05:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -28,13 +28,17 @@ not exposed by the read-only checks available during this audit.
   `subscriber_paywall` / `parse_empty`); gate `rotowire_empty` until ~30h
   before tip; fail closed (`rotowire_empty_near_tip`) inside that window;
   move freshness floor to 13:00 UTC and skip when freeze is >6h away.
+- **API clear path:** `/watchdog/{slate_date}` and `/watchdog/today` now
+  drive `events`/`status` from a live `evaluate_watchdog()` re-check (no
+  persist). Historical rows remain under `history` for forensics, so tip-
+  window false positives cannot sticky-warn the phone curl after the gates
+  deploy.
 - **Sunday residual:** starters still depend on Sunday ~13:00 UTC job1 (and
   job1_lite) seeing same-day RotoWire lineups for the tip-day slate_date.
-  Historical `watchdog_events` rows for 2026-09-25 remain visible on
-  `/watchdog/today` (API reads the table, no time filter) until the slate
-  rolls; new fires of these two triggers are suppressed outside the window
-  after deploy. Parser DOM still matches sister sports with live games;
-  WNBA page is empty only because there are no games today.
+  New fires of `rotowire_empty` / `enrichment_stale` stay suppressed outside
+  the tip / freeze windows after deploy. Parser DOM still matches sister
+  sports with live games; WNBA page is empty only because there are no games
+  today.
 - **Real Sports session (2026-09-25 ~4:50 PM CT):** `REALSPORTS_STORAGE_STATE_B64GZ`
   present on `cron-job1`, `cron-job1-late`, `backfill-enrichment`, and
   `cron-dayclose` (len=9248 each). `auth-check-live`: derived session payload
