@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 881 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 883 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -275,6 +275,7 @@ Generated from `git ls-files`. 881 tracked files. Regenerate with `scripts/gener
 ## nfl-oracle/src/nfl_oracle/recommendations/
 - nfl-oracle/src/nfl_oracle/recommendations/__init__.py -- NFL recommendation generation and serving, without contest submission.
 - nfl-oracle/src/nfl_oracle/recommendations/app.py -- Read-only recommendation API. Provider credentials are never loaded here.
+- nfl-oracle/src/nfl_oracle/recommendations/boost_projection.py -- Boost-aware projection signal applied before five-card optimize.
 - nfl-oracle/src/nfl_oracle/recommendations/cli.py -- Production roles for the NFL recommendation service.
 - nfl-oracle/src/nfl_oracle/recommendations/context.py -- Time-filtered NFL role, matchup and environment features.
 - nfl-oracle/src/nfl_oracle/recommendations/dayclose.py -- Day-close grading: score a frozen NFL lineup against finalized real-world
@@ -395,6 +396,7 @@ Generated from `git ls-files`. 881 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_auth_check_live.py -- NFL parity for wnba-oracle's auth-check-live value-free contract.
 - nfl-oracle/tests/unit/test_auth_presence_check.py -- auth_presence_check must see volume-backed Real Sports session files.
 - nfl-oracle/tests/unit/test_backfill_cursor.py -- Tests for season backfill cursor resume.
+- nfl-oracle/tests/unit/test_boost_projection.py -- Boost-aware projection signal pins for Sunday win-ready (#327).
 - nfl-oracle/tests/unit/test_capture_storage_state_paths.py -- capture_storage_state must write under volume-aware scraper_dir.
 - nfl-oracle/tests/unit/test_clocks.py -- Tests for train/live Corpus G clock helpers.
 - nfl-oracle/tests/unit/test_contest_algebra_and_gates.py -- Contest scoring algebra + entry gates (observation only).

@@ -43,6 +43,10 @@ from zoneinfo import ZoneInfo
 
 from nfl_oracle.contests.boosts import slot_multiplier_for
 from nfl_oracle.contests.parse import ParsedContest
+from nfl_oracle.recommendations.boost_projection import (
+    DEFAULT_BOOST_SIGNAL_PER_POINT,
+    apply_boost_aware_projections,
+)
 from nfl_oracle.recommendations.model import (
     ContextAdjustment,
     HistoricalPerformance,
@@ -214,6 +218,7 @@ def replay_contest_pools(
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
     progress: Callable[[str], None] | None = None,
+    boost_signal_per_point: float = DEFAULT_BOOST_SIGNAL_PER_POINT,
 ) -> tuple[tuple[ContestPoolResult, ...], dict[str, int]]:
     """Walk-forward production replay restricted to each contest's visible pool.
 
@@ -265,6 +270,7 @@ def replay_contest_pools(
                 config=cfg,
                 compact_samples=compact_samples,
                 excluded=excluded,
+                boost_signal_per_point=boost_signal_per_point,
             )
             if result is not None:
                 results.append(result)
@@ -284,6 +290,7 @@ def _run_contest(
     config: OptimizerConfig,
     compact_samples: bool,
     excluded: dict[str, int],
+    boost_signal_per_point: float = DEFAULT_BOOST_SIGNAL_PER_POINT,
 ) -> ContestPoolResult | None:
     contest = pool.contest
     history = rows_before(rows, cutoff=pool.cutoff, exclude_game_ids=pool.day_game_ids)
@@ -326,6 +333,11 @@ def _run_contest(
         return None
     if compact_samples:
         projections = compact_projections(projections)
+    projections = apply_boost_aware_projections(
+        projections,
+        slate,
+        signal_per_boost_point=boost_signal_per_point,
+    )
     try:
         lineup = optimize(
             slate,
