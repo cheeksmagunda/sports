@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-25T21:50:00Z
+Last verified: 2026-09-25T21:55:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
@@ -35,13 +35,25 @@ not exposed by the read-only checks available during this audit.
   rolls; new fires of these two triggers are suppressed outside the window
   after deploy. Parser DOM still matches sister sports with live games;
   WNBA page is empty only because there are no games today.
+- **Real Sports session (2026-09-25 ~4:50 PM CT):** `REALSPORTS_STORAGE_STATE_B64GZ`
+  present on `cron-job1`, `cron-job1-late`, `backfill-enrichment`, and
+  `cron-dayclose` (len=9248 each). `auth-check-live`: derived session payload
+  structure valid; live checks passed. Names/presence only; value not logged.
+
+## optimizer_leverage_weight sweep decision (#317) - 2026-09-25
+
+- The leak-free GitHub Actions benchmark run [36133177919](https://github.com/cheeksmagunda/sports/actions/runs/36133177919) succeeded at about 2026-09-25 07:31 CT. Its `model-research-benchmark-merged` artifact contains `MODEL_RESEARCH_BENCHMARK.md` and `benchmark_results.json` covering 109 slates.
+- The compiled production baseline uses `optimizer_leverage_weight=0.28`. The only leverage challenger in the default grid was `knob:leverage_weight_0.2`: paired score W/T/L was approximately 9/92/8 versus baseline, mean score delta was approximately -0.036, and payout was flat. This provides no flip signal.
+- Decision: keep `optimizer_leverage_weight=0.28`. No Railway variable change is needed, and `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` already remains `0.28`, so no config code update is needed. Live Railway `cron-job2` confirms `OPTIMIZER_LEVERAGE_WEIGHT=0.28`.
+- The dedicated E1 leverage matrix (`0.0`, `0.14`, `0.28`, `0.40`) was not run. It remains an optional follow-up; picker-knob work is proceeding in parallel under #280 and #37. Full matrix is ~86 CPU-hours at default samples; not justified pre-Sunday given flat default-grid signal.
 
 ## optimizer_leverage_weight evidence gate (#289)  -  2026-09-25
 
 - **Live knob:** `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` remains
   `0.28` (no production knob change; public API had no slate timing for
-  2026-09-25 at verification, but operator sign-off is still required for any
-  live flip). Railway `OPTIMIZER_LEVERAGE_WEIGHT` was not mutated in this fix.
+  2026-09-25 at verification; standing authorization for justified picker-knob
+  changes is documented in commit `3ec2bad` and issue #37. Railway
+  `OPTIMIZER_LEVERAGE_WEIGHT` was not mutated in this fix.
 - **Root cause:** `scripts/build_model_research_benchmark.py`
   `_precompute_slates` (shared by `model_tournament.py`) patched
   `job2._load_measured_drafts` to each slate's own post-lock `slate_labels.drafts`.
@@ -51,9 +63,10 @@ not exposed by the read-only checks available during this audit.
   (`wnba_oracle.eval.point_in_time.causal_drafts_for_slate`); optional
   `--leak-same-slate-ownership` keeps the old path for diagnostics only.
   Unit tests pin the guard. Walk-forward already had the same rule.
-- **Still open:** leak-free leverage/contrarian sweep (experiment E1 from the
-  #38 closing report) before keep-or-revert of `0.28`. Tracked as a follow-up
-  issue from #289.
+- **Decision (via #317):** default-grid leak-free challenger
+  `knob:leverage_weight_0.2` showed no flip vs 0.28 (see sweep section above).
+  Keep `0.28`. Dedicated E1 matrix (`0.0/0.14/0.28/0.40`) remains optional;
+  Railway `OPTIMIZER_LEVERAGE_WEIGHT` unchanged at `0.28`.
 
 
 ## backfill-enrichment recovery (#279 / #310 / #312)  -  2026-09-25

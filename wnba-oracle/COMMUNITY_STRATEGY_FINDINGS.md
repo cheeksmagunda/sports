@@ -129,7 +129,7 @@ true from 2026-08-30 (unrecorded before); `duplication_weight` 0.0 and
 | Item | Decision | Why |
 | --- | --- | --- |
 | Production knobs, tonight | No change | Live slate, freeze 22:20 UTC; evidence is not decisive enough for an unreviewed flip |
-| `leverage_weight=0.28` | Flag for re-validation; no live change | #289 methodology fixed (prior-slate ownership in benchmark/tournament); E1 leak-free re-sweep still required before keep-or-revert; B3 inversion remains |
+| `leverage_weight=0.28` | Keep (default-grid evidence) | #289 methodology fixed; #317 leak-free default-grid challenger `0.2` was ~9/92/8 W/T/L, mean dScore -0.036, flat payout — no flip. Dedicated E1 matrix optional; B3 inversion remains |
 | Ownership source | Proposal only (not implemented): new flag, default off, feeding `field.project_ownership` the prior-slate measured percentile (B4) instead of the estimator | Leak-free and strongly predictive; needs a walk-forward backtest before arming |
 | `duplication_weight`, `duplication_aware_payout` | Keep off | Depends on ownership quality; no field duplication data yet |
 | `committed_order_objective`, `ceiling_tilt_slots`, `payout_regime=top_20` | Keep | No contrary evidence reachable |
