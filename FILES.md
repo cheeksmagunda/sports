@@ -1120,7 +1120,7 @@ Generated from `git ls-files`. 882 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_train_cli.py
 - wnba-oracle/tests/unit/test_upcoming_games_pool.py -- D109: scope the optimizer pool to games that have not tipped yet.
 - wnba-oracle/tests/unit/test_verify_durable_job.py -- Tests for bounded durable job verification.
-- wnba-oracle/tests/unit/test_watchdog.py -- Watchdog trigger logic — pure function tests against a mocked engine.
+- wnba-oracle/tests/unit/test_watchdog.py -- Watchdog trigger logic  -  pure function tests against a mocked engine.
 - wnba-oracle/tests/unit/test_watchdog_monitor_ops.py -- Schedule-aware tests for the independent production monitor.
 - wnba-oracle/tests/unit/test_workflow_setup_contract.py -- Keep independent hosted jobs on the same portable Python contract.
 
