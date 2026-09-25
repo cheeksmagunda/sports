@@ -80,17 +80,27 @@ def evaluate_t40_deadline(
     freeze_due_at = _freeze_deadline(day_games)
     frozen_at = _parse_timestamp((frozen or {}).get("frozen_at"))
     if freeze_due_at is None:
-        return T40WatchdogReport(
-            day=day,
-            status="unresolved",
-            reason="schedule_missing_gametime",
-            checked_at=now,
-            earliest_kickoff_at=None,
-            freeze_due_at=None,
-            alert_deadline_at=None,
-            frozen_at=frozen_at,
-            latest_run=latest_run,
-        )
+        # Volume schedules.csv can lag the committed gametime column (#267).
+        # Fall back to the worker run next_freeze/cutoff so Sunday still alerts (#327).
+        details = (latest_run or {}).get("details") if isinstance(latest_run, dict) else None
+        details = details if isinstance(details, dict) else {}
+        freeze_due_at = _parse_timestamp(details.get("next_freeze"))
+        if freeze_due_at is None:
+            cutoff = _parse_timestamp(details.get("cutoff_at"))
+            if cutoff is not None:
+                freeze_due_at = cutoff - timedelta(minutes=40)
+        if freeze_due_at is None:
+            return T40WatchdogReport(
+                day=day,
+                status="unresolved",
+                reason="schedule_missing_gametime",
+                checked_at=now,
+                earliest_kickoff_at=None,
+                freeze_due_at=None,
+                alert_deadline_at=None,
+                frozen_at=frozen_at,
+                latest_run=latest_run,
+            )
     earliest_kickoff_at = freeze_due_at + timedelta(minutes=40)
     alert_deadline_at = freeze_due_at + timedelta(minutes=grace_minutes)
     if frozen_at is not None and frozen_at <= alert_deadline_at:
