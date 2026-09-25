@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 876 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 878 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -863,6 +863,7 @@ Generated from `git ls-files`. 876 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/eval/identity_coverage.py -- Identity-aware prediction-to-outcome joins with explicit coverage reporting.
 - wnba-oracle/src/wnba_oracle/eval/metrics.py -- Calibration-first metrics: CRPS, reliability, ECE, quantile loss.
 - wnba-oracle/src/wnba_oracle/eval/multiple_comparisons.py -- Multiple-comparisons guard for the rotation gate (#MC, D63).
+- wnba-oracle/src/wnba_oracle/eval/point_in_time.py -- Point-in-time helpers for offline replay and walk-forward evaluation.
 
 ## wnba-oracle/src/wnba_oracle/features/
 - wnba-oracle/src/wnba_oracle/features/__init__.py
@@ -1077,6 +1078,7 @@ Generated from `git ls-files`. 876 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_picker.py -- Lineup optimizer unit tests.
 - wnba-oracle/tests/unit/test_placements.py -- Placement / calibration tracking (D90, Phase 2).
 - wnba-oracle/tests/unit/test_player_props.py -- D80: per-event player-prop fetch + parse.
+- wnba-oracle/tests/unit/test_point_in_time_ownership.py -- Point-in-time ownership for offline replay (#289).
 - wnba-oracle/tests/unit/test_popularity.py -- Anti-popularity contrarian adjustment + draft-popularity estimator.
 - wnba-oracle/tests/unit/test_pre_freeze_guard.py -- Tests for the durable Job 1 pre-freeze evidence check.
 - wnba-oracle/tests/unit/test_project_paths.py
