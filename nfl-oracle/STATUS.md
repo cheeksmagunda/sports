@@ -1,5 +1,45 @@
 # Status
 
+## Corpus C contest-pool replay: production vs the visible winner on one denominator (2026-09-25, issue #280)
+
+Follow-on to the production backtest section below (same pipeline, same
+weekly retrain, same leakage guard). `nfl_oracle.replay.contest_pool_replay`
+(`make contest-pool-replay`) restricts each finalized Corpus C contest to its
+own visible pool, joined to Corpus G by Real Sports `player_id` on the
+contest's US/Eastern day, with that contest's card boosts, and scores every
+lineup with the contest's finalized values against the same boost-aware
+ceiling as the visible winner. Local run 2026-09-25 against the 91 contests
+with field evidence (2024-11-24 to 2026-02-08), 33 weekly folds, same
+2024-2025 context snapshot as below; none excluded.
+
+| slice | n | production mean | production median | re-slotted own five | visible winner | naive EWMA, same pool |
+|-------|---|-----------------|-------------------|---------------------|----------------|-----------------------|
+| all | 91 | 51.7% | 50.5% | 53.1% | 79.9% | 47.2% |
+| zero-boost | 4 | 74.9% | 79.2% | 77.0% | 97.5% | 75.3% |
+| boosted | 87 | 50.7% | 50.4% | 52.0% | 79.1% | 45.9% |
+
+- The gap to the winner is about 28 points, and re-slotting production's own
+  five cards by realized value recovers only 1.4 of them: the shortfall is
+  player selection, not slot order or the optimizer.
+- Production beats the naive EWMA baseline on 62 of 91 paired contests. It
+  beats the visible winner on 2 of 91 and beats at least one visible top-20
+  entry on 6 of 91 (4.4% of visible entries per contest, on average).
+- Production's five overlap the hindsight-best five by 0.96 players on average
+  (0.89 on boosted contests) and the winner's five by 1.31.
+- Single-game contests (41, diversity relaxed): production 52.5% vs winner
+  86.8%. Multi-game (50): 51.1% vs 74.2%.
+
+Join and data quality: 3,199 of 3,230 visible pool entries matched Corpus G;
+the 31 unmatched all scored 0 and are dropped from the candidate pool
+(slightly generous to production). 16 player values differ between Corpus C
+and Corpus G by more than 0.05; Corpus C values are used for scoring. 6
+contests have `law_verified=False` and are kept, consistent with the harness
+field numbers. Same caveats as the backtest below (retrospective context, no
+live injury/odds/weather, wall-clock training with a data cutoff). Only the
+top 20 entries are visible, so none of this is a field percentile. No
+production code path changed; #280 stays open for the selection work
+(boost-aware projection and calibration by position are the next candidates).
+
 ## Offline T-40 pregate before live fetch (2026-09-24, issue #267)
 
 `ScheduledGame` now carries `kickoff_at` (UTC), converted DST-aware from the

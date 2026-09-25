@@ -18,7 +18,7 @@ top twenty is not observed and no function here estimates it.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 from nfl_oracle.contests.boosts import slot_multiplier_for
@@ -87,13 +87,27 @@ def hindsight_best_lineup(
     zero-boost regime.
     """
     k = k or contest.contest.lineup_size
-    pool = eligible_pool_values(contest)
-    if len(pool) < k:
-        return None
-    boosts = contest.boost_table()
     multipliers = contest.contest.slot_multipliers
     slots = [slot_multiplier_for(s, multipliers) for s in range(1, k + 1)]
-    ranked = sorted(pool.items(), key=lambda kv: -kv[1])
+    return best_lineup(eligible_pool_values(contest), contest.boost_table(), slots)
+
+
+def best_lineup(
+    values: Mapping[int, float],
+    boosts: Mapping[int, float],
+    slots: Sequence[float],
+) -> HindsightLineup | None:
+    """The DP behind :func:`hindsight_best_lineup`, over any value table.
+
+    With finalized values it is the hindsight ceiling. With projected values it
+    is the best commitment a projection implies under the same boosts and
+    slots, which is how the contest-pool replay scores a baseline projection
+    without inventing a second selection rule.
+    """
+    k = len(slots)
+    if len(values) < k:
+        return None
+    ranked = sorted(values.items(), key=lambda kv: -kv[1])
     n = len(ranked)
 
     neg_inf = float("-inf")

@@ -203,6 +203,8 @@ def build_slate(
     *,
     now: datetime,
     team_keys: Mapping[int, str] | None = None,
+    card_boosts: Mapping[int, float] | None = None,
+    slot_multipliers: tuple[float, float, float, float, float] = SLOT_MULTIPLIERS,
 ) -> Slate:
     """A live-contract ``Slate`` for a historical set of games.
 
@@ -210,6 +212,8 @@ def build_slate(
     rows are excluded: the live pool is built after inactives are known and a
     DNP scores zero). Every clock is ``now`` and every kickoff is one hour in
     the future purely so ``assert_prelock`` passes; see the module docstring.
+    ``card_boosts`` carries a replayed contest's own per-player boosts (the
+    Corpus C contest-pool replay); absent players, and the default, are zero.
     """
     now = utc(now)
     clock = EvidenceClock(source_available_at=now, captured_at=now)
@@ -246,18 +250,19 @@ def build_slate(
             team=keys.get(row.team_id or 0, str(row.team_id)),
             opponent=keys.get(row.opponent_team_id or 0, str(row.opponent_team_id)),
             injury_status=None,
-            card_boost=0.0,
+            card_boost=(card_boosts or {}).get(row.player_id, 0.0),
             clock=clock,
         )
         for row in sorted(rows, key=lambda r: (r.game_id, r.player_id))
         if not row.did_not_play
     )
+    nonzero_boosts = [c.card_boost for c in candidates if c.card_boost > 0]
     return Slate(
         contest=Contest(
             contest_id=1,
             day=now.date(),
             end_day=now.date(),
-            slot_multipliers=SLOT_MULTIPLIERS,
+            slot_multipliers=slot_multipliers,
             is_locked=False,
             is_finalized=False,
             clock=clock,
@@ -270,9 +275,9 @@ def build_slate(
         pool_roster_count=len(candidates),
         pool_search_matched_count=len(candidates),
         pool_complete=True,
-        boost_regime="zero_boost",
-        boost_nonzero_count=0,
-        boost_max=0.0,
+        boost_regime="zero_boost" if not nonzero_boosts else "provider_boosts_present",
+        boost_nonzero_count=len(nonzero_boosts),
+        boost_max=max(nonzero_boosts, default=0.0),
     )
 
 
@@ -292,17 +297,18 @@ def compact_projections(projections: Sequence[Projection]) -> tuple[Projection, 
     )
 
 
-def naive_ewma_capture(
+def naive_ewma_projections(
     playing: Sequence[HistoricalPerformance],
     history: Sequence[HistoricalPerformance],
     *,
     min_player_games: int = 3,
     decay: float = 0.9,
-) -> float | None:
-    """The ``nfl_oracle.replay.backtest`` EWMA-plus-position-prior rule on this pool.
+) -> dict[int, float]:
+    """The ``nfl_oracle.replay.backtest`` EWMA-plus-position-prior projection.
 
     Uses only ``history`` (already filtered to final-before-cutoff rows), so it
-    is leakage-safe by the same guard as the production replay.
+    is leakage-safe by the same guard as the production replay. Players with
+    neither enough own history nor a position prior are left out.
     """
     by_player: dict[int, list[HistoricalPerformance]] = defaultdict(list)
     by_position: dict[str, list[float]] = defaultdict(list)
@@ -311,23 +317,38 @@ def naive_ewma_capture(
             continue
         by_player[row.player_id].append(row)
         by_position[row.position].append(row.value)
-    projected: list[tuple[float, int]] = []
+    projected: dict[int, float] = {}
     for row in playing:
         prior = by_player.get(row.player_id, [])
         if len(prior) >= min_player_games:
-            projection: float | None = ewma(tuple(r.value for r in prior), decay=decay)
+            projected[row.player_id] = ewma(tuple(r.value for r in prior), decay=decay)
         else:
             samples = by_position.get(row.position)
-            projection = mean(samples) if samples else None
-        if projection is not None:
-            projected.append((projection, row.player_id))
+            if samples:
+                projected[row.player_id] = mean(samples)
+    return projected
+
+
+def naive_ewma_capture(
+    playing: Sequence[HistoricalPerformance],
+    history: Sequence[HistoricalPerformance],
+    *,
+    min_player_games: int = 3,
+    decay: float = 0.9,
+) -> float | None:
+    """Zero-boost capture of the :func:`naive_ewma_projections` top five on this pool."""
+    projected = naive_ewma_projections(
+        playing, history, min_player_games=min_player_games, decay=decay
+    )
     if len(projected) < len(SLOT_MULTIPLIERS):
         return None
-    chosen = sorted(projected, key=lambda item: (-item[0], item[1]))[: len(SLOT_MULTIPLIERS)]
+    chosen = sorted(projected.items(), key=lambda item: (-item[1], item[0]))[
+        : len(SLOT_MULTIPLIERS)
+    ]
     actual = {row.player_id: row.value for row in playing}
     committed = sum(
         actual[player_id] * slot
-        for (_projection, player_id), slot in zip(chosen, SLOT_MULTIPLIERS, strict=True)
+        for (player_id, _projection), slot in zip(chosen, SLOT_MULTIPLIERS, strict=True)
     )
     _ids, best = hindsight_best(actual, SLOT_MULTIPLIERS)
     return committed / best if best > 0 else None
