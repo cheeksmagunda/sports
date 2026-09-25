@@ -11,20 +11,61 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from nfl_oracle.recommendations.context import enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
-from nfl_oracle.recommendations.model import attach_enrichment
+from nfl_oracle.recommendations.model import HistoricalPerformance, attach_enrichment
 from nfl_oracle.recommendations.optimizer import OptimizerConfig
 from nfl_oracle.recommendations.sources import ContextSnapshot
 from nfl_oracle.replay.production_backtest import (
     backtest_production_pipeline,
     summarize,
 )
+
+
+@dataclass(frozen=True)
+class BacktestInputs:
+    """Corpus G rows enriched exactly as ``_model_bundle`` does, plus join keys."""
+
+    rows: tuple[HistoricalPerformance, ...]
+    enriched: tuple[HistoricalPerformance, ...]
+    history_excluded: dict[str, int]
+    context_rows: int
+    context_excluded: dict[str, int]
+    context_evidence_mode: str
+    week_of: dict[int, tuple[int, str, int]]
+    team_keys: dict[int, str]
+
+
+def load_backtest_inputs(history_root: Path, context_snapshot: Path) -> BacktestInputs:
+    rows, history_excluded = load_history(history_root)
+    metadata = load_history_metadata(history_root, rows)
+    snapshot = ContextSnapshot.load(context_snapshot)
+    enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
+    enriched = attach_enrichment(rows, enrichment)
+    week_of = {
+        game_id: (int(meta["season"]), str(meta["season_type"]), int(meta["week"]))
+        for (_player, game_id), meta in metadata.items()
+    }
+    team_keys: dict[int, str] = {}
+    for row in rows:
+        meta = metadata[(row.player_id, row.game_id)]
+        if row.team_id is not None:
+            team_keys[row.team_id] = str(meta["team"])
+    return BacktestInputs(
+        rows=tuple(rows),
+        enriched=tuple(enriched),
+        history_excluded=dict(history_excluded),
+        context_rows=len(enrichment.rows),
+        context_excluded=enrichment.excluded,
+        context_evidence_mode=enrichment.evidence_mode,
+        week_of=week_of,
+        team_keys=team_keys,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,20 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    rows, history_excluded = load_history(args.history_root)
-    metadata = load_history_metadata(args.history_root, rows)
-    snapshot = ContextSnapshot.load(args.context_snapshot)
-    enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
-    enriched = attach_enrichment(rows, enrichment)
-    week_of = {
-        game_id: (int(meta["season"]), str(meta["season_type"]), int(meta["week"]))
-        for (_player, game_id), meta in metadata.items()
-    }
-    team_keys: dict[int, str] = {}
-    for row in rows:
-        meta = metadata[(row.player_id, row.game_id)]
-        if row.team_id is not None:
-            team_keys[row.team_id] = str(meta["team"])
+    inputs = load_backtest_inputs(args.history_root, args.context_snapshot)
+    week_of = inputs.week_of
 
     def fold_of(spec: Any) -> Any:
         if args.retrain == "slate":
@@ -86,10 +115,10 @@ def main(argv: list[str] | None = None) -> int:
 
     started = datetime.now(UTC)
     results, excluded = backtest_production_pipeline(
-        enriched,
+        inputs.enriched,
         grouping=args.grouping,
         fold_of=fold_of,
-        team_keys=team_keys,
+        team_keys=inputs.team_keys,
         optimizer_config=OptimizerConfig(simulations=args.simulations),
         compact_samples=not args.full_samples,
         progress=progress,
@@ -100,11 +129,11 @@ def main(argv: list[str] | None = None) -> int:
         "issue": 280,
         "grouping": args.grouping,
         "retrain": args.retrain,
-        "history_rows": len(rows),
-        "history_excluded": history_excluded,
-        "context_rows": len(enrichment.rows),
-        "context_excluded": enrichment.excluded,
-        "context_evidence_mode": enrichment.evidence_mode,
+        "history_rows": len(inputs.rows),
+        "history_excluded": inputs.history_excluded,
+        "context_rows": inputs.context_rows,
+        "context_excluded": inputs.context_excluded,
+        "context_evidence_mode": inputs.context_evidence_mode,
         "started_at": started.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "summary": asdict(summary),
