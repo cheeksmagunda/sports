@@ -29,7 +29,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     # Dataframes
     "polars>=1.16,<2.0",
-    "pandas>=2.2,<3.0",
+    "pandas>=2.2,<4.0",
     "pyarrow>=23.0.1,<26.0",
     "pandera[polars]>=0.21,<1.0",
     # ML stack. Exact pins on libs whose version influences pickled bytes
