@@ -41,9 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         PickerKnobs(boost_rank_blend=0.50, profile="boost_0.50"),
         PickerKnobs(boost_rank_blend=0.75, profile="boost_0.75"),
         PickerKnobs(position_calibration=1.0, profile="pos_1.0"),
-        PickerKnobs(
-            boost_rank_blend=0.35, position_calibration=0.5, profile="boost_0.35_pos_0.5"
-        ),
+        PickerKnobs(boost_rank_blend=0.35, position_calibration=0.5, profile="boost_0.35_pos_0.5"),
     )
     inputs = load_backtest_inputs(args.history_root, args.context_snapshot)
     contests = [
