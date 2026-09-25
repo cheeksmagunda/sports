@@ -1,9 +1,38 @@
 # Status
 
-Last verified: 2026-09-24T20:30:00Z
+Last verified: 2026-09-25T04:59:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## backfill-enrichment recovery (#279 build, #310 runtime TypeError) — 2026-09-25 ~04:59 UTC
+
+Live verification from Codespace Railway CLI (`scripts/codespace-railway-env`,
+CLI session as Cheeks Magunda):
+
+- **Root cause (#279):** image-reuse `railway redeploy` of an older deployment
+  kept `serviceManifest.builder=RAILPACK` even though `wnba-oracle/railway.toml`
+  declares `builder = "DOCKERFILE"`. Railpack/mise then ran `uv sync` with
+  `UV_PYTHON_DOWNLOADS=never` and failed looking for Python >=3.11,<3.13.
+  Fix path: `railway redeploy --from-source` or `serviceInstanceDeployV2`
+  (docs in `railway.toml` / README via PR #309, merge `cc2d553`).
+- **Dockerfile builds:** confirmed. Deploy `215229c9` on merge `f0acf412`
+  (#311 / #310) used `builder=DOCKERFILE`, `dockerfilePath=wnba-oracle/Dockerfile`,
+  startCommand `sh -c 'python .../seed_storage_state.py && oracle-cron --job backfill'`.
+  Earlier smoke redeploy `2012c79a` also reached Railway `SUCCESS` on a Dockerfile
+  image.
+- **Runtime TypeError (#310):** fixed and merged (`f0acf412`). Prior crash was
+  `if not game_logs` on a Polars DataFrame; now `len(game_logs) == 0`. Deploy
+  `215229c9` logs show **no** TypeError / DataFrame-ambiguity
+  (`backfill_game_logs_loaded n_rows=18504`, then opp-DvP built).
+- **Current remaining blocker (#312):** deploy `215229c9` ended `CRASHED`
+  because the backfill job exited 1: every slate hit
+  `backfill_head_feats_failed error_type="AttributeError"` (226/226 feature
+  builds failed, 0 inserts). Separate from the interpreter / Polars-truthiness
+  fixes. `seed_storage_state` warns that the derived Real Sports session is
+  not configured on this service (no `REALSPORTS_STORAGE_STATE_B64GZ`).
+  Full historical backfill remains an authorized one-shot via
+  `wnba-backfill-enrichment.yml`, not a routine auto-deploy.
 
 ## Configuration audit, layers 2-5 (2026-09-24 ~20:30 UTC, issue #239)
 
