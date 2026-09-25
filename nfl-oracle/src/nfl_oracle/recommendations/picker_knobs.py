@@ -193,6 +193,5 @@ def accumulate_position_residuals(
 
 def summarize_knob_label(knobs: PickerKnobs) -> str:
     return (
-        f"{knobs.profile}:boost={knobs.boost_rank_blend:.2f},"
-        f"pos={knobs.position_calibration:.2f}"
+        f"{knobs.profile}:boost={knobs.boost_rank_blend:.2f},pos={knobs.position_calibration:.2f}"
     )

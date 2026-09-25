@@ -27,7 +27,7 @@ Honesty boundary, inherited from the harness: only the top twenty entries are
 visible. ``beats_visible_entries`` counts visible entries production's score
 exceeds; it is never a percentile of the full field. Pool players with no
 Corpus G row that day (all scored zero in the local archive) are dropped from
-the candidate pool and counted, which is slightly generous to production.
+ the candidate pool and counted, which is slightly generous to production.
 
 Read-only research: no provider calls, no contest entry, no store writes.
 """
@@ -562,6 +562,5 @@ def replay_contest_pools_knob_sweep(
                             f"capture={result.capture_ratio:.3f}"
                         )
     return {
-        profile: (tuple(results), dict(excluded))
-        for profile, results in results_by_profile.items()
+        profile: (tuple(results), dict(excluded)) for profile, results in results_by_profile.items()
     }
