@@ -294,25 +294,41 @@ logs, variable changes) run **from inside the GitHub Codespace**, after
 Railway from the operator Mac, and do not use `SPORTS_ALLOW_LOCAL_RAILWAY` as
 the normal path.
 
+### Headless SSH gotcha (read this)
+
+`gh codespace ssh` often has **no** `RAILWAY_*` in the process environment even
+with `bash -l`. Codespaces still writes user secrets to
+`/workspaces/.codespaces/shared/.env-secrets`. Do not conclude "no token" from
+an empty `printenv`. Also: if both `RAILWAY_API_TOKEN` (account) and
+`RAILWAY_TOKEN` (project/CI) are set, the CLI returns Unauthorized. Never keep
+both. Do not delete the GitHub Actions project `RAILWAY_TOKEN` used by CI.
+
+**Mandatory helper before any Railway CLI work:**
+
+```bash
+scripts/codespace-railway-env -- railway whoami
+scripts/codespace-railway-env -- railway status
+```
+
+The helper loads `RAILWAY_API_TOKEN` from the environment or `.env-secrets`
+(without bash mangling), unsets `RAILWAY_TOKEN`, asserts `whoami`, then execs
+your command. If the Codespaces API token is rejected, it falls back to a
+logged-in `~/.railway` CLI session when present. If both fail, refresh the
+Codespaces secret `RAILWAY_API_TOKEN` (Railway dashboard account token).
+
 Pattern:
 
 1. Wake the Codespace with Mac `gh` (`gh codespace ssh -c <name> --` or the
    VS Code / Cursor remote).
-2. Prefer a **login shell** so Codespaces user secrets inject
-   (`RAILWAY_API_TOKEN`, `REALSPORTS_STORAGE_STATE_B64GZ`).
-3. **Never both Railway token kinds in one shell.** If both
-   `RAILWAY_API_TOKEN` and `RAILWAY_TOKEN` are set, unset `RAILWAY_TOKEN` and
-   keep the API token. postStart does this for interactive shells; do not
-   delete the GitHub Actions project `RAILWAY_TOKEN` used by CI.
-4. If `railway ssh` fails on host key, register the Codespace host key with
+2. Run Railway only through `scripts/codespace-railway-env -- ...` (or
+   `eval "$(scripts/codespace-railway-env --print-exports)"` then `railway`).
+3. If `railway ssh` fails on host key, register the Codespace host key with
    `railway ssh keys add` (or import) before retrying.
-5. Worker CLIs live under `/opt/venv/bin` on the service image. Example NFL
+4. Worker CLIs live under `/opt/venv/bin` on the service image. Example NFL
    forced retrain:
 
 ```bash
-unset RAILWAY_TOKEN
-railway whoami
-railway ssh --service nfl-oracle-worker -- \
+scripts/codespace-railway-env -- railway ssh --service nfl-oracle-worker -- \
   bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
 ```
 
