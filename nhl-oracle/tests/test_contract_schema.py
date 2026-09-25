@@ -12,12 +12,12 @@ from nhl_oracle.contract.schema import (
 
 
 def test_default_contract_matches_live_audit_defaults() -> None:
-    """Defaults were updated after the Week 2 live Real Sports audit (#299)."""
+    """Defaults reflect #299 live audit as corrected for pre-boost (#325)."""
 
     contract = NhlContestContract()
     assert contract.format is ContestFormat.FIVE_CARD_ORDERED
     assert contract.lock_scope is LockScope.PER_CONTEST
-    assert contract.boost_regime is BoostRegime.FLAT
+    assert contract.boost_regime is BoostRegime.NONE
     assert contract.score_value_label == "value"
     assert contract.roster_size == 5
     assert contract.slot_multipliers == (2.0, 1.8, 1.6, 1.4, 1.2)

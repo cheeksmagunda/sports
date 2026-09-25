@@ -56,10 +56,12 @@ or deployment; each milestone gets its own scoped issue when it starts.
 
 Working product hypothesis, pending operator confirmation: open the NHL app
 and see five ordered Real Sports recommendations for manual entry. Week 2
-live audit (#299) confirmed five-card-ordered format, per-contest lock, flat
-boosts, score label "value", goalie eligibility, and slot multipliers
-(2.0/1.8/1.6/1.4/1.2) from Real Sports NHL evidence (historical contest 1901
-plus current-slate player cards).
+live audit (#299) plus pre-boost correction (#325) confirmed five-card-ordered
+format, per-contest lock, score label "value", goalie eligibility, and slot
+multipliers (2.0/1.8/1.6/1.4/1.2). Boost regime is **none** (pre-boost) until
+every NHL team has played; current-slate player cards lack card boost fields.
+Do not design picker logic around boosts before that milestone. Historical
+contest 1901 draftStats may show flat `multiplierBonus` from a later window.
 
 1. **Product and provider contract.** Audit current and historical contest
    identities, exact score/value labels, candidate completeness, goalie
@@ -107,4 +109,5 @@ Operational lessons carried over from the NFL 2026-09-09 run:
 Open decisions (operator): first product scope, initial target slate/date,
 usable historical coverage depth beyond the Week 2 seed, and the publication
 target after a measured hosted rehearsal. Contest law and lock semantics were
-verified in the Week 2 live audit (#299); see STATUS.md.
+verified in the Week 2 live audit (#299); boost regime corrected to pre-boost
+`none` in #325. See STATUS.md.
