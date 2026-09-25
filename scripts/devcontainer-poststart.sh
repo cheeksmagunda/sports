@@ -30,6 +30,20 @@ for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
   printf '\n%s\n[ -n "${PS1:-}" ] && unset GITHUB_TOKEN GH_TOKEN\n' "# sports: one gh identity in this codespace (issue #235)" >> "$rc"
 done
 
+
+# Railway: never both token kinds in one shell (ENTRY_POINTS.md / #300).
+# Codespaces should inject only RAILWAY_API_TOKEN. If a project-scoped
+# RAILWAY_TOKEN is also present it can flip CLI auth to Unauthorized.
+for rc in "/home/vscode/.bashrc" "/home/vscode/.zshrc"; do
+  [ -f "" ] || continue
+  grep -qF "# sports: one railway identity in this codespace (#300)" "" && continue
+  printf "\n%s\n[ -n "\${PS1:-}" ] && [ -n "\${RAILWAY_API_TOKEN:-}" ] && unset RAILWAY_TOKEN\n"     "# sports: one railway identity in this codespace (#300)" >> ""
+done
+# Also clear for this postStart process and child railway link jobs.
+if [ -n "${RAILWAY_API_TOKEN:-}" ]; then
+  unset RAILWAY_TOKEN
+fi
+
 # Railway: the CLI reads RAILWAY_API_TOKEN from the environment (issue #235);
 # only the per-directory project link is container state, so restore it on
 # every start. Best effort and backgrounded like everything else here.
