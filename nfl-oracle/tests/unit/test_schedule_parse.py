@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from nfl_oracle.calendar.schedule import (
@@ -97,3 +97,31 @@ def test_catalog_vs_schedule_density_with_dense_fixtures() -> None:
     # Continuous slate is denser than seed anchors.
     assert cmp["seed_to_schedule_ratio"] < 1.0
     assert cmp["schedule_games_beyond_seeds"] > 0
+
+
+def test_csv_without_gametime_loads_with_unknown_kickoff() -> None:
+    games = parse_schedules_csv(SAMPLE)
+    assert len(games) == 4
+    assert all(game.kickoff_at is None for game in games)
+
+
+def test_gametime_converts_eastern_to_utc_across_dst() -> None:
+    text = """season,week,game_id,gameday,home_team,away_team,game_type,gametime
+2026,3,2026_03_ATL_GB,2026-09-24,GB,ATL,REG,20:15
+2026,15,2026_15_AAA_BBB,2026-12-13,BBB,AAA,REG,13:00
+2026,15,2026_15_CCC_DDD,2026-12-13,DDD,CCC,REG,
+2026,15,2026_15_EEE_FFF,2026-12-13,FFF,EEE,REG,25:99
+"""
+    games = {g.game_id: g for g in parse_schedules_csv(text)}
+    # EDT (UTC-4): Thursday 20:15 ET is the next UTC day, 00:15.
+    assert games["2026_03_ATL_GB"].kickoff_at == datetime(2026, 9, 25, 0, 15, tzinfo=UTC)
+    # EST (UTC-5) after the November DST change.
+    assert games["2026_15_AAA_BBB"].kickoff_at == datetime(2026, 12, 13, 18, 0, tzinfo=UTC)
+    assert games["2026_15_CCC_DDD"].kickoff_at is None
+    assert games["2026_15_EEE_FFF"].kickoff_at is None
+
+
+def test_committed_schedule_has_tonights_kickoff() -> None:
+    path = Path(__file__).resolve().parents[2] / "data" / "schedule" / "schedules.csv"
+    games = {g.game_id: g for g in load_schedules_csv(path, season=2026)}
+    assert games["2026_03_ATL_GB"].kickoff_at == datetime(2026, 9, 25, 0, 15, tzinfo=UTC)
