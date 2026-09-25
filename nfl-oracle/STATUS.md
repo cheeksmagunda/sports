@@ -29,6 +29,12 @@ snapshot, weekly retrain, leakage guard). No LightGBM.
   worker+API. Leave position calibration at 0 until a post-retrain model
   carries `position_residual_bias`. Gap to visible winner (79.9%) remains
   large; this is the measured first lever, not a closed win.
+- Also landed: T-40 watchdog falls back to worker run `details.next_freeze` /
+  `cutoff_at` when volume `schedules.csv` lacks gametime (#327), so a stale
+  volume schedule cannot silence Sunday alerts.
+- Distinct from open PR #329's additive `boost_signal_per_point` default-on
+  path (not Corpus-C measured at open). This PR's rank-blend knobs stay
+  identity in code; the live flip uses the measured `boost_0.75` profile.
 
 ## Sunday 2026-09-27 T-40 readiness (2026-09-25 ~16:30 CT, issue #156)
 
