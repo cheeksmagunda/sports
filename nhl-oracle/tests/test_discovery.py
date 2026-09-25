@@ -99,7 +99,12 @@ def test_discover_contract_uses_contest_stats_values_for_candidates() -> None:
         contest_stats=contest_stats,
     )
     assert contract.score_value_label == "value"
-    assert contract.boost_regime is BoostRegime.FLAT
+    # Live player cards omit boost fields; historical draftStats must not override.
+    assert contract.boost_regime is BoostRegime.NONE
+    assert any("pre-boost" in n for n in evidence.notes)
+    assert any(
+        "historical_contest_draftStats_had_nonzero_multiplierBonus" in n for n in evidence.notes
+    )
     assert contract.goalie_eligible is True
     assert evidence.players_seen == 3
     by_id = {c.player_id: c for c in candidates}
@@ -107,3 +112,65 @@ def test_discover_contract_uses_contest_stats_values_for_candidates() -> None:
     assert by_id[101].position == "G"
     assert by_id[103].position == "UNK"
     assert all(c.score_value is not None for c in candidates)
+
+
+def test_discover_contract_preboost_when_live_cards_lack_bonus_fields() -> None:
+    """Current-slate cards without boost fields => none, even with empty stats."""
+
+    meta = {
+        "info": {
+            "isLocked": False,
+            "contest": {"sport": "nhl", "additionalInfo": {"lineupSize": 5}},
+        }
+    }
+    draftinfo = {"info": {"defaultMultipliers": [2.0, 1.8, 1.6, 1.4, 1.2], "lineupSize": 5}}
+    players = [
+        {
+            "players": [
+                {"id": 1, "position": "C", "value": 10.0},
+                {"id": 2, "position": "G", "value": 8.0},
+            ]
+        }
+    ]
+    contract, evidence, _candidates = discover_contract(
+        meta=meta,
+        draftinfo=draftinfo,
+        players_payloads=players,
+        contest_ids=(),
+        game_ids=(7,),
+        games_scheduled=1,
+        games_captured=1,
+        captured_at="2026-09-25T00:00:00Z",
+    )
+    assert contract.boost_regime is BoostRegime.NONE
+    assert any("pre-boost" in n for n in evidence.notes)
+
+
+def test_discover_contract_flat_only_from_live_card_bonuses() -> None:
+    meta = {
+        "info": {
+            "isLocked": False,
+            "contest": {"sport": "nhl", "additionalInfo": {"lineupSize": 5}},
+        }
+    }
+    draftinfo = {"info": {"defaultMultipliers": [2.0, 1.8, 1.6, 1.4, 1.2], "lineupSize": 5}}
+    players = [
+        {
+            "players": [
+                {"id": 1, "position": "C", "value": 10.0, "multiplierBonus": 0.0},
+                {"id": 2, "position": "G", "value": 8.0, "multiplierBonus": 1.5},
+            ]
+        }
+    ]
+    contract, evidence, _candidates = discover_contract(
+        meta=meta,
+        draftinfo=draftinfo,
+        players_payloads=players,
+        contest_ids=(1,),
+        game_ids=(7,),
+        games_scheduled=1,
+        games_captured=1,
+        captured_at="2026-09-25T00:00:00Z",
+    )
+    assert contract.boost_regime is BoostRegime.FLAT
+    assert any("live player cards" in n for n in evidence.notes)

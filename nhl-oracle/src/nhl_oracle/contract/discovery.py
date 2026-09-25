@@ -109,15 +109,18 @@ def goalie_eligible_from_players(players_payloads: list[dict[str, Any]]) -> bool
     return False
 
 
-def boost_regime_from_players_and_stats(
+def _collect_player_card_bonuses(
     players_payloads: list[dict[str, Any]],
-    contest_stats: dict[str, Any] | None = None,
-) -> BoostRegime:
+) -> tuple[list[float], int]:
+    """Return (bonus values found, count of player rows inspected)."""
+
     bonuses: list[float] = []
+    players_seen = 0
     for payload in players_payloads:
         for player in _as_list(payload.get("players")):
             if not isinstance(player, dict):
                 continue
+            players_seen += 1
             raw = player.get("multiplierBonus")
             if raw is None:
                 raw = player.get("cardBoost")
@@ -127,23 +130,102 @@ def boost_regime_from_players_and_stats(
                 bonuses.append(float(raw))
             except (TypeError, ValueError):
                 continue
-    if contest_stats is not None:
-        for section in _as_list(contest_stats.get("draftStats")):
-            for row in _as_list(_as_dict(section).get("players")):
-                if not isinstance(row, dict):
-                    continue
-                raw = row.get("multiplierBonus")
-                if raw is None:
-                    continue
-                try:
-                    bonuses.append(float(raw))
-                except (TypeError, ValueError):
-                    continue
+    return bonuses, players_seen
+
+
+def _collect_contest_stats_bonuses(
+    contest_stats: dict[str, Any] | None,
+) -> list[float]:
+    bonuses: list[float] = []
+    if contest_stats is None:
+        return bonuses
+    for section in _as_list(contest_stats.get("draftStats")):
+        for row in _as_list(_as_dict(section).get("players")):
+            if not isinstance(row, dict):
+                continue
+            raw = row.get("multiplierBonus")
+            if raw is None:
+                continue
+            try:
+                bonuses.append(float(raw))
+            except (TypeError, ValueError):
+                continue
+    return bonuses
+
+
+def _regime_from_bonuses(bonuses: list[float]) -> BoostRegime:
     if not bonuses:
         return BoostRegime.UNKNOWN
     if any(b != 0 for b in bonuses):
         return BoostRegime.FLAT
     return BoostRegime.NONE
+
+
+def boost_regime_from_players_and_stats(
+    players_payloads: list[dict[str, Any]],
+    contest_stats: dict[str, Any] | None = None,
+) -> tuple[BoostRegime, tuple[str, ...]]:
+    """Infer live boost regime, preferring current-slate player cards.
+
+    Pre-boost / zero-boost rule: until every NHL team has played, live cards
+    carry no card boosts. Historical contest draftStats may still show nonzero
+    ``multiplierBonus`` from a later window; that must not override live-slate
+    absence or zeros. Returns (regime, notes).
+    """
+
+    notes: list[str] = []
+    card_bonuses, players_seen = _collect_player_card_bonuses(players_payloads)
+    stats_bonuses = _collect_contest_stats_bonuses(contest_stats)
+    card_regime = _regime_from_bonuses(card_bonuses)
+    stats_regime = _regime_from_bonuses(stats_bonuses)
+
+    if players_seen > 0 and not card_bonuses:
+        # Live game cards inspected and none expose a boost field: pre-boost.
+        regime = BoostRegime.NONE
+        notes.append(
+            "boost_regime=none from current-slate player cards "
+            f"(inspected={players_seen}, no multiplierBonus/cardBoost fields; pre-boost)"
+        )
+        if stats_regime is BoostRegime.FLAT:
+            notes.append(
+                "historical_contest_draftStats_had_nonzero_multiplierBonus "
+                "(not applied to live pre-boost regime)"
+            )
+        return regime, tuple(notes)
+
+    if card_regime is BoostRegime.NONE:
+        notes.append("boost_regime=none (multiplierBonus present on player cards and all zero)")
+        if stats_regime is BoostRegime.FLAT:
+            notes.append(
+                "historical_contest_draftStats_had_nonzero_multiplierBonus "
+                "(not applied; live cards are zero)"
+            )
+        return BoostRegime.NONE, tuple(notes)
+
+    if card_regime is BoostRegime.FLAT:
+        notes.append(
+            "boost_regime=flat from nonzero multiplierBonus/cardBoost on live player cards"
+        )
+        return BoostRegime.FLAT, tuple(notes)
+
+    # No usable live player rows: fall back to contest draftStats only.
+    if stats_regime is BoostRegime.FLAT:
+        notes.append(
+            "boost_regime=flat from contest draftStats multiplierBonus "
+            "(no live player-card boost fields available)"
+        )
+        return BoostRegime.FLAT, tuple(notes)
+    if stats_regime is BoostRegime.NONE:
+        notes.append(
+            "boost_regime=none (contest draftStats multiplierBonus present and all zero; "
+            "no live player-card boost fields)"
+        )
+        return BoostRegime.NONE, tuple(notes)
+
+    notes.append(
+        "boost_regime still unknown (no multiplierBonus/cardBoost on players or draftStats)"
+    )
+    return BoostRegime.UNKNOWN, tuple(notes)
 
 
 def lock_scope_from_meta(meta: dict[str, Any]) -> LockScope:
@@ -307,18 +389,8 @@ def discover_contract(
     else:
         notes.append("lock_scope still unknown (no contest-level isLocked boolean)")
 
-    boost = boost_regime_from_players_and_stats(players_payloads, contest_stats)
-    if boost is BoostRegime.FLAT:
-        notes.append(
-            "boost_regime=flat from nonzero card multiplierBonus fields "
-            "(player cards and/or contest draftStats)"
-        )
-    elif boost is BoostRegime.NONE:
-        notes.append("boost_regime=none (multiplierBonus present and all zero)")
-    else:
-        notes.append(
-            "boost_regime still unknown (no multiplierBonus/cardBoost on players or draftStats)"
-        )
+    boost, boost_notes = boost_regime_from_players_and_stats(players_payloads, contest_stats)
+    notes.extend(boost_notes)
 
     goalie = goalie_eligible_from_players(players_payloads)
     if goalie is True:

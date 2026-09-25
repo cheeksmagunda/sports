@@ -1,10 +1,11 @@
 """NHL contest contract shape confirmed against live Real Sports evidence.
 
-Defaults below reflect the Week 2 live read-only audit (#299): historical NHL
-contest 1901 (five-card ordered, per-contest lock, flat boost, score label
-"value") plus current-slate player cards that include goalie (G) positions.
-Re-open a field to UNKNOWN/None only when a later live audit contradicts these
-facts.
+Defaults below reflect Week 2 live read-only audit (#299) as corrected by the
+pre-boost re-audit (#325): five-card ordered, per-contest lock, score label
+"value", goalie eligible, and boost_regime none until every NHL team has
+played. Historical contest 1901 draftStats may show flat multiplierBonus from
+a later window; that must not drive the live pre-boost default. Re-open a
+field to UNKNOWN/None only when a later live audit contradicts these facts.
 """
 
 from __future__ import annotations
@@ -45,7 +46,7 @@ class NhlContestContract:
     sport: str = "nhl"
     format: ContestFormat = ContestFormat.FIVE_CARD_ORDERED
     lock_scope: LockScope = LockScope.PER_CONTEST
-    boost_regime: BoostRegime = BoostRegime.FLAT
+    boost_regime: BoostRegime = BoostRegime.NONE
     score_value_label: str | None = "value"
     roster_size: int = 5
     slot_multipliers: tuple[float, ...] | None = (2.0, 1.8, 1.6, 1.4, 1.2)
