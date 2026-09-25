@@ -859,6 +859,8 @@ def _precompute_slates(
     shard: tuple[int, int] | None = None,
     policy: Any = None,
     game_logs_csv: Path | None = None,
+    *,
+    leak_same_slate_ownership: bool = False,
 ) -> tuple[dict[str, dict[str, Any]], int]:
     """Load labels, leaderboards, and validated game identity (database, or
     offline corpus-backup / prefetch CSVs) and build the production sampling
@@ -876,6 +878,10 @@ def _precompute_slates(
     persisted identity row is excluded from the pool, and a slate left with
     too few players is dropped.
 
+    Measured ownership defaults to prior-slate drafts only (#289). Pass
+    ``leak_same_slate_ownership=True`` to reproduce the pre-fix same-slate
+    post-lock leak for diagnostics.
+
     Returns ``(precomputed, drops)`` where ``drops`` counts each exclusion
     reason, so a shrinking corpus is visible in the artifact instead of
     silently biasing the variant ranking."""
@@ -888,12 +894,12 @@ def _precompute_slates(
         lb = load_leaderboards_csv(leaderboards_csv)
         identity = load_game_identity_csv(game_identity_csv) if game_identity_csv else None
         game_logs = load_game_logs_csv(game_logs_csv) if game_logs_csv else None
-        # Offline mode has no engine: serve measured drafts from the CSV so
-        # the D86 measured-ownership path matches the live path.
-        import wnba_oracle.scheduler.job2 as _job2
-
+        # Offline mode has no engine: serve measured drafts from the CSV.
+        # Default is prior-slate (point-in-time) ownership so leverage /
+        # measured-field paths do not see same-slate post-lock drafts a live
+        # freeze never has (#289). Pass leak_same_slate_ownership=True only
+        # for diagnostic comparison with the pre-fix leaky replay.
         measured = drafts_by_slate(sl)
-        _job2._load_measured_drafts = lambda sd: measured.get(str(sd), {})
     else:
         from wnba_oracle.db.reads import (
             read_game_identity,
@@ -906,6 +912,15 @@ def _precompute_slates(
         lb = read_leaderboards()
         identity = read_game_identity()
         game_logs = read_game_logs()
+        measured = drafts_by_slate(sl)
+
+    import wnba_oracle.scheduler.job2 as _job2
+    from wnba_oracle.eval.point_in_time import causal_drafts_for_slate
+
+    if leak_same_slate_ownership:
+        _job2._load_measured_drafts = lambda sd: measured.get(str(sd), {})
+    else:
+        _job2._load_measured_drafts = lambda sd: causal_drafts_for_slate(str(sd), measured)
     identity_by_slate = index_game_identity(identity) if identity is not None else {}
 
     # #53: build head_features per slate from the gamelog corpus so
@@ -1295,6 +1310,15 @@ def main() -> int:
             "biased to separate variants from noise."
         ),
     )
+    parser.add_argument(
+        "--leak-same-slate-ownership",
+        action="store_true",
+        help=(
+            "Diagnostic only: feed each slate its own post-lock drafts into "
+            "measured ownership (the pre-#289 leak). Default uses prior-slate "
+            "drafts only."
+        ),
+    )
     args = parser.parse_args()
 
     if args.merge_shards:
@@ -1355,6 +1379,16 @@ def main() -> int:
     policy = build_model_policy(get_settings())
 
     print("Precomputing production specs per slate...")
+    if args.leak_same_slate_ownership:
+        print(
+            "WARNING: ownership = same-slate realized drafts (LEAKY, diagnostic only)",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "ownership = most recent prior-slate drafts per player (point-in-time)",
+            file=sys.stderr,
+        )
     precomputed, drops = _precompute_slates(
         args.max_slates,
         args.labels_csv,
@@ -1363,6 +1397,7 @@ def main() -> int:
         shard=(args.shard_index, args.shard_count),
         policy=policy,
         game_logs_csv=args.game_logs_csv,
+        leak_same_slate_ownership=args.leak_same_slate_ownership,
     )
     # Full accounting to stderr: every exclusion reason, not just one of them.
     # A silently shrinking corpus biases variant ranking toward whichever

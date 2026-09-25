@@ -472,12 +472,14 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     "starter_minutes_lift_enabled": True,
     "picker_floor_tilt_weight": 0.2,
     "optimizer_committed_order_objective": True,
-    # 2026-08-30: promoted from the library default 0.0 (fully off in prod
-    # until now) on the strength of the 101-slate confirmation sweep in
-    # STATUS.md -- the single strongest individual knob measured (+5.103
-    # score / +0.1386 payout alone), and the leading pair combined with
-    # committed_order_objective (+4.890 score / +0.1980 payout, sign-test
-    # p=0.000032).
+    # 2026-08-30: promoted from the library default 0.0 on a 101-slate sweep
+    # that reported +5.103 score / +0.1386 payout alone (+4.890 / +0.1980 with
+    # committed_order_objective). #289: that sweep's benchmark patched
+    # job2._load_measured_drafts with each slate's own post-lock drafts, so
+    # the evidence is invalidated. Weight KEPT at 0.28 (no live knob change
+    # without operator sign-off / leak-free E1 re-run); re-promotion or
+    # revert requires scripts/build_model_research_benchmark.py after the
+    # prior-slate ownership guard. See issue #289 and follow-up E1.
     "optimizer_leverage_weight": 0.28,
 }
 

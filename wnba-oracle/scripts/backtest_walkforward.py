@@ -44,6 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
 from wnba_oracle.eval.contest_score import committed_lineup_score
+from wnba_oracle.eval.point_in_time import causal_drafts_for_slate
 from wnba_oracle.predict.base import boost_prior, player_volatility
 from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
 
@@ -125,34 +126,6 @@ def _drafts_by_slate_from_frame(sl: pl.DataFrame) -> dict[str, dict[int, int]]:
 
 def _load_drafts_by_slate() -> dict[str, dict[int, int]]:
     return _drafts_by_slate_from_frame(read_slate_labels())
-
-
-def causal_drafts_for_slate(
-    slate_date: str,
-    drafts_by_slate: dict[str, dict[int, int]],
-    pool_pids: set[int] | None = None,
-) -> dict[int, int]:
-    """Point-in-time ownership proxy: each player's draft count from the most
-    recent slate STRICTLY BEFORE ``slate_date``.
-
-    ``slate_labels.drafts`` for slate N is realized field ownership and is
-    only written by day-close the morning after, so feeding N's own drafts
-    into the contrarian tilt (the pre-fix behaviour) leaks the field's
-    answer. Live freezes have never had that value either (AGENTS.md, #38).
-    Players with no prior draft observation are omitted, which
-    ``apply_contrarian_adjustment`` treats as zero penalty.
-    """
-    out: dict[int, int] = {}
-    for sd in sorted(drafts_by_slate, reverse=True):
-        if sd >= slate_date:
-            continue
-        for pid, n in drafts_by_slate[sd].items():
-            if pid in out:
-                continue
-            if pool_pids is not None and pid not in pool_pids:
-                continue
-            out[pid] = n
-    return out
 
 
 def run_placement(

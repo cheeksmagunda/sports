@@ -1,9 +1,29 @@
 # Status
 
-Last verified: 2026-09-25T05:40:00Z
+Last verified: 2026-09-25T06:00:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## optimizer_leverage_weight evidence gate (#289)  -  2026-09-25
+
+- **Live knob:** `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` remains
+  `0.28` (no production knob change; public API had no slate timing for
+  2026-09-25 at verification, but operator sign-off is still required for any
+  live flip). Railway `OPTIMIZER_LEVERAGE_WEIGHT` was not mutated in this fix.
+- **Root cause:** `scripts/build_model_research_benchmark.py`
+  `_precompute_slates` (shared by `model_tournament.py`) patched
+  `job2._load_measured_drafts` to each slate's own post-lock `slate_labels.drafts`.
+  Live freezes never see those drafts. The 2026-08-30 promotion evidence is
+  therefore not transferable.
+- **Code fix:** benchmark/tournament default to prior-slate
+  (`wnba_oracle.eval.point_in_time.causal_drafts_for_slate`); optional
+  `--leak-same-slate-ownership` keeps the old path for diagnostics only.
+  Unit tests pin the guard. Walk-forward already had the same rule.
+- **Still open:** leak-free leverage/contrarian sweep (experiment E1 from the
+  #38 closing report) before keep-or-revert of `0.28`. Tracked as a follow-up
+  issue from #289.
+
 
 ## backfill-enrichment recovery (#279 / #310 / #312)  -  2026-09-25
 
