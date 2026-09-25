@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 852 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 853 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -547,6 +547,7 @@ Generated from `git ls-files`. 852 tracked files. Regenerate with `scripts/gener
 - scripts/check_import_boundaries.py -- Enforce the workspace dependency direction with static import checks.
 - scripts/check_issue_link.py -- Enforce issue linkage for material pull request work.
 - scripts/codespace-push
+- scripts/codespace-railway-env
 - scripts/codespaces-smoke.sh -- Shell script
 - scripts/devcontainer-postcreate.sh -- Shell script
 - scripts/devcontainer-poststart.sh -- Shell script
