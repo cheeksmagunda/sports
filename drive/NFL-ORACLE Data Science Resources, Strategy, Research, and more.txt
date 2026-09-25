@@ -2944,3 +2944,356 @@ scoring branch, plus the lock-mechanism/account-scoping detail above. Both
 need an authorized live pre-lock observation to close, not further archive
 mining -- the archive has already been read as far as it can honestly go for
 this question.
+
+
+Dated note: 2026-09-24 (captures 20:08-20:10 UTC and 21:50-21:51 UTC)
+### Issue #91 evidence append: authorized live pre-lock observation of NFL contest 2196 (2026-09-24)
+
+Append-only. This section is CURRENT VERIFICATION from a live pre-lock read;
+the 2026-09-23 section directly above is historical archive evidence and is
+left unchanged, except where this section explicitly corrects it (see the
+negative-value item). No secret values, cookies, tokens, or account
+identifiers are recorded here. No contest entry, no draft submission, no
+purchase, no Rax wager. Real Sports session state was read, never refreshed,
+re-seeded, or rewritten (canonical Codespace storage_state sha256[:8]
+b3bbcf41 and mtime identical before and after every pass). Railway and the
+production T-40 worker were not touched.
+
+Authority and method
+- The operator explicitly authorized an automated, read-only capture of
+  tonight's live NFL contest board for #91 (this relaxes, for this one
+  observation only, the issue's "does not authorize automated capture"
+  scope line).
+- Environment: canonical Codespace (fluffy-zebra-g4gqq746477q2jg), existing
+  read-only code `nfl_oracle.recommendations.provider.NFLReader`
+  (next_day, day_content, contest, collect) plus direct GETs of the contest
+  meta, /draftinfo, /payoutinfo and /stats routes. Codespace checkout was on
+  branch chat/285-dependabot-issue-link at 4e7d5ce507fc (a peer's branch;
+  nfl_oracle reader code used as-is, not modified). GET only. Every payload
+  passed `redact_corpus_payload` + `assert_no_identity_leak` before it was
+  written, and only under /tmp in the Codespace.
+- Pass 1: 2026-09-24 20:08:38 to 20:09:48 UTC, 114 provider requests.
+- Pass 2: 2026-09-24 21:50:08 to 21:51:16 UTC, 113 provider requests
+  (a first pass-2 attempt at 21:38 UTC failed before any provider request
+  because the Codespace /tmp scratch had been cleared; it was re-uploaded
+  and run once). After pass 2 the /tmp derived header-cache copy in the
+  Codespace was deleted.
+
+Acceptance checks
+
+1. Contest identity, board/regime, eligible pool, stable ids, legality, slot vector: RESOLVED (live).
+- Provider day: 2026-09-24 (`/home/nfl/next` latestDayContent.day), NFL week 3,
+  seasonType regularseason, season 2026.
+- Game: provider game id 19487, dateTime 2026-09-25T00:15:00.000Z, status
+  scheduled, homeTeamKey GB, awayTeamKey ATL, channel AMZN. Note: the
+  provider lists GB as HOME and ATL as AWAY (ATL at GB). The earlier
+  "GB at ATL" phrasing (STATUS.md 2026-09-24 entry and the task brief) came
+  from the offline schedule fixture and disagrees with the live payload on
+  home/away; the live payload is authoritative. Kickoff 00:15 UTC is
+  confirmed live.
+- Contest: `config.dailyDraftInfo.contests` lists exactly one contest,
+  id 2196 (source "home"). Meta: sport nfl, day = endDay = 2026-09-24,
+  isFinalized false, info.isLocked false, info.nonce "0_pregame",
+  headerText "Draft", createdAt 2026-09-23T11:00:50.408Z,
+  additionalInfo.lineupSize 5. Board/regime: the single-game NFL "Daily
+  draft" (home feed post "Daily draft"), boosts published (see check 3).
+  The same day also shows a separate "Weekly draft" post and a "Daily
+  streak" post; those are different products and were not examined.
+- Draftinfo: lineupSize 5, defaultMultipliers [2, 1.8, 1.6, 1.4, 1.2],
+  descriptionText "Select 5 players for the highest Real score.
+  Lower-ranked players get bigger boosts." No position, team, salary, or
+  per-position cap field exists in draftinfo; the only structural rule
+  exposed is five cards into five ordered slots.
+- Slot vector (1st to 5th slot): 2.0, 1.8, 1.6, 1.4, 1.2, identical to the
+  archive's OBSERVED_DEFAULT_SLOT_MULTIPLIERS.
+- Eligible pool: 159 players. Game roster (`/games/19487/sport/nfl/players`)
+  = 159; rating-lineup search reconciled by exact Real id = 159; unmatched
+  = 0; pool_complete true. ATL 81, GB 78. Positions: DL 31, OL 30, DB 25,
+  WR 18, LB 17, RB 12, TE 12, QB 7, K 3, P 2, LS 2. injuryStatus: Active
+  133, Out 23, Questionable 3 (Out players remain in the searchable pool;
+  whether the provider would accept an Out player in a submitted lineup is
+  unresolved, not tested).
+- Identity caution: two distinct ATL RBs share displayName "B. Robinson"
+  (id 23189, rank 14, boost 0; id 23190, rank 261, boost 2.5). Reconcile by
+  Real id only, never by name.
+- Duplicate-card rule and submit payload shape: UNRESOLVED. Not testable
+  without a submission, which is forbidden.
+- Full pool (Real id | display name | pos | team | multiplierBonus | primaryRanking | injuryStatus | displayed badge), pass 1:
+  11694 | N. Folk | K | ATL | boost 3 | rank 559 | Active | shown +3.0x
+  12831 | T. Taylor | QB | GB | boost 0 | rank null | Active | shown none
+  16531 | J. Matthews | OL | ATL | boost 0 | rank null | Active | shown none
+  16883 | Z. Smith | DL | ATL | boost 0.9 | rank 101 | Active | shown +0.9x
+  17963 | A. Hooper | TE | ATL | boost 3 | rank 783 | Active | shown +3.0x
+  18017 | J. Hargrave | DL | GB | boost 3 | rank 938 | Questionable | shown +3.0x
+  18990 | J. Smith | TE | GB | boost 2.1 | rank 469 | Active | shown +2.1x
+  19016 | S. Ebukam | DL | ATL | boost 3 | rank 620 | Out | shown +3.0x
+  19128 | C. Levin | OL | ATL | boost 0 | rank null | Active | shown none
+  19461 | C. Rush | QB | ATL | boost 2.8 | rank 532 | Active | shown +2.8x
+  19486 | S. Norton | OL | ATL | boost 0 | rank null | Out | shown none
+  19847 | M. Hughes | DB | ATL | boost 2.4 | rank 250 | Active | shown +2.4x
+  19873 | J. Bates III | DB | ATL | boost 3 | rank 534 | Active | shown +3.0x
+  19934 | D. Hand | DL | ATL | boost 0 | rank null | Out | shown none
+  20024 | Z. Franklin | LB | GB | boost 3 | rank 679 | Active | shown +3.0x
+  20281 | M. Ford Jr | DB | ATL | boost 3 | rank 815 | Active | shown +3.0x
+  20664 | J. Woods | LB | ATL | boost 3 | rank 949 | Active | shown +3.0x
+  20824 | J. Jacobs | RB | GB | boost 0 | rank null | Out | shown none
+  20857 | C. Lindstrom | OL | ATL | boost 0 | rank null | Active | shown none
+  20960 | J. Taylor | OL | ATL | boost 0 | rank null | Active | shown none
+  21017 | J. Bailey | P | ATL | boost 2.1 | rank 226 | Active | shown +2.1x
+  21142 | O. Zaccheaus | WR | ATL | boost 3 | rank 920 | Active | shown +3.0x
+  21239 | K. Nixon | DB | GB | boost 0.7 | rank 79 | Active | shown +0.7x
+  21484 | M. Orzech | LS | GB | boost 0 | rank null | Active | shown none
+  21677 | T. Tagovailoa | QB | ATL | boost 0 | rank null | Active | shown none
+  21801 | T. Sermon | RB | ATL | boost 0 | rank null | Out | shown none
+  21841 | J. Love | QB | GB | boost 0.5 | rank 50 | Active | shown +0.5x
+  21936 | X. McKinney | DB | GB | boost 3 | rank 637 | Active | shown +3.0x
+  22050 | D. Holmes | DB | ATL | boost 0 | rank null | Active | shown none
+  22052 | C. Henderson | DB | ATL | boost 3 | rank 313 | Active | shown +3.0x
+  22075 | A. Terrell Jr. | DB | ATL | boost 3 | rank 558 | Out | shown +3.0x
+  22119 | C. Woerner | TE | ATL | boost 0 | rank null | Active | shown none
+  22155 | K. Hinton | OL | ATL | boost 0 | rank null | Active | shown none
+  22199 | K. Welch | LB | GB | boost 3 | rank 957 | Active | shown +3.0x
+  22232 | L. London | DL | ATL | boost 3 | rank 748 | Active | shown +3.0x
+  22306 | L. McCullough | LS | ATL | boost 0 | rank null | Active | shown none
+  22488 | C. Blair | WR | ATL | boost 3 | rank 1060 | Active | shown +3.0x
+  22508 | K. Pitts Sr. | TE | ATL | boost 3 | rank 795 | Active | shown +3.0x
+  22563 | K. Herbert | RB | ATL | boost 0 | rank null | Active | shown none
+  22695 | M. Parsons | DL | GB | boost 0 | rank null | Out | shown none
+  22708 | A. Banks | OL | GB | boost 0 | rank null | Out | shown none
+  22767 | D. Deablo | LB | ATL | boost 2.3 | rank 243 | Active | shown +2.3x
+  22787 | B. St-Juste | DB | GB | boost 3 | rank 962 | Active | shown +3.0x
+  22904 | I. McDuffie | LB | GB | boost 3 | rank 752 | Active | shown +3.0x
+  22926 | N. Niemann | LB | GB | boost 3 | rank 837 | Active | shown +3.0x
+  23020 | R. Neuzil | OL | ATL | boost 0 | rank null | Active | shown none
+  23151 | D. London | WR | ATL | boost 2.9 | rank 301 | Active | shown +2.9x
+  23155 | J. Dotson | WR | ATL | boost 3 | rank 655 | Active | shown +3.0x
+  23168 | S. Moore | WR | GB | boost 3 | rank 1055 | Active | shown +3.0x
+  23182 | K. Slovis | QB | GB | boost 0 | rank null | Active | shown none
+  23189 | B. Robinson | RB | ATL | boost 0 | rank 14 | Active | shown none
+  23190 | B. Robinson | RB | ATL | boost 2.5 | rank 261 | Active | shown +2.5x
+  23192 | C. Brooks | RB | GB | boost 3 | rank 436 | Active | shown +3.0x
+  23211 | M. Lloyd | RB | GB | boost 2.9 | rank 306 | Active | shown +2.9x
+  23218 | P. Strong Jr. | RB | GB | boost 0 | rank null | Active | shown none
+  23233 | J. Reed | WR | GB | boost 3 | rank 715 | Out | shown +3.0x
+  23242 | M. Penix Jr. | QB | ATL | boost 0 | rank null | Active | shown none
+  23258 | D. Jackson | DL | ATL | boost 0 | rank null | Active | shown none
+  23262 | Z. Harrison | DL | ATL | boost 3 | rank 965 | Active | shown +3.0x
+  23329 | C. Thomas | DL | ATL | boost 2.1 | rank 470 | Active | shown +2.1x
+  23344 | C. Harris | LB | ATL | boost 3 | rank 967 | Active | shown +3.0x
+  23351 | S. Rhyan | OL | GB | boost 0 | rank null | Active | shown none
+  23376 | D. Wyatt | DL | GB | boost 3 | rank 756 | Active | shown +3.0x
+  23388 | D. Malone | LB | ATL | boost 0 | rank null | Out | shown none
+  23395 | C. Watson | WR | GB | boost 0.1 | rank 23 | Active | shown +0.1x
+  23482 | B. Melton | WR | GB | boost 3 | rank 904 | Active | shown +3.0x
+  23509 | Z. Bako-Bewele | OL | GB | boost 0 | rank null | Out | shown none
+  23510 | C. Volson | OL | GB | boost 0 | rank null | Active | shown none
+  23518 | J. Ford | DL | GB | boost 1.9 | rank 464 | Active | shown +1.9x
+  23603 | E. Johnson II | DL | GB | boost 0 | rank null | Active | shown none
+  23621 | N. Muse | TE | ATL | boost 0 | rank null | Active | shown none
+  23768 | D. Whelan | P | GB | boost 3 | rank 338 | Active | shown +3.0x
+  23776 | A. Mosby | DL | GB | boost 0 | rank null | Active | shown none
+  24048 | T. Vrabel | OL | ATL | boost 0 | rank null | Active | shown none
+  24082 | Z. Pickens | DL | ATL | boost 0 | rank null | Active | shown none
+  24111 | G. Dexter Sr. | DL | ATL | boost 3 | rank 413 | Active | shown +3.0x
+  24118 | T. Kraft | TE | GB | boost 2.8 | rank 291 | Active | shown +2.8x
+  24138 | J. Robinson | DB | ATL | boost 0 | rank null | Active | shown none
+  24150 | L. Musgrave | TE | GB | boost 0 | rank null | Out | shown none
+  24163 | M. Bergeron | OL | ATL | boost 0 | rank null | Active | shown none
+  24191 | L. Van Ness | DL | GB | boost 0.7 | rank 69 | Active | shown +0.7x
+  24192 | C. Valentine | DB | GB | boost 0 | rank null | Active | shown none
+  24227 | D. Hellams | DB | ATL | boost 3 | rank 977 | Active | shown +3.0x
+  24230 | S. Brown | DB | ATL | boost 3 | rank 694 | Active | shown +3.0x
+  24282 | K. Brooks | DL | GB | boost 0 | rank null | Active | shown none
+  24375 | J. Whyle | TE | GB | boost 0 | rank null | Active | shown none
+  24386 | Y. Abdullah | LB | ATL | boost 3 | rank 983 | Active | shown +3.0x
+  24401 | B. Cox Jr. | DL | GB | boost 3 | rank 643 | Active | shown +3.0x
+  24477 | C. Sorsdal | OL | ATL | boost 0 | rank null | Active | shown none
+  24496 | J. Riley | DL | GB | boost 0 | rank null | Out | shown none
+  24552 | K. Hailassie | DB | GB | boost 0 | rank null | Active | shown none
+  24813 | J. Phillips Jr. | LB | GB | boost 0 | rank null | Active | shown none
+  24875 | D. Drummond | WR | ATL | boost 0 | rank null | Active | shown none
+  24945 | M. Smith | DL | ATL | boost 3 | rank 786 | Active | shown +3.0x
+  24959 | J. Bullard | DB | GB | boost 3 | rank 309 | Active | shown +3.0x
+  24997 | B. Dorlus | DL | ATL | boost 3 | rank 762 | Active | shown +3.0x
+  25002 | D. Dabney | TE | GB | boost 0 | rank null | Active | shown none
+  25018 | J. Morgan | OL | GB | boost 0 | rank null | Active | shown none
+  25021 | E. Cooper | LB | GB | boost 0.8 | rank 88 | Active | shown +0.8x
+  25033 | B. Trice | DL | ATL | boost 3 | rank 997 | Active | shown +3.0x
+  25117 | J. McClellan | RB | ATL | boost 0 | rank null | Active | shown none
+  25125 | E. Williams | DB | GB | boost 2 | rank 212 | Active | shown +2.0x
+  25161 | K. Oladapo | DB | GB | boost 0 | rank null | Active | shown none
+  25190 | K. Hadden | DB | GB | boost 3 | rank 764 | Active | shown +3.0x
+  25249 | T. Hopper | LB | GB | boost 3 | rank 866 | Active | shown +3.0x
+  25264 | J. Bertrand | LB | ATL | boost 0 | rank null | Out | shown none
+  25281 | J. Monk | OL | GB | boost 0 | rank null | Active | shown none
+  25341 | T. Glover | OL | GB | boost 0 | rank null | Active | shown none
+  25342 | M. Jerrell | OL | ATL | boost 0 | rank null | Active | shown none
+  25383 | D. Jennings | OL | GB | boost 0 | rank null | Active | shown none
+  25395 | T. Yassmin | TE | GB | boost 0 | rank null | Out | shown none
+  25922 | M. Golden | WR | GB | boost 1 | rank 107 | Active | shown +1.0x
+  25998 | J. Walker | LB | ATL | boost 0 | rank null | Out | shown none
+  26002 | C. Williams | OL | ATL | boost 0 | rank null | Out | shown none
+  26017 | J. Pearce Jr. | DL | ATL | boost 0 | rank null | Out | shown none
+  26040 | K. Johnson | RB | GB | boost 3 | rank 617 | Active | shown +3.0x
+  26067 | X. Watts | DB | ATL | boost 3 | rank 497 | Active | shown +3.0x
+  26081 | A. Wells Jr. | WR | ATL | boost 0 | rank null | Active | shown none
+  26091 | B. Collins | WR | ATL | boost 0 | rank null | Out | shown none
+  26097 | I. Neyor | WR | GB | boost 0 | rank null | Active | shown none
+  26105 | S. Williams | WR | GB | boost 0 | rank null | Out | shown none
+  26118 | B. Bowman Jr. | DB | ATL | boost 0 | rank null | Questionable | shown none
+  26123 | B. Sorrell | DL | GB | boost 3 | rank 416 | Active | shown +3.0x
+  26139 | C. Oliver | DL | GB | boost 0 | rank null | Out | shown none
+  26173 | W. Brinson | DL | GB | boost 0 | rank null | Out | shown none
+  26175 | A. Belton | OL | GB | boost 0 | rank null | Active | shown none
+  26190 | R. Longerbeam | DB | ATL | boost 0 | rank null | Active | shown none
+  26199 | J. Ivey | LB | ATL | boost 0 | rank null | Active | shown none
+  26238 | J. Williams | OL | GB | boost 0 | rank null | Active | shown none
+  26250 | L. Krieg | K | GB | boost 0 | rank null | Active | shown none
+  26338 | Q. Skinner Jr. | WR | GB | boost 0 | rank null | Active | shown none
+  26426 | D. Cooper | OL | GB | boost 0 | rank null | Active | shown none
+  26556 | M. Redman | TE | GB | boost 0 | rank null | Active | shown none
+  26700 | A. Campbell | DL | GB | boost 3 | rank 1028 | Questionable | shown +3.0x
+  26775 | A. Terrell | DB | ATL | boost 3 | rank 888 | Active | shown +3.0x
+  26866 | B. Cisse | DB | GB | boost 3 | rank 377 | Active | shown +3.0x
+  26891 | H. Perkins Jr. | LB | ATL | boost 3 | rank 1035 | Active | shown +3.0x
+  26909 | Z. Branch | WR | ATL | boost 3 | rank 806 | Active | shown +3.0x
+  26944 | V. Anthony II | WR | ATL | boost 0 | rank null | Active | shown none
+  26985 | C. McClellan | DL | GB | boost 0 | rank null | Active | shown none
+  27018 | N. Kelly | DL | GB | boost 0 | rank null | Active | shown none
+  27029 | E. Onianwa | OL | ATL | boost 0 | rank null | Active | shown none
+  28054 | J. Sturdivant | WR | GB | boost 0 | rank null | Active | shown none
+  28065 | D. Dennis-Sutton | DL | GB | boost 2.2 | rank 480 | Active | shown +2.2x
+  28087 | J. Burton | OL | GB | boost 0 | rank null | Active | shown none
+  28096 | K. Daniels | LB | ATL | boost 3 | rank 600 | Active | shown +3.0x
+  28107 | T. Smack | K | GB | boost 0.2 | rank 30 | Active | shown +0.2x
+  28115 | D. Wade | OL | GB | boost 0 | rank null | Active | shown none
+  28123 | D. Jackson | DB | GB | boost 0 | rank null | Active | shown none
+  28142 | J. Strand | QB | ATL | boost 3 | rank 926 | Active | shown +3.0x
+  28149 | C. Jones | RB | ATL | boost 0 | rank null | Active | shown none
+  28167 | R. Mahlman | OL | ATL | boost 0 | rank null | Active | shown none
+  28174 | J. Gesky | OL | GB | boost 0 | rank null | Active | shown none
+  28198 | A. Thompson | DL | ATL | boost 0 | rank null | Out | shown none
+  28282 | M. DeWalt IV | DB | ATL | boost 0 | rank null | Active | shown none
+  28283 | K. Dewberry | OL | ATL | boost 0 | rank null | Active | shown none
+  28287 | J. Velling | TE | ATL | boost 0 | rank null | Active | shown none
+  28417 | J. Thompson | OL | ATL | boost 0 | rank null | Active | shown none
+  28469 | D. Bankston | RB | GB | boost 0 | rank null | Active | shown none
+
+2. Lock and per-game lock/edit behavior: PARTIALLY RESOLVED.
+- Observed provider lock state: info.isLocked false and
+  raxContestPoolDetails.isLocked false at both passes (latest 21:51
+  UTC). No lock timestamp or lock-time field exists anywhere in meta,
+  draftinfo, payoutinfo, stats, or day content. The provider lock moment is
+  therefore UNRESOLVED; the only clock the provider exposes is kickoff,
+  2026-09-25T00:15:00Z.
+- Our operational freeze is a separate, earlier cutoff: T-40 from that
+  kickoff = 2026-09-24 23:35:00 UTC (production worker). It is our choice,
+  not a provider lock, and must not be reported as one.
+- Per-game lock: not observable tonight; this is a single-game slate
+  (one game, one contest), so there is no second game to lock separately.
+  Multi-game per-game lock behavior remains UNRESOLVED.
+- Edit behavior: draftinfo canClear false for the observing session (no
+  lineup exists). Whether a submitted lineup can be edited before lock is
+  UNRESOLVED (no entry made). The Rax side-pool copy states: "Rax contest
+  entry is final and cannot be removed."
+
+3. multiplierBonus visibility, fixedness, displayed zero, scope: PARTIALLY RESOLVED.
+- Visible before lock: YES. Every one of the 159 pool records carries a
+  numeric multiplierBonus about 4 hours before kickoff. Regime:
+  provider_boosts_present, 70 nonzero, max 3.0. Histogram (pass 1):
+  0 x89, 0.1 x1, 0.2 x1, 0.5 x1, 0.7 x2, 0.8 x1, 0.9 x1, 1.0 x1, 1.9 x1,
+  2.0 x1, 2.1 x3, 2.2 x1, 2.3 x1, 2.4 x1, 2.5 x1, 2.8 x2, 2.9 x2, 3.0 x49.
+- Fixed before lock: YES for the observed window only. Per-player diff by
+  Real id between pass 1 (20:08-20:10 UTC) and pass 2 (21:50-21:51 UTC):
+  same 159 ids, 0 multiplierBonus changes, 0 primaryRanking changes, 0
+  injuryStatus changes, 0 badge changes; draftinfo and payoutinfo
+  byte-identical, meta and stats differ only in commentCount (330 to 371).
+  Fixedness from 21:51 UTC to the provider lock (at or before 00:15 UTC) is
+  NOT observed and remains UNRESOLVED.
+- Displayed zero, real vs placeholder: the search record's `details` array
+  carries the UI badge. All 70 nonzero players show a badge whose text
+  equals the value (for example "+2.4x"); all 89 zero players show no badge
+  (details null), so the UI displays absence, not a "0". Of the 89 zeros,
+  88 have primaryRanking null (unranked) and 1 is ranked (id 23189
+  B. Robinson, rank 14, the best-ranked player on the board). The ranked
+  zero is consistent with the provider copy "Lower-ranked players get bigger
+  boosts" (rank 23 gets 0.1, rank 30 gets 0.2). Whether the 88 unranked
+  zeros are a real 0 or a not-yet-assigned placeholder is UNRESOLVED; the
+  payload cannot distinguish them. Resolution path: after finalization,
+  /entries and draftStats for 2196 expose the applied multiplierBonus per
+  drafted card; any drafted unranked player then shows whether 0 was applied.
+- Boost vs rank is not strictly monotonic: ranks 309-436 all read 3.0 but
+  ranks 464-532 read 1.9-2.8. Recorded as observed, not explained.
+- Account-scoped or resource-spending: UNRESOLVED. multiplierBonus arrives
+  as a player property on the rating-lineup search with no account field,
+  and nothing in draftinfo prices or spends it; that is consistent with a
+  provider-assigned, non-resource value, but only one account was observed
+  and the public cross-check (`/stats` draftStats) is empty pre-lock
+  ("Stats will show here once games begin"). Separately, day content has
+  config.showBoostControl true, which points to a distinct user-facing
+  boost-control/pass feature; its mechanics were not examined. Resolution
+  path: compare this capture to 2196's finalized draftStats boosts.
+- Unknown boosts rule: only the 88 unranked-zero cards remain ambiguous;
+  treat them as boost 0 (boost-free counterfactual) in the shadow.
+
+4. Negative-value scoring branch: RESOLVED on NFL-scoped historical evidence; not re-observed live.
+- Correction to the 2026-09-23 section above, which stated that every card
+  in the archive is non-negative. A re-scan of the local Corpus C archive
+  (nfl-oracle/data/raw/corpus_c, 92 NFL contests, 9,100 visible top-20
+  cards; 1 card had no value) finds 5 NFL cards with negative Real value
+  (5 entries, 4 contests; 4 distinct player-games), all sport "nfl":
+  - contest 1147 (2025-11-28), J. Elliott, value -0.133599, multiplier 3.0
+    (boost 1.8), card score -0.400798, entry rank 13 score 57.21
+    (appears twice, two entries)
+  - contest 1113 (2025-11-20), E. Moore, value -0.104035, multiplier 4.6
+    (boost 3.0), card score -0.478562, entry rank 18 score 57.47
+  - contest 1346 (2026-01-12), J. Smith, value -0.03528, multiplier 4.2
+    (boost 3.0), card score -0.148176, entry rank 18 score 56.34
+  - contest 1145 (2025-11-27), Z. Flowers, value -0.3689, multiplier 2.9
+    (boost 1.1), card score -1.06981, entry rank 12 score 63.79
+- On every one: card score = value x (slot + boost) exactly, with the
+  negative sign kept (no floor at zero, no sign flip, no boost exemption),
+  and the entry score equals the sum of its five card scores including the
+  negative card. So a negative-value card SUBTRACTS value x (slot + boost),
+  and a higher boost or earlier slot makes it worse.
+- Scope caveat: this is 2025-26 archive evidence under the same scoring law;
+  contest 2196 cannot show it until it finalizes. No live contradiction was
+  seen (the payoutinfo entryPayoutText still describes a different
+  "lower scores are better" game, already shown by the archive to contradict
+  the leaderboard).
+
+5. Ranking, tie, payout semantics for this regime: PARTIALLY RESOLVED.
+- Leaderboard prizes (payoutinfo, live): 1st 100, 2nd 80, 3rd 60, 4th 40,
+  5th 20, 6th-10th 10 each (Rax). Copy: "The prizes above will be split
+  across each tier of winners when the contest finalizes."
+- Optional Rax side pools (draftinfo, live), 100 Rax wager each: Top 50%
+  pays 1.7x (170 Rax), Top 20% pays 3.5x (350), Top 10% pays 7x (700).
+  Copy: "Tiebreaker is earliest time entered. Rax contest entry is final and
+  cannot be removed." and "The Rax entry will be deducted from your balance
+  once you submit". These are paid entries and remain out of scope.
+- Leaderboard ties (archive): 110 tied-score groups in the visible top 20.
+  Tied entries share one `rank` value (for example contest 1034: four
+  entries at rank 1 with score 101.78, next group at rank 7), that is
+  competition ranking, while `pagedRank` orders them for display. Display
+  order inside a tie is not by earliest updatedAt. How the tier prize is
+  split among tied entrants is stated in copy ("split across each tier")
+  but the split arithmetic was not observed: UNRESOLVED.
+- Ranking basis: the leaderboard ranks by total score = sum of
+  value x (slot + boost), highest first (archive law). Shadow score
+  comparisons are not official placement and not profit; nothing here
+  claims either.
+
+Go/no-go (2026-09-24)
+- Contest entry: NO-GO. The issue does not authorize entry, and provider
+  lock time, duplicate/Out-player legality, submit shape, unranked-zero
+  boost meaning, account scope, and tie-split arithmetic are unresolved.
+  provider_contract_verified stays false.
+- Boost-aware shadow on contest 2196: GO. Contest, one-game pool (159 ids,
+  complete), slot vector, and a published, badge-consistent boost table are
+  verified live pre-lock, and the negative-value branch is now evidenced on
+  NFL data, so the playbook may run as a boost-aware shadow with unranked
+  zeros treated as boost 0. No edge is claimed.
+- Follow-ups that close the rest without entry: after 2196 finalizes,
+  compare its /entries and draftStats boosts to this capture (fixedness to
+  lock, unranked-zero meaning, account scope); capture a multi-game slate's
+  lock fields for per-game lock behavior.
