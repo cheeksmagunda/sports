@@ -1,0 +1,21 @@
+# Local secrets and Real Sports session material (never commit).
+scraper/
+**/storage_state.json
+**/request_token_cache.json
+.env
+.env.*
+
+# Live / local corpus (redacted fixtures for tests live under tests/fixtures/).
+data/raw/*
+!data/raw/.gitkeep
+data/catalog/*
+!data/catalog/.gitkeep
+data/audit/*
+!data/audit/.gitkeep
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+*.pyc

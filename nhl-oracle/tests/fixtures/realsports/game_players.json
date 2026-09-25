@@ -1,0 +1,30 @@
+{
+  "players": [
+    {
+      "id": 101,
+      "position": "C",
+      "fantasyPoints": 12.5
+    },
+    {
+      "id": 102,
+      "position": "LW",
+      "fantasyPoints": 11.0
+    },
+    {
+      "id": 103,
+      "position": "RW",
+      "fantasyPoints": 10.0
+    },
+    {
+      "id": 104,
+      "position": "D",
+      "fantasyPoints": 9.0
+    },
+    {
+      "id": 105,
+      "position": "G",
+      "fantasyPoints": 8.5,
+      "multiplierBonus": 0.1
+    }
+  ]
+}

@@ -16,12 +16,28 @@ from typing import Any, Literal
 
 from oracle_core.artifacts import atomic_write_bytes, atomic_write_json, sha256_bytes
 
-NhlEndpointName = Literal["boxscore", "roster", "contest"]
+NhlEndpointName = Literal[
+    "boxscore",
+    "roster",
+    "contest",
+    "draftinfo",
+    "home",
+    "players",
+    "stats",
+    "feed",
+    "audit",
+]
 
 ENDPOINT_FILENAMES: dict[NhlEndpointName, str] = {
     "boxscore": "boxscore.json",
     "roster": "roster.json",
     "contest": "contest.json",
+    "draftinfo": "draftinfo.json",
+    "home": "home.json",
+    "players": "players.json",
+    "stats": "stats.json",
+    "feed": "feed.json",
+    "audit": "audit.json",
 }
 
 

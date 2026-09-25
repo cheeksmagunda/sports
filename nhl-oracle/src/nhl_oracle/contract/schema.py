@@ -1,9 +1,10 @@
-"""Candidate NHL contest contract shape, pending live-provider confirmation.
+"""NHL contest contract shape confirmed against live Real Sports evidence.
 
-Every field defaults to an explicit unknown state instead of assuming NFL's
-five-card-ordered format or WNBA's roster-construction format applies to NHL.
-Confirming these fields against a real provider is out of scope until the
-Week 1 authorization checkpoint (issue #135) is separately granted.
+Defaults below reflect the Week 2 live read-only audit (#299): historical NHL
+contest 1901 (five-card ordered, per-contest lock, flat boost, score label
+"value") plus current-slate player cards that include goalie (G) positions.
+Re-open a field to UNKNOWN/None only when a later live audit contradicts these
+facts.
 """
 
 from __future__ import annotations
@@ -39,16 +40,16 @@ class BoostRegime(StrEnum):
 
 @dataclass(frozen=True)
 class NhlContestContract:
-    """A candidate NHL contest contract shape awaiting live-provider audit."""
+    """NHL contest contract shape (defaults from live Real Sports audit #299)."""
 
     sport: str = "nhl"
-    format: ContestFormat = ContestFormat.UNKNOWN
-    lock_scope: LockScope = LockScope.UNKNOWN
-    boost_regime: BoostRegime = BoostRegime.UNKNOWN
-    score_value_label: str | None = None
+    format: ContestFormat = ContestFormat.FIVE_CARD_ORDERED
+    lock_scope: LockScope = LockScope.PER_CONTEST
+    boost_regime: BoostRegime = BoostRegime.FLAT
+    score_value_label: str | None = "value"
     roster_size: int = 5
-    slot_multipliers: tuple[float, ...] | None = None
-    goalie_eligible: bool | None = None
+    slot_multipliers: tuple[float, ...] | None = (2.0, 1.8, 1.6, 1.4, 1.2)
+    goalie_eligible: bool | None = True
 
     def __post_init__(self) -> None:
         if self.roster_size <= 0:

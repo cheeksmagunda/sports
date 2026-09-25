@@ -55,10 +55,11 @@ itself authorizes no provider collection, service provisioning, credentials,
 or deployment; each milestone gets its own scoped issue when it starts.
 
 Working product hypothesis, pending operator confirmation: open the NHL app
-and see five ordered Real Sports recommendations for manual entry. NHL
-contest format, scoring, eligibility, boosts, and lock behavior must be
-established from NHL evidence before the implementation contract is
-committed.
+and see five ordered Real Sports recommendations for manual entry. Week 2
+live audit (#299) confirmed five-card-ordered format, per-contest lock, flat
+boosts, score label "value", goalie eligibility, and slot multipliers
+(2.0/1.8/1.6/1.4/1.2) from Real Sports NHL evidence (historical contest 1901
+plus current-slate player cards).
 
 1. **Product and provider contract.** Audit current and historical contest
    identities, exact score/value labels, candidate completeness, goalie
@@ -104,5 +105,6 @@ Operational lessons carried over from the NFL 2026-09-09 run:
   be explicit.
 
 Open decisions (operator): first product scope, initial target slate/date,
-verified NHL contest law and lock semantics, usable historical coverage, and
-the publication target after a measured hosted rehearsal.
+usable historical coverage depth beyond the Week 2 seed, and the publication
+target after a measured hosted rehearsal. Contest law and lock semantics were
+verified in the Week 2 live audit (#299); see STATUS.md.

@@ -11,8 +11,29 @@ from nhl_oracle.contract.schema import (
 )
 
 
-def test_default_contract_has_all_open_questions() -> None:
+def test_default_contract_matches_live_audit_defaults() -> None:
+    """Defaults were updated after the Week 2 live Real Sports audit (#299)."""
+
     contract = NhlContestContract()
+    assert contract.format is ContestFormat.FIVE_CARD_ORDERED
+    assert contract.lock_scope is LockScope.PER_CONTEST
+    assert contract.boost_regime is BoostRegime.FLAT
+    assert contract.score_value_label == "value"
+    assert contract.roster_size == 5
+    assert contract.slot_multipliers == (2.0, 1.8, 1.6, 1.4, 1.2)
+    assert contract.goalie_eligible is True
+    assert contract.open_questions() == ()
+
+
+def test_unknown_fields_still_surface_open_questions() -> None:
+    contract = NhlContestContract(
+        format=ContestFormat.UNKNOWN,
+        lock_scope=LockScope.UNKNOWN,
+        boost_regime=BoostRegime.UNKNOWN,
+        score_value_label=None,
+        slot_multipliers=None,
+        goalie_eligible=None,
+    )
     questions = contract.open_questions()
     assert "contest_format_five_card_ordered_vs_roster_construction" in questions
     assert "lock_scope_per_contest_vs_per_game" in questions

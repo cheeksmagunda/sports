@@ -1,1 +1,1 @@
-"""NHL raw payload provenance and persistence (pre-provider scaffold)."""
+"""NHL ingest: Real Sports client, redaction, and corpus provenance."""
