@@ -5,6 +5,15 @@
 # 2026-05-07 to 2026-05-18 silent-cron regression for the cautionary tale.
 # Railway services use the sports repository root as their build context and
 # this file as the config-as-code path.
+#
+# Builder must stay DOCKERFILE (wnba-oracle/Dockerfile). A plain
+# `railway redeploy` (image reuse / reason=redeploy) of an older deployment
+# whose serviceManifest.builder was RAILPACK re-runs Railpack/mise and fails
+# with "No interpreter found for Python >=3.11, <3.13" because
+# UV_PYTHON_DOWNLOADS=never (issue #279). Recover with:
+#   scripts/codespace-railway-env -- railway redeploy --service <name> --from-source -y
+# or the workflow's serviceInstanceDeployV2(commitSha=...) path, never an
+# image-reuse redeploy of a FAILED Railpack build.
 
 [build]
 builder = "DOCKERFILE"

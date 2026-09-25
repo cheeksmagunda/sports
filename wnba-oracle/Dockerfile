@@ -94,6 +94,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD ["pyt
 
 # Default CMD is the API. Cron services override startCommand to:
 #   sh -c "python /app/wnba-oracle/scripts/seed_storage_state.py && oracle-cron --job jobN"
+# backfill-enrichment uses the same wrap with --job backfill (no cron schedule;
+# one-shot via wnba-backfill-enrichment.yml / serviceInstanceDeployV2).
 # Always wrap with sh -c so ${PORT} expands. See mlb-oracle for the silent-cron
 # regression that motivated this.
+# Builds MUST go through this Dockerfile (railway.toml builder=DOCKERFILE).
+# Do not image-reuse-redeploy a RAILPACK-failed deployment (issue #279).
 CMD ["sh", "-c", "echo BOOT_PHASE=migrate && alembic upgrade head && echo BOOT_PHASE=uvicorn PORT=${PORT:-8000} && exec uvicorn wnba_oracle.api.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=* --log-level info"]
