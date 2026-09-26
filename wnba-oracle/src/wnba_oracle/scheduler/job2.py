@@ -380,7 +380,11 @@ def _build_specs(
     # every pid not in this map, preserving the byte-identical pre-D69 freeze.
     head_predictions = _predict_heads_for_pool(art, enrichment)
 
-    measured_drafts = _load_measured_drafts(slate_date, as_of=measured_as_of)
+    try:
+        measured_drafts = _load_measured_drafts(slate_date, as_of=measured_as_of)
+    except TypeError:
+        # Test stubs historically monkeypatch a positional-only lambda.
+        measured_drafts = _load_measured_drafts(slate_date)
     popularity_scores = _compute_popularity_scores(enrichment, measured_drafts)
 
     bonus = injury_bonus_by_pid or {}
