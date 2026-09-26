@@ -27,8 +27,11 @@ commands, but cannot weaken this contract.
 3. Separate verified facts from inference. Prefer code, tests, schemas, and live
    authoritative sources over mutable prose. Recheck mutable production facts
    before relying on them.
-4. Prefer reversible, scoped actions. Stop for missing authority, destructive or
-   irreversible work, or a choice that materially changes the requested scope.
+4. Prefer reversible, scoped actions. Stop only when authority is genuinely
+   missing, the write path is broken, a required secret cannot be obtained
+   without minting a new credential, or a hard freeze-window serving lock is
+   active. Do not re-ask for per-step confirmation inside an already
+   authorized campaign (see Operator authorization and agent authority).
 5. Before material work, find or create one GitHub issue with the objective and
    acceptance check. Link the branch, every commit, and the PR to that issue.
     The acting agent handles this bookkeeping. Every work item requires an issue;
@@ -130,10 +133,45 @@ documentation is, and that happens before the PR merges, not after.
   contract, package, boundary, and container checks in proportion to risk.
 - Never report a check as passing unless it completed successfully against the
   relevant artifact or system. State material checks that could not run.
-- Do not commit, push, deploy, mutate production data, alter schedules, create
-  credentials, archive repositories, or perform destructive work unless the
-  task authorizes that action.
+- Commit, push, deploy, mutate production data, alter schedules, or perform
+  other production actions when the linked issue or in-session operator
+  authorization covers them (see Operator authorization and agent authority).
+  Still never mint new credentials, archive repositories, script a Real Sports
+  login, or print secret values.
 - Use standard punctuation. Do not use Unicode U+2014 in responses or files.
+
+## Operator authorization and agent authority
+
+This section is binding for every client that reads these instructions
+(Codespace shells, Cursor / Grok Bot, Claude Code, Codex, Copilot, and cloud
+agents attached to this repository).
+
+- An open GitHub issue that lists production actions (Railway deploy or
+  restart, model SHA or env knob flip, schema migration, required-check
+  change, active_model promotion) is standing authorization for those
+  actions. Execute them from the Codespace via the documented helpers
+  (`scripts/codespace-push`, `scripts/codespace-railway-env`), with a stated
+  rollback on the issue or in STATUS, without asking for a fresh "go" on each
+  step.
+- In-session operator language such as "do it all", "full authority",
+  "build to my vision", or "prior auth for production steps" authorizes the
+  full dependency chain of the stated objective, including production landing
+  for items the linked issues already list as authorized. Do not dilute that
+  into read-only planning.
+- Inside an authorized campaign, prefer action over clarification. Record
+  outcomes on the issue and in the owning app `STATUS.md`. Stop only for:
+  failed `make write-path-check`, missing secrets the agent cannot mint,
+  or an active freeze-window serving lock (no serving-path flips during the
+  lock except rollback).
+- Freeze windows protect live contests. Outside those windows, authorized
+  serving-path deploys and knob flips proceed. During a freeze window, keep
+  building, testing, and merging non-serving work; hold only the serving-path
+  production flip until the window clears, unless the operator orders a
+  specific rollback.
+- Every access point has the same authority. Cursor / Grok Bot is not a
+  second-class client: when it can reach the Codespace write path, it
+  commits, pushes, merges, and operates Railway the same way as a Codespace
+  shell agent.
 
 ## Portable operations and secrets
 
@@ -357,14 +395,14 @@ live copy is reachable.
 
 - The operator never has to approve or merge a pull request through manual
   action. When a PR's required checks are green and the change is within the
-  scope the operator authorized, the acting agent merges it. Every access
-  point (Copilot CLI, Claude Code, Codex, the Claude GitHub App, and the
-  Copilot coding agent) follows this rule identically.
+  scope the operator authorized (including production-path PRs whose linked
+  issue authorizes production landing), the acting agent merges it. Every
+  access point (Copilot CLI, Claude Code, Codex, the Claude GitHub App, the
+  Copilot coding agent, and Cursor / Grok Bot) follows this rule identically.
 - Merge with squash to keep `main` linear, then delete the branch.
-- This autonomy covers only routine, reversible work. Destructive actions,
-  production data mutation, schedule changes, and scope-expanding changes
-  still stop for explicit operator authorization, per Engineering and
-  verification.
+- After merge, execute any production landing steps the linked issue already
+  authorized (deploy, restart, env/SHA flip) from the Codespace, then verify
+  live and update STATUS with verified facts only.
 - Agents must not leave stale PRs open. If a PR the agent owns cannot merge
   (failing checks, conflicts, review feedback), the agent fixes it, asks
   for help, or closes it with a reason.
