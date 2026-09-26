@@ -265,6 +265,7 @@ def evaluate_watchdog(
     *,
     now_utc: dt.datetime | None = None,
     check_config_drift: bool = False,
+    check_model_artifact: bool = True,
 ) -> list[WatchdogEvent]:
     """Run pipeline checks without persisting (operator API live status).
 
@@ -272,6 +273,11 @@ def evaluate_watchdog(
     row for the slate, so tip-window false positives stayed sticky until the
     slate rolled (#319). Live evaluation drives the operator curl status;
     writers still persist via ``run_watchdog``.
+
+    ``check_model_artifact`` defaults True so cron-style callers keep fail-closed
+    artifact coverage. The operator API router passes False: api/job1 containers
+    often omit the job2-only artifact SHA env, which otherwise surfaces as a
+    false-critical ``model_artifact_unset`` on ``/watchdog/today`` (#331 / #335).
     """
     now_utc = now_utc or dt.datetime.now(dt.UTC)
     events: list[WatchdogEvent] = []
@@ -280,7 +286,8 @@ def evaluate_watchdog(
     events.extend(_check_enrichment_source(slate_date))
     events.extend(_check_opponent_reciprocity(slate_date))
     events.extend(_check_freeze(slate_date, now_utc=now_utc))
-    events.extend(_check_model_artifact(slate_date))
+    if check_model_artifact:
+        events.extend(_check_model_artifact(slate_date))
     events.extend(_check_feature_content(slate_date, now_utc=now_utc))
     if check_config_drift:
         events.extend(_check_config_drift(slate_date))
