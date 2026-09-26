@@ -340,3 +340,165 @@ def test_partial_measured_field_keeps_unknown_players_estimated() -> None:
         p.player_id != 6 and p.ownership_source == "estimated_projection_softmax"
         for p in result.picks
     )
+
+
+def test_contest_utility_formula() -> None:
+    from nfl_oracle.recommendations.optimizer import contest_utility
+
+    assert contest_utility(10, 12, 0.5, upside_weight=0, field_weight=0) == 10
+    assert contest_utility(10, 12, 0.5, upside_weight=0.5, field_weight=0) == 10 + 0.5 * 12
+    assert contest_utility(10, 12, 0.5, upside_weight=0, field_weight=0.2) == 10 + 0.2 * 10 * 0.5
+
+
+def _custom_projections(
+    slate_value: Slate,
+    *,
+    means: dict[int, float],
+    samples: dict[int, tuple[float, ...]],
+):
+    from nfl_oracle.recommendations.model import Projection
+
+    return tuple(
+        Projection(
+            player_id=c.player_id,
+            mean=means[c.player_id],
+            conditional_mean=means[c.player_id],
+            stddev=1,
+            availability_probability=1,
+            prior_games=5,
+            samples=samples[c.player_id],
+            provenance=("test_estimate",),
+        )
+        for c in slate_value.candidates
+    )
+
+
+def test_upside_weight_prefers_higher_p90_when_means_close() -> None:
+    target = slate(one_game=True)
+    # Players 1-4 are anchors. 5 is slightly higher E; 6 matches lower mean with fat tail.
+    means = {1: 10.0, 2: 9.0, 3: 8.0, 4: 7.0, 5: 6.2, 6: 6.0}
+    samples = {
+        1: (10.0,) * 5,
+        2: (9.0,) * 5,
+        3: (8.0,) * 5,
+        4: (7.0,) * 5,
+        5: (6.2,) * 5,
+        6: (0.0, 0.0, 6.0, 12.0, 12.0),  # mean 6.0, higher p90
+    }
+    projs = _custom_projections(target, means=means, samples=samples)
+    decision = BASE + timedelta(days=8)
+    baseline = optimize(
+        target,
+        projs,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(
+            simulations=200,
+            upside_weight=0,
+            field_weight=0,
+            min_distinct_teams=1,
+            min_distinct_games=1,
+            seed=7,
+        ),
+    )
+    upside = optimize(
+        target,
+        projs,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(
+            simulations=200,
+            upside_weight=2.0,
+            field_weight=0,
+            min_distinct_teams=1,
+            min_distinct_games=1,
+            seed=7,
+        ),
+    )
+    baseline_ids = {p.player_id for p in baseline.picks}
+    upside_ids = {p.player_id for p in upside.picks}
+    assert 6 not in baseline_ids
+    assert 6 in upside_ids
+    assert upside.simulated_p90 >= baseline.simulated_p90
+
+
+def test_field_weight_changes_selection_when_field_beat_differs() -> None:
+    from nfl_oracle.recommendations.optimizer import contest_utility
+
+    # Same expected, different field-beat rates: raising field_weight flips the ranking.
+    chalk_e, chalk_beat = 66.0, 0.05
+    lev_e, lev_beat = 65.9, 0.45
+    assert contest_utility(
+        chalk_e, chalk_e, chalk_beat, upside_weight=0, field_weight=0
+    ) > contest_utility(lev_e, lev_e, lev_beat, upside_weight=0, field_weight=0)
+    assert contest_utility(
+        lev_e, lev_e, lev_beat, upside_weight=0, field_weight=2.0
+    ) > contest_utility(chalk_e, chalk_e, chalk_beat, upside_weight=0, field_weight=2.0)
+
+    # optimize() must thread field_weight into contest_utility (not a dead knob).
+    target = slate(one_game=True)
+    decision = BASE + timedelta(days=8)
+    seen: list[float] = []
+    import nfl_oracle.recommendations.optimizer as opt_mod
+
+    real = opt_mod.contest_utility
+
+    def spy(expected, p90, field_win_rate, *, upside_weight, field_weight):
+        seen.append(field_weight)
+        return real(
+            expected,
+            p90,
+            field_win_rate,
+            upside_weight=upside_weight,
+            field_weight=field_weight,
+        )
+
+    opt_mod.contest_utility = spy  # type: ignore[assignment]
+    try:
+        optimize(
+            target,
+            projections(target),
+            decision_at=decision,
+            scoring_policy=ScoringPolicy(),
+            config=OptimizerConfig(
+                simulations=100,
+                upside_weight=0,
+                field_weight=1.25,
+                min_distinct_teams=1,
+                min_distinct_games=1,
+            ),
+        )
+    finally:
+        opt_mod.contest_utility = real  # type: ignore[assignment]
+    assert seen and all(w == 1.25 for w in seen)
+
+
+def test_chalk_stud_survives_high_field_weight() -> None:
+    target = slate(one_game=True)
+    means = {1: 100.0, 2: 9.0, 3: 8.0, 4: 7.0, 5: 6.0, 6: 5.0}
+    samples = {pid: (means[pid],) * 5 for pid in means}
+    projs = _custom_projections(target, means=means, samples=samples)
+    decision = BASE + timedelta(days=8)
+    field = FieldObservation(
+        clock=EvidenceClock(source_available_at=decision, captured_at=decision),
+        entry_count=100,
+        player_counts={1: 100, 2: 80, 3: 80, 4: 80, 5: 80, 6: 80},
+        provenance="test_field",
+        coverage="complete",
+    )
+    result = optimize(
+        target,
+        projs,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(
+            simulations=200,
+            upside_weight=0,
+            field_weight=2.0,
+            min_distinct_teams=1,
+            min_distinct_games=1,
+            seed=3,
+        ),
+        field=field,
+    )
+    assert 1 in {p.player_id for p in result.picks}

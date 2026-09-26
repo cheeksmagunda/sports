@@ -56,10 +56,39 @@ class OptimizerConfig(Record):
     min_distinct_teams: int = Field(default=3, ge=1, le=5)
     min_distinct_games: int = Field(default=2, ge=1, le=5)
     simulations: int = Field(default=500, ge=100, le=10000)
+    # Contest-utility knobs for total draft value (see contest_utility).
     upside_weight: Finite = Field(default=0.15, ge=0, le=2)
     field_weight: Finite = Field(default=0.1, ge=0, le=2)
+    # Cap how many expected-ranked candidates are re-scored with simulations.
+    utility_candidates: int = Field(default=64, ge=1, le=500)
     game_correlation: Finite = Field(default=0.15, ge=0, le=0.8)
     seed: int = 115
+
+
+def contest_utility(
+    expected: float,
+    p90: float,
+    field_win_rate: float,
+    *,
+    upside_weight: float,
+    field_weight: float,
+) -> float:
+    """Contest utility for total draft value (portfolio EV, not single-card mean).
+
+    Exact formula (documented for #400)::
+
+        U = expected + upside_weight * p90 + field_weight * expected * field_win_rate
+
+    where:
+    - ``expected`` is the mean committed-slot lineup score
+    - ``p90`` is the 90th percentile of simulated lineup scores
+    - ``field_win_rate`` is the strict P(lineup score > field score) used for
+      selection (ties do not inflate chalk-vs-chalk leverage)
+
+    When ``upside_weight = field_weight = 0``, ``U`` reduces to pure expected
+    score (legacy linear selection). Both knobs participate in selection.
+    """
+    return expected + upside_weight * p90 + field_weight * expected * field_win_rate
 
 
 class FieldObservation(Record):
@@ -359,7 +388,10 @@ def optimize(
             teams_required=teams,
             games_required=games,
         )
-        if exact:
+        # When field/upside weights are active, keep a beam pool so contest
+        # utility can re-rank beyond the single MILP optimum.
+        use_contest_weights = cfg.field_weight > 0 or cfg.upside_weight > 0
+        if exact and not use_contest_weights:
             return exact
         beam: list[tuple[float, tuple[int, ...]]] = [(0, ())]
         for slot in range(5):
@@ -388,6 +420,11 @@ def optimize(
                 if len(group) < cfg.beam_width:
                     group.append(item)
             beam = [item for group in groups.values() for item in group]
+        if exact:
+            seen = {ids for _, ids in beam}
+            for item in exact:
+                if item[1] not in seen:
+                    beam.append(item)
         return sorted(beam, key=lambda item: (-item[0], item[1]))
 
     # Team and game diversity are independent constraints. Search all relaxed
@@ -449,7 +486,7 @@ def optimize(
             )
         )
 
-    def evaluate(ids: tuple[int, ...]) -> tuple[float, float]:
+    def evaluate(ids: tuple[int, ...]) -> tuple[float, float, float]:
         simulations = [
             sum(
                 scoring_policy.score(values[pid], slots[i], candidates[pid].card_boost)
@@ -458,16 +495,32 @@ def optimize(
             for values in trials
         ]
         p90 = sorted(simulations)[int(0.9 * (len(simulations) - 1))]
+        # Reported metric keeps half-credits for ties.
         wins = mean(
             float(a > b) + 0.5 * float(a == b)
             for a, b in zip(simulations, field_scores, strict=True)
         )
-        return p90, wins
+        # Selection uses strict beats so chalk-vs-chalk ties do not inflate
+        # field leverage relative to an uncorrelated contrarian lineup.
+        strict_beats = mean(float(a > b) for a, b in zip(simulations, field_scores, strict=True))
+        return p90, wins, strict_beats
 
-    # Total Value is the sole production objective. Simulations remain
-    # descriptive diagnostics and never select a different lineup.
-    chosen = (beam[0][0], beam[0][1], *evaluate(beam[0][1]))
-    expected, ids, p90, wins = chosen
+    # Select by contest_utility over the top expected-ranked beam pool.
+    # Reported total_value remains expected committed-slot score.
+    pool = beam[: max(cfg.utility_candidates, 1)]
+    ranked: list[tuple[float, float, tuple[int, ...], float, float]] = []
+    for expected_score, ids in pool:
+        p90, wins, strict_beats = evaluate(ids)
+        utility = contest_utility(
+            expected_score,
+            p90,
+            strict_beats,
+            upside_weight=float(cfg.upside_weight),
+            field_weight=float(cfg.field_weight),
+        )
+        ranked.append((utility, expected_score, ids, p90, wins))
+    ranked.sort(key=lambda row: (-row[0], -row[1], row[2]))
+    _utility, expected, ids, p90, wins = ranked[0]
     return Recommendation(
         picks=tuple(
             Pick(
@@ -513,6 +566,6 @@ def optimize(
             "game_correlation_is_configured_sensitivity_not_fitted",
             "field_win_rate_against_simulated_opponent_not_payout_probability",
             "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
-            "simulation_metrics_are_diagnostics_and_do_not_reassign_the_frozen_lineup",
+            "selection_uses_contest_utility_expected_plus_upside_and_field_weights",
         ),
     )
