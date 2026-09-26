@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 887 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -57,6 +57,7 @@ Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/gener
 - .github/workflows/model-research-benchmark.yml -- GitHub Actions workflow
 - .github/workflows/nfl-corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/nfl-dayclose.yml -- GitHub Actions workflow
+- .github/workflows/nfl-race.yml -- GitHub Actions workflow
 - .github/workflows/nfl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
 - .github/workflows/secret-audit.yml -- GitHub Actions workflow
@@ -65,6 +66,7 @@ Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/gener
 - .github/workflows/wnba-dayclose-verify.yml -- GitHub Actions workflow
 - .github/workflows/wnba-model-train.yml -- GitHub Actions workflow
 - .github/workflows/wnba-pre-freeze-guard.yml -- GitHub Actions workflow
+- .github/workflows/wnba-race.yml -- GitHub Actions workflow
 
 ## drive/
 - drive/2026-08-25-wnba-contextual-stacking.md -- Contextual Stacking and Lineup Balance
