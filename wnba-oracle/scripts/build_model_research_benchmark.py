@@ -53,8 +53,6 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from seasons_common import add_seasons_argument, in_seasons, parse_seasons  # noqa: E402
-
 SEED = 2026
 CAPTURE_THRESHOLDS: tuple[int, ...] = (5, 8, 10)
 
@@ -863,7 +861,6 @@ def _precompute_slates(
     game_logs_csv: Path | None = None,
     *,
     leak_same_slate_ownership: bool = False,
-    seasons: list[str] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], int]:
     """Load labels, leaderboards, and validated game identity (database, or
     offline corpus-backup / prefetch CSVs) and build the production sampling
