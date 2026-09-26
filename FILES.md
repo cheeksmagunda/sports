@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 908 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 913 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 908 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -259,6 +261,8 @@ Generated from `git ls-files`. 908 tracked files. Regenerate with `scripts/gener
 ## nfl-oracle/src/nfl_oracle/ingest/
 - nfl-oracle/src/nfl_oracle/ingest/__init__.py -- NFL Real Sports ingest surfaces (Corpus G first).
 - nfl-oracle/src/nfl_oracle/ingest/backfill.py -- Resumable season-by-season Corpus G backfill with coverage tracking.
+- nfl-oracle/src/nfl_oracle/ingest/backfill.py -- Resumable season-by-season Corpus G backfill with coverage tracking.
+- nfl-oracle/src/nfl_oracle/ingest/backfill.py -- Resumable season-by-season Corpus G backfill with coverage tracking.
 - nfl-oracle/src/nfl_oracle/ingest/clocks.py -- Train/live information clocks for Corpus G provenance.
 - nfl-oracle/src/nfl_oracle/ingest/corpus_g.py -- Corpus G persistence for Real Sports NFL game payloads.
 - nfl-oracle/src/nfl_oracle/ingest/persist.py -- Idempotent redacted payload persistence helper for Corpus G.
@@ -403,6 +407,7 @@ Generated from `git ls-files`. 908 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_auth_check_live.py -- NFL parity for wnba-oracle's auth-check-live value-free contract.
 - nfl-oracle/tests/unit/test_auth_presence_check.py -- auth_presence_check must see volume-backed Real Sports session files.
 - nfl-oracle/tests/unit/test_backfill_cursor.py -- Tests for season backfill cursor resume.
+- nfl-oracle/tests/unit/test_calendar_derived_defaults.py
 - nfl-oracle/tests/unit/test_capture_storage_state_paths.py -- capture_storage_state must write under volume-aware scraper_dir.
 - nfl-oracle/tests/unit/test_clocks.py -- Tests for train/live Corpus G clock helpers.
 - nfl-oracle/tests/unit/test_contest_algebra_and_gates.py -- Contest scoring algebra + entry gates (observation only).
