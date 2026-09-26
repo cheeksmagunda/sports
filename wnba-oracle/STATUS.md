@@ -2,6 +2,14 @@
 
 Last verified: 2026-09-26T03:50:00Z
 
+## Optional total_draft_value optimizer objective (#433)  -  2026-09-26
+
+- `OptimizeConfig.objective_mode` defaults to `"payout"` (production unchanged).
+- `"total_draft_value"` selects by E[committed-order lineup score] and skips
+  payout/leverage/ceiling/duplication additives. Offline / lab only until a
+  walk-forward TV capture number justifies a serving flip.
+- Unit tests in `tests/unit/test_total_draft_value_objective.py`.
+
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
 
