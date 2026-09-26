@@ -487,10 +487,12 @@ async def _worker_once(
         available = content.get("config", {}).get("dailyDraftInfo", {}).get("contests", [])
         if not isinstance(available, list):
             available = []
-        contest_ids = [
-            item.get("id")
+        contest_ids: list[int] = [
+            contest_id
             for item in available
-            if isinstance(item, dict) and type(item.get("id")) is int
+            if isinstance(item, dict)
+            for contest_id in [item.get("id")]
+            if isinstance(contest_id, int)
         ]
         selected_contest_id = _select_contest_id(contest_ids)
         if selected_contest_id is None:
