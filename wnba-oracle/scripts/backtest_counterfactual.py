@@ -41,7 +41,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPTS))
 sys.path.insert(0, str(_SCRIPTS.parent / "src"))
 
-from seasons_common import add_seasons_argument, in_seasons, parse_seasons
+from seasons_common import add_seasons_argument, in_seasons, parse_seasons  # noqa: E402
 
 os.environ.setdefault(
     "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
@@ -173,9 +173,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sl = read_slate_labels()
     lb = read_leaderboards()
-    test = sorted(
-        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons)
-    )
+    test = sorted(d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons))
 
     slates_data = []
     for sd in test:

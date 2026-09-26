@@ -28,7 +28,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPTS))
 sys.path.insert(0, str(_SCRIPTS.parent / "src"))
 
-from seasons_common import add_seasons_argument, in_seasons, parse_seasons
+from seasons_common import add_seasons_argument, in_seasons, parse_seasons  # noqa: E402
 
 os.environ.setdefault(
     "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
@@ -38,7 +38,7 @@ os.environ.setdefault("PAYOUT_REGIME", "top_20")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
 os.environ.setdefault("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
 
-import structlog
+import structlog  # noqa: E402
 
 structlog.configure(processors=[structlog.dev.ConsoleRenderer()])  # reduce noise
 
@@ -76,9 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     sl = read_slate_labels()
     lb = read_leaderboards()
 
-    season_slates = {
-        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons)
-    }
+    season_slates = {d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons)}
     lb_slates = set(lb["slate_date"].unique().to_list())
     valid_slates = sorted(season_slates & lb_slates)
     print(

@@ -9,7 +9,6 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
-from unittest.mock import patch
 
 import polars as pl
 import pytest
@@ -19,7 +18,7 @@ _SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-import seasons_common  # noqa: E402
+import seasons_common  # noqa: E402, I001
 
 
 # ====================================================================
@@ -142,7 +141,7 @@ def _make_leaderboards() -> pl.DataFrame:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def _mock_build_race(tmp_path, monkeypatch):
     """Patch the DB reads in build_race_corpus to return synthetic data."""
     if str(_SCRIPTS) not in sys.path:
@@ -166,9 +165,7 @@ def _mock_build_race(tmp_path, monkeypatch):
 class TestBuildRaceCorpus:
     def test_single_season_filter(self, _mock_build_race):
         mod, tmp_path = _mock_build_race
-        summary = mod.build_race_corpus(
-            output_dir=tmp_path, seasons=["2026"], top_n=20
-        )
+        summary = mod.build_race_corpus(output_dir=tmp_path, seasons=["2026"], top_n=20)
         assert "2026" in summary
         assert "2025" not in summary
         labels = pl.read_parquet(tmp_path / "labels_2026.parquet")
@@ -177,9 +174,7 @@ class TestBuildRaceCorpus:
 
     def test_multi_season(self, _mock_build_race):
         mod, tmp_path = _mock_build_race
-        summary = mod.build_race_corpus(
-            output_dir=tmp_path, seasons=["2025", "2026"], top_n=20
-        )
+        summary = mod.build_race_corpus(output_dir=tmp_path, seasons=["2025", "2026"], top_n=20)
         assert "2025" in summary
         assert "2026" in summary
         lb_2025 = pl.read_parquet(tmp_path / "leaderboards_2025.parquet")
@@ -189,25 +184,19 @@ class TestBuildRaceCorpus:
 
     def test_top_n_filter(self, _mock_build_race):
         mod, tmp_path = _mock_build_race
-        mod.build_race_corpus(
-            output_dir=tmp_path, seasons=["2025", "2026"], top_n=2
-        )
+        mod.build_race_corpus(output_dir=tmp_path, seasons=["2025", "2026"], top_n=2)
         lb_2025 = pl.read_parquet(tmp_path / "leaderboards_2025.parquet")
         assert lb_2025.height == 2
 
     def test_empty_season_skipped(self, _mock_build_race):
         mod, tmp_path = _mock_build_race
-        summary = mod.build_race_corpus(
-            output_dir=tmp_path, seasons=["2024"], top_n=20
-        )
+        summary = mod.build_race_corpus(output_dir=tmp_path, seasons=["2024"], top_n=20)
         assert summary == {}
         assert not (tmp_path / "labels_2024.parquet").exists()
 
     def test_user_id_preserved(self, _mock_build_race):
         mod, tmp_path = _mock_build_race
-        mod.build_race_corpus(
-            output_dir=tmp_path, seasons=["2026"], top_n=20
-        )
+        mod.build_race_corpus(output_dir=tmp_path, seasons=["2026"], top_n=20)
         lb = pl.read_parquet(tmp_path / "leaderboards_2026.parquet")
         assert "user_id" in lb.columns
         assert set(lb["user_id"].to_list()) == {"u4", "u5", "u6"}
