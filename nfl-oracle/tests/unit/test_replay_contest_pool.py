@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -287,6 +288,54 @@ def test_knob_sweep_shares_one_fit_across_profiles() -> None:
         assert len(results) == 1
         assert results[0].picker_profile == profile
         assert 0.0 <= results[0].capture_ratio <= 1.0
+
+
+def test_knob_sweep_excluded_is_isolated_per_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression for the shared excluded dict bug (#338).
+
+    A picker-specific exclusion recorded for one profile's per-run pass must
+    not leak into another profile's reported ``excluded`` reasons, while a
+    pool-level exclusion that happens once, before any picker knob runs,
+    must appear identically on every profile.
+    """
+    rows = _rows()
+    good_contest = _contest(rows)
+    # Triggers the shared, profile-independent "no_draft_stats" exclusion in
+    # the pool-building pass, before any picker knob is ever considered.
+    empty_contest = replace(good_contest, draft_stats=())
+
+    real_run_contest = cpr._run_contest
+
+    def fake_run_contest(
+        pool: cpr.ContestPool, *, picker: PickerKnobs, excluded: dict[str, int], **kwargs: object
+    ) -> cpr.ContestPoolResult | None:
+        if picker.profile == "flaky":
+            excluded["flaky_only_reason"] += 1
+            return None
+        return real_run_contest(pool, picker=picker, excluded=excluded, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cpr, "_run_contest", fake_run_contest)
+
+    knobs = (
+        PickerKnobs(profile="identity"),
+        PickerKnobs(boost_rank_blend=0.5, profile="flaky"),
+    )
+    swept = replay_contest_pools_knob_sweep(
+        rows,
+        [empty_contest, good_contest],
+        knobs,
+        now=NOW,
+    )
+    identity_results, identity_excluded = swept["identity"]
+    flaky_results, flaky_excluded = swept["flaky"]
+
+    assert len(identity_results) == 1
+    assert len(flaky_results) == 0
+    # The shared pool-level exclusion appears on both profiles...
+    assert identity_excluded == {"no_draft_stats": 1}
+    # ...but "flaky"'s own per-run exclusion never leaks onto "identity", and
+    # "identity"'s success never erases "flaky"'s own exclusion.
+    assert flaky_excluded == {"no_draft_stats": 1, "flaky_only_reason": 1}
 
 
 def test_boost_rank_blend_changes_capture_on_boosted_contest() -> None:
