@@ -15,9 +15,7 @@ from pathlib import Path
 from nfl_oracle.common.paths import resolve_project_root
 
 
-def resolve_context_snapshot(
-    project_root: Path, *, explicit: str | None = None
-) -> Path | None:
+def resolve_context_snapshot(project_root: Path, *, explicit: str | None = None) -> Path | None:
     """Return the newest on-disk context snapshot, or an explicit override."""
 
     env_override = os.environ.get("NFL_CONTEXT_SNAPSHOT", "")
