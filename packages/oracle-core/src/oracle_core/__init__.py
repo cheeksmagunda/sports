@@ -52,6 +52,13 @@ from oracle_core.dossier import (
     build_gap_analysis,
     gap_metric_from_entries,
 )
+from oracle_core.fitness import (
+    WinCloseBand,
+    is_close,
+    is_win,
+    win_close,
+    win_close_band,
+)
 from oracle_core.high_tv import (
     ArchiveSeasonDepth,
     HighPotentialLabel,
@@ -200,6 +207,8 @@ __all__ = [
     "attach_identifiers",
     "high_tv_label_observation",
     "identifier_value",
+    "is_close",
+    "is_win",
     "item_list",
     "punch_list_item_list",
     "observation",
@@ -279,6 +288,9 @@ __all__ = [
     "validate_role",
     "validate_required_env",
     "verify_sha256",
+    "win_close",
+    "win_close_band",
+    "WinCloseBand",
     "write_artifact",
 ]
 
