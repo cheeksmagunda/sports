@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 902 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -460,6 +462,7 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_service_app.py -- Research service scaffold smoke tests.
 - nfl-oracle/tests/unit/test_service_shadow_edges.py -- Research service edge cases for shadow/gates/status (observation only).
 - nfl-oracle/tests/unit/test_strategy_scaffold.py -- Strategy scaffold: clocks, five-card legality, snapshots.
+- nfl-oracle/tests/unit/test_t40_watchdog_workflow_crons.py -- Guard the nfl-t40-watchdog schedule against holiday kickoff regressions.
 - nfl-oracle/tests/unit/test_train_force_flag.py -- train --force must rebuild even when the active model is still young.
 - nfl-oracle/tests/unit/test_value_baselines.py -- Tests for walk-forward Real value baselines (offline).
 - nfl-oracle/tests/unit/test_value_labels.py -- Tests for Real value label schema + Corpus G extraction.
@@ -781,6 +784,7 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/scripts/backtest_walkforward.py -- Walk-forward backtest: HONEST prediction-quality measurement (no leakage).
 - wnba-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable WNBA corpus.
 - wnba-oracle/scripts/build_model_research_benchmark.py -- Model research benchmark: walk-forward variant sweep over stored slates.
+- wnba-oracle/scripts/build_race_corpus.py -- Build per-season race corpora from the read-only backup Postgres.
 - wnba-oracle/scripts/calibrate_knobs.py -- Calibrate D87-D90 optimizer knobs against 2026 historical slates.
 - wnba-oracle/scripts/calibrate_starter_and_boost.py -- Calibrate STARTER_UNKNOWN_FADE and PICKER_BOOST_TAIL_LIFT from the corpus.
 - wnba-oracle/scripts/check_migrations.py -- Exercise empty and existing-schema Alembic upgrades on a local PostgreSQL server.
@@ -808,6 +812,7 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/scripts/runtime_role_probe.py -- Validate that a built runtime image enforces its configured cron role.
 - wnba-oracle/scripts/rwgql.py -- Call Railway GraphQL with ambient auth and optional variables on stdin.
 - wnba-oracle/scripts/rwgql.sh -- Shell script
+- wnba-oracle/scripts/seasons_common.py -- Shared --seasons parsing for WNBA research and race-corpus scripts.
 - wnba-oracle/scripts/seed_storage_state.py -- Materialize the Playwright storage_state.json from a base64+gzip env var.
 - wnba-oracle/scripts/snapshot_corpus.py -- Materialize a frozen local corpus snapshot for offline model work.
 - wnba-oracle/scripts/snapshot_training_inputs.py -- Snapshot one immutable pair of live training inputs for reproducibility checks.
@@ -1117,6 +1122,7 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
 - wnba-oracle/tests/unit/test_sampling_offset.py -- score_offset (K) calibration in the copula sampler (D52).
 - wnba-oracle/tests/unit/test_schemas.py -- Pandera schema sanity checks. Validate that good frames pass and obvious
+- wnba-oracle/tests/unit/test_seasons_and_race_corpus.py -- Unit tests for seasons_common and build_race_corpus (offline, no DB).
 - wnba-oracle/tests/unit/test_secret_contract.py
 - wnba-oracle/tests/unit/test_serving_schema.py -- Serve-time enrichment schema validator (features/serving_schema.py).
 - wnba-oracle/tests/unit/test_settings_pause.py -- picks_paused_on / picks_resume_date: the operator-directed pause window.
