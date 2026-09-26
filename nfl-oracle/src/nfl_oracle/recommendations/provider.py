@@ -234,7 +234,7 @@ class NFLReader:
         if not available and not content["games"]:
             raise NoSlate("no_slate")
         if contest_id is None:
-            if len(available) != 1:
+            if not available:
                 raise ProviderError("ambiguous_or_missing_contest")
             contest_id = available[0]
         if contest_id not in available:
