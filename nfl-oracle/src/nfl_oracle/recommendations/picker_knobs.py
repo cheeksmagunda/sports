@@ -158,9 +158,13 @@ def _boost_aligned_means(
 
     Ties in boost break by player_id so the map is deterministic. The multiset
     of values is preserved; only the assignment to players changes. When every
-    boost is equal (zero-boost regime), the assignment matches the original
-    ascending-mean order and the blend is a no-op up to tie breaks.
+    boost in the pool is equal (zero-boost or uniform-boost regime), return the
+    original conditional means unchanged so player_id tie-breaks cannot shuffle
+    projections.
     """
+    boost_values = {float(boost_of[p.player_id]) for p in projections}
+    if len(boost_values) <= 1:
+        return {p.player_id: p.conditional_mean for p in projections}
     ordered_values = sorted(p.conditional_mean for p in projections)
     by_boost = sorted(projections, key=lambda p: (boost_of[p.player_id], p.player_id))
     return {
@@ -176,9 +180,10 @@ def _stddev_with_availability(
         conditional_variance = 0.0
     else:
         conditional_variance = pstdev(samples) ** 2
-    return (
+    result: float = (
         probability * conditional_variance + probability * (1.0 - probability) * conditional**2
     ) ** 0.5
+    return result
 
 
 def accumulate_position_residuals(
