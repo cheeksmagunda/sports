@@ -55,7 +55,12 @@ _SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPTS))
 sys.path.insert(0, str(_SCRIPTS.parent / "src"))
 
-from seasons_common import add_seasons_argument, in_seasons, parse_seasons
+from seasons_common import (  # noqa: E402
+    DEFAULT_SEASONS,
+    add_seasons_argument,
+    in_seasons,
+    parse_seasons,
+)
 
 SEED = 2026
 CAPTURE_THRESHOLDS: tuple[int, ...] = (5, 8, 10)
@@ -864,7 +869,7 @@ def _precompute_slates(
     policy: Any = None,
     game_logs_csv: Path | None = None,
     *,
-    seasons: list[str],
+    seasons: list[str] | None = None,
     leak_same_slate_ownership: bool = False,
 ) -> tuple[dict[str, dict[str, Any]], int]:
     """Load labels, leaderboards, and validated game identity (database, or
@@ -948,8 +953,9 @@ def _precompute_slates(
             print(f"head_features: resolver build failed ({exc}); skipping", file=sys.stderr)
             head_resolver = None
 
+    active_seasons = seasons if seasons is not None else parse_seasons(DEFAULT_SEASONS)
     season_slates = {
-        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons)
+        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), active_seasons)
     }
     valid = sorted(season_slates & set(lb["slate_date"].unique().to_list()))
     if shard is not None:

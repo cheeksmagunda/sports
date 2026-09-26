@@ -45,13 +45,17 @@ _SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPTS))
 sys.path.insert(0, str(_SCRIPTS.parent / "src"))
 
-from seasons_common import add_seasons_argument, in_seasons, parse_seasons
+from seasons_common import add_seasons_argument, in_seasons, parse_seasons  # noqa: E402
 
-from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
-from wnba_oracle.eval.contest_score import committed_lineup_score
-from wnba_oracle.eval.point_in_time import causal_drafts_for_slate
-from wnba_oracle.predict.base import boost_prior, player_volatility
-from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
+from wnba_oracle.db.reads import (  # noqa: E402
+    read_label_corpus,
+    read_leaderboards,
+    read_slate_labels,
+)
+from wnba_oracle.eval.contest_score import committed_lineup_score  # noqa: E402
+from wnba_oracle.eval.point_in_time import causal_drafts_for_slate  # noqa: E402
+from wnba_oracle.predict.base import boost_prior, player_volatility  # noqa: E402
+from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline  # noqa: E402
 
 
 def prior_by_player(history: pd.DataFrame) -> dict[int, list[float]]:
