@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+from collections.abc import Sequence
+from typing import Any
 
 from wnba_oracle.common.logging import get_logger
 
@@ -48,7 +50,7 @@ def should_attempt_capture(*, now_utc: dt.datetime, lock_time: dt.datetime | Non
     return now_utc >= lock_time - CAPTURE_WINDOW_BEFORE_LOCK
 
 
-def _drafts_from_labels(labels: list[object]) -> dict[int, int]:
+def _drafts_from_labels(labels: Sequence[Any]) -> dict[int, int]:
     """Extract platform_player_id -> drafts for job2 measured ownership (#434)."""
 
     out: dict[int, int] = {}
