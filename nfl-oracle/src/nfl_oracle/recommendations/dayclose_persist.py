@@ -93,7 +93,8 @@ def _leaderboards_frame(day: date, contest_id: int, slate_results: dict[str, Any
     for entry in slate_results.get("top_entries") or []:
         if not isinstance(entry, dict):
             continue
-        picks = entry.get("picks") if isinstance(entry.get("picks"), list) else []
+        raw_picks = entry.get("picks")
+        picks: list[Any] = raw_picks if isinstance(raw_picks, list) else []
         rows.append(
             {
                 "slate_date": day.isoformat(),
