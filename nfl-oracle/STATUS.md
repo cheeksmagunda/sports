@@ -565,9 +565,10 @@ SportsEvent). NFL wiring is ``nfl_oracle.recommendations.high_tv``.
 ### Feature inventory (TNF week-2)
 Enabled this PR: anti-chalk, high-TV weights + ladder, pace priors, low-n
 valuelaw shrink, schema.org board serialization.
-Still off / queued: injury + weather stubs (need live capture), opponent
-defense join stubs, ``use_feature_value_model`` shadow default False,
-recommendations_enabled env gate (ops), LightGBM never.
+Still off / queued: opponent defense densify, ``use_feature_value_model``
+shadow default False, recommendations_enabled env gate (ops), LightGBM
+never. Injury/weather live_ok slots are reserved in fit (#418); capture
+coverage and active_model retrain remain separate.
 Leave ``fix/156-force-retrain`` / PR #160 alone.
 
 
