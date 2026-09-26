@@ -103,9 +103,9 @@ from oracle_core.logging import (
 )
 from oracle_core.race import (
     FitConfig,
+    FitnessSummary,
     FitOutcome,
     FitResult,
-    FitnessSummary,
     rank_race,
     summarize_fitness,
 )

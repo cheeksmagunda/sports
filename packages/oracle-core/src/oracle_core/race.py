@@ -110,9 +110,12 @@ class FitnessSummary:
 def rank_race(
     scores: Mapping[str, float],
     *,
-    config: FitConfig = FitConfig(),
+    config: FitConfig | None = None,
 ) -> tuple[FitOutcome, ...]:
     """Classify every candidate in one race as WIN, CLOSE, or OUT."""
+
+    if config is None:
+        config = FitConfig()
 
     if not scores:
         return ()
@@ -123,9 +126,7 @@ def rank_race(
             raise ValueError(f"score for {candidate_id!r} must be finite")
         validated[candidate_id] = float(score)
 
-    best_score = (
-        max(validated.values()) if config.higher_is_better else min(validated.values())
-    )
+    best_score = max(validated.values()) if config.higher_is_better else min(validated.values())
     tolerance = config.close_tolerance(best_score)
 
     outcomes: list[FitOutcome] = []
@@ -145,13 +146,16 @@ def rank_race(
 def summarize_fitness(
     races: Iterable[Mapping[str, float]],
     *,
-    config: FitConfig = FitConfig(),
+    config: FitConfig | None = None,
 ) -> dict[str, FitnessSummary]:
     """Aggregate WIN/CLOSE share across many races.
 
     Candidates absent from a race are not penalized for that race; they simply
     have one fewer observed result.
     """
+
+    if config is None:
+        config = FitConfig()
 
     counts: dict[str, dict[FitResult, int]] = defaultdict(
         lambda: {
