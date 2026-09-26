@@ -314,7 +314,9 @@ replace an already-published lineup.
 
 Deadline alerting is GitHub Actions-based, not Railway-hosted:
 `.github/workflows/nfl-t40-watchdog.yml` polls every 15 minutes inside NFL
-kickoff windows (UTC crons in the workflow), combines the
+kickoff windows (UTC crons in the workflow), including Thanksgiving,
+Saturday 2026-12-19, and Christmas afternoon/evening windows plus the UTC
+hour after late kickoffs, combines the
 public nflverse schedule's kickoff time with `RecommendationStore` freeze/run
 state, and opens or updates one `nfl-ops-guard` issue if no freeze exists by
 the post-T-40 grace deadline. It needs only `NFL_DATABASE_URL` and
