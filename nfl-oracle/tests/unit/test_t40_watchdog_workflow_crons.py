@@ -5,9 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-WORKFLOW = (
-    Path(__file__).resolve().parents[3] / ".github" / "workflows" / "nfl-t40-watchdog.yml"
-)
+WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "nfl-t40-watchdog.yml"
 
 # Weekly grid (Sunday + TNF/SNF/MNF evenings).
 WEEKLY_CRONS = (
