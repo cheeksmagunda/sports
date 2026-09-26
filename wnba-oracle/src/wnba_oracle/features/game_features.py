@@ -89,6 +89,7 @@ TARGET_COLUMNS: tuple[str, ...] = (
     "ast_per_min",
     "stl_blk_per_min",
     "real_score",
+    "real_score_residual",
 )
 
 
@@ -142,6 +143,7 @@ def add_targets(game_logs: pl.DataFrame) -> pl.DataFrame:
                 "stl_blk_per_min"
             ),
             real_score_expr(),
+            pl.lit(None).cast(pl.Float64).alias("real_score_residual"),
         ]
     )
 
