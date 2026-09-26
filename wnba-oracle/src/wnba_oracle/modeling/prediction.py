@@ -562,6 +562,24 @@ def predict_players(
     return work.predictions
 
 
+def stage1_rank_pred(
+    *,
+    pre_contrarian: float,
+    boost_tail_rank: float | None = None,
+) -> float:
+    """Stage-1 rank score for total draft value (#416).
+
+    Contrarian may still reshape sampler means, but the top-N filter must
+    rank on pre-contrarian TV so near-cutline chalk studs are not dropped
+    before the optimizer can keep them. Boost-tail lift may raise this
+    further without lowering it below the pre-contrarian floor.
+    """
+    floor = float(pre_contrarian)
+    if boost_tail_rank is None:
+        return floor
+    return max(floor, float(boost_tail_rank))
+
+
 def materialize_specs(
     adjusted: dict[int, float],
     *,
@@ -577,6 +595,9 @@ def materialize_specs(
 
     ``K``/``volatility`` are the sampling-sigma inputs (D52/D55); ``adjusted``
     is ``preds.pred_real_scores`` after ``apply_contrarian_adjustment``.
+    Sampler ``mu`` uses the adjusted score. Stage-1 ``rank_pred_override``
+    always carries pre-contrarian TV (maxed with boost-tail lift when set)
+    so popularity tilt cannot eject high-TV chalk from ``top_n_filter``.
     """
     samps: list[PlayerSamplingSpec] = []
     fields: list[FieldPlayerSpec] = []
@@ -633,13 +654,17 @@ def materialize_specs(
             if (policy.field_measured_ownership_enabled and pid in measured_drafts)
             else None
         )
+        pre_contrarian = float(preds.pred_real_scores.get(pid, pred))
         fields.append(
             FieldPlayerSpec(
                 player_id=pid,
                 pred_real_score=pred,
                 card_boost=boost,
                 measured_drafts=md,
-                rank_pred_override=preds.rank_pred_by_pid.get(pid),
+                rank_pred_override=stage1_rank_pred(
+                    pre_contrarian=pre_contrarian,
+                    boost_tail_rank=preds.rank_pred_by_pid.get(pid),
+                ),
             )
         )
         enrichment_name = str(r.get("name", "") or "").strip()

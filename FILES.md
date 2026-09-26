@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 909 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 910 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1111,6 +1111,7 @@ Generated from `git ls-files`. 909 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_player_props.py -- D80: per-event player-prop fetch + parse.
 - wnba-oracle/tests/unit/test_point_in_time_ownership.py -- Point-in-time ownership for offline replay (#289).
 - wnba-oracle/tests/unit/test_popularity.py -- Anti-popularity contrarian adjustment + draft-popularity estimator.
+- wnba-oracle/tests/unit/test_pre_contrarian_stage1.py -- Stage-1 pool ranks on pre-contrarian total draft value (#416).
 - wnba-oracle/tests/unit/test_pre_freeze_guard.py -- Tests for the durable Job 1 pre-freeze evidence check.
 - wnba-oracle/tests/unit/test_project_paths.py
 - wnba-oracle/tests/unit/test_prop_signal.py -- D78: sportsbook prop-signal multiplier in job2._prop_signal_multiplier.
