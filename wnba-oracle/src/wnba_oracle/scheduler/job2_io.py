@@ -110,22 +110,42 @@ def _load_prior_real_scores(slate_date: str) -> dict[int, list[float]]:
     return out
 
 
-def _load_measured_drafts(slate_date: str) -> dict[int, int]:
-    """Pull the most recent draftStats.drafts counts from slate_labels for
-    the slate. Empty if Job 2 is firing before any contest finalized
-    (typical case pregame). Job 2 then falls back to the popularity
-    estimator."""
+def _load_measured_drafts(
+    slate_date: str,
+    *,
+    as_of: dt.datetime | None = None,
+) -> dict[int, int]:
+    """Pull draftStats.drafts counts from slate_labels for the slate.
+
+    Empty if Job 2 fires before any capture/finalization (typical pregame);
+    Job 2 then falls back to the popularity estimator.
+
+    When ``as_of`` is set (freeze lock time), only rows with
+    ``ingested_at <= as_of`` are eligible so same-slate post-lock dayclose
+    drafts cannot leak into the freeze path (#434 / #289).
+    """
     try:
         eng = get_engine()
     except RuntimeError:
         return {}
-    q = text(
-        "SELECT platform_player_id, MAX(drafts) AS drafts "
-        "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
-        "GROUP BY platform_player_id"
-    )
+    params: dict[str, object] = {"sd": slate_date}
+    if as_of is None:
+        q = text(
+            "SELECT platform_player_id, MAX(drafts) AS drafts "
+            "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
+            "GROUP BY platform_player_id"
+        )
+    else:
+        as_of_utc = as_of if as_of.tzinfo is not None else as_of.replace(tzinfo=dt.UTC)
+        params["as_of"] = as_of_utc.astimezone(dt.UTC)
+        q = text(
+            "SELECT platform_player_id, MAX(drafts) AS drafts "
+            "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
+            "AND ingested_at <= :as_of "
+            "GROUP BY platform_player_id"
+        )
     with eng.connect() as conn:
-        rows = conn.execute(q, {"sd": slate_date}).fetchall()
+        rows = conn.execute(q, params).fetchall()
     out: dict[int, int] = {}
     for r in rows:
         m = r._mapping

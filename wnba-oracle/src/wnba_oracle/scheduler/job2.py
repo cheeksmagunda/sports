@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -330,6 +330,7 @@ def _build_specs(
     policy: ModelPolicy | None = None,
     art: PickerArtifact | None = None,
     artifact_resolved: bool = False,
+    measured_as_of: dt.datetime | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict]]:
     """Build the (sampling, field) specs the optimizer reads.
 
@@ -379,7 +380,7 @@ def _build_specs(
     # every pid not in this map, preserving the byte-identical pre-D69 freeze.
     head_predictions = _predict_heads_for_pool(art, enrichment)
 
-    measured_drafts = _load_measured_drafts(slate_date)
+    measured_drafts = _load_measured_drafts(slate_date, as_of=measured_as_of)
     popularity_scores = _compute_popularity_scores(enrichment, measured_drafts)
 
     bonus = injury_bonus_by_pid or {}
@@ -852,6 +853,13 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         n_players=len(player_history),
         n_prior_history=len(prior_by_player),
     )
+    # When live ownership capture is enabled, also consume measured drafts for
+    # field sims (#434). Capture runs just above; PIT filter uses lock_time.
+    if (
+        getattr(settings, "live_ownership_capture_enabled", False)
+        and not policy.field_measured_ownership_enabled
+    ):
+        policy = replace(policy, field_measured_ownership_enabled=True)
     samps, fields, projection_by_pid = _build_specs(
         enrichment,
         slate_date=sd,
@@ -861,6 +869,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         policy=policy,
         art=art,
         artifact_resolved=True,
+        measured_as_of=lock_time,
     )
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
