@@ -69,8 +69,14 @@ SEASON_STATUS_KNOWN = "known"
 SEASON_STATUS_UNKNOWN = "unknown"
 SEASON_STATUS_BLOCKED = "blocked"
 
-# Seasons we track in the matrix even before game ids are discovered.
-TRACKED_SEASONS: tuple[int, ...] = tuple(range(2002, 2026))
+FIRST_TRACKED_SEASON = 2002
+
+
+def tracked_seasons(now: datetime | None = None) -> tuple[int, ...]:
+    """Seasons we track in the matrix even before game ids are discovered."""
+
+    current_year = (now or datetime.now(UTC)).year
+    return tuple(range(FIRST_TRACKED_SEASON, current_year + 1))
 
 
 @dataclass
@@ -226,7 +232,7 @@ def ensure_season_skeleton(matrix: dict[str, Any]) -> dict[str, Any]:
     """Ensure tracked seasons exist with known/unknown/blocked status fields."""
 
     seasons: dict[str, Any] = matrix.setdefault("seasons", {})
-    for season in TRACKED_SEASONS:
+    for season in tracked_seasons():
         key = str(season)
         block = seasons.setdefault(key, {"games": {}, "status": SEASON_STATUS_UNKNOWN})
         if "games" not in block or not isinstance(block.get("games"), dict):
