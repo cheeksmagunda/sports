@@ -340,3 +340,143 @@ def test_partial_measured_field_keeps_unknown_players_estimated() -> None:
         p.player_id != 6 and p.ownership_source == "estimated_projection_softmax"
         for p in result.picks
     )
+
+
+def _projection(
+    player_id: int,
+    *,
+    mean: float,
+    samples: tuple[float, ...],
+    availability: float = 1.0,
+):
+    from nfl_oracle.recommendations.model import Projection
+
+    return Projection(
+        player_id=player_id,
+        mean=mean,
+        conditional_mean=mean,
+        stddev=max(0.1, (max(samples) - min(samples)) / 2),
+        availability_probability=availability,
+        prior_games=5,
+        samples=samples,
+        provenance=("test_estimate",),
+    )
+
+
+def test_raising_field_weight_changes_lineup_when_ownership_differs() -> None:
+    """Higher field_weight re-ranks near-EV lineups by simulated field-beat rate."""
+
+    target = slate()
+    decision = target.captured_at
+    # Player 6 is slightly lower EV than 5 but boomier. Zero field_weight can
+    # prefer the boom path; positive field_weight re-ranks by field-beat rate
+    # against the measured ownership field.
+    chalk_means = {1: 10.0, 2: 9.0, 3: 8.0, 4: 7.0, 5: 6.0, 6: 5.95}
+    projs = tuple(
+        _projection(
+            c.player_id,
+            mean=chalk_means[c.player_id],
+            samples=(
+                chalk_means[c.player_id] - 0.5,
+                chalk_means[c.player_id],
+                chalk_means[c.player_id] + (2.0 if c.player_id == 6 else 0.5),
+            ),
+        )
+        for c in target.candidates
+    )
+    field = FieldObservation(
+        clock=EvidenceClock(source_available_at=decision, captured_at=decision),
+        entry_count=100,
+        player_counts={1: 100, 2: 100, 3: 100, 4: 100, 5: 90, 6: 10},
+        provenance="test",
+        coverage="complete",
+    )
+    baseline = optimize(
+        target,
+        projs,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(simulations=400, field_weight=0.0, upside_weight=0.0, seed=7),
+        field=field,
+    )
+    leveraged = optimize(
+        target,
+        projs,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(simulations=400, field_weight=2.0, upside_weight=0.0, seed=7),
+        field=field,
+    )
+    assert {p.player_id for p in baseline.picks} != {p.player_id for p in leveraged.picks}
+
+
+def test_raising_upside_weight_prefers_higher_p90_when_means_tied() -> None:
+    target = slate()
+    decision = target.captured_at
+    # Equal means for the marginal slot; player 6 has a fat right tail.
+    projs = []
+    for c in target.candidates:
+        if c.player_id == 5:
+            projs.append(_projection(5, mean=5.0, samples=(4.5, 5.0, 5.5)))
+        elif c.player_id == 6:
+            projs.append(_projection(6, mean=5.0, samples=(1.0, 5.0, 12.0)))
+        else:
+            mean_v = float(10 - c.player_id + 1)
+            projs.append(
+                _projection(
+                    c.player_id,
+                    mean=mean_v,
+                    samples=(mean_v - 0.2, mean_v, mean_v + 0.2),
+                )
+            )
+    flat = optimize(
+        target,
+        tuple(projs),
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(simulations=300, field_weight=0.0, upside_weight=0.0, seed=11),
+    )
+    upside = optimize(
+        target,
+        tuple(projs),
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(simulations=300, field_weight=0.0, upside_weight=2.0, seed=11),
+    )
+    assert 6 not in {p.player_id for p in flat.picks} or flat.simulated_p90 <= upside.simulated_p90
+    assert 6 in {p.player_id for p in upside.picks}
+    assert upside.simulated_p90 >= flat.simulated_p90
+
+
+def test_chalk_studs_still_win_when_leverage_cannot_recover() -> None:
+    target = slate()
+    decision = target.captured_at
+    # Player 1 is an irreplaceable stud; omitting them collapses EV.
+    projs = tuple(
+        _projection(
+            c.player_id,
+            mean=20.0 if c.player_id == 1 else float(c.player_id),
+            samples=(
+                (19.0, 20.0, 21.0)
+                if c.player_id == 1
+                else (float(c.player_id), float(c.player_id) + 0.5)
+            ),
+        )
+        for c in target.candidates
+    )
+    field = FieldObservation(
+        clock=EvidenceClock(source_available_at=decision, captured_at=decision),
+        entry_count=100,
+        player_counts={1: 95, 2: 81, 3: 81, 4: 81, 5: 81, 6: 81},
+        provenance="test",
+        coverage="complete",
+    )
+    result = optimize(
+        target,
+        projs,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(simulations=200, field_weight=2.0, upside_weight=2.0, seed=3),
+        field=field,
+    )
+    assert 1 in {p.player_id for p in result.picks}
