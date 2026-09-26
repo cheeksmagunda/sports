@@ -2,12 +2,13 @@
 
 ## Injury/weather context slots always reserved (2026-09-26, Refs #418)
 
-`fit_model` now unions observed context keys with
+`fit_model` unions observed context keys with
 `canonical_live_context_feature_names()` (injury one-hots + weather
 magnitudes/availability) so live cards/NWS can move ratings even when
-historical coverage was sparse. Ridge force (#212) still keys off observed
-context only. Soft Q/D and weather magnitudes are covered by unit tests;
-OUT/inactive hard-zero unchanged. No active_model flip in this change.
+historical coverage was sparse. Because those slots are always present,
+ridge remains the selected estimator (#212 pathway stays live). Soft Q/D
+and weather magnitudes are covered by unit tests; OUT/inactive hard-zero
+unchanged. No active_model flip in this change.
 
 ## NFL race corpus persist (2026-09-26, Refs #338)
 
