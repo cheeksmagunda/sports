@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 903 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -558,6 +558,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/src/oracle_core/jobs.py -- Generic job registration, lifecycle, role validation, and execution.
 - packages/oracle-core/src/oracle_core/logging.py -- Structured, redacted logging primitives for application adapters.
 - packages/oracle-core/src/oracle_core/py.typed
+- packages/oracle-core/src/oracle_core/race.py -- Domain-free evolutionary/successive-halving search over backtests.
 - packages/oracle-core/src/oracle_core/redaction.py -- Secret redaction helpers for logs, diagnostics, and HTTP URLs.
 - packages/oracle-core/src/oracle_core/schemaorg.py -- schema.org vocabulary helpers for shared Oracle data contracts.
 - packages/oracle-core/src/oracle_core/service.py -- Generic FastAPI service metadata and health behavior.
@@ -575,6 +576,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
 - packages/oracle-core/tests/test_jobs.py
+- packages/oracle-core/tests/test_race.py
 - packages/oracle-core/tests/test_redaction_logging.py
 - packages/oracle-core/tests/test_schemaorg.py -- schema.org contract helpers.
 - packages/oracle-core/tests/test_service.py
@@ -880,6 +882,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/eval/metrics.py -- Calibration-first metrics: CRPS, reliability, ECE, quantile loss.
 - wnba-oracle/src/wnba_oracle/eval/multiple_comparisons.py -- Multiple-comparisons guard for the rotation gate (#MC, D63).
 - wnba-oracle/src/wnba_oracle/eval/point_in_time.py -- Point-in-time helpers for offline replay and walk-forward evaluation.
+- wnba-oracle/src/wnba_oracle/eval/racer.py -- WNBA evaluate hook for the portfolio race engine (#356).
 
 ## wnba-oracle/src/wnba_oracle/features/
 - wnba-oracle/src/wnba_oracle/features/__init__.py
@@ -1047,6 +1050,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_dossier.py -- Unit and integration tests for dossier entry and gap computation.
 - wnba-oracle/tests/unit/test_dossier_api.py -- #35 phase 3 / #39: read-only dossier API surface.
 - wnba-oracle/tests/unit/test_eb_residual_targets.py -- EB residual target wiring (#350).
+- wnba-oracle/tests/unit/test_eval_racer.py -- Offline unit tests for wnba_oracle.eval.racer (#356).
 - wnba-oracle/tests/unit/test_feature_payload.py
 - wnba-oracle/tests/unit/test_features_cohort.py -- Spec / cohort assignment tests.
 - wnba-oracle/tests/unit/test_field_measured_ownership.py -- Field-ownership model: measured-drafts path (D86).
