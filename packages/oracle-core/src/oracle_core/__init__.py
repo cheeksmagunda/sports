@@ -101,6 +101,14 @@ from oracle_core.logging import (
     format_exception_safe,
     get_logger,
 )
+from oracle_core.race import (
+    FitConfig,
+    FitOutcome,
+    FitResult,
+    FitnessSummary,
+    rank_race,
+    summarize_fitness,
+)
 from oracle_core.redaction import (
     RedactionPolicy,
     redact_headers,
@@ -263,10 +271,15 @@ __all__ = [
     "create_service",
     "default_target_day",
     "format_exception_safe",
+    "FitConfig",
+    "FitOutcome",
+    "FitResult",
+    "FitnessSummary",
     "get_logger",
     "get_runtime_config",
     "normalize_postgres_url",
     "parse_retry_after",
+    "rank_race",
     "redact_headers",
     "redact_text",
     "redact_url",
@@ -276,6 +289,7 @@ __all__ = [
     "run_sweep",
     "sha256_bytes",
     "sha256_file",
+    "summarize_fitness",
     "validate_role",
     "validate_required_env",
     "verify_sha256",
