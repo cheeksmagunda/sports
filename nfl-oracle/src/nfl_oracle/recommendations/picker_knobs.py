@@ -16,9 +16,9 @@ STATUS.md when applying.
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping, Sequence
-import math
 from statistics import mean, pstdev
 
 from pydantic import Field, field_validator
@@ -181,10 +181,11 @@ def _stddev_with_availability(
         conditional_variance = 0.0
     else:
         conditional_variance = pstdev(samples) ** 2
-    result: float = (
+    # math.sqrt keeps the return typed as float; ``x ** 0.5`` is Any under typeshed
+    # because float**float may be complex (CI mypy no-any-return).
+    return math.sqrt(
         probability * conditional_variance + probability * (1.0 - probability) * conditional**2
-    ) ** 0.5
-    return result
+    )
 
 
 def accumulate_position_residuals(
