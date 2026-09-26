@@ -317,8 +317,11 @@ Deadline alerting is GitHub Actions-based, not Railway-hosted:
 kickoff windows (UTC crons in the workflow), combines the
 public nflverse schedule's kickoff time with `RecommendationStore` freeze/run
 state, and opens or updates one `nfl-ops-guard` issue if no freeze exists by
-the post-T-40 grace deadline. It needs only `NFL_DATABASE_URL` and
-`NFL_PG_SSL_ROOT_CERT`; no Real Sports session is required.
+the post-T-40 grace deadline. Weekly coverage is Sunday + TNF/SNF/MNF evenings;
+holiday add-ons cover Thanksgiving Thursday afternoon (November), late-season
+Saturday (December, e.g. 12-19), and Christmas Day (12-25) plus their UTC
+spillover hours. It needs only `NFL_DATABASE_URL` and `NFL_PG_SSL_ROOT_CERT`;
+no Real Sports session is required.
 
 The repeatable local image check is `make -C nfl-oracle
 docker-production-smoke`. It builds the image and invokes `nfl-pipeline

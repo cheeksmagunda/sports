@@ -18,6 +18,13 @@ contest-pool rows via `EvalContext.extras` (no live Corpus G fit in the hook).
 - Follow-on in flight: zero-boost equal-boost no-op (#334 / PR #340) so uniform
   pools are not shuffled by `player_id` under live `boost_0.75`.
 
+## T-40 watchdog holiday crons (2026-09-25, Refs #346 / #332)
+
+`.github/workflows/nfl-t40-watchdog.yml` now also polls Thanksgiving Thursday
+afternoon (November), late-season Saturday (December, e.g. 12-19), and
+Christmas Day (12-25) plus the UTC hour after evening kickoffs. Weekly
+Sunday/TNF/SNF/MNF windows are unchanged. No Railway change.
+
 ## Picker knobs Corpus C sweep (2026-09-25 ~17:02 CT, Refs #280)
 
 Boost-aware projection + optional holdout position calibration, applied after

@@ -6,10 +6,26 @@ on:
     # at 16:20 and 19:25-19:45; SNF/MNF/TNF T-40 falls 23:35-23:40; the 9:30am
     # ET international window falls at 13:50. Off-window polling would burn
     # Actions minutes for nothing; workflow_dispatch covers odd kickoffs.
+    #
+    # Holiday gaps the weekly Sun/TNF/MNF grid misses (EST = UTC-5):
+    # - Thanksgiving Thu afternoon: 1pm/4:30pm ET T-40 (17:20 / 20:50 UTC);
+    #   evening TNF already covered by the 23:00 Thu + 00:00 Fri crons.
+    # - Late-season Saturday (e.g. 2026-12-19): 5pm/8:20pm ET T-40
+    #   (21:20 UTC Sat / 00:40 UTC Sun).
+    # - Christmas Day (e.g. 2026-12-25): 1pm/4:30pm/8:15pm ET T-40
+    #   (17:20 / 20:50 UTC / 00:35 UTC next day).
     - cron: "*/15 13-14 * * 0"
     - cron: "*/15 16-21 * * 0"
     - cron: "*/15 23 * * 0,1,4"
     - cron: "*/15 0 * * 1,2,5"
+    # Thanksgiving Thursday afternoon (November Thursdays only).
+    - cron: "*/15 17-21 * 11 4"
+    # Late-season Saturday (December Saturdays) + Sunday 00 UTC spillover.
+    - cron: "*/15 21-23 * 12 6"
+    - cron: "*/15 0 * 12 0"
+    # Christmas Day afternoon + next-day 00 UTC spillover for the nightcap.
+    - cron: "*/15 17-21 25 12 *"
+    - cron: "*/15 0 26 12 *"
   workflow_dispatch:
     inputs:
       day:
