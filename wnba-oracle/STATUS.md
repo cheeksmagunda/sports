@@ -1,9 +1,20 @@
 # Status
 
-Last verified: 2026-09-26T03:50:00Z
+Last verified: 2026-09-26T17:30:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## WNBA ops-guard watchdog (#368, 2026-09-26)
+
+GitHub issues titled **WNBA Oracle watchdog alert** (label `ops-guard`, e.g.
+#368 / #379) are not engineering backlog. They are the auto-managed guard slot
+for `.github/workflows/watchdog-monitor.yml`. The workflow opens or updates that
+issue on production ALERT and closes it on the next clean run; triage underlying
+dayclose/job1 failures in this file and Railway logs.
+
+As of 2026-09-26T13:13Z the guard reported ALERT on scheduled dayclose
+(degraded) and job1 (failed); API health and frontend routing were OK.
 
 ## WNBA race corpus builder (#337 under #332)  -  2026-09-25
 
