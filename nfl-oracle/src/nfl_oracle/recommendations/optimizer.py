@@ -13,8 +13,12 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from nfl_oracle.common.logging import get_logger
+from nfl_oracle.contests.schema import MAX_OBSERVED_BOOST
 from nfl_oracle.recommendations.model import Projection
 from nfl_oracle.recommendations.schema import Candidate, EvidenceClock, Finite, Record, Slate
+
+log = get_logger("nfl_oracle.recommendations.optimizer")
 
 try:  # scipy is optional for local scaffold environments
     _numpy: Any = import_module("numpy")
@@ -300,9 +304,25 @@ def optimize(
 ) -> Recommendation:
     slate.assert_prelock(decision_at)
     cfg = config or OptimizerConfig()
+    clamped_candidates: list[Candidate] = []
+    for candidate in slate.candidates:
+        if candidate.card_boost > MAX_OBSERVED_BOOST + 1e-9:
+            log.warning(
+                "player_boost_clamped",
+                extra={
+                    "player_id": candidate.player_id,
+                    "observed_boost": candidate.card_boost,
+                    "clamped_boost": MAX_OBSERVED_BOOST,
+                },
+            )
+            clamped_candidates.append(
+                candidate.model_copy(update={"card_boost": MAX_OBSERVED_BOOST})
+            )
+        else:
+            clamped_candidates.append(candidate)
+    if clamped_candidates != list(slate.candidates):
+        slate = slate.model_copy(update={"candidates": tuple(clamped_candidates)})
     candidates = {p.player_id: p for p in slate.candidates}
-    if any(candidate.card_boost > 3 for candidate in slate.candidates):
-        raise ValueError("player_boost_out_of_range")
     if len({p.player_id for p in projections}) != len(projections):
         raise ValueError("duplicate_projection")
     if {p.player_id for p in projections} != set(candidates):
