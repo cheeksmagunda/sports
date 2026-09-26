@@ -707,7 +707,7 @@ class SobolSampler:
         ndim = len(space.dimensions)
         if self._engine is None or self._ndim != ndim:
             try:
-                from scipy.stats import qmc  # type: ignore[import-untyped]
+                from scipy.stats import qmc
             except ImportError as exc:  # pragma: no cover - env dependent
                 raise ImportError(
                     "SobolSampler requires scipy; install the optional dependency "
