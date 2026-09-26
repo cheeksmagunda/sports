@@ -10,7 +10,12 @@ import pytest
 
 from nfl_oracle.contests.parse import ParsedContest
 from nfl_oracle.contests.schema import ContestRecord, DraftStatRow, EntryLineupPick, EntryRecord
-from nfl_oracle.recommendations.model import FitConfig, HistoricalPerformance, RatingModel, fit_model
+from nfl_oracle.recommendations.model import (
+    FitConfig,
+    HistoricalPerformance,
+    RatingModel,
+    fit_model,
+)
 from nfl_oracle.recommendations.picker_knobs import PickerKnobs
 from nfl_oracle.recommendations.schema import EvidenceClock
 from nfl_oracle.replay import contest_pool_replay as cpr
