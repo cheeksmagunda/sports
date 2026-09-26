@@ -14,12 +14,10 @@ Fitness uses ``oracle_core.fitness``:
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from oracle_core.fitness import win_close
-
-
 from oracle_core.race import (
     EvalContext,
     RankObservation,
