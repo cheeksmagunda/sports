@@ -381,6 +381,29 @@ def _offline_pregate(
         return None
 
 
+def _select_contest_id(
+    contest_ids: Sequence[int],
+    *,
+    explicit: str | None = None,
+) -> int | None:
+    """Choose a contest on a multi-contest day.
+
+    Defaults to the first discovered id. When ``NFL_CONTEST_ID`` (or
+    ``explicit``) is set, require that id to be among ``contest_ids``.
+    Returns None when the day has no contests or the override is invalid.
+    """
+    if not contest_ids:
+        return None
+    raw = explicit if explicit is not None else os.environ.get("NFL_CONTEST_ID", "").strip()
+    if not raw:
+        return contest_ids[0]
+    try:
+        cid = int(raw)
+    except ValueError:
+        return None
+    return cid if cid in contest_ids else None
+
+
 async def _worker_once(
     project: Path,
     store: RecommendationStore,
@@ -462,11 +485,20 @@ async def _worker_once(
             )
             return None
         available = content.get("config", {}).get("dailyDraftInfo", {}).get("contests", [])
-        contest_ids = [item.get("id") for item in available if isinstance(item, dict)]
-        if len(contest_ids) != 1 or type(contest_ids[0]) is not int:
+        if not isinstance(available, list):
+            available = []
+        contest_ids: list[int] = [
+            contest_id
+            for item in available
+            if isinstance(item, dict)
+            for contest_id in [item.get("id")]
+            if isinstance(contest_id, int)
+        ]
+        selected_contest_id = _select_contest_id(contest_ids)
+        if selected_contest_id is None:
             record_run(day, status="blocked", detail_code="contest_unavailable")
             return None
-        slate = await reader.collect(day, contest_id=contest_ids[0])
+        slate = await reader.collect(day, contest_id=selected_contest_id)
         # Collection is a live network round trip; every per-candidate and
         # context clock it produces is stamped with real wall-clock time at or
         # after this point. Re-read the clock here rather than reusing the
