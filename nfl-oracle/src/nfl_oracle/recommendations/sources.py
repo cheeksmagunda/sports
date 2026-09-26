@@ -248,9 +248,8 @@ def collect_nflverse(
             continue
         # nflreadpy can combine compatible seasons for some endpoints but
         # raises on schema changes for others, especially depth charts. Fetch
-        # each requested season independently so a successful 2024/2025
-        # historical source is never discarded because an early 2026 release
-        # is unavailable.
+        # each requested season independently so a successful historical source
+        # is never discarded because a newer-season release is unavailable.
         if len(years) > 1 and name != "schedules":
             rows: list[Row] = []
             successful = 0
