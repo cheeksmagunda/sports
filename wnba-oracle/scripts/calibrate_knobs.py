@@ -14,6 +14,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -23,7 +24,11 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+sys.path.insert(0, str(_SCRIPTS.parent / "src"))
+
+from seasons_common import add_seasons_argument, in_seasons, parse_seasons
 
 os.environ.setdefault(
     "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
@@ -59,17 +64,27 @@ def _score_lineup(player_ids, boost_by_pid, rs_by_pid) -> float:
     return committed_lineup_score(player_ids, rs_by_pid, boost_by_pid)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_seasons_argument(parser)
+    args = parser.parse_args(argv)
+    seasons = parse_seasons(args.seasons)
+
     from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
 
     print("Loading slate data from DB...")
     sl = read_slate_labels()
     lb = read_leaderboards()
 
-    slates_2026 = {d for d in sl["slate_date"].unique().to_list() if str(d).startswith("2026-")}
+    season_slates = {
+        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons)
+    }
     lb_slates = set(lb["slate_date"].unique().to_list())
-    valid_slates = sorted(slates_2026 & lb_slates)
-    print(f"Found {len(valid_slates)} 2026 slates with both labels and leaderboard data\n")
+    valid_slates = sorted(season_slates & lb_slates)
+    print(
+        f"Found {len(valid_slates)} slates with both labels and leaderboard data "
+        f"(seasons: {','.join(seasons)})\n"
+    )
 
     # ---- Phase 1: precompute specs once per slate -------------------------
     print("Phase 1: precomputing model predictions for each slate...")
@@ -225,4 +240,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
