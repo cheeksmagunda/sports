@@ -18,8 +18,6 @@ Generated from `git ls-files`. 911 tracked files. Regenerate with `scripts/gener
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
 - FILES.md -- File manifest (generated, do not hand-edit)
-- FILES.md -- File manifest (generated, do not hand-edit)
-- FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - README.md -- Sports Oracle
@@ -945,6 +943,7 @@ Generated from `git ls-files`. 911 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/picker/payout.py -- Payout-curve loader and per-lineup EV computation.
 - wnba-oracle/src/wnba_oracle/picker/popularity.py -- Draft-popularity estimator + anti-popularity contrarian adjustment.
 - wnba-oracle/src/wnba_oracle/picker/sample.py -- Joint sampling via Gaussian copula on log-residuals.
+- wnba-oracle/src/wnba_oracle/picker/shark_signal.py -- Prior-only shark draft-rate signal.
 - wnba-oracle/src/wnba_oracle/picker/stacking.py -- Pure helpers for contextual lineup-balance decisions.
 
 ## wnba-oracle/src/wnba_oracle/predict/
@@ -1136,6 +1135,7 @@ Generated from `git ls-files`. 911 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_serving_schema.py -- Serve-time enrichment schema validator (features/serving_schema.py).
 - wnba-oracle/tests/unit/test_settings_pause.py -- picks_paused_on / picks_resume_date: the operator-directed pause window.
 - wnba-oracle/tests/unit/test_shadow.py -- Tests for scheduler.shadow. Pure metric compute + writer contract.
+- wnba-oracle/tests/unit/test_shark_signal.py -- Offline unit tests for ``wnba_oracle.picker.shark_signal``.
 - wnba-oracle/tests/unit/test_slate_api.py -- D104: /slate/{date} timing endpoint feeding the tip-relative countdown.
 - wnba-oracle/tests/unit/test_slate_clock.py
 - wnba-oracle/tests/unit/test_slate_meta.py -- D83: slate timing capture (job1) feeding the late-refreeze lock gate.
