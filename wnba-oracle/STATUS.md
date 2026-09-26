@@ -1,34 +1,22 @@
 # Status
 
-Last verified: 2026-09-26T02:45:00Z
+Last verified: 2026-09-26T03:50:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
 
-## Advance freeze readiness visibility (#332)  -  2026-09-25
+## WNBA race corpus builder (#337 under #332)  -  2026-09-25
 
-Sunday T-40 prep exposed a phone-curl gap: `/slate/{date}` only carried tip/
-lock/freeze timing and pause flags, while `/watchdog/{date}` carried raw
-`events` / `history` / `status` without a single ready-or-not verdict.
-`scripts/pre_freeze_guard.py` already joined watchdog (live + history for hard
-triggers), durable job1, and slate timing across three HTTP calls.
-
-| Surface | Before | Ready-to-freeze signal |
-| --- | --- | --- |
-| `/slate/{date}` | `freeze_target_utc`, `picks_paused` | Timing only; no pipeline health |
-| `/watchdog/jobs/today` | Per-job durable rows | Job1 success alone insufficient |
-| `/watchdog/{date}` | `events`, `history`, `status` | Required mental union with guard rules |
-| Pre-freeze GitHub Action | Full join | Authoritative but not on public API |
-
-**Additive API (merged pending deploy):** `/watchdog/{date}` and `/watchdog/today`
-now include `freeze_readiness` (`ready_for_freeze`, `phase`, `blockers`,
-`advisories`, job1 durable facts, timing/frozen flags,
-`observation_only: true`). `/slate/{date}` adds `slate_timing_captured` only.
-Hard blockers match `pre_freeze_guard` (including cron-persisted
-`model_artifact_*` when live eval skips them on the API container, #331).
-
-**Operator curl (after API deploy):**
-`curl -s "$WNBA_API_BASE/watchdog/today" | jq '{status, ready: .freeze_readiness.ready_for_freeze, phase: .freeze_readiness.phase, blockers: .freeze_readiness.blockers}'`
+- **Code:** `scripts/build_race_corpus.py` and `scripts/seasons_common.py`
+  (PR #337); offline unit tests in
+  `tests/unit/test_seasons_and_race_corpus.py`.
+- **Operator build:** run from the Codespace with read-only
+  `BACKUP_DATABASE_URL`, emit parquet under a temp dir, publish to the orphan
+  `backups` branch (CSV corpus backup pattern; dedicated race workflow
+  unverified until first dispatch).
+- **Research scripts:** walk-forward, pipeline, counterfactual, knob
+  calibration, and model-research benchmark accept `--seasons` (default
+  `2025,2026`) instead of a hard `2026-` slate filter.
 
 ## rotowire_empty + enrichment_stale (#319)  -  2026-09-25
 

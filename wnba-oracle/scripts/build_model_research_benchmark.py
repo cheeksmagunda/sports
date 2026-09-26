@@ -51,7 +51,16 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+sys.path.insert(0, str(_SCRIPTS.parent / "src"))
+
+from seasons_common import (  # noqa: E402
+    DEFAULT_SEASONS,
+    add_seasons_argument,
+    in_seasons,
+    parse_seasons,
+)
 
 SEED = 2026
 CAPTURE_THRESHOLDS: tuple[int, ...] = (5, 8, 10)
@@ -860,6 +869,7 @@ def _precompute_slates(
     policy: Any = None,
     game_logs_csv: Path | None = None,
     *,
+    seasons: list[str] | None = None,
     leak_same_slate_ownership: bool = False,
 ) -> tuple[dict[str, dict[str, Any]], int]:
     """Load labels, leaderboards, and validated game identity (database, or
@@ -943,8 +953,11 @@ def _precompute_slates(
             print(f"head_features: resolver build failed ({exc}); skipping", file=sys.stderr)
             head_resolver = None
 
-    slates_2026 = {d for d in sl["slate_date"].unique().to_list() if str(d).startswith("2026-")}
-    valid = sorted(slates_2026 & set(lb["slate_date"].unique().to_list()))
+    active_seasons = seasons if seasons is not None else parse_seasons(DEFAULT_SEASONS)
+    season_slates = {
+        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), active_seasons)
+    }
+    valid = sorted(season_slates & set(lb["slate_date"].unique().to_list()))
     if shard is not None:
         valid = select_shard(valid, shard[0], shard[1])
     if max_slates is not None:
@@ -1319,7 +1332,9 @@ def main() -> int:
             "drafts only."
         ),
     )
+    add_seasons_argument(parser)
     args = parser.parse_args()
+    seasons = parse_seasons(args.seasons)
 
     if args.merge_shards:
         payloads = [json.loads(p.read_text(encoding="utf-8")) for p in args.merge_shards]
@@ -1397,6 +1412,7 @@ def main() -> int:
         shard=(args.shard_index, args.shard_count),
         policy=policy,
         game_logs_csv=args.game_logs_csv,
+        seasons=seasons,
         leak_same_slate_ownership=args.leak_same_slate_ownership,
     )
     # Full accounting to stderr: every exclusion reason, not just one of them.

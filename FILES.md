@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 898 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,9 +17,7 @@ Generated from `git ls-files`. 898 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
-- FILES.md
-- FILES.md
-- FILES.md
+- FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - README.md -- Sports Oracle
