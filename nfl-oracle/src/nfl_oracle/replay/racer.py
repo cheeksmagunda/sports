@@ -27,19 +27,18 @@ from collections.abc import Mapping, Sequence
 from statistics import median
 from typing import Any, Protocol
 
-from nfl_oracle.recommendations.picker_knobs import PickerKnobs
-from nfl_oracle.replay.contest_pool_replay import ContestPoolResult
-
 # ---------------------------------------------------------------------------
 # oracle_core.race contract (required; Refs #356)
 # ---------------------------------------------------------------------------
-
 from oracle_core.race import (
     EvalContext,
     RankObservation,
     SlateResult,
     Variant,
 )
+
+from nfl_oracle.recommendations.picker_knobs import PickerKnobs
+from nfl_oracle.replay.contest_pool_replay import ContestPoolResult
 
 _RACE_SOURCE = "oracle_core.race"
 
