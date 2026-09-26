@@ -335,7 +335,10 @@ issue). Operator restored billing 2026-09-24. Re-checked live this session:
     commit/push both succeeded; only the `Post Run` cleanup step failed,
     confirming these were red-run/cleanup failures, not backup-data gaps.
     The first *scheduled* (non-manual) run under the fix has not happened
-    yet as of verification time.
+    yet as of verification time. Race-corpus publish (`publish_race_corpus`
+    on workflow_dispatch, Refs #337) is code-complete as a schema-only stub
+    path; no live race parquet on `origin/backups` has been verified yet.
+
   - #230 (Real Sports access coordination, closed): migration
     `20260919_0011_external_access_windows` and its consumer
     (`scheduler/access_coordination.py` + `scheduler/realsports_access.py`)

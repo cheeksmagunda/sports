@@ -262,6 +262,15 @@ persists the existing Real Sports -> stats.wnba.com resolver output from Job 1
 without changing any model-facing decision path. Historical backfill is a
 separate, explicit operation and is not part of ordinary ingestion.
 
+The `corpus-backup` workflow also has an opt-in race-corpus publish path
+(issue #337): on `workflow_dispatch` with `confirm_backup` and
+`publish_race_corpus`, it builds per-season parquet under
+`wnba-oracle/data/race/` on `origin/backups` via
+`scripts/build_race_corpus.py` (read-only `BACKUP_DATABASE_URL`, 100MB
+per-file guard, hash-verified manifest). Scheduled corpus CSV backups are
+unchanged. The builder currently ships as a schema-only stub until the full
+row export lands.
+
 ## Layout
 
 ```text

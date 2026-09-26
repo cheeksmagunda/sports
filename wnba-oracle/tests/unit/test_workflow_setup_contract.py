@@ -37,3 +37,36 @@ def test_backup_publisher_limits_authentication_to_the_write_step() -> None:
         if step is not writer:
             assert "GH_TOKEN" not in step.get("env", {})
     assert "secrets." not in str(publisher)
+
+
+def test_race_corpus_publish_is_workflow_dispatch_opt_in() -> None:
+    """Race parquet publish stays behind workflow_dispatch until #337 is complete."""
+
+    workflow = yaml.safe_load((WORKFLOWS / "corpus-backup.yml").read_text())
+    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+    assert "publish_race_corpus" in inputs
+    assert inputs["publish_race_corpus"]["default"] is False
+    export_steps = workflow["jobs"]["export"]["steps"]
+    race_build = next(
+        step for step in export_steps if step.get("name") == "Build race corpus (per-season parquet)"
+    )
+    assert "publish_race_corpus" in race_build["if"]
+    assert "workflow_dispatch" in race_build["if"]
+    assert "BACKUP_DATABASE_URL" in race_build["env"]["DATABASE_PUBLIC_URL"]
+    assert "build_race_corpus.py" in race_build["run"]
+    size_guard = next(
+        step
+        for step in export_steps
+        if step.get("name") == "Enforce race corpus per-file size budget"
+    )
+    assert "+100M" in size_guard["run"]
+    verify = next(
+        step for step in export_steps if step.get("name") == "Verify race manifest and hashes"
+    )
+    assert "--verify-only" in verify["run"]
+    writer = next(
+        step
+        for step in workflow["jobs"]["publish"]["steps"]
+        if step.get("name") == "Commit snapshot to backups branch"
+    )
+    assert "wnba-oracle/data/race" in writer["run"]

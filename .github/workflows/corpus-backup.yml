@@ -15,6 +15,11 @@ on:
         required: false
         type: boolean
         default: false
+      publish_race_corpus:
+        description: Also build and publish the WNBA race corpus under wnba-oracle/data/race/ (Refs #337)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -78,6 +83,44 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      # Race corpus publish is opt-in via workflow_dispatch until the full
+      # builder replaces the schema-only stub (Refs #337). Scheduled runs skip.
+      - name: Build race corpus (per-season parquet)
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_race_corpus == true
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
+        run: >
+          uv run --frozen --package wnba-oracle python
+          wnba-oracle/scripts/build_race_corpus.py --seasons all
+          --out "$RUNNER_TEMP/race-corpus/wnba"
+
+      - name: Enforce race corpus per-file size budget
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_race_corpus == true
+        run: |
+          big=$(find "$RUNNER_TEMP/race-corpus" -name '*.parquet' -size +100M -print)
+          if [ -n "$big" ]; then
+            echo "race parquet over 100MB:"
+            echo "$big"
+            exit 1
+          fi
+
+      - name: Verify race manifest and hashes
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_race_corpus == true
+        run: >
+          uv run --frozen --package wnba-oracle python
+          wnba-oracle/scripts/build_race_corpus.py --verify-only
+          --out "$RUNNER_TEMP/race-corpus/wnba"
+
+      - name: Transfer verified race corpus without database credentials
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_race_corpus == true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: race-corpus-${{ github.run_id }}
+          path: ${{ runner.temp }}/race-corpus
+          if-no-files-found: error
+          retention-days: 1
+
   publish:
     needs: export
     permissions:
@@ -103,10 +146,26 @@ jobs:
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
         run: uv run --frozen --package wnba-oracle python wnba-oracle/scripts/restore_corpus.py --snapshot-dir "$SNAPSHOT_DIR"
 
+      - name: Download verified race corpus
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_race_corpus == true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: race-corpus-${{ github.run_id }}
+          path: ${{ runner.temp }}/race-corpus
+
+      - name: Reverify race corpus before repository write
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_race_corpus == true
+        run: >
+          uv run --frozen --package wnba-oracle python
+          wnba-oracle/scripts/build_race_corpus.py --verify-only
+          --out "$RUNNER_TEMP/race-corpus/wnba"
+
       - name: Commit snapshot to backups branch
         env:
           GH_TOKEN: ${{ github.token }}
           SNAPSHOT_DIR: ${{ runner.temp }}/corpus-backup
+          RACE_DIR: ${{ runner.temp }}/race-corpus/wnba
+          PUBLISH_RACE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_race_corpus == true }}
         run: |
           gh auth setup-git
           git config user.name "wnba-oracle-bot"
@@ -125,6 +184,14 @@ jobs:
           git add -f wnba-oracle/data/backups/slate_labels.csv
           git add -f wnba-oracle/data/backups/contest_leaderboards.csv
           git add -f wnba-oracle/data/backups/manifest.json
+          if [ "$PUBLISH_RACE" = "true" ]; then
+            mkdir -p wnba-oracle/data/race/wnba
+            # Replace prior race tree so removed seasons do not linger.
+            rm -rf wnba-oracle/data/race/wnba
+            mkdir -p wnba-oracle/data/race/wnba
+            cp -R "$RACE_DIR"/. wnba-oracle/data/race/wnba/
+            git add -f wnba-oracle/data/race
+          fi
           if git diff --cached --quiet; then
             echo "no corpus changes; skipping commit"
           else

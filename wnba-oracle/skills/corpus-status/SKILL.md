@@ -93,7 +93,17 @@ workflow may have failed. Check the Actions run log for `corpus-backup`.
 To trigger a manual backup:
 
 ```sh
-gh workflow run corpus-backup.yml --ref main
+gh workflow run corpus-backup.yml --ref main \
+  -f confirm_backup=true
+```
+
+To also publish the schema-only race corpus stub under
+`wnba-oracle/data/race/` on `origin/backups` (issue #337; opt-in, not on the
+schedule):
+
+```sh
+gh workflow run corpus-backup.yml --ref main \
+  -f confirm_backup=true -f publish_race_corpus=true
 ```
 
 ## Step 4: Snapshot training inputs for a new model run
