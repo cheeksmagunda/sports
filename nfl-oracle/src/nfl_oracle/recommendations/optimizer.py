@@ -56,10 +56,48 @@ class OptimizerConfig(Record):
     min_distinct_teams: int = Field(default=3, ge=1, le=5)
     min_distinct_games: int = Field(default=2, ge=1, le=5)
     simulations: int = Field(default=500, ge=100, le=10000)
+    # Selection knobs for contest_utility (not diagnostics-only).
     upside_weight: Finite = Field(default=0.15, ge=0, le=2)
     field_weight: Finite = Field(default=0.1, ge=0, le=2)
+    # Cap how many expected-ranked feasible lineups are re-scored with U.
+    utility_candidates: int = Field(default=64, ge=1, le=500)
     game_correlation: Finite = Field(default=0.15, ge=0, le=0.8)
     seed: int = 115
+
+
+def contest_utility(
+    expected: float,
+    p90: float,
+    field_beat: float,
+    *,
+    upside_weight: float,
+    field_weight: float,
+    mean_ownership: float = 0.0,
+) -> float:
+    """Five-card portfolio contest utility used for lineup selection.
+
+    Exact formula (documented for #400 tests):
+
+        U = E
+          + upside_weight * p90
+          + field_weight * E * P(beat simulated field)
+          - field_weight * E * mean_ownership
+
+    ``E`` is the linear sum of expected committed-slot scores under the Real
+    scoring law. ``p90`` and ``P(beat field)`` come from the same correlated
+    simulation used for Recommendation diagnostics. ``mean_ownership`` is the
+    mean pre-lock ownership of the five picks. The ownership penalty is what
+    lets ``field_weight`` prefer contrarian portfolios when that raises total
+    draft value; chalk studs still win when omitting them collapses ``E``
+    enough that leverage cannot recover. When both weights are zero, ``U``
+    reduces to pure expected score.
+    """
+    return float(
+        expected
+        + upside_weight * p90
+        + field_weight * expected * field_beat
+        - field_weight * expected * mean_ownership
+    )
 
 
 class FieldObservation(Record):
@@ -120,6 +158,62 @@ class Recommendation(Record):
     boost_max: Finite
     assumptions: tuple[str, ...]
     contest_entry: Literal[False] = False
+
+
+def _beam_search(
+    eligible: Sequence[Projection],
+    candidates: dict[int, Candidate],
+    scores: dict[int, tuple[float, ...]],
+    *,
+    teams_required: int,
+    games_required: int,
+    beam_width: int,
+    ownership: dict[int, float] | None = None,
+    spreads: dict[int, float] | None = None,
+) -> list[tuple[float, tuple[int, ...]]]:
+    """Bounded beam over expected committed score with diversity pruning.
+
+    When ``ownership`` / ``spreads`` are provided, the diversity signature also
+    buckets by mean ownership and sample spread so low-owned and high-upside
+    completions are not pruned away by chalk / flat paths before
+    contest_utility can re-rank them.
+    """
+    beam: list[tuple[float, tuple[int, ...]]] = [(0.0, ())]
+    for slot in range(5):
+        expanded: list[tuple[float, tuple[int, ...]]] = []
+        for value, ids in beam:
+            for projection in eligible:
+                if projection.player_id in ids:
+                    continue
+                new = (*ids, projection.player_id)
+                remaining = 4 - slot
+                if len({candidates[i].team_id for i in new}) + remaining < teams_required:
+                    continue
+                if len({candidates[i].game_id for i in new}) + remaining < games_required:
+                    continue
+                expanded.append((value + scores[projection.player_id][slot], new))
+        # Preserve a beam for each diversity signature so a strong single
+        # team cannot evict every feasible multi-team completion.
+        expanded.sort(key=lambda item: (-item[0], item[1]))
+        groups: dict[tuple[int, ...], list[tuple[float, tuple[int, ...]]]] = {}
+        for item in expanded:
+            signature_parts: list[int] = [
+                len({candidates[i].team_id for i in item[1]}),
+                len({candidates[i].game_id for i in item[1]}),
+            ]
+            if ownership is not None and item[1]:
+                mean_own = sum(ownership[i] for i in item[1]) / len(item[1])
+                signature_parts.append(min(4, int(mean_own * 5)))
+            if spreads is not None and item[1]:
+                mean_spread = sum(spreads[i] for i in item[1]) / len(item[1])
+                # Buckets of width 5 Real points.
+                signature_parts.append(min(8, int(mean_spread / 5.0)))
+            signature = tuple(signature_parts)
+            group = groups.setdefault(signature, [])
+            if len(group) < beam_width:
+                group.append(item)
+        beam = [item for group in groups.values() for item in group]
+    return sorted(beam, key=lambda item: (-item[0], item[1]))
 
 
 def _exact_search(
@@ -345,6 +439,7 @@ def optimize(
         )
         for p in eligible
     }
+    spreads = {p.player_id: float(max(p.samples) - min(p.samples)) for p in eligible}
     # Preserve the configured request in the report.  Feasibility is resolved
     # below against the actual slate cardinalities, so a one-team slate is
     # visibly a relaxed request rather than an apparently satisfied request.
@@ -352,6 +447,18 @@ def optimize(
     requested_games = cfg.min_distinct_games
 
     def search(teams: int, games: int) -> list[tuple[float, tuple[int, ...]]]:
+        # Beam always builds a feasible pool. MILP (when available) seeds the
+        # expected-score optimum into that pool; contest_utility then selects.
+        pool = _beam_search(
+            eligible,
+            candidates,
+            scores,
+            teams_required=teams,
+            games_required=games,
+            beam_width=cfg.beam_width,
+            ownership=ownership,
+            spreads=spreads,
+        )
         exact = _exact_search(
             eligible,
             candidates,
@@ -360,35 +467,12 @@ def optimize(
             games_required=games,
         )
         if exact:
-            return exact
-        beam: list[tuple[float, tuple[int, ...]]] = [(0, ())]
-        for slot in range(5):
-            expanded = []
-            for value, ids in beam:
-                for p in eligible:
-                    if p.player_id in ids:
-                        continue
-                    new = (*ids, p.player_id)
-                    remaining = 4 - slot
-                    if len({candidates[i].team_id for i in new}) + remaining < teams:
-                        continue
-                    if len({candidates[i].game_id for i in new}) + remaining < games:
-                        continue
-                    expanded.append((value + scores[p.player_id][slot], new))
-            # Preserve a beam for each diversity signature so a strong single
-            # team cannot evict every feasible multi-team completion.
-            expanded.sort(key=lambda item: (-item[0], item[1]))
-            groups: dict[tuple[int, int], list[tuple[float, tuple[int, ...]]]] = {}
-            for item in expanded:
-                signature = (
-                    len({candidates[i].team_id for i in item[1]}),
-                    len({candidates[i].game_id for i in item[1]}),
-                )
-                group = groups.setdefault(signature, [])
-                if len(group) < cfg.beam_width:
-                    group.append(item)
-            beam = [item for group in groups.values() for item in group]
-        return sorted(beam, key=lambda item: (-item[0], item[1]))
+            seen = {ids for _, ids in pool}
+            for score, ids in exact:
+                if ids not in seen:
+                    pool.append((score, ids))
+                    seen.add(ids)
+        return sorted(pool, key=lambda item: (-item[0], item[1]))
 
     # Team and game diversity are independent constraints. Search all relaxed
     # pairs in order of total shortfall so one infeasible dimension does not
@@ -464,10 +548,51 @@ def optimize(
         )
         return p90, wins
 
-    # Total Value is the sole production objective. Simulations remain
-    # descriptive diagnostics and never select a different lineup.
-    chosen = (beam[0][0], beam[0][1], *evaluate(beam[0][1]))
-    expected, ids, p90, wins = chosen
+    # Select via contest_utility. Shortlist top expected, lowest-ownership, and
+    # highest-spread feasible lineups so leverage / upside knobs can re-rank.
+    # Reported total_value remains E[committed score] of the chosen lineup.
+    by_expected = sorted(beam, key=lambda item: (-item[0], item[1]))
+    top_expected = by_expected[: cfg.utility_candidates]
+    by_own = sorted(
+        beam,
+        key=lambda item: (
+            sum(ownership[i] for i in item[1]) / max(1, len(item[1])),
+            -item[0],
+            item[1],
+        ),
+    )
+    low_own = by_own[: cfg.utility_candidates]
+    by_spread = sorted(
+        beam,
+        key=lambda item: (
+            -(sum(spreads[i] for i in item[1]) / max(1, len(item[1]))),
+            -item[0],
+            item[1],
+        ),
+    )
+    high_spread = by_spread[: cfg.utility_candidates]
+    seen_ids: set[tuple[int, ...]] = set()
+    shortlist: list[tuple[float, tuple[int, ...]]] = []
+    for item in top_expected + low_own + high_spread:
+        if item[1] in seen_ids:
+            continue
+        seen_ids.add(item[1])
+        shortlist.append(item)
+    ranked: list[tuple[float, float, tuple[int, ...], float, float]] = []
+    for expected_score, ids in shortlist:
+        p90, wins = evaluate(ids)
+        mean_own = sum(ownership[i] for i in ids) / max(1, len(ids))
+        utility = contest_utility(
+            expected_score,
+            p90,
+            wins,
+            upside_weight=float(cfg.upside_weight),
+            field_weight=float(cfg.field_weight),
+            mean_ownership=mean_own,
+        )
+        ranked.append((utility, expected_score, ids, p90, wins))
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    _utility, expected, ids, p90, wins = ranked[0]
     return Recommendation(
         picks=tuple(
             Pick(
@@ -512,7 +637,7 @@ def optimize(
             "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
             "game_correlation_is_configured_sensitivity_not_fitted",
             "field_win_rate_against_simulated_opponent_not_payout_probability",
-            "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
-            "simulation_metrics_are_diagnostics_and_do_not_reassign_the_frozen_lineup",
+            "total_value_report_is_expected_sum_of_committed_slot_and_player_multipliers",
+            "selection_maximizes_contest_utility_E_upside_p90_field_beat_minus_ownership",
         ),
     )
