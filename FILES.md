@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 913 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 911 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -260,8 +260,6 @@ Generated from `git ls-files`. 913 tracked files. Regenerate with `scripts/gener
 
 ## nfl-oracle/src/nfl_oracle/ingest/
 - nfl-oracle/src/nfl_oracle/ingest/__init__.py -- NFL Real Sports ingest surfaces (Corpus G first).
-- nfl-oracle/src/nfl_oracle/ingest/backfill.py -- Resumable season-by-season Corpus G backfill with coverage tracking.
-- nfl-oracle/src/nfl_oracle/ingest/backfill.py -- Resumable season-by-season Corpus G backfill with coverage tracking.
 - nfl-oracle/src/nfl_oracle/ingest/backfill.py -- Resumable season-by-season Corpus G backfill with coverage tracking.
 - nfl-oracle/src/nfl_oracle/ingest/clocks.py -- Train/live information clocks for Corpus G provenance.
 - nfl-oracle/src/nfl_oracle/ingest/corpus_g.py -- Corpus G persistence for Real Sports NFL game payloads.
