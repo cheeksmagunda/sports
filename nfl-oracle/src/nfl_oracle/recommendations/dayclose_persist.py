@@ -88,14 +88,13 @@ def _labels_frame(day: date, contest_id: int, slate_results: dict[str, Any]) -> 
     return pl.from_dicts(rows, schema=schema)
 
 
-def _leaderboards_frame(
-    day: date, contest_id: int, slate_results: dict[str, Any]
-) -> pl.DataFrame:
+def _leaderboards_frame(day: date, contest_id: int, slate_results: dict[str, Any]) -> pl.DataFrame:
     rows: list[dict[str, Any]] = []
     for entry in slate_results.get("top_entries") or []:
         if not isinstance(entry, dict):
             continue
-        picks = entry.get("picks") if isinstance(entry.get("picks"), list) else []
+        raw_picks = entry.get("picks")
+        picks: list[Any] = raw_picks if isinstance(raw_picks, list) else []
         rows.append(
             {
                 "slate_date": day.isoformat(),
@@ -145,9 +144,7 @@ def persist_dayclose_parquet(
     root = race_dayclose_root(project_root, race_root=race_root)
     labels_path, leaderboards_path = day_parquet_paths(root, season=season, day=day)
     _atomic_write_parquet(labels_path, _labels_frame(day, contest_id, slate_results))
-    _atomic_write_parquet(
-        leaderboards_path, _leaderboards_frame(day, contest_id, slate_results)
-    )
+    _atomic_write_parquet(leaderboards_path, _leaderboards_frame(day, contest_id, slate_results))
     return {
         "labels": str(labels_path),
         "leaderboards": str(leaderboards_path),
@@ -244,9 +241,7 @@ def build_race_corpus(
     summary: dict[str, dict[str, int]] = {}
     for season in seasons:
         labels = _load_season_labels(root, season)
-        leaderboards = load_dayclose_top_entries(
-            project_root, season=season, race_root=race_root
-        )
+        leaderboards = load_dayclose_top_entries(project_root, season=season, race_root=race_root)
         if labels.is_empty() and leaderboards.is_empty():
             continue
         if not leaderboards.is_empty():
@@ -260,4 +255,3 @@ def build_race_corpus(
             "leaderboards": leaderboards.height,
         }
     return summary
-
