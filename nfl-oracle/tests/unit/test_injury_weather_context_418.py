@@ -158,8 +158,10 @@ def test_weather_magnitude_moves_conditional_mean_when_coef_nonzero() -> None:
     cold = {1: ContextAdjustment(clock=clock, features={"weather_temp_f": 32.0})}
     warm = {1: ContextAdjustment(clock=clock, features={"weather_temp_f": 85.0})}
     slate = _slate_for_player(injury_status="Active", decision=decision)
-    cold_mean = predict(slate, model, history, decision_at=decision, context=cold)[0].conditional_mean
-    warm_mean = predict(slate, model, history, decision_at=decision, context=warm)[0].conditional_mean
+    cold_proj = predict(slate, model, history, decision_at=decision, context=cold)[0]
+    warm_proj = predict(slate, model, history, decision_at=decision, context=warm)[0]
+    cold_mean = cold_proj.conditional_mean
+    warm_mean = warm_proj.conditional_mean
     assert warm_mean > cold_mean
 
 

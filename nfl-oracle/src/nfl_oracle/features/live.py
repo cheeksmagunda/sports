@@ -130,4 +130,6 @@ def canonical_live_context_feature_names() -> tuple[str, ...]:
     """
 
     injury_keys = tuple(f"injury_{name}" for name in INJURY_CATEGORIES)
-    return injury_keys + ("injury_status_available",) + WEATHER_FEATURE_NAMES + ("weather_available",)
+    return (
+        injury_keys + ("injury_status_available",) + WEATHER_FEATURE_NAMES + ("weather_available",)
+    )
