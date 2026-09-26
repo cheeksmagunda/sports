@@ -352,15 +352,20 @@ def optimize(
     requested_games = cfg.min_distinct_games
 
     def search(teams: int, games: int) -> list[tuple[float, tuple[int, ...]]]:
-        exact = _exact_search(
-            eligible,
-            candidates,
-            scores,
-            teams_required=teams,
-            games_required=games,
-        )
-        if exact:
-            return exact
+        # MILP returns a single expected-score optimum. When field/upside knobs
+        # are live we need a shortlist to re-rank by contest utility, so fall
+        # through to beam search instead of accepting the lone MILP lineup.
+        knobs_live = cfg.field_weight > 1e-12 or cfg.upside_weight > 1e-12
+        if not knobs_live:
+            exact = _exact_search(
+                eligible,
+                candidates,
+                scores,
+                teams_required=teams,
+                games_required=games,
+            )
+            if exact:
+                return exact
         beam: list[tuple[float, tuple[int, ...]]] = [(0, ())]
         for slot in range(5):
             expanded = []
@@ -464,10 +469,30 @@ def optimize(
         )
         return p90, wins
 
-    # Total Value is the sole production objective. Simulations remain
-    # descriptive diagnostics and never select a different lineup.
-    chosen = (beam[0][0], beam[0][1], *evaluate(beam[0][1]))
-    expected, ids, p90, wins = chosen
+    def contest_utility(expected: float, p90: float, field_win_rate: float) -> float:
+        """Lineup selection score for total draft value.
+
+        ``U = E + upside_weight * (p90 - E) + field_weight * field_win_rate * max(|E|, 1)``
+
+        Beam/MILP propose by expected committed slot score; this utility
+        re-ranks complete proposals so the knobs are live, not silent.
+        """
+
+        scale = max(abs(expected), 1.0)
+        return (
+            expected
+            + cfg.upside_weight * (p90 - expected)
+            + cfg.field_weight * field_win_rate * scale
+        )
+
+    # Re-rank every feasible beam lineup when contest-utility weights are live.
+    shortlist = beam if (cfg.upside_weight > 0 or cfg.field_weight > 0) else beam[:1]
+    ranked: list[tuple[float, float, tuple[int, ...], float, float]] = []
+    for expected, ids in shortlist:
+        p90, wins = evaluate(ids)
+        ranked.append((contest_utility(expected, p90, wins), expected, ids, p90, wins))
+    ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    _utility, expected, ids, p90, wins = ranked[0]
     return Recommendation(
         picks=tuple(
             Pick(
@@ -513,6 +538,6 @@ def optimize(
             "game_correlation_is_configured_sensitivity_not_fitted",
             "field_win_rate_against_simulated_opponent_not_payout_probability",
             "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
-            "simulation_metrics_are_diagnostics_and_do_not_reassign_the_frozen_lineup",
+            "lineup_selected_by_contest_utility_over_expected_score_beam",
         ),
     )
