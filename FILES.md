@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 891 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 894 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 891 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -1039,6 +1041,7 @@ Generated from `git ls-files`. 891 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_determinism_compare.py -- Content-based artifact comparison for the determinism gate.
 - wnba-oracle/tests/unit/test_dossier.py -- Unit and integration tests for dossier entry and gap computation.
 - wnba-oracle/tests/unit/test_dossier_api.py -- #35 phase 3 / #39: read-only dossier API surface.
+- wnba-oracle/tests/unit/test_eb_residual_targets.py -- EB residual target wiring (#350).
 - wnba-oracle/tests/unit/test_feature_payload.py
 - wnba-oracle/tests/unit/test_features_cohort.py -- Spec / cohort assignment tests.
 - wnba-oracle/tests/unit/test_field_measured_ownership.py -- Field-ownership model: measured-drafts path (D86).
