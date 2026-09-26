@@ -21,9 +21,11 @@ on:
     - cron: "0 14 * * 1"
   workflow_dispatch:
 
+# The run itself is the signal (issue #442): it lists the changed
+# sync-critical files in its job summary and a notice annotation. It never
+# opens or updates an issue, so it needs no issues permission.
 permissions:
   contents: read
-  issues: write
 
 jobs:
   report:
@@ -37,34 +39,62 @@ jobs:
         id: changes
         run: |
           set -eu
+          paths=(AGENTS.md README.md ENTRY_POINTS.md OVERVIEW.md FILES.md Makefile pyproject.toml .devcontainer .github/workflows ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md')
           if [ "${{ github.event_name }}" = "push" ]; then
-            summary=$(git log "${{ github.event.before }}..${{ github.sha }}" --format='%h %ad %s' --date=short -- AGENTS.md README.md ENTRY_POINTS.md OVERVIEW.md FILES.md Makefile pyproject.toml .devcontainer .github/workflows ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+            summary=$(git log "${{ github.event.before }}..${{ github.sha }}" --format='%h %ad %s' --date=short -- "${paths[@]}" || true)
+            files=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- "${paths[@]}" || true)
           else
             since=$(date -u -d '8 days ago' +%Y-%m-%dT%H:%M:%SZ)
-            summary=$(git log --since="$since" --format='%h %ad %s' --date=short -- AGENTS.md README.md ENTRY_POINTS.md OVERVIEW.md FILES.md Makefile pyproject.toml .devcontainer .github/workflows ':(glob)**/AGENTS.md' ':(glob)**/README.md' ':(glob)**/STATUS.md' || true)
+            summary=$(git log --since="$since" --format='%h %ad %s' --date=short -- "${paths[@]}" || true)
+            files=$(git log --since="$since" --name-only --format= -- "${paths[@]}" | sort -u || true)
           fi
           if [ -z "$summary" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
+            delim="CONTEXT_FRESHNESS_$(date +%s%N)"
             {
-              echo 'summary<<EOF'
+              echo "changed=true"
+              echo "summary<<${delim}"
               echo "$summary"
-              echo 'EOF'
+              echo "${delim}"
+              echo "files<<${delim}"
+              echo "$files"
+              echo "${delim}"
             } >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open or update tracking issue
-        if: steps.changes.outputs.changed == 'true'
+      - name: Report changed sync-critical files in the job summary
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGED: ${{ steps.changes.outputs.changed }}
           SUMMARY: ${{ steps.changes.outputs.summary }}
+          FILES: ${{ steps.changes.outputs.files }}
         run: |
           set -eu
-          existing=$(gh issue list --state open --search "Context freshness in:title" --json number --jq '.[0].number' || true)
-          body=$(printf 'Sync-critical files changed on `main`:\n\n```\n%s\n```\n\nPer the Context synchronization section of `AGENTS.md`:\n\n1. Refresh the changed files in every configured Claude, Codex, Copilot, and Grok static project or chat snapshot.\n2. Confirm each project instruction prompt still matches the live `AGENTS.md`.\n3. Close this issue when snapshots are refreshed.\n' "$SUMMARY")
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "$body"
-          else
-            gh issue create --title "Context freshness: refresh AI project snapshots" --body "$body"
+          {
+            echo "## Context freshness"
+            echo
+            if [ "$CHANGED" != "true" ]; then
+              echo "No sync-critical files changed in this window; static snapshots need no refresh."
+            else
+              echo 'Sync-critical files changed on `main`:'
+              echo
+              echo '```'
+              echo "$FILES"
+              echo '```'
+              echo
+              echo "Commits:"
+              echo
+              echo '```'
+              echo "$SUMMARY"
+              echo '```'
+              echo
+              echo 'Per the Context synchronization section of `AGENTS.md`:'
+              echo
+              echo "1. Refresh the changed files in every configured Claude, Codex, Copilot, and Grok static project or chat snapshot."
+              echo '2. Confirm each project instruction prompt still matches the live `AGENTS.md`.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CHANGED" = "true" ]; then
+            count=$(printf '%s\n' "$FILES" | grep -c . || true)
+            echo "::notice title=Context freshness::${count} sync-critical file(s) changed; refresh the static AI project snapshots listed in this run's job summary."
           fi

@@ -23,10 +23,6 @@ on:
 permissions:
   contents: read
 
-env:
-  RESULTS_LABEL: nfl-ops-results
-  GUARD_LABEL: nfl-ops-guard
-
 concurrency:
   group: nfl-dayclose
   cancel-in-progress: false
@@ -35,7 +31,6 @@ jobs:
   dayclose:
     permissions:
       contents: read
-      issues: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -149,9 +144,6 @@ jobs:
           && steps.gate.outputs.skip_for_weekclose != 'true'
           && (steps.gate.outputs.has_slate != 'false' || github.event_name == 'workflow_dispatch')
         with:
-          results_label: ${{ env.RESULTS_LABEL }}
           results_title: "NFL results ledger"
-          guard_label: ${{ env.GUARD_LABEL }}
-          guard_title: "NFL production operations"
           report_path: ${{ runner.temp }}/dayclose-report.md
           should_escalate: ${{ steps.dayclose.outcome != 'success' && 'true' || 'false' }}

@@ -328,8 +328,8 @@ kickoff windows (UTC crons in the workflow), including Thanksgiving,
 Saturday 2026-12-19, and Christmas afternoon/evening windows plus the UTC
 hour after late kickoffs, combines the
 public nflverse schedule's kickoff time with `RecommendationStore` freeze/run
-state, and opens or updates one `nfl-ops-guard` issue if no freeze exists by
-the post-T-40 grace deadline. It needs only `NFL_DATABASE_URL` and
+state, and fails its run, with the report in that run's job summary, if no
+freeze exists by the post-T-40 grace deadline. It needs only `NFL_DATABASE_URL` and
 `NFL_PG_SSL_ROOT_CERT`; no Real Sports session is required.
 
 The repeatable local image check is `make -C nfl-oracle

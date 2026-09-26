@@ -259,6 +259,15 @@ agents attached to this repository).
 - Current deployments, active source commits, service identifiers, schedules,
   artifact identifiers, incidents, and production risks belong in the child
   `STATUS.md`. Development progress and history belong in GitHub Issues and PRs.
+- A GitHub issue is a work item that carries a solution: the PR that resolves
+  it closes it. Actions runs and jobs are not issues. No workflow, composite
+  action, or script creates, comments on, labels, reopens, or closes an issue
+  to report job, probe, watchdog, punch-list, or context-freshness status. A
+  scheduled job's signal is its own Actions run, failed when escalation is
+  warranted, with the report in that run's job summary, plus the existing
+  heartbeat where one is configured. `scripts/tests/test_no_status_issues.py`
+  enforces this; only `claude.yml`, which answers `@claude` comments, holds
+  `issues: write` (issue #442).
 - A sport application's multi-milestone roadmap is documentation, not an
   issue: the plan lives in that application's `README.md` (Roadmap section)
   and milestone progress in its `STATUS.md`. Each milestone's scoped
@@ -339,8 +348,9 @@ Sync-critical files: every `AGENTS.md` and `README.md`, every application
 `.devcontainer/`, and `.github/workflows/`. When one of these changes on
 `main`, every agent must re-read it before related work, and the operator
 refreshes the uploaded
-snapshots. A scheduled workflow opens a tracking issue when these files change
-so re-uploads are not forgotten.
+snapshots. The `Context freshness` workflow lists the changed files in its
+run's job summary and a notice annotation on every such push, plus a weekly
+scheduled recap, so re-uploads are not forgotten.
 
 ### Repository structure for all entry points
 

@@ -119,8 +119,10 @@ fresh source deploy through `wnba-oracle/Dockerfile` (`railway redeploy
 --from-source` or `serviceInstanceDeployV2`), not an image-reuse redeploy of a
 prior Railpack failure (issue #279).
 
-Scheduled watchdog, pre-freeze, and day-close verification steps retain a safe
-report and escalate before failing their workflow. Corpus backup keeps database
+Scheduled watchdog, pre-freeze, and day-close verification steps always write a
+safe report to their run's job summary and fail the run when escalation is
+warranted; `watchdog-monitor` also forwards the result to its heartbeat when
+one is configured. Corpus backup keeps database
 credentials in its read-only export job and transfers a hash-verified artifact
 to a separate repository-writing job, where the hashes are verified again.
 Browser requests to the API and public score feed are no-store and time-bounded,

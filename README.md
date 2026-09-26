@@ -216,9 +216,11 @@ nfl-dayclose.yml` and `nfl-corpus-backup.yml`). Both scheduled workflows gate
 on a cheap, session-free public-schedule check
 (`nfl-oracle/scripts/nfl_dayclose_gate.py`) for whether the sweep's own
 catch-up window contains any slate, so an off-season day costs nothing; a
-manual `workflow_dispatch` run always bypasses the gate. The shared
-ledger-post/escalate mechanics live in the
-`.github/actions/dayclose-ledger` composite action.
+manual `workflow_dispatch` run always bypasses the gate. The shared reporting
+mechanics (post the report to the run's job summary, fail the run when
+escalation is warranted) live in the `.github/actions/dayclose-ledger`
+composite action; the issue rule it follows is in `AGENTS.md`'s
+Documentation and state.
 
 `wnba-oracle`'s existing day-close job (a Railway cron, verified from GitHub
 Actions by `wnba-dayclose-verify.yml`) predates this pattern and is
