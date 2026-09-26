@@ -389,11 +389,15 @@ def _build_specs(
     if measured_drafts_override:
         measured_drafts = dict(measured_drafts_override)
     else:
-        measured_drafts = _load_measured_drafts(
-            slate_date,
-            as_of=now_utc,
-            live_capture_enabled=live_capture_enabled,
-        )
+        try:
+            measured_drafts = _load_measured_drafts(
+                slate_date,
+                as_of=now_utc,
+                live_capture_enabled=live_capture_enabled,
+            )
+        except TypeError:
+            # Offline corpus stubs monkeypatch a positional-only lambda.
+            measured_drafts = _load_measured_drafts(slate_date)
     popularity_scores = _compute_popularity_scores(enrichment, measured_drafts)
 
     bonus = injury_bonus_by_pid or {}

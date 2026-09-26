@@ -928,9 +928,9 @@ def _precompute_slates(
     from wnba_oracle.eval.point_in_time import causal_drafts_for_slate
 
     if leak_same_slate_ownership:
-        _job2._load_measured_drafts = lambda sd: measured.get(str(sd), {})
+        _job2._load_measured_drafts = lambda sd, **_k: measured.get(str(sd), {})
     else:
-        _job2._load_measured_drafts = lambda sd: causal_drafts_for_slate(str(sd), measured)
+        _job2._load_measured_drafts = lambda sd, **_k: causal_drafts_for_slate(str(sd), measured)
     identity_by_slate = index_game_identity(identity) if identity is not None else {}
 
     # #53: build head_features per slate from the gamelog corpus so
