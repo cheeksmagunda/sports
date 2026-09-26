@@ -27,6 +27,7 @@ Outputs a per-slate table + aggregate stats.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -35,7 +36,11 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+sys.path.insert(0, str(_SCRIPTS.parent / "src"))
+
+from seasons_common import add_seasons_argument, in_seasons, parse_seasons  # noqa: E402
 
 # Match production env exactly
 os.environ.setdefault(
@@ -47,10 +52,10 @@ os.environ.setdefault("CONTRARIAN_ENABLED", "true")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
 os.environ.setdefault("PAYOUT_REGIME", "top_20")
 
-from wnba_oracle.eval.contest_score import committed_lineup_score
-from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup
-from wnba_oracle.picker.payout import default_curve_for_regime
-from wnba_oracle.scheduler.job2 import _build_specs
+from wnba_oracle.eval.contest_score import committed_lineup_score  # noqa: E402
+from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup  # noqa: E402
+from wnba_oracle.picker.payout import default_curve_for_regime  # noqa: E402
+from wnba_oracle.scheduler.job2 import _build_specs  # noqa: E402
 
 
 def score_lineup_against_truth(
@@ -70,13 +75,20 @@ def score_lineup_against_truth(
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_seasons_argument(parser)
+    args = parser.parse_args(argv)
+    seasons = parse_seasons(args.seasons)
+
     from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
 
     sl = read_slate_labels()
     lb = read_leaderboards()
-    test_slates = sorted([d for d in sl["slate_date"].unique().to_list() if d.startswith("2026-")])
-    print(f"Backtesting on {len(test_slates)} 2026 slates")
+    test_slates = sorted(
+        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons)
+    )
+    print(f"Backtesting on {len(test_slates)} slates (seasons: {','.join(seasons)})")
     print(f"Using artifact SHA: {os.environ['WNBA_ORACLE_MODEL_ARTIFACT_SHA'][:16]}...")
     print()
 
@@ -180,4 +192,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

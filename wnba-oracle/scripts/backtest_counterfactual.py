@@ -26,6 +26,7 @@ Run: uv run python scripts/backtest_counterfactual.py
 
 from __future__ import annotations
 
+import argparse
 import itertools
 import json
 import os
@@ -36,7 +37,11 @@ import numpy as np
 import polars as pl
 from scipy.stats import spearmanr
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+sys.path.insert(0, str(_SCRIPTS.parent / "src"))
+
+from seasons_common import add_seasons_argument, in_seasons, parse_seasons  # noqa: E402
 
 os.environ.setdefault(
     "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
@@ -158,12 +163,17 @@ def agg(rows, label):
 _HISTORY = _load_player_history()
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_seasons_argument(parser)
+    args = parser.parse_args(argv)
+    seasons = parse_seasons(args.seasons)
+
     from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
 
     sl = read_slate_labels()
     lb = read_leaderboards()
-    test = sorted(d for d in sl["slate_date"].unique().to_list() if d.startswith("2026-"))
+    test = sorted(d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons))
 
     slates_data = []
     for sd in test:
@@ -256,4 +266,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
