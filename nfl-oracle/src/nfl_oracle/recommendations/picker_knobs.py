@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping, Sequence
+import math
 from statistics import mean, pstdev
 
 from pydantic import Field, field_validator
