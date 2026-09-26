@@ -32,6 +32,7 @@ fact and no live freeze has ever seen; see AGENTS.md / #38).
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -40,7 +41,11 @@ import pandas as pd
 import polars as pl
 from scipy.stats import spearmanr
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+sys.path.insert(0, str(_SCRIPTS.parent / "src"))
+
+from seasons_common import add_seasons_argument, in_seasons, parse_seasons
 
 from wnba_oracle.db.reads import read_label_corpus, read_leaderboards, read_slate_labels
 from wnba_oracle.eval.contest_score import committed_lineup_score
@@ -246,25 +251,35 @@ def run_placement(
         print(f"  {name:28s} {t20:>4d}/{n} {t5:>5d} {t1:>5d} {gap:>9.2f} {ov:>6.2f}/5")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Walk-forward backtest: honest prediction-quality measurement."
+    )
+    add_seasons_argument(parser)
+    parser.add_argument("--placement", action="store_true")
+    parser.add_argument("--leak-same-slate-ownership", action="store_true")
+    args = parser.parse_args(argv)
+    seasons = parse_seasons(args.seasons)
+
     corpus = read_label_corpus().to_pandas()
     lb = read_leaderboards()
-    slates = sorted(d for d in corpus["slate_date"].unique() if str(d).startswith("2026-"))
+    slates = sorted(d for d in corpus["slate_date"].unique() if in_seasons(str(d), seasons))
     print(
-        f"Walk-forward over {len(slates)} 2026 slates "
-        f"(history grows from {corpus['slate_date'].min()})\n"
+        f"Walk-forward over {len(slates)} slates "
+        f"(seasons: {','.join(seasons)}, "
+        f"history grows from {corpus['slate_date'].min()})\n"
     )
     predictor_quality(corpus, slates)
 
-    if "--placement" in sys.argv:
+    if args.placement:
         run_placement(
             corpus,
             lb,
             slates,
-            leak_same_slate_ownership="--leak-same-slate-ownership" in sys.argv,
+            leak_same_slate_ownership=args.leak_same_slate_ownership,
         )
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

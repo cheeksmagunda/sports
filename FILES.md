@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 890 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -57,6 +57,7 @@ Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/gener
 - .github/workflows/model-research-benchmark.yml -- GitHub Actions workflow
 - .github/workflows/nfl-corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/nfl-dayclose.yml -- GitHub Actions workflow
+- .github/workflows/nfl-race.yml -- GitHub Actions workflow
 - .github/workflows/nfl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
 - .github/workflows/secret-audit.yml -- GitHub Actions workflow
@@ -65,6 +66,7 @@ Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/gener
 - .github/workflows/wnba-dayclose-verify.yml -- GitHub Actions workflow
 - .github/workflows/wnba-model-train.yml -- GitHub Actions workflow
 - .github/workflows/wnba-pre-freeze-guard.yml -- GitHub Actions workflow
+- .github/workflows/wnba-race.yml -- GitHub Actions workflow
 
 ## drive/
 - drive/2026-08-25-wnba-contextual-stacking.md -- Contextual Stacking and Lineup Balance
@@ -774,6 +776,7 @@ Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/scripts/backtest_walkforward.py -- Walk-forward backtest: HONEST prediction-quality measurement (no leakage).
 - wnba-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable WNBA corpus.
 - wnba-oracle/scripts/build_model_research_benchmark.py -- Model research benchmark: walk-forward variant sweep over stored slates.
+- wnba-oracle/scripts/build_race_corpus.py -- Build per-season race corpora from the read-only backup Postgres.
 - wnba-oracle/scripts/calibrate_knobs.py -- Calibrate D87-D90 optimizer knobs against 2026 historical slates.
 - wnba-oracle/scripts/calibrate_starter_and_boost.py -- Calibrate STARTER_UNKNOWN_FADE and PICKER_BOOST_TAIL_LIFT from the corpus.
 - wnba-oracle/scripts/check_migrations.py -- Exercise empty and existing-schema Alembic upgrades on a local PostgreSQL server.
@@ -801,6 +804,7 @@ Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/scripts/runtime_role_probe.py -- Validate that a built runtime image enforces its configured cron role.
 - wnba-oracle/scripts/rwgql.py -- Call Railway GraphQL with ambient auth and optional variables on stdin.
 - wnba-oracle/scripts/rwgql.sh -- Shell script
+- wnba-oracle/scripts/seasons_common.py -- Shared --seasons parsing for WNBA research and race-corpus scripts.
 - wnba-oracle/scripts/seed_storage_state.py -- Materialize the Playwright storage_state.json from a base64+gzip env var.
 - wnba-oracle/scripts/snapshot_corpus.py -- Materialize a frozen local corpus snapshot for offline model work.
 - wnba-oracle/scripts/snapshot_training_inputs.py -- Snapshot one immutable pair of live training inputs for reproducibility checks.
@@ -1104,6 +1108,7 @@ Generated from `git ls-files`. 885 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
 - wnba-oracle/tests/unit/test_sampling_offset.py -- score_offset (K) calibration in the copula sampler (D52).
 - wnba-oracle/tests/unit/test_schemas.py -- Pandera schema sanity checks. Validate that good frames pass and obvious
+- wnba-oracle/tests/unit/test_seasons_and_race_corpus.py -- Unit tests for seasons_common and build_race_corpus (offline, no DB).
 - wnba-oracle/tests/unit/test_secret_contract.py
 - wnba-oracle/tests/unit/test_serving_schema.py -- Serve-time enrichment schema validator (features/serving_schema.py).
 - wnba-oracle/tests/unit/test_settings_pause.py -- picks_paused_on / picks_resume_date: the operator-directed pause window.

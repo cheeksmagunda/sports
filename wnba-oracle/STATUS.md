@@ -1,9 +1,22 @@
 # Status
 
-Last verified: 2026-09-25T21:55:00Z
+Last verified: 2026-09-26T03:50:00Z
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.
+
+## WNBA race corpus builder (#337 under #332)  -  2026-09-25
+
+- **Code:** `scripts/build_race_corpus.py` and `scripts/seasons_common.py`
+  (PR #337); offline unit tests in
+  `tests/unit/test_seasons_and_race_corpus.py`.
+- **Operator build:** run from the Codespace with read-only
+  `BACKUP_DATABASE_URL`, emit parquet under a temp dir, publish to the orphan
+  `backups` branch (CSV corpus backup pattern; dedicated race workflow
+  unverified until first dispatch).
+- **Research scripts:** walk-forward, pipeline, counterfactual, knob
+  calibration, and model-research benchmark accept `--seasons` (default
+  `2025,2026`) instead of a hard `2026-` slate filter.
 
 ## rotowire_empty + enrichment_stale (#319)  -  2026-09-25
 

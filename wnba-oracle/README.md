@@ -183,9 +183,30 @@ Use `scripts/analyze_stacking_decisions.py` for a read-only production summary.
 The report separates exact, censored, and unknown outcomes and does not infer a
 performance advantage from unresolved placements.
 
+## Race corpus (#337)
+
+`scripts/build_race_corpus.py` exports per-season parquet corpora for the
+portfolio backtest race (#332): full-pool `slate_labels` (realized scores
+included) and top-N `contest_leaderboards` rows with raw `user_id` preserved.
+Season selection uses the shared `--seasons` flag (see `scripts/seasons_common.py`;
+default `2025,2026`). Research scripts that previously hard-coded `2026-` slate
+filters now accept the same flag.
+
+Reads the read-only backup Postgres via `BACKUP_DATABASE_URL` when set
+(same secret as corpus backup / model-research prefetch), otherwise
+`DATABASE_PUBLIC_URL` or `DATABASE_URL` with verified TLS. Outputs
+`labels_<year>.parquet` and `leaderboards_<year>.parquet` under `--output-dir`
+for publication on the orphan `backups` branch.
+
+```sh
+BACKUP_DATABASE_URL=... uv run --frozen --package wnba-oracle python \
+    scripts/build_race_corpus.py --output-dir /tmp/race --seasons 2025,2026
+```
+
 ## Model research benchmark
 
-`scripts/build_model_research_benchmark.py` replays stored 2026 slates through
+`scripts/build_model_research_benchmark.py` replays stored slates (default
+`--seasons 2025,2026`) through
 the production optimizer under a deterministic variant grid: the compiled
 production policy (`EXPECTED_PROD_CONFIG` applied the same way
 `job2.build_model_policy` does, not a hand-maintained partial config), one
