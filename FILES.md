@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 909 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 910 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -425,6 +425,7 @@ Generated from `git ls-files`. 909 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
+- nfl-oracle/tests/unit/test_injury_weather_context_fit.py -- Force-include injury/weather live_ok context slots in fit/predict (#418).
 - nfl-oracle/tests/unit/test_label_depth.py -- Max-season label-kind depth across the catalog (issue #189).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
 - nfl-oracle/tests/unit/test_multi_contest_day.py -- Multi-contest day selection for the NFL worker and NFLReader.collect.

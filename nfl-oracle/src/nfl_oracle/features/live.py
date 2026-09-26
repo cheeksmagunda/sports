@@ -61,6 +61,18 @@ WEATHER_FEATURE_NAMES: Final[tuple[str, ...]] = (
 )
 
 
+def canonical_live_context_feature_names() -> tuple[str, ...]:
+    """Injury one-hots + weather keys always reserved in fit/predict (#418).
+
+    Sparse historical coverage must not drop these live_ok slots from
+    ``context_feature_names``, or live evidence cannot move ratings.
+    """
+
+    injury = tuple(f"injury_{name}" for name in INJURY_CATEGORIES) + ("injury_status_available",)
+    weather = WEATHER_FEATURE_NAMES + ("weather_available",)
+    return injury + weather
+
+
 def injury_category(value: str | None) -> str:
     """Coarse, probability-free availability category for a raw designation."""
 
