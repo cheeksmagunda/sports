@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from nfl_oracle.calendar.schedule import ScheduledGame, week_for_gameday
+
+EASTERN = ZoneInfo("America/New_York")
 
 
 @dataclass(frozen=True)
@@ -14,6 +17,34 @@ class SeasonWeek:
     season: int
     week: int | None
     note: str = ""
+
+
+def eastern_today(now: datetime | None = None) -> date:
+    """Calendar date in US/Eastern for the given instant (default: now)."""
+
+    current = now or datetime.now(UTC)
+    return current.astimezone(EASTERN).date()
+
+
+def default_schedule_season_max(now: datetime | None = None) -> int:
+    """Upper bound for offline schedule cache downloads."""
+
+    return season_label_for_date(eastern_today(now))
+
+
+def latest_two_seasons(rows: Iterable[Mapping[str, object]]) -> tuple[int, int]:
+    """Latest two distinct season labels present in a tabular dataset."""
+
+    seasons = sorted(
+        {
+            int(value)
+            for row in rows
+            if (value := row.get("season")) is not None and str(value).isdigit()
+        }
+    )
+    if len(seasons) < 2:
+        raise ValueError("fewer_than_two_seasons_in_dataset")
+    return seasons[-2], seasons[-1]
 
 
 def season_label_for_date(day: date) -> int:

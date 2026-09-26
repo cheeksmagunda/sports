@@ -75,8 +75,10 @@ FIRST_TRACKED_SEASON = 2002
 def tracked_seasons(now: datetime | None = None) -> tuple[int, ...]:
     """Seasons we track in the matrix even before game ids are discovered."""
 
-    current_year = (now or datetime.now(UTC)).year
-    return tuple(range(FIRST_TRACKED_SEASON, current_year + 1))
+    from nfl_oracle.calendar.season import default_schedule_season_max
+
+    upper = default_schedule_season_max(now)
+    return tuple(range(FIRST_TRACKED_SEASON, upper + 1))
 
 
 @dataclass

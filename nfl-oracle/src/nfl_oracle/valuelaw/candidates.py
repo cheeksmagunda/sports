@@ -26,13 +26,17 @@ from typing import Any
 import httpx
 from oracle_core.artifacts import atomic_write_json
 
+from nfl_oracle.calendar.season import eastern_today
 from nfl_oracle.common.paths import resolve_project_root
 from nfl_oracle.recommendations.provider import NFLReader, ObservationStore
 from nfl_oracle.recommendations.schema import Candidate, Record, Slate, utc
 
 LIVE_CONTEST_ID = 2141
-LIVE_DAY = date(2026, 9, 9)
 LIVE_GAME_ID = 19457
+
+
+def live_day_default(now: datetime | None = None) -> date:
+    return eastern_today(now)
 
 _ARTIFACT_STEM = re.compile(r"^slate_(?P<contest>[1-9][0-9]*)(?P<suffix>_live_[0-9TZ]+|_fresh)?$")
 
@@ -335,7 +339,7 @@ def live_artifact_name(contest_id: int, captured_at: datetime) -> str:
 async def collect_live_slate(
     *,
     contest_id: int = LIVE_CONTEST_ID,
-    day: date = LIVE_DAY,
+    day: date | None = None,
     root: Path | None = None,
     timeout_s: float = 25.0,
 ) -> Slate:
@@ -343,17 +347,18 @@ async def collect_live_slate(
 
     from nfl_oracle.ingest.realsports import headers_or_capture
 
+    slate_day = day or live_day_default()
     base = root or project_root()
     headers = await headers_or_capture()
     async with httpx.AsyncClient(timeout=timeout_s) as client:
         reader = NFLReader(client, headers, ObservationStore(observations_dir(base)))
-        return await reader.collect(day, contest_id=contest_id)
+        return await reader.collect(slate_day, contest_id=contest_id)
 
 
 async def refresh_live_slate(
     *,
     contest_id: int = LIVE_CONTEST_ID,
-    day: date = LIVE_DAY,
+    day: date | None = None,
     root: Path | None = None,
     write: bool = True,
 ) -> tuple[Slate, Path | None]:
@@ -370,7 +375,7 @@ async def refresh_live_slate(
 def refresh_live_slate_sync(
     *,
     contest_id: int = LIVE_CONTEST_ID,
-    day: date = LIVE_DAY,
+    day: date | None = None,
     root: Path | None = None,
     write: bool = True,
 ) -> tuple[Slate, Path | None]:
