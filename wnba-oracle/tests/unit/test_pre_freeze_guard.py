@@ -7,6 +7,8 @@ import pathlib
 import sys
 from types import ModuleType
 
+import pytest
+
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parents[2] / "scripts"
 
 
@@ -85,3 +87,111 @@ def test_durable_job1_record_rejects_early_run() -> None:
 
     assert check.status == "alert"
     assert "outside the requested window" in check.summary
+
+
+def _job_runs_ok() -> dict[str, object]:
+    return _payload()
+
+
+def _watchdog_body(
+    *,
+    events: list[dict[str, str]] | None = None,
+    history: list[dict[str, str]] | None = None,
+) -> dict[str, object]:
+    return {
+        "slate_date": "2026-08-20",
+        "events": events or [],
+        "history": history or [],
+    }
+
+
+def _install_api_mocks(guard: ModuleType, monkeypatch: pytest.MonkeyPatch, *, watchdog: dict) -> None:
+    slate_date = "2026-08-20"
+
+    def get_json(url: str):
+        if url.endswith("/health"):
+            return 200, {"status": "ok"}
+        if url.endswith(f"/watchdog/{slate_date}?severity_min=warn"):
+            return 200, watchdog
+        if url.endswith("/watchdog/jobs/today"):
+            return 200, _job_runs_ok()
+        if url.endswith(f"/slate/{slate_date}"):
+            return 404, {}
+        raise AssertionError(f"unexpected url: {url}")
+
+    monkeypatch.setattr(guard, "get_json", get_json)
+
+
+def _pipeline_watchdog_check(guard: ModuleType, monkeypatch: pytest.MonkeyPatch, *, watchdog: dict):
+    _install_api_mocks(guard, monkeypatch, watchdog=watchdog)
+    checks, _health_failed = guard._api_checks(
+        "https://api.example",
+        "2026-08-20",
+        window=_window(guard),
+    )
+    return next(check for check in checks if check.name == "Pipeline watchdog")
+
+
+@pytest.mark.parametrize(
+    "trigger",
+    ["model_artifact_unset", "model_artifact_unresolved"],
+)
+def test_pipeline_watchdog_alerts_on_model_artifact_hard_trigger_in_history_only(
+    monkeypatch: pytest.MonkeyPatch,
+    trigger: str,
+) -> None:
+    """Live /watchdog omits model_artifact_* (#331); cron history must still fail closed."""
+    guard = _load_guard()
+
+    check = _pipeline_watchdog_check(
+        guard,
+        monkeypatch,
+        watchdog=_watchdog_body(history=[{"trigger": trigger}]),
+    )
+
+    assert check.status == "alert"
+    assert trigger in check.summary
+
+
+def test_pipeline_watchdog_unions_live_events_and_cron_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    guard = _load_guard()
+
+    check = _pipeline_watchdog_check(
+        guard,
+        monkeypatch,
+        watchdog=_watchdog_body(
+            events=[{"trigger": "config_drift"}],
+            history=[{"trigger": "model_artifact_unset"}],
+        ),
+    )
+
+    assert check.status == "alert"
+    assert "model_artifact_unset" in check.summary
+    assert "config_drift" not in check.summary
+
+
+def test_pipeline_watchdog_warns_on_advisory_trigger_in_history_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    guard = _load_guard()
+
+    check = _pipeline_watchdog_check(
+        guard,
+        monkeypatch,
+        watchdog=_watchdog_body(history=[{"trigger": "config_drift"}]),
+    )
+
+    assert check.status == "warn"
+    assert "config_drift" in check.summary
+
+
+def test_pipeline_watchdog_ok_when_live_and_history_are_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    guard = _load_guard()
+
+    check = _pipeline_watchdog_check(guard, monkeypatch, watchdog=_watchdog_body())
+
+    assert check.status == "ok"
