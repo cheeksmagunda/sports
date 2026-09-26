@@ -110,22 +110,48 @@ def _load_prior_real_scores(slate_date: str) -> dict[int, list[float]]:
     return out
 
 
-def _load_measured_drafts(slate_date: str) -> dict[int, int]:
-    """Pull the most recent draftStats.drafts counts from slate_labels for
-    the slate. Empty if Job 2 is firing before any contest finalized
-    (typical case pregame). Job 2 then falls back to the popularity
-    estimator."""
+def _load_measured_drafts(
+    slate_date: str,
+    *,
+    as_of: dt.datetime | None = None,
+    live_capture_enabled: bool | None = None,
+) -> dict[int, int]:
+    """Pull draftStats.drafts counts from slate_labels for the slate.
+
+    Freeze path (#434): pass ``live_capture_enabled`` from
+    ``LIVE_OWNERSHIP_CAPTURE_ENABLED``. When False, return {} so the
+    optimizer stays on the estimator (safe default; no same-slate
+    post-lock dayclose leak into freezes). When True, return rows with
+    ``ingested_at <= as_of`` (typically freeze ``now_utc``) so live
+    capture near lock can move field ownership while same-slate
+    post-lock dayclose rows ingested after ``as_of`` stay invisible.
+
+    Callers that omit ``live_capture_enabled`` keep the legacy unfiltered
+    same-slate read (offline benchmarks / monkeypatches).
+    """
+    if live_capture_enabled is False:
+        return {}
     try:
         eng = get_engine()
     except RuntimeError:
         return {}
-    q = text(
-        "SELECT platform_player_id, MAX(drafts) AS drafts "
-        "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
-        "GROUP BY platform_player_id"
-    )
+    if live_capture_enabled is True and as_of is not None:
+        q = text(
+            "SELECT platform_player_id, MAX(drafts) AS drafts "
+            "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
+            "AND ingested_at <= :as_of "
+            "GROUP BY platform_player_id"
+        )
+        params: dict[str, object] = {"sd": slate_date, "as_of": as_of}
+    else:
+        q = text(
+            "SELECT platform_player_id, MAX(drafts) AS drafts "
+            "FROM slate_labels WHERE slate_date = :sd AND drafts IS NOT NULL "
+            "GROUP BY platform_player_id"
+        )
+        params = {"sd": slate_date}
     with eng.connect() as conn:
-        rows = conn.execute(q, {"sd": slate_date}).fetchall()
+        rows = conn.execute(q, params).fetchall()
     out: dict[int, int] = {}
     for r in rows:
         m = r._mapping

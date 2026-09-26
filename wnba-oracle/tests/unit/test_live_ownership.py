@@ -45,7 +45,10 @@ def test_attempts_after_lock() -> None:
 
 def test_safe_wrapper_is_noop_outside_window() -> None:
     with patch.object(lo, "_discover_and_capture") as discover:
-        lo.capture_live_ownership_safe(now_utc=LOCK - dt.timedelta(hours=2), lock_time=LOCK)
+        assert (
+            lo.capture_live_ownership_safe(now_utc=LOCK - dt.timedelta(hours=2), lock_time=LOCK)
+            == {}
+        )
     discover.assert_not_called()
 
 
@@ -54,7 +57,7 @@ def test_safe_wrapper_never_raises_on_exception() -> None:
         raise RuntimeError("network exploded")
 
     with patch.object(lo, "_discover_and_capture", side_effect=_boom):
-        lo.capture_live_ownership_safe(now_utc=LOCK, lock_time=LOCK)  # must not raise
+        assert lo.capture_live_ownership_safe(now_utc=LOCK, lock_time=LOCK) == {}
 
 
 def test_safe_wrapper_never_raises_on_timeout() -> None:
@@ -68,18 +71,24 @@ def test_safe_wrapper_never_raises_on_timeout() -> None:
         patch.object(lo, "_discover_and_capture", side_effect=_hang),
         patch.object(lo, "CAPTURE_TIMEOUT_SECONDS", 0.01),
     ):
-        lo.capture_live_ownership_safe(now_utc=LOCK, lock_time=LOCK)  # must not raise
+        assert lo.capture_live_ownership_safe(now_utc=LOCK, lock_time=LOCK) == {}
 
 
 def test_safe_wrapper_logs_successful_result() -> None:
     async def _ok() -> dict:
-        return {"status": "captured", "contest_id": 2117, "n_players": 30}
+        return {
+            "status": "captured",
+            "contest_id": 2117,
+            "n_players": 30,
+            "drafts": {101: 40},
+        }
 
     with (
         patch.object(lo, "_discover_and_capture", side_effect=_ok),
         patch.object(lo, "log") as log,
     ):
-        lo.capture_live_ownership_safe(now_utc=LOCK, lock_time=LOCK)
+        out = lo.capture_live_ownership_safe(now_utc=LOCK, lock_time=LOCK)
+    assert out == {101: 40}
     log.info.assert_called_once_with(
         "live_ownership_capture", status="captured", contest_id=2117, n_players=30
     )
@@ -100,4 +109,22 @@ async def test_capture_uses_shared_validated_contest_discovery(monkeypatch) -> N
     monkeypatch.setattr(realsports, "discover_wnba_contest_id", fake_discover)
     monkeypatch.setattr(contest_stats, "fetch_contest_stats", lambda *_args: [])
 
-    assert await lo._discover_and_capture() == {"status": "pregame_empty", "contest_id": 2117}
+    assert await lo._discover_and_capture() == {
+        "status": "pregame_empty",
+        "contest_id": 2117,
+        "drafts": {},
+    }
+
+
+def test_safe_wrapper_returns_drafts_on_capture() -> None:
+    async def _ok() -> dict:
+        return {
+            "status": "captured",
+            "contest_id": 2117,
+            "n_players": 2,
+            "drafts": {101: 40, 102: 12},
+        }
+
+    with patch.object(lo, "_discover_and_capture", side_effect=_ok):
+        out = lo.capture_live_ownership_safe(now_utc=LOCK, lock_time=LOCK)
+    assert out == {101: 40, 102: 12}

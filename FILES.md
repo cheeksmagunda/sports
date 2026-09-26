@@ -974,7 +974,7 @@ Generated from `git ls-files`. 912 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/scheduler/job_backfill.py -- Backfill job1_enrichment head_features for all historical slates.
 - wnba-oracle/src/wnba_oracle/scheduler/job_dayclose.py -- Day-close cron: capture yesterday's finalized WNBA contest and extend
 - wnba-oracle/src/wnba_oracle/scheduler/job_runtime.py -- WNBA-owned job registration and lifecycle hooks.
-- wnba-oracle/src/wnba_oracle/scheduler/live_ownership.py -- Same-day live ownership capture (#38 / F6).
+- wnba-oracle/src/wnba_oracle/scheduler/live_ownership.py -- Same-day live ownership capture (#38 / F6 / #434).
 - wnba-oracle/src/wnba_oracle/scheduler/placements.py -- Closed-loop placement / calibration tracking.
 - wnba-oracle/src/wnba_oracle/scheduler/placements_calibration.py -- Pure calibration math for the placement feedback loop: DB-free,
 - wnba-oracle/src/wnba_oracle/scheduler/realsports_access.py -- WNBA ownership of Real Sports account-window policy.

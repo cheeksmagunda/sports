@@ -330,6 +330,9 @@ def _build_specs(
     policy: ModelPolicy | None = None,
     art: PickerArtifact | None = None,
     artifact_resolved: bool = False,
+    now_utc: dt.datetime | None = None,
+    live_capture_enabled: bool | None = None,
+    measured_drafts_override: dict[int, int] | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict]]:
     """Build the (sampling, field) specs the optimizer reads.
 
@@ -379,7 +382,18 @@ def _build_specs(
     # every pid not in this map, preserving the byte-identical pre-D69 freeze.
     head_predictions = _predict_heads_for_pool(art, enrichment)
 
-    measured_drafts = _load_measured_drafts(slate_date)
+    # #434: prefer same-dispatch capture counts when present; else gate the
+    # slate_labels read on LIVE_OWNERSHIP_CAPTURE_ENABLED + as_of so pre-lock
+    # capture can feed field specs without leaking same-slate post-lock
+    # dayclose rows (#289).
+    if measured_drafts_override:
+        measured_drafts = dict(measured_drafts_override)
+    else:
+        measured_drafts = _load_measured_drafts(
+            slate_date,
+            as_of=now_utc,
+            live_capture_enabled=live_capture_enabled,
+        )
     popularity_scores = _compute_popularity_scores(enrichment, measured_drafts)
 
     bonus = injury_bonus_by_pid or {}
@@ -803,14 +817,13 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
     # budget. Dry runs intentionally bypass this gate for diagnostics.
     lock_time = upcoming_tip or _load_slate_lock_time(sd)
     deadline = _freeze_deadline_utc(lock_time, settings)
+    captured_drafts: dict[int, int] = {}
     if not dry_run and getattr(settings, "live_ownership_capture_enabled", False):
-        # #38/F6: best-effort, timeout-bounded, never raises. Runs before the
-        # pre-freeze-window return below so it fires on every dispatch near
-        # lock regardless of freeze outcome -- see live_ownership.py for why
-        # this is a no-op for hours before lock by design.
+        # #38/F6 + #434: best-effort capture near lock; returned drafts feed
+        # _build_specs measured ownership on this same dispatch.
         from wnba_oracle.scheduler.live_ownership import capture_live_ownership_safe
 
-        capture_live_ownership_safe(now_utc=now_utc, lock_time=lock_time)
+        captured_drafts = capture_live_ownership_safe(now_utc=now_utc, lock_time=lock_time)
     if not dry_run and deadline is not None and _in_pre_freeze_window(now_utc, deadline):
         log.info(
             "job2_pre_freeze_window",
@@ -861,6 +874,11 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         policy=policy,
         art=art,
         artifact_resolved=True,
+        now_utc=now_utc,
+        live_capture_enabled=bool(
+            getattr(settings, "live_ownership_capture_enabled", False)
+        ),
+        measured_drafts_override=captured_drafts or None,
     )
     if len(samps) < 5:
         return Job2Result(sd, model_sha, None, False, "specs_too_small")
