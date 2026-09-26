@@ -10,6 +10,17 @@ on:
     - cron: "*/15 16-21 * * 0"
     - cron: "*/15 23 * * 0,1,4"
     - cron: "*/15 0 * * 1,2,5"
+    # Holiday afternoon/evening kickoffs (UTC). T-40 for 1pm ET ~17:20Z; 4:30pm
+    # ET ~20:50Z; late windows spill into the next UTC hour (see spillover crons).
+    - cron: "*/15 17-22 26 11 *" # Thanksgiving 2026-11-26
+    - cron: "*/15 0-1 27 11 *"
+    - cron: "*/15 17-22 19 12 *" # Saturday 2026-12-19
+    - cron: "*/15 0-1 20 12 *"
+    - cron: "*/15 17-22 25 12 *" # Christmas 2026-12-25
+    - cron: "*/15 0-1 26 12 *"
+    - cron: "*/15 17-22 * * 4"
+    - cron: "*/15 17-22 * * 6"
+    - cron: "*/15 0-1 * * 5,0"
   workflow_dispatch:
     inputs:
       day:
