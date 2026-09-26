@@ -43,7 +43,9 @@ def test_race_corpus_publish_is_workflow_dispatch_opt_in() -> None:
     """Race parquet publish stays behind workflow_dispatch until #337 is complete."""
 
     workflow = yaml.safe_load((WORKFLOWS / "corpus-backup.yml").read_text())
-    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+    # PyYAML 1.1 treats unquoted `on:` as boolean True.
+    on = workflow.get("on") or workflow[True]
+    inputs = on["workflow_dispatch"]["inputs"]
     assert "publish_race_corpus" in inputs
     assert inputs["publish_race_corpus"]["default"] is False
     export_steps = workflow["jobs"]["export"]["steps"]
