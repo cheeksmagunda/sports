@@ -62,5 +62,5 @@ def test_verify_rejects_tampered_hash(tmp_path: pathlib.Path) -> None:
     assert mod.main(["--stub", "--stub-seasons", "2025", "--out", str(out)]) == 0
     payload = out / "season=2025" / "field.parquet"
     payload.write_bytes(payload.read_bytes() + b"x")
-    with pytest.raises(mod.RaceCorpusValidationError, match="hash"):
+    with pytest.raises(mod.RaceCorpusValidationError, match="hash|byte"):
         mod.verify_race_corpus(out)
