@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-06 (initial scaffold)
+Last verified: 2026-09-26 (October 2026-27 readiness audit)
 
 This file records application state only.
 
@@ -9,6 +9,8 @@ This file records application state only.
 - Package: `nba-oracle` workspace member
 - Scope live now: contract-compliant scaffold only
 - Wired for root checks: test, lint, typecheck, build, boundary, and app contract
+- CI: root `make test-nba` runs in `backend-ci.yml` alongside WNBA/NFL/NHL import smoke
+- Calendar / TRACKED seasons: not started (NBA.com lists 2026-10-20 regular-season open; not recorded in-app)
 - Not started: provider ingest, schemas, modeling, scheduling, contest logic
 
 ## Boundaries

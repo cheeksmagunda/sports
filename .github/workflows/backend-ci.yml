@@ -95,6 +95,12 @@ jobs:
       - name: Test NFL backend
         run: make test-nfl
 
+      - name: Test NBA backend
+        run: make test-nba
+
+      - name: Test NHL backend
+        run: make test-nhl
+
       - name: Lint backend workspace
         run: make lint
 
