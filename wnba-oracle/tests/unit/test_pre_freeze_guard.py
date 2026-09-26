@@ -105,7 +105,9 @@ def _watchdog_body(
     }
 
 
-def _install_api_mocks(guard: ModuleType, monkeypatch: pytest.MonkeyPatch, *, watchdog: dict) -> None:
+def _install_api_mocks(
+    guard: ModuleType, monkeypatch: pytest.MonkeyPatch, *, watchdog: dict
+) -> None:
     slate_date = "2026-08-20"
 
     def get_json(url: str):
