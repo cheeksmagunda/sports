@@ -12,6 +12,7 @@ from typing import Any, Literal, cast
 from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
+from nfl_oracle.features.live import canonical_live_context_feature_names
 from nfl_oracle.recommendations.high_tv import sample_weights_for_history
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
@@ -455,7 +456,14 @@ def fit_model(
     split = times[split_index]
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
-    names = tuple(sorted({key for row in train for key in row.context_features}))
+    # Always reserve live_ok injury/weather slots so sparse history cannot
+    # drop keys that live cards/NWS still carry (#418 / total draft value).
+    names = tuple(
+        sorted(
+            set(canonical_live_context_feature_names())
+            | {key for row in train for key in row.context_features}
+        )
+    )
     train_weight_list = sample_weights_for_history(train)
     train_weights = {
         (row.player_id, row.game_id): weight
