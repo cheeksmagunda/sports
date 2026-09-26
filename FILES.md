@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 889 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 891 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -552,6 +552,7 @@ Generated from `git ls-files`. 889 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
+- packages/oracle-core/src/oracle_core/fitness.py -- Domain-free WIN/CLOSE fitness helpers for the portfolio backtest race.
 - packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
 - packages/oracle-core/src/oracle_core/jobs.py -- Generic job registration, lifecycle, role validation, and execution.
@@ -570,6 +571,7 @@ Generated from `git ls-files`. 889 tracked files. Regenerate with `scripts/gener
 - packages/oracle-core/tests/test_config.py
 - packages/oracle-core/tests/test_dayclose.py
 - packages/oracle-core/tests/test_dossier.py
+- packages/oracle-core/tests/test_fitness.py
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
 - packages/oracle-core/tests/test_jobs.py
