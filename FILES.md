@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 911 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 912 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1148,6 +1148,7 @@ Generated from `git ls-files`. 911 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_starter_signal.py -- job2 starter-signal multiplier from the RotoWire starter flag (D52, D104).
 - wnba-oracle/tests/unit/test_stat_leverage.py -- Stat-leverage concentration analysis.
 - wnba-oracle/tests/unit/test_streak_quality.py -- Hot-streak quality assessment.
+- wnba-oracle/tests/unit/test_total_draft_value_objective.py -- Optional total_draft_value optimizer objective (#433).
 - wnba-oracle/tests/unit/test_train_cli.py
 - wnba-oracle/tests/unit/test_upcoming_games_pool.py -- D109: scope the optimizer pool to games that have not tipped yet.
 - wnba-oracle/tests/unit/test_verify_durable_job.py -- Tests for bounded durable job verification.
