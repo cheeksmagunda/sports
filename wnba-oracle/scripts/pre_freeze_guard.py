@@ -105,13 +105,22 @@ def _api_checks(
         else:
             events = payload.get("events")
             event_list = events if isinstance(events, list) else []
-            triggers = sorted(
-                {
-                    str(event.get("trigger"))
-                    for event in event_list
-                    if isinstance(event, dict) and event.get("trigger")
-                }
-            )
+            history = payload.get("history")
+            history_list = history if isinstance(history, list) else []
+            # Live /watchdog events omit model_artifact_* by design (#331):
+            # api containers lack the job2 artifact SHA. Fail-closed artifact
+            # coverage comes from cron-persisted history instead.
+            live_triggers = {
+                str(event.get("trigger"))
+                for event in event_list
+                if isinstance(event, dict) and event.get("trigger")
+            }
+            history_triggers = {
+                str(event.get("trigger"))
+                for event in history_list
+                if isinstance(event, dict) and event.get("trigger")
+            }
+            triggers = sorted(live_triggers | history_triggers)
             hard = sorted(HARD_WATCHDOG_TRIGGERS.intersection(triggers))
             if hard:
                 checks.append(

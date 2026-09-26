@@ -106,7 +106,9 @@ def get_watchdog_for_slate(
 
     from wnba_oracle.scheduler.watchdog import evaluate_watchdog
 
-    live_raw = evaluate_watchdog(slate_date, check_config_drift=False)
+    live_raw = evaluate_watchdog(
+        slate_date, check_config_drift=False, check_model_artifact=False
+    )
     events = []
     for ev in live_raw:
         if severity_rank.get(ev.severity, 0) < min_rank:
