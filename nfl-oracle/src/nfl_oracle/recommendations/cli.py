@@ -79,6 +79,19 @@ def _engine() -> Any:
     )
 
 
+def _select_contest_id(contest_ids: Sequence[int]) -> int | None:
+    override = os.environ.get("NFL_CONTEST_ID", "").strip()
+    if override:
+        try:
+            configured = int(override)
+        except ValueError:
+            return None
+        return configured if configured in contest_ids else None
+    if not contest_ids:
+        return None
+    return min(contest_ids)
+
+
 def _day(value: str | None) -> date | None:
     if not value:
         return None
