@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 912 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 913 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -974,7 +974,7 @@ Generated from `git ls-files`. 912 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/scheduler/job_backfill.py -- Backfill job1_enrichment head_features for all historical slates.
 - wnba-oracle/src/wnba_oracle/scheduler/job_dayclose.py -- Day-close cron: capture yesterday's finalized WNBA contest and extend
 - wnba-oracle/src/wnba_oracle/scheduler/job_runtime.py -- WNBA-owned job registration and lifecycle hooks.
-- wnba-oracle/src/wnba_oracle/scheduler/live_ownership.py -- Same-day live ownership capture (#38 / F6).
+- wnba-oracle/src/wnba_oracle/scheduler/live_ownership.py -- Same-day live ownership capture (#38 / F6 / #434).
 - wnba-oracle/src/wnba_oracle/scheduler/placements.py -- Closed-loop placement / calibration tracking.
 - wnba-oracle/src/wnba_oracle/scheduler/placements_calibration.py -- Pure calibration math for the placement feedback loop: DB-free,
 - wnba-oracle/src/wnba_oracle/scheduler/realsports_access.py -- WNBA ownership of Real Sports account-window policy.
@@ -1091,6 +1091,7 @@ Generated from `git ls-files`. 912 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_lineup_history.py -- D82: append-only lineup API surface.
 - wnba-oracle/tests/unit/test_live_ownership.py -- #38/F6: same-day live ownership capture gating and safety.
 - wnba-oracle/tests/unit/test_logging_httpx_redact.py -- httpx logs the full request URL (incl. query-string secrets like The Odds
+- wnba-oracle/tests/unit/test_measured_drafts_live_capture.py -- #434: gate freeze measured_drafts on LIVE_OWNERSHIP_CAPTURE_ENABLED.
 - wnba-oracle/tests/unit/test_metrics.py -- Metrics tests: CRPS, coverage, ECE.
 - wnba-oracle/tests/unit/test_minutes_backfill.py -- wnba_game_logs refresh (D102): row mapping and truthful outcomes.
 - wnba-oracle/tests/unit/test_minutes_model.py -- Minutes/role model (D55): scoring formula, predictor, ingest, job2 wiring.
