@@ -1,5 +1,11 @@
 # Status
 
+## Race evaluate hook (2026-09-25, Refs #339)
+
+Offline `nfl_oracle.replay.racer` maps `ContestPoolResult.production_score` /
+`winner_score` onto WIN/CLOSE observations for the portfolio race engine.
+Uses local contract stubs until `oracle_core.race` lands on `main`; precomputed
+contest-pool rows via `EvalContext.extras` (no live Corpus G fit in the hook).
 
 ## Landed (#330, 2026-09-25)
 <!-- merged-330-e3fba499 -->
