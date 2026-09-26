@@ -55,10 +55,11 @@ class FieldPlayerSpec:
     # estimator back-fills it. When any spec carries a measured count the
     # field marginal is built from the real counts, not the estimator.
     measured_drafts: float | None = None
-    # 2026-07-04 boost-tail lift: optional override for the stage-1 ranker's
-    # visible_value. When None, stage-1 uses pred_real_score. When set, stage-1
-    # uses this instead so the ranker can prefer ceiling for high-boost head
-    # players without perturbing the sampler (mu still comes from pred_real_score).
+    # Stage-1 rank override for visible_value (#416 + 2026-07-04 boost-tail).
+    # When None, stage-1 falls back to pred_real_score. Job2 materialize_specs
+    # always sets this to pre-contrarian TV (maxed with boost-tail lift) so
+    # popularity tilt cannot eject high-TV chalk from top_n_filter while the
+    # sampler mu still reads contrarian-adjusted pred_real_score.
     # See scripts/calibrate_starter_and_boost.py + PICKER_BOOST_TAIL_LIFT.
     rank_pred_override: float | None = None
 
