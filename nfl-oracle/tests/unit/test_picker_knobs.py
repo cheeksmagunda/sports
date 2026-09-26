@@ -9,6 +9,7 @@ import pytest
 from nfl_oracle.recommendations.model import Projection
 from nfl_oracle.recommendations.picker_knobs import (
     PickerKnobs,
+    _boost_aligned_means,
     apply_picker_knobs,
     picker_knobs_from_env,
     position_residual_bias,
@@ -167,3 +168,39 @@ def test_partial_boost_blend_interpolates_toward_aligned_mean() -> None:
     # Full blend would swap 10<->2; half blend: player2 -> 2 + 0.5*(10-2)=6
     assert by_id[2] == pytest.approx(6.0)
     assert by_id[1] == pytest.approx(6.0)
+
+
+def test_zero_boost_pool_is_identity_even_with_full_blend() -> None:
+    """Equal boosts must not shuffle means by player_id (#332 / #334)."""
+    slate = _make_slate({1: 0.0, 2: 0.0, 3: 0.0, 4: 0.0, 5: 0.0})
+    projections = (
+        _proj(1, 9.0),
+        _proj(2, 5.0),
+        _proj(3, 1.0),
+        _proj(4, 3.0),
+        _proj(5, 7.0),
+    )
+    out = apply_picker_knobs(
+        projections,
+        slate,
+        knobs=PickerKnobs(boost_rank_blend=0.75, profile="boost_0.75"),
+    )
+    assert [p.conditional_mean for p in out] == [p.conditional_mean for p in projections]
+    assert [p.player_id for p in out] == [p.player_id for p in projections]
+
+
+def test_uniform_nonzero_boost_pool_is_identity() -> None:
+    slate = _make_slate({1: 1.5, 2: 1.5, 3: 1.5})
+    projections = (_proj(1, 4.0), _proj(2, 9.0), _proj(3, 1.0))
+    out = apply_picker_knobs(
+        projections,
+        slate,
+        knobs=PickerKnobs(boost_rank_blend=1.0, profile="uniform"),
+    )
+    assert [p.conditional_mean for p in out] == [p.conditional_mean for p in projections]
+
+
+def test_boost_aligned_means_equal_boosts_return_original_means() -> None:
+    projections = (_proj(3, 1.0), _proj(1, 9.0), _proj(2, 5.0))
+    aligned = _boost_aligned_means(projections, {1: 0.0, 2: 0.0, 3: 0.0})
+    assert aligned == {3: 1.0, 1: 9.0, 2: 5.0}

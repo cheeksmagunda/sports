@@ -16,6 +16,7 @@ STATUS.md when applying.
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping, Sequence
 from statistics import mean, pstdev
@@ -158,9 +159,13 @@ def _boost_aligned_means(
 
     Ties in boost break by player_id so the map is deterministic. The multiset
     of values is preserved; only the assignment to players changes. When every
-    boost is equal (zero-boost regime), the assignment matches the original
-    ascending-mean order and the blend is a no-op up to tie breaks.
+    boost in the pool is equal (zero-boost or uniform-boost regime), return the
+    original conditional means unchanged so player_id tie-breaks cannot shuffle
+    projections.
     """
+    boost_values = {float(boost_of[p.player_id]) for p in projections}
+    if len(boost_values) <= 1:
+        return {p.player_id: p.conditional_mean for p in projections}
     ordered_values = sorted(p.conditional_mean for p in projections)
     by_boost = sorted(projections, key=lambda p: (boost_of[p.player_id], p.player_id))
     return {
@@ -176,9 +181,11 @@ def _stddev_with_availability(
         conditional_variance = 0.0
     else:
         conditional_variance = pstdev(samples) ** 2
-    return (
+    # math.sqrt keeps the return typed as float; ``x ** 0.5`` is Any under typeshed
+    # because float**float may be complex (CI mypy no-any-return).
+    return math.sqrt(
         probability * conditional_variance + probability * (1.0 - probability) * conditional**2
-    ) ** 0.5
+    )
 
 
 def accumulate_position_residuals(
