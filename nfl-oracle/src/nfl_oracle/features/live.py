@@ -120,3 +120,14 @@ def weather_availability_flag(vector: Mapping[str, float]) -> float:
     """Availability float for a context vector already carrying weather keys."""
 
     return float(any(name in vector for name in WEATHER_FEATURE_NAMES))
+
+
+def canonical_live_context_feature_names() -> tuple[str, ...]:
+    """Injury one-hots + weather magnitudes always reserved in RatingModel (#418).
+
+    Union these with keys observed in training so live card/NWS evidence can
+    move predictions even when historical injury/weather coverage was sparse.
+    """
+
+    injury_keys = tuple(f"injury_{name}" for name in INJURY_CATEGORIES)
+    return injury_keys + ("injury_status_available",) + WEATHER_FEATURE_NAMES + ("weather_available",)

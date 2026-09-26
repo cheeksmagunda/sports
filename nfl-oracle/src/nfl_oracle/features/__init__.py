@@ -1,6 +1,7 @@
 """Feature schema scaffolding for nfl-oracle."""
 
 from nfl_oracle.features.live import (
+    canonical_live_context_feature_names,
     injury_category,
     injury_features,
     injury_indicator_features,
@@ -31,6 +32,7 @@ from nfl_oracle.features.stubs import offline_stub_feature_row
 __all__ = [
     "NFL_DIVISIONS",
     "FeatureSpec",
+    "canonical_live_context_feature_names",
     "RealValueHistoryIndex",
     "build_prior_rows_for_players",
     "division_for_team",

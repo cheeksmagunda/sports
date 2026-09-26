@@ -12,6 +12,7 @@ from typing import Any, Literal, cast
 from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
+from nfl_oracle.features.live import canonical_live_context_feature_names
 from nfl_oracle.recommendations.high_tv import sample_weights_for_history
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
@@ -455,7 +456,11 @@ def fit_model(
     split = times[split_index]
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
-    names = tuple(sorted({key for row in train for key in row.context_features}))
+    # Observed keys alone used to gate ridge (#212). Canonical injury/weather
+    # slots are always reserved so live cards/NWS can move predictions even
+    # when historical coverage was sparse (#418 / #403 job 1).
+    observed_context = {key for row in train for key in row.context_features}
+    names = tuple(sorted(set(canonical_live_context_feature_names()) | observed_context))
     train_weight_list = sample_weights_for_history(train)
     train_weights = {
         (row.player_id, row.game_id): weight
@@ -533,7 +538,7 @@ def fit_model(
     # Issue #212: when context features are wired, keep every pathway live.
     # position_mean / global_mean also zero context coefficients; only ridge
     # preserves pace/defense/matchup/depth for v2 TNF.
-    selected_estimator: EstimatorName = "ridge" if names else holdout_winner
+    selected_estimator: EstimatorName = "ridge" if observed_context else holdout_winner
     ordered_weight_list = sample_weights_for_history(ordered)
     ordered_weights = {
         (row.player_id, row.game_id): weight
@@ -611,7 +616,7 @@ def fit_model(
             "selected_mae": candidates_mae[selected_estimator],
             "holdout_winner": holdout_winner,
             "holdout_winner_mae": candidates_mae[holdout_winner],
-            "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
+            "ridge_forced_for_wired_context": bool(observed_context) and holdout_winner != "ridge",
             "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
             "training_target": "high_total_value_full_archive_not_win_chalk",
             "context_evidence_disclosure": (
