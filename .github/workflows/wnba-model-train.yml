@@ -44,12 +44,13 @@ jobs:
       - name: Train model
         working-directory: wnba-oracle
         env:
-          DATABASE_PUBLIC_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           PGSSLROOTCERT: ${{ runner.temp }}/pg_root.crt
         run: |
           SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+          REFIT_FLAG="${{ inputs.refit_full && '--refit-full' || '' }}"
           uv run --frozen --package wnba-oracle oracle-train \
-            --refit-full \
+            $REFIT_FLAG \
             --commit "$SHORT_SHA" \
             --metrics-path "$RUNNER_TEMP/train_metrics.json"
 

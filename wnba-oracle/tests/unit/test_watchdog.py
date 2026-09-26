@@ -763,3 +763,32 @@ def test_watchdog_today_uses_live_eval_not_history() -> None:
     assert body["events"] == []
     assert len(body["history"]) == 1
     assert body["history"][0]["trigger"] == "rotowire_empty"
+
+
+def test_evaluate_watchdog_can_skip_model_artifact(monkeypatch) -> None:
+    """API live path must not false-critical on unset artifact SHA (#331)."""
+
+    def _empty(_sd: str, **_kwargs: object) -> list:
+        return []
+
+    monkeypatch.setattr(watchdog, "_check_pool", _empty)
+    monkeypatch.setattr(watchdog, "_check_enrichment_freshness", _empty)
+    monkeypatch.setattr(watchdog, "_check_enrichment_source", _empty)
+    monkeypatch.setattr(watchdog, "_check_opponent_reciprocity", _empty)
+    monkeypatch.setattr(watchdog, "_check_freeze", _empty)
+    monkeypatch.setattr(
+        watchdog,
+        "_check_model_artifact",
+        lambda _sd, **_kwargs: [
+            watchdog.WatchdogEvent(
+                slate_date=_sd,
+                trigger="model_artifact_unset",
+                severity=watchdog.SEVERITY_CRITICAL,
+                payload={},
+            )
+        ],
+    )
+    monkeypatch.setattr(watchdog, "_check_feature_content", _empty)
+    assert watchdog.evaluate_watchdog("2026-06-21", check_model_artifact=False) == []
+    skipped = watchdog.evaluate_watchdog("2026-06-21", check_model_artifact=True)
+    assert [e.trigger for e in skipped] == ["model_artifact_unset"]
