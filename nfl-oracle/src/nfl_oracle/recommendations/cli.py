@@ -381,7 +381,6 @@ def _offline_pregate(
         return None
 
 
-
 def _select_contest_id(
     contest_ids: Sequence[int],
     *,
