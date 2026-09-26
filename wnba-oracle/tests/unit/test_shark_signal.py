@@ -129,7 +129,11 @@ class TestComputeSharkDraftRates:
             lb, labels, "2026-06-12", top_n=20, min_prior_appearances=2
         )
         assert result.sharks == {"shark1"}
-        assert 99 not in result.rates["platform_player_id"].values
+        # Target-slate leaderboard picks must not inflate draft counts; the
+        # label pool still gets a zero-rate row for alignment.
+        rates = result.rates.set_index("platform_player_id")["shark_draft_rate"]
+        assert rates[99] == pytest.approx(0.0)
+        assert result.total_shark_lineups == 2
 
     def test_lookback_window(self) -> None:
         lb = _leaderboard(
@@ -195,7 +199,16 @@ class TestComputeSharkDraftRates:
     def test_validates_label_columns(self) -> None:
         with pytest.raises(SharkSignalError, match="labels missing columns"):
             compute_shark_draft_rates(
-                _leaderboard([]),
+                _leaderboard(
+                    [
+                        {
+                            "slate_date": "2026-06-10",
+                            "rank": 1,
+                            "user_id": "u",
+                            "lineup": _lineup([1, 2, 3, 4, 5]),
+                        }
+                    ]
+                ),
                 pd.DataFrame({"slate_date": ["2026-06-11"]}),
                 "2026-06-11",
             )

@@ -25,6 +25,9 @@ class SharkSignalError(ValueError):
 
 
 def _validate_leaderboards(df: pd.DataFrame) -> pd.DataFrame:
+    # Empty fixtures have no columns; callers still need config validation.
+    if df.empty:
+        return df
     missing = REQUIRED_LEADERBOARD_COLUMNS - set(df.columns)
     if missing:
         raise SharkSignalError(f"leaderboards missing columns: {sorted(missing)}")
@@ -32,6 +35,8 @@ def _validate_leaderboards(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _validate_labels(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
     required = {"slate_date", "platform_player_id"}
     missing = required - set(df.columns)
     if missing:
@@ -58,6 +63,8 @@ def _explode_leaderboards(
     top_n: int,
 ) -> pd.DataFrame:
     """One row per (slate_date, user_id, player_id) for top-N finishers."""
+    if leaderboards.empty:
+        return pd.DataFrame(columns=["slate_date", "user_id", "player_id"])
     rows = []
     for rec in leaderboards.itertuples(index=False):
         if int(rec.rank) > top_n:
@@ -168,12 +175,12 @@ def compute_shark_draft_rates(
         prior_slates:
             ISO date strings of the prior slates actually used.
     """
-    _validate_leaderboards(leaderboards)
-    _validate_labels(labels)
     if top_n < 1:
         raise SharkSignalError("top_n must be >= 1")
     if min_prior_appearances < 1:
         raise SharkSignalError("min_prior_appearances must be >= 1")
+    _validate_leaderboards(leaderboards)
+    _validate_labels(labels)
 
     exploded = _explode_leaderboards(leaderboards, top_n=top_n)
     prior = _apply_lookback(exploded, target_slate_date, max_lookback_slates)
@@ -185,7 +192,12 @@ def compute_shark_draft_rates(
     )
 
     shark_rows = prior[prior["user_id"].isin(sharks)]
-    total_shark_lineups = len(shark_rows)
+    # Count distinct prior top-N lineups (slate, user), not exploded player rows.
+    total_shark_lineups = (
+        int(shark_rows.groupby(["slate_date", "user_id"], sort=False).ngroups)
+        if not shark_rows.empty
+        else 0
+    )
     prior_slates = sorted(shark_rows["slate_date"].unique()) if not shark_rows.empty else []
 
     target_pool = labels[labels["slate_date"] == target_slate_date][
@@ -265,11 +277,11 @@ def identify_sharks(
     min_prior_appearances: int = 3,
 ) -> set[str]:
     """Standalone helper: return raw user_ids that qualify as sharks."""
-    _validate_leaderboards(leaderboards)
     if top_n < 1:
         raise SharkSignalError("top_n must be >= 1")
     if min_prior_appearances < 1:
         raise SharkSignalError("min_prior_appearances must be >= 1")
+    _validate_leaderboards(leaderboards)
     exploded = _explode_leaderboards(leaderboards, top_n=top_n)
     return _identify_sharks(
         exploded,
