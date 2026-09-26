@@ -1,0 +1,72 @@
+name: wnba-race
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or ref to race from
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wnba-race
+  cancel-in-progress: false
+
+jobs:
+  prefetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Prefetch race inputs
+        continue-on-error: true
+        run: |
+          echo "wnba-race prefetch placeholder until race scripts land"
+
+  matrix:
+    needs: prefetch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Run race shard placeholder
+        continue-on-error: true
+        run: |
+          echo "wnba-race matrix placeholder for shard ${{ matrix.shard }}"
+
+  merge:
+    needs: matrix
+    if: ${{ !cancelled() && needs.matrix.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Merge race shards placeholder
+        run: |
+          echo "wnba-race merge placeholder until merge scripts land"
