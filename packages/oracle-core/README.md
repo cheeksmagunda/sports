@@ -14,6 +14,9 @@ The public package includes:
 - generic FastAPI root and health behavior;
 - cross-sport post-slate dossier contract and JSON-LD helpers;
 - atomic artifact persistence, integrity checks, and deterministic test fakes;
+- provider-neutral race engine (`oracle_core.race`): variant sha256 identity,
+  search space / genetics, WIN-or-CLOSE fitness, FitConfig score classification,
+  elite band, chronological lockbox split, shard runner, and process-pool map;
 - day-close sweep orchestration (`oracle_core.dayclose`): grade a target day,
   then retry a bounded catch-up window for anything still ungraded;
 - schema.org / JSON-LD entity helpers (`oracle_core.schemaorg`) for Person,
