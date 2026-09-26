@@ -364,39 +364,43 @@ def _projection(
 
 
 def test_raising_field_weight_changes_lineup_when_ownership_differs() -> None:
-    """Higher field_weight re-ranks near-EV lineups by simulated field-beat rate."""
+    """Higher field_weight prefers lower-owned lineups with better field-beat rate."""
 
     target = slate()
     decision = target.captured_at
-    # Player 6 is slightly lower EV than 5 but boomier. Zero field_weight can
-    # prefer the boom path; positive field_weight re-ranks by field-beat rate
-    # against the measured ownership field.
-    chalk_means = {1: 10.0, 2: 9.0, 3: 8.0, 4: 7.0, 5: 6.0, 6: 5.95}
-    projs = tuple(
-        _projection(
-            c.player_id,
-            mean=chalk_means[c.player_id],
-            samples=(
-                chalk_means[c.player_id] - 0.5,
-                chalk_means[c.player_id],
-                chalk_means[c.player_id] + (2.0 if c.player_id == 6 else 0.5),
-            ),
-        )
-        for c in target.candidates
-    )
+    # Players 1-4 chalk. Player 5 is flat high-EV chalk; player 6 is slightly
+    # lower EV but beats the chalk field most of the time (rare miss + common 9).
+    projs = []
+    for c in target.candidates:
+        pid = c.player_id
+        if pid == 5:
+            projs.append(_projection(5, mean=8.0, samples=(8.0, 8.0, 8.0)))
+        elif pid == 6:
+            projs.append(_projection(6, mean=7.2, samples=(0.0, 9.0, 9.0, 9.0, 9.0)))
+        else:
+            mean_v = float(12 - pid)
+            projs.append(_projection(pid, mean=mean_v, samples=(mean_v, mean_v, mean_v)))
+    projs = tuple(projs)
     field = FieldObservation(
         clock=EvidenceClock(source_available_at=decision, captured_at=decision),
         entry_count=100,
-        player_counts={1: 100, 2: 100, 3: 100, 4: 100, 5: 90, 6: 10},
+        player_counts={1: 100, 2: 100, 3: 100, 4: 100, 5: 99, 6: 1},
         provenance="test",
         coverage="complete",
+    )
+    cfg_common = dict(
+        simulations=300,
+        upside_weight=0.0,
+        seed=7,
+        min_distinct_teams=1,
+        min_distinct_games=1,
     )
     baseline = optimize(
         target,
         projs,
         decision_at=decision,
         scoring_policy=ScoringPolicy(),
-        config=OptimizerConfig(simulations=400, field_weight=0.0, upside_weight=0.0, seed=7),
+        config=OptimizerConfig(field_weight=0.0, **cfg_common),
         field=field,
     )
     leveraged = optimize(
@@ -404,10 +408,13 @@ def test_raising_field_weight_changes_lineup_when_ownership_differs() -> None:
         projs,
         decision_at=decision,
         scoring_policy=ScoringPolicy(),
-        config=OptimizerConfig(simulations=400, field_weight=2.0, upside_weight=0.0, seed=7),
+        config=OptimizerConfig(field_weight=2.0, **cfg_common),
         field=field,
     )
-    assert {p.player_id for p in baseline.picks} != {p.player_id for p in leveraged.picks}
+    assert 5 in {p.player_id for p in baseline.picks}
+    assert 6 not in {p.player_id for p in baseline.picks}
+    assert 6 in {p.player_id for p in leveraged.picks}
+    assert leveraged.simulated_field_win_rate > baseline.simulated_field_win_rate
 
 
 def test_raising_upside_weight_prefers_higher_p90_when_means_tied() -> None:
@@ -467,7 +474,7 @@ def test_chalk_studs_still_win_when_leverage_cannot_recover() -> None:
     field = FieldObservation(
         clock=EvidenceClock(source_available_at=decision, captured_at=decision),
         entry_count=100,
-        player_counts={1: 95, 2: 81, 3: 81, 4: 81, 5: 81, 6: 81},
+        player_counts={1: 100, 2: 100, 3: 100, 4: 100, 5: 50, 6: 50},
         provenance="test",
         coverage="complete",
     )
