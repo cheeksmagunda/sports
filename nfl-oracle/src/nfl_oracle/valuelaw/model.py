@@ -8,12 +8,12 @@ share is very large. This module fits one linear model per position family on
 accuracy against named baselines, so "the box score explains value" is a
 tested claim, not an assertion.
 
-Split is strictly time-aware: train on season 2024 regular-season rows, test
-on season 2025 regular-season rows. Preseason rows are excluded from both, to
-match the STATUS.md convention (37,710 of 47,209 rows are non-preseason).
-Nothing here reads a 2025 row to inform a prediction for another 2025 row from
-an earlier week; the split is by season, which is what the data on disk
-supports today. A finer walk-forward-by-week split is future work.
+Split is strictly time-aware: by default train on the penultimate season label
+in the dataset and test on the latest. Preseason rows are excluded from both,
+to match the STATUS.md convention (37,710 of 47,209 rows are non-preseason).
+Nothing in the test season informs an earlier-week prediction within that
+season; the split is by season, which is what the data on disk supports today.
+A finer walk-forward-by-week split is future work.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from typing import Any
 from oracle_core.artifacts import atomic_write_json
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
+from nfl_oracle.calendar.season import latest_two_seasons
 
 STAT_COLUMN_RE = re.compile(r"^(stat|adv)_\d+(_\w+)?$")
 
@@ -164,10 +165,14 @@ def fit_position_model(
 def fit_all(
     dataset_path: Path,
     *,
-    train_season: int = 2024,
-    test_season: int = 2025,
+    train_season: int | None = None,
+    test_season: int | None = None,
 ) -> ValueModelBundle:
     rows = _load_rows(dataset_path)
+    if train_season is None or test_season is None:
+        resolved_train, resolved_test = latest_two_seasons(rows)
+        train_season = train_season if train_season is not None else resolved_train
+        test_season = test_season if test_season is not None else resolved_test
     positions = sorted({r["position"] for r in rows if r.get("position")})
     models: dict[str, PositionModel] = {}
     for position in positions:
