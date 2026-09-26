@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 894 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -782,6 +782,7 @@ Generated from `git ls-files`. 894 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/scripts/backtest_walkforward.py -- Walk-forward backtest: HONEST prediction-quality measurement (no leakage).
 - wnba-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable WNBA corpus.
 - wnba-oracle/scripts/build_model_research_benchmark.py -- Model research benchmark: walk-forward variant sweep over stored slates.
+- wnba-oracle/scripts/build_race_corpus.py -- Build (or verify) the WNBA race corpus for offline backtest racing.
 - wnba-oracle/scripts/calibrate_knobs.py -- Calibrate D87-D90 optimizer knobs against 2026 historical slates.
 - wnba-oracle/scripts/calibrate_starter_and_boost.py -- Calibrate STARTER_UNKNOWN_FADE and PICKER_BOOST_TAIL_LIFT from the corpus.
 - wnba-oracle/scripts/check_migrations.py -- Exercise empty and existing-schema Alembic upgrades on a local PostgreSQL server.
@@ -1016,6 +1017,7 @@ Generated from `git ls-files`. 894 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_backtest_walkforward.py -- Point-in-time ownership in scripts/backtest_walkforward.py.
 - wnba-oracle/tests/unit/test_boost_cap.py -- Lineup boost caps.
 - wnba-oracle/tests/unit/test_boost_tail_lift.py -- Stage-1 ranking uses rank_pred_override when set (2026-07-04 boost-tail lift).
+- wnba-oracle/tests/unit/test_build_race_corpus.py -- Offline tests for the WNBA race corpus builder stub (#337).
 - wnba-oracle/tests/unit/test_cache.py -- File cache round-trip + TTL semantics. Mocks CACHE_DIR to a tmp_path.
 - wnba-oracle/tests/unit/test_ceiling_sigma.py -- Environment-conditioned ceiling sigma scaling.
 - wnba-oracle/tests/unit/test_committed_order_objective.py -- The optimizer objective under committed vs per-draw slot assignment.
