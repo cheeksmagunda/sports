@@ -875,9 +875,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job2Result:
         art=art,
         artifact_resolved=True,
         now_utc=now_utc,
-        live_capture_enabled=bool(
-            getattr(settings, "live_ownership_capture_enabled", False)
-        ),
+        live_capture_enabled=bool(getattr(settings, "live_ownership_capture_enabled", False)),
         measured_drafts_override=captured_drafts or None,
     )
     if len(samps) < 5:
