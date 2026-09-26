@@ -26,6 +26,15 @@ from nfl_oracle.recommendations.schema import (
 EstimatorName = Literal["ridge", "player_prior", "position_mean", "global_mean"]
 
 
+class FitConfig(Record):
+    ridge_alpha: Finite = Field(default=10, gt=0)
+    holdout_fraction: float = Field(default=0.8, gt=0, lt=1)
+    min_train_kickoffs: int = Field(default=2, ge=1)
+    min_unique_kickoffs: int = Field(default=5, ge=2)
+    min_training_rows: int = Field(default=30, ge=1)
+    min_design_rows: int = Field(default=10, ge=1)
+
+
 class HistoricalPerformance(Record):
     player_id: PositiveId
     external_id: str | None = None
@@ -83,6 +92,7 @@ class Projection(Record):
 class RatingModel(Record):
     version: Literal[1] = 1
     trained_at: datetime
+    fit_config: FitConfig = Field(default_factory=FitConfig)
     training_fingerprint: str
     training_rows: int
     coefficients: tuple[Finite, ...]
@@ -416,8 +426,14 @@ def _design(
     return x, y, w
 
 
-def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) -> RatingModel:
+def fit_model(
+    rows: Sequence[HistoricalPerformance],
+    *,
+    trained_at: datetime,
+    fit_config: FitConfig | None = None,
+) -> RatingModel:
     now = utc(trained_at)
+    cfg = fit_config or FitConfig()
     if len({(r.player_id, r.game_id) for r in rows}) != len(rows):
         raise ValueError("duplicate_historical_player_game")
     if any(max(r.available_at, r.captured_at) > now for r in rows):
@@ -431,9 +447,12 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     _validate_identity_links(rows)
     ordered = sorted(rows, key=lambda r: (r.kickoff_at, r.game_id, r.player_id))
     times = sorted({r.kickoff_at for r in ordered})
-    if len(times) < 5 or len(ordered) < 30:
+    if len(times) < cfg.min_unique_kickoffs or len(ordered) < cfg.min_training_rows:
         raise ValueError("insufficient_training_history")
-    split = times[max(2, int(len(times) * 0.8))]
+    split_index = min(
+        len(times) - 1, max(cfg.min_train_kickoffs, int(len(times) * cfg.holdout_fraction))
+    )
+    split = times[split_index]
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
     names = tuple(sorted({key for row in train for key in row.context_features}))
@@ -443,11 +462,13 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
         for row, weight in zip(train, train_weight_list, strict=True)
     }
     x, y, sample_w = _design(train, names, row_weights=train_weights)
-    if len(x) < 10 or not holdout:
+    if len(x) < cfg.min_design_rows or not holdout:
         raise ValueError("insufficient_chronological_evaluation")
-    fitted = RidgeRegressor(alpha=10).fit(x, y, sample_weight=sample_w)
+    fitted = RidgeRegressor(alpha=cfg.ridge_alpha).fit(x, y, sample_weight=sample_w)
     ablation_x, ablation_y, ablation_w = _design(train, row_weights=train_weights)
-    ablation_fit = RidgeRegressor(alpha=10).fit(ablation_x, ablation_y, sample_weight=ablation_w)
+    ablation_fit = RidgeRegressor(alpha=cfg.ridge_alpha).fit(
+        ablation_x, ablation_y, sample_weight=ablation_w
+    )
     bank = _PriorBank()
     for record in train:
         bank.add(record)
@@ -519,7 +540,7 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
         for row, weight in zip(ordered, ordered_weight_list, strict=True)
     }
     final_x, final_y, final_w = _design(ordered, names, row_weights=ordered_weights)
-    final = RidgeRegressor(alpha=10).fit(final_x, final_y, sample_weight=final_w)
+    final = RidgeRegressor(alpha=cfg.ridge_alpha).fit(final_x, final_y, sample_weight=final_w)
     context_width = 2 * len(names)
     if selected_estimator == "ridge":
         selected_coefficients = tuple(final.coefficients or ())
@@ -553,6 +574,7 @@ def fit_model(rows: Sequence[HistoricalPerformance], *, trained_at: datetime) ->
     }
     return RatingModel(
         trained_at=now,
+        fit_config=cfg,
         training_rows=len(ordered),
         context_feature_names=names,
         training_fingerprint=fingerprint([r.model_dump(mode="json") for r in ordered]),

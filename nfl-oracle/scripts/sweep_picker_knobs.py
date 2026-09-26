@@ -23,7 +23,11 @@ from nfl_oracle.replay.contest_pool_replay import (
     replay_contest_pools_knob_sweep,
     summarize,
 )
-from nfl_oracle.replay.production_backtest_cli import load_backtest_inputs
+from nfl_oracle.replay.production_backtest_cli import (
+    add_fit_config_args,
+    fit_config_from_args,
+    load_backtest_inputs,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--contest-root", type=Path, default=Path("data/raw/corpus_c"))
     parser.add_argument("--context-snapshot", type=Path, required=True)
     parser.add_argument("--simulations", type=int, default=100)
+    add_fit_config_args(parser)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
@@ -58,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         print(line, file=sys.stderr, flush=True)
 
     started = datetime.now(UTC)
+    fit_config = fit_config_from_args(args)
     swept = replay_contest_pools_knob_sweep(
         inputs.enriched,
         contests,
@@ -65,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         fold_of=fold_of,
         team_keys=inputs.team_keys,
         optimizer_config=OptimizerConfig(simulations=args.simulations),
+        fit_config=fit_config,
         progress=progress,
     )
     finished = datetime.now(UTC)
@@ -81,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     payload = {
         "kind": "picker_knob_sweep",
         "issue": 280,
+        "fit_config": fit_config.model_dump(mode="json"),
         "started_at": started.isoformat(),
         "finished_at": finished.isoformat(),
         "profiles": profiles,

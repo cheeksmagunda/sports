@@ -6,6 +6,7 @@ from statistics import mean
 import pytest
 
 from nfl_oracle.recommendations.model import (
+    FitConfig,
     HistoricalPerformance,
     drop_ambiguous_identity_rows,
     fit_model,
@@ -173,3 +174,9 @@ def test_fit_model_records_position_residual_bias_from_holdout() -> None:
     for key, value in model.position_residual_bias.items():
         assert isinstance(key, str) and key
         assert isinstance(value, float)
+
+
+def test_fit_model_records_fit_config() -> None:
+    config = FitConfig(ridge_alpha=2.5, min_unique_kickoffs=5, min_training_rows=30)
+    model = fit_model(rows(), trained_at=BASE + timedelta(days=8), fit_config=config)
+    assert model.fit_config == config

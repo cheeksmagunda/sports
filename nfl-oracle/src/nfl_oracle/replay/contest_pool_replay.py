@@ -45,6 +45,7 @@ from nfl_oracle.contests.boosts import slot_multiplier_for
 from nfl_oracle.contests.parse import ParsedContest
 from nfl_oracle.recommendations.model import (
     ContextAdjustment,
+    FitConfig,
     HistoricalPerformance,
     RatingModel,
     drop_ambiguous_identity_rows,
@@ -216,6 +217,7 @@ def replay_contest_pools(
     now: datetime | None = None,
     team_keys: Mapping[int, str] | None = None,
     optimizer_config: OptimizerConfig | None = None,
+    fit_config: FitConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
     picker: PickerKnobs | None = None,
@@ -230,6 +232,7 @@ def replay_contest_pools(
     """
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
+    model_fit_config = fit_config or FitConfig()
     knobs = picker or PickerKnobs()
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)
@@ -255,7 +258,7 @@ def replay_contest_pools(
         train, _audit = drop_ambiguous_identity_rows(train)
         assert_no_leakage(train, cutoff=fold_cutoff, slate_game_ids=fold_games)
         try:
-            model = fitter(train, clock_now)
+            model = fitter(train, clock_now, model_fit_config)
         except ValueError as error:
             if isinstance(error, LeakageError):
                 raise
@@ -458,6 +461,15 @@ def summarize(
     )
 
 
+def _merge_excluded_counts(
+    shared: Mapping[str, int], per_profile: Mapping[str, int]
+) -> dict[str, int]:
+    merged: dict[str, int] = dict(shared)
+    for reason, count in per_profile.items():
+        merged[reason] = merged.get(reason, 0) + count
+    return {reason: count for reason, count in merged.items() if count}
+
+
 def capture_with_picker(
     pool: ContestPool,
     *,
@@ -495,6 +507,7 @@ def replay_contest_pools_knob_sweep(
     now: datetime | None = None,
     team_keys: Mapping[int, str] | None = None,
     optimizer_config: OptimizerConfig | None = None,
+    fit_config: FitConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
     progress: Callable[[str], None] | None = None,
@@ -507,23 +520,27 @@ def replay_contest_pools_knob_sweep(
         raise ValueError("picker_profile_not_unique")
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
+    model_fit_config = fit_config or FitConfig()
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)
-    excluded: dict[str, int] = defaultdict(int)
+    shared_excluded: dict[str, int] = defaultdict(int)
     pools: list[ContestPool] = []
     for contest in contests:
         if not contest.draft_stats:
-            excluded["no_draft_stats"] += 1
+            shared_excluded["no_draft_stats"] += 1
             continue
         pool = join_contest_pool(contest, by_day.get(contest.contest.day, ()))
         if pool is None:
-            excluded["no_corpus_g_rows_for_day"] += 1
+            shared_excluded["no_corpus_g_rows_for_day"] += 1
             continue
         pools.append(pool)
     folds: dict[Hashable, list[ContestPool]] = defaultdict(list)
     for pool in pools:
         folds[fold_key(pool)].append(pool)
     results_by_profile: dict[str, list[ContestPoolResult]] = {k.profile: [] for k in knobs_list}
+    excluded_by_profile: dict[str, dict[str, int]] = {
+        k.profile: defaultdict(int) for k in knobs_list
+    }
     for key, fold_pools in sorted(folds.items(), key=lambda item: min(p.cutoff for p in item[1])):
         fold_cutoff = min(pool.cutoff for pool in fold_pools)
         fold_games = {game for pool in fold_pools for game in pool.day_game_ids}
@@ -531,11 +548,11 @@ def replay_contest_pools_knob_sweep(
         train, _audit = drop_ambiguous_identity_rows(train)
         assert_no_leakage(train, cutoff=fold_cutoff, slate_game_ids=fold_games)
         try:
-            model = fitter(train, clock_now)
+            model = fitter(train, clock_now, model_fit_config)
         except ValueError as error:
             if isinstance(error, LeakageError):
                 raise
-            excluded[f"fit:{error}"] += len(fold_pools)
+            shared_excluded[f"fit:{error}"] += len(fold_pools)
             continue
         for pool in sorted(fold_pools, key=lambda p: (p.cutoff, p.contest_id)):
             for knobs in knobs_list:
@@ -553,7 +570,7 @@ def replay_contest_pools_knob_sweep(
                     excluded=per_excluded,
                 )
                 for reason, count in per_excluded.items():
-                    excluded[reason] += count
+                    excluded_by_profile[knobs.profile][reason] += count
                 if result is not None:
                     results_by_profile[knobs.profile].append(result)
                     if progress is not None:
@@ -562,5 +579,9 @@ def replay_contest_pools_knob_sweep(
                             f"capture={result.capture_ratio:.3f}"
                         )
     return {
-        profile: (tuple(results), dict(excluded)) for profile, results in results_by_profile.items()
+        profile: (
+            tuple(results),
+            _merge_excluded_counts(shared_excluded, excluded_by_profile[profile]),
+        )
+        for profile, results in results_by_profile.items()
     }

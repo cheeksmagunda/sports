@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from nfl_oracle.recommendations.model import (
+    FitConfig,
     HistoricalPerformance,
     RatingModel,
     fit_model,
@@ -83,9 +84,11 @@ def test_fitter_only_ever_sees_labels_final_before_the_slate_cutoff() -> None:
     rows = _rows(late_game=7)  # game 1007's label finalizes after game 1008 kicks off
     seen: list[frozenset[int]] = []
 
-    def spy(train: Sequence[HistoricalPerformance], trained_at: datetime) -> RatingModel:
+    def spy(
+        train: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
         seen.append(frozenset(r.game_id for r in train))
-        return fit_model(train, trained_at=trained_at)
+        return fit_model(train, trained_at=trained_at, fit_config=fit_config)
 
     backtest_production_pipeline(rows, now=NOW, fitter=spy)
     # One retrain per slate, in cutoff order: seen[i] trains the slate for game 1000+i.
@@ -94,6 +97,21 @@ def test_fitter_only_ever_sees_labels_final_before_the_slate_cutoff() -> None:
     assert 1006 in seen[8] and 1007 not in seen[8]
     assert 1007 in seen[9]
     assert all(1000 + i not in games for i, games in enumerate(seen))
+
+
+def test_backtest_passes_fit_config_to_fitter() -> None:
+    seen: list[FitConfig] = []
+    config = FitConfig(ridge_alpha=2.5)
+
+    def spy(
+        train: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
+        seen.append(fit_config)
+        return fit_model(train, trained_at=trained_at, fit_config=fit_config)
+
+    backtest_production_pipeline(_rows(), now=NOW, fitter=spy, fit_config=config)
+    assert seen
+    assert all(item == config for item in seen)
 
 
 def test_leakage_guard_rejects_future_and_same_slate_labels() -> None:

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from nfl_oracle.contests.parse import ParsedContest
 from nfl_oracle.contests.schema import ContestRecord, DraftStatRow, EntryLineupPick, EntryRecord
-from nfl_oracle.recommendations.model import HistoricalPerformance, RatingModel, fit_model
+from nfl_oracle.recommendations.model import FitConfig, HistoricalPerformance, RatingModel, fit_model
 from nfl_oracle.recommendations.picker_knobs import PickerKnobs
 from nfl_oracle.recommendations.schema import EvidenceClock
 from nfl_oracle.replay import contest_pool_replay as cpr
@@ -188,9 +189,11 @@ def test_training_never_sees_the_contest_day_or_late_labels() -> None:
     rows = _rows(late_game=GAMES - 2)
     seen: list[frozenset[int]] = []
 
-    def spy(train: Sequence[HistoricalPerformance], trained_at: datetime) -> RatingModel:
+    def spy(
+        train: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
         seen.append(frozenset(r.game_id for r in train))
-        return fit_model(train, trained_at=trained_at)
+        return fit_model(train, trained_at=trained_at, fit_config=fit_config)
 
     replay_contest_pools(rows, [_contest(rows)], now=NOW, fitter=spy)
     (games,) = seen
@@ -265,9 +268,11 @@ def test_knob_sweep_shares_one_fit_across_profiles() -> None:
     rows = _rows()
     fits: list[int] = []
 
-    def spy(train: Sequence[HistoricalPerformance], trained_at: datetime) -> RatingModel:
+    def spy(
+        train: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
         fits.append(len(train))
-        return fit_model(train, trained_at=trained_at)
+        return fit_model(train, trained_at=trained_at, fit_config=fit_config)
 
     knobs = (
         PickerKnobs(profile="identity"),
@@ -287,6 +292,71 @@ def test_knob_sweep_shares_one_fit_across_profiles() -> None:
         assert len(results) == 1
         assert results[0].picker_profile == profile
         assert 0.0 <= results[0].capture_ratio <= 1.0
+
+
+def test_knob_sweep_passes_fit_config_to_shared_fit() -> None:
+    rows = _rows()
+    seen: list[FitConfig] = []
+    config = FitConfig(ridge_alpha=2.5)
+
+    def spy(
+        train: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
+        seen.append(fit_config)
+        return fit_model(train, trained_at=trained_at, fit_config=fit_config)
+
+    replay_contest_pools_knob_sweep(
+        rows,
+        [_contest(rows)],
+        (PickerKnobs(profile="identity"),),
+        now=NOW,
+        fitter=spy,
+        fit_config=config,
+    )
+    assert seen == [config]
+
+
+def test_knob_sweep_excluded_is_isolated_per_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression for the shared excluded dict bug (#338).
+
+    A picker-specific exclusion recorded for one profile's per-run pass must
+    not leak into another profile's reported ``excluded`` reasons, while a
+    pool-level exclusion that happens once, before any picker knob is ever
+    considered, must appear identically on every profile.
+    """
+    rows = _rows()
+    good_contest = _contest(rows)
+    empty_contest = replace(good_contest, draft_stats=())
+
+    real_run_contest = cpr._run_contest
+
+    def fake_run_contest(
+        pool: cpr.ContestPool, *, picker: PickerKnobs, excluded: dict[str, int], **kwargs: object
+    ) -> cpr.ContestPoolResult | None:
+        if picker.profile == "flaky":
+            excluded["flaky_only_reason"] += 1
+            return None
+        return real_run_contest(pool, picker=picker, excluded=excluded, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cpr, "_run_contest", fake_run_contest)
+
+    knobs = (
+        PickerKnobs(profile="identity"),
+        PickerKnobs(boost_rank_blend=0.5, profile="flaky"),
+    )
+    swept = replay_contest_pools_knob_sweep(
+        rows,
+        [empty_contest, good_contest],
+        knobs,
+        now=NOW,
+    )
+    identity_results, identity_excluded = swept["identity"]
+    flaky_results, flaky_excluded = swept["flaky"]
+
+    assert len(identity_results) == 1
+    assert len(flaky_results) == 0
+    assert identity_excluded == {"no_draft_stats": 1}
+    assert flaky_excluded == {"no_draft_stats": 1, "flaky_only_reason": 1}
 
 
 def test_boost_rank_blend_changes_capture_on_boosted_contest() -> None:

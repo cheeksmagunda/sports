@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from nfl_oracle.ingest.backfill import (
@@ -11,6 +12,7 @@ from nfl_oracle.ingest.backfill import (
     _upsert_coverage,
     load_coverage_matrix,
     refresh_coverage_matrix,
+    tracked_seasons,
 )
 from nfl_oracle.ingest.corpus_g import CorpusGStore
 
@@ -19,7 +21,7 @@ def test_refresh_matrix_marks_tracked_seasons_unknown(tmp_path: Path) -> None:
     store = CorpusGStore(root=tmp_path)
     matrix = refresh_coverage_matrix(store)
     assert matrix["seasons"]["2021"]["status"] == SEASON_STATUS_UNKNOWN
-    assert "2025" in matrix["seasons"]
+    assert str(datetime.now(UTC).year) in matrix["seasons"]
     assert "status_vocabulary" in matrix
 
 
@@ -50,3 +52,7 @@ def test_upsert_marks_season_known_with_value_note(tmp_path: Path) -> None:
     game = block["games"]["18800"]
     assert game["event_time"] == "2024-11-03T18:00:00.000Z"
     assert game["value_note"]
+
+
+def test_tracked_seasons_include_the_current_year() -> None:
+    assert tracked_seasons(datetime(2026, 9, 25, tzinfo=UTC))[-1] == 2026

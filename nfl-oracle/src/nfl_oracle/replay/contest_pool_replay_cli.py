@@ -24,7 +24,11 @@ from nfl_oracle.replay.contest_pool_replay import (
     replay_contest_pools,
     summarize,
 )
-from nfl_oracle.replay.production_backtest_cli import load_backtest_inputs
+from nfl_oracle.replay.production_backtest_cli import (
+    add_fit_config_args,
+    fit_config_from_args,
+    load_backtest_inputs,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -73,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="identity",
         help="Label recorded on each result for this knob setting.",
     )
+    add_fit_config_args(parser)
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
     return parser
 
@@ -96,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         print(line, file=sys.stderr, flush=True)
 
     started = datetime.now(UTC)
+    fit_config = fit_config_from_args(args)
     picker = PickerKnobs(
         boost_rank_blend=args.boost_rank_blend,
         position_calibration=args.position_calibration,
@@ -107,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         fold_of=fold_of,
         team_keys=inputs.team_keys,
         optimizer_config=OptimizerConfig(simulations=args.simulations),
+        fit_config=fit_config,
         compact_samples=not args.full_samples,
         picker=picker,
         progress=progress,
@@ -116,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         "kind": "production_pipeline_contest_pool_replay",
         "issue": 280,
         "retrain": args.retrain,
+        "fit_config": fit_config.model_dump(mode="json"),
         "picker": picker.model_dump(mode="json"),
         "contests_with_field_evidence": len(contests),
         "history_rows": len(inputs.rows),

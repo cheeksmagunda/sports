@@ -50,6 +50,7 @@ from zoneinfo import ZoneInfo
 
 from nfl_oracle.recommendations.model import (
     ContextAdjustment,
+    FitConfig,
     HistoricalPerformance,
     Projection,
     RatingModel,
@@ -77,7 +78,7 @@ EASTERN = ZoneInfo("America/New_York")
 SlateGrouping = Literal["game", "day"]
 # Fits and predicts through the real production functions. Tests may swap the
 # fitter to exercise failure paths; the CLI never does.
-Fitter = Callable[[Sequence[HistoricalPerformance], datetime], RatingModel]
+Fitter = Callable[[Sequence[HistoricalPerformance], datetime, FitConfig], RatingModel]
 
 
 class LeakageError(ValueError):
@@ -354,8 +355,10 @@ def naive_ewma_capture(
     return committed / best if best > 0 else None
 
 
-def _production_fit(rows: Sequence[HistoricalPerformance], trained_at: datetime) -> RatingModel:
-    return fit_model(rows, trained_at=trained_at)
+def _production_fit(
+    rows: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+) -> RatingModel:
+    return fit_model(rows, trained_at=trained_at, fit_config=fit_config)
 
 
 def _default_fold(spec: _SlateSpec) -> str:
@@ -370,6 +373,7 @@ def backtest_production_pipeline(
     now: datetime | None = None,
     team_keys: Mapping[int, str] | None = None,
     optimizer_config: OptimizerConfig | None = None,
+    fit_config: FitConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
     progress: Callable[[str], None] | None = None,
@@ -384,6 +388,7 @@ def backtest_production_pipeline(
     """
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
+    model_fit_config = fit_config or FitConfig()
     fold_key = fold_of or _default_fold
     specs = group_slates(rows, grouping)
     folds: dict[Hashable, list[_SlateSpec]] = defaultdict(list)
@@ -398,7 +403,7 @@ def backtest_production_pipeline(
         train, _audit = drop_ambiguous_identity_rows(train)
         assert_no_leakage(train, cutoff=fold_cutoff, slate_game_ids=fold_games)
         try:
-            model = fitter(train, clock_now)
+            model = fitter(train, clock_now, model_fit_config)
         except ValueError as error:
             if isinstance(error, LeakageError):
                 raise
