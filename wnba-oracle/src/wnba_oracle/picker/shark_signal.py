@@ -68,14 +68,14 @@ def _explode_leaderboards(
             raise SharkSignalError(
                 f"unparseable lineup for slate={rec.slate_date} rank={rec.rank}: {exc}"
             ) from exc
-        for player_id in player_ids:
-            rows.append(
-                {
-                    "slate_date": str(rec.slate_date),
-                    "user_id": str(rec.user_id),
-                    "player_id": player_id,
-                }
-            )
+        rows.extend(
+            {
+                "slate_date": str(rec.slate_date),
+                "user_id": str(rec.user_id),
+                "player_id": player_id,
+            }
+            for player_id in player_ids
+        )
     return pd.DataFrame(rows)
 
 
