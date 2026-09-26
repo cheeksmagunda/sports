@@ -14,21 +14,16 @@ Fitness (portfolio contract, Refs #332 / #339):
 Honesty boundary inherited from the contest-pool replay: only the top twenty
 entries are visible. Observations never invent a field percentile.
 
-``oracle_core.race`` may not be on ``main`` yet. Until it lands, this module
-ships local dataclasses matching the designed ``RankObservation`` /
-``SlateResult`` / ``EvalContext`` / ``Variant`` contract and marks the import
-site with a TODO. Heavy walk-forward replay stays injectable: offline tests
-and Actions skeletons pass precomputed :class:`ContestPoolResult` rows via
-:class:`EvalContext` extras (or the offline :func:`make_evaluate_fn` helper)
-instead of pulling Corpus G / fitting ridge in-process.
+Imports the live ``oracle_core.race`` contract (Phase 2b / #356). Heavy
+walk-forward replay stays injectable: offline tests and Actions skeletons
+pass precomputed :class:`ContestPoolResult` rows via :class:`EvalContext`
+extras (or the offline :func:`make_evaluate_fn` helper) instead of pulling
+Corpus G / fitting ridge in-process.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
 from statistics import median
 from typing import Any, Protocol
 
@@ -36,64 +31,17 @@ from nfl_oracle.recommendations.picker_knobs import PickerKnobs
 from nfl_oracle.replay.contest_pool_replay import ContestPoolResult
 
 # ---------------------------------------------------------------------------
-# oracle_core.race contract (import when present; else local stubs)
+# oracle_core.race contract (required; Refs #356)
 # ---------------------------------------------------------------------------
 
-try:
-    # TODO(#339): prefer oracle_core.race once Phase 2 lands on main.
-    from oracle_core.race import (  # type: ignore[import-not-found]
-        EvalContext,
-        RankObservation,
-        SlateResult,
-        Variant,
-    )
+from oracle_core.race import (
+    EvalContext,
+    RankObservation,
+    SlateResult,
+    Variant,
+)
 
-    _RACE_SOURCE = "oracle_core.race"
-except ImportError:  # pragma: no cover - exercised when race is absent
-
-    @dataclass(frozen=True)
-    class Variant:  # type: ignore[no-redef]
-        """Local stub matching ``oracle_core.race.Variant``."""
-
-        params: Mapping[str, Any]
-
-        @property
-        def id(self) -> str:
-            # Content-addressed id lands with oracle_core.race; stubs use a
-            # stable, order-independent repr so offline tests stay deterministic.
-            items = sorted((str(k), repr(v)) for k, v in dict(self.params).items())
-            return "stub:" + ",".join(f"{k}={v}" for k, v in items)
-
-    @dataclass(frozen=True)
-    class RankObservation:  # type: ignore[no-redef]
-        """Local stub matching ``oracle_core.race.RankObservation``."""
-
-        slate_id: str
-        won: bool
-        close: bool
-        score: float = 0.0
-        rank: int | None = None
-        field_size: int | None = None
-
-    @dataclass(frozen=True)
-    class SlateResult:  # type: ignore[no-redef]
-        """Local stub matching ``oracle_core.race.SlateResult``."""
-
-        variant_id: str
-        observations: tuple[RankObservation, ...]
-
-    @dataclass(frozen=True)
-    class EvalContext:  # type: ignore[no-redef]
-        """Local stub matching ``oracle_core.race.EvalContext``."""
-
-        fidelity: Any = None
-        seed: int = 0
-        generation: int = 0
-        now: datetime | None = None
-        cache_dir: Path | None = None
-        extras: Mapping[str, Any] = field(default_factory=dict)
-
-    _RACE_SOURCE = "nfl_oracle.replay.racer.stub"
+_RACE_SOURCE = "oracle_core.race"
 
 
 #: Fallback CLOSE band when no (rank20, winner) pairs are available.

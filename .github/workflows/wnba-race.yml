@@ -31,7 +31,11 @@ jobs:
       - name: Prefetch race inputs
         continue-on-error: true
         run: |
-          echo "wnba-race prefetch placeholder until race scripts land"
+          if [ -d wnba-oracle/data/race ] || [ -d data/race ]; then
+            echo "WNBA race corpus present"
+          else
+            echo "WNBA race corpus absent; backup corpora (#337) not checked out"
+          fi
 
   matrix:
     needs: prefetch
@@ -49,10 +53,14 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
-      - name: Run race shard placeholder
+      - name: Run WNBA evaluate hook
         continue-on-error: true
         run: |
-          echo "wnba-race matrix placeholder for shard ${{ matrix.shard }}"
+          uv run --frozen --package wnba-oracle python -c "
+          from wnba_oracle.eval.racer import EvalContext, Variant, evaluate, race_contract_source
+          slate = evaluate(Variant({'profile': 'identity'}), EvalContext())
+          print(f'shard=${{ matrix.shard }} observations={len(slate.observations)} source={race_contract_source()}')
+          "
 
   merge:
     needs: matrix
@@ -67,6 +75,9 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
-      - name: Merge race shards placeholder
+      - name: Merge race shards
         run: |
-          echo "wnba-race merge placeholder until merge scripts land"
+          uv run --frozen --package oracle-core python -c "
+          from oracle_core.race import merge_shard_records
+          print('merge_shard_records ready', merge_shard_records([]))
+          "

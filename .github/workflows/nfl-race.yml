@@ -31,7 +31,17 @@ jobs:
       - name: Prefetch race inputs
         continue-on-error: true
         run: |
-          echo "nfl-race prefetch placeholder until race scripts land"
+          if [ -f nfl-oracle/scripts/resolve_context_snapshot.py ]; then
+            uv run --frozen --package nfl-oracle python nfl-oracle/scripts/resolve_context_snapshot.py \
+              || echo "context snapshot absent; evaluate hook stays no-op"
+          else
+            echo "resolve_context_snapshot.py not on this ref yet"
+          fi
+          if [ -d nfl-oracle/data/race ]; then
+            echo "race corpus present under nfl-oracle/data/race"
+          else
+            echo "race corpus absent; backup corpora (#338) not checked out"
+          fi
 
   matrix:
     needs: prefetch
@@ -49,10 +59,14 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
-      - name: Run race shard placeholder
+      - name: Run NFL evaluate hook
         continue-on-error: true
         run: |
-          echo "nfl-race matrix placeholder for shard ${{ matrix.shard }}"
+          uv run --frozen --package nfl-oracle python -c "
+          from nfl_oracle.replay.racer import EvalContext, Variant, evaluate, race_contract_source
+          slate = evaluate(Variant({'profile': 'identity'}), EvalContext())
+          print(f'shard=${{ matrix.shard }} observations={len(slate.observations)} source={race_contract_source()}')
+          "
 
   merge:
     needs: matrix
@@ -67,6 +81,9 @@ jobs:
 
       - uses: ./.github/actions/setup-python-uv
 
-      - name: Merge race shards placeholder
+      - name: Merge race shards
         run: |
-          echo "nfl-race merge placeholder until merge scripts land"
+          uv run --frozen --package oracle-core python -c "
+          from oracle_core.race import merge_shard_records
+          print('merge_shard_records ready', merge_shard_records([]))
+          "
