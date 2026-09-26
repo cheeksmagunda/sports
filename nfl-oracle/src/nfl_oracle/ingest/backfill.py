@@ -43,6 +43,7 @@ def tracked_seasons(now: datetime | date | None = None) -> tuple[int, ...]:
         day = now
     return tuple(range(FIRST_TRACKED_SEASON, season_label_for_date(day) + 1))
 
+
 # Seed game ids for honest first-pass proofs. Not a full season census.
 SEED_GAMES: dict[int, list[int]] = {
     2025: [19440, 19445, 19449, 19450, 19451],
