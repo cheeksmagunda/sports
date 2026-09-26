@@ -154,6 +154,95 @@ def train_quantile_head(
     )
 
 
+def train_regression_head(
+    *,
+    name: str,
+    cohort: str,
+    target: str,
+    feature_columns: tuple[str, ...],
+    train_df: pl.DataFrame,
+    valid_df: pl.DataFrame,
+    monotone_constraints: dict[str, int] | None = None,
+    categorical_features: tuple[str, ...] = (),
+    cfg: LGBMHeadConfig = LGBMHeadConfig(),
+) -> TrainedHead:
+    """Train one regression head (median stored at quantile key 0.5 for parity)."""
+    if train_df.is_empty():
+        raise ValueError(f"empty train_df for head {name}/{cohort}")
+    mc_vec = tuple((monotone_constraints or {}).get(c, 0) for c in feature_columns)
+
+    X_train = train_df.select(list(feature_columns)).to_pandas()
+    y_train = train_df.get_column(target).to_pandas()
+    X_valid = (
+        valid_df.select(list(feature_columns)).to_pandas() if not valid_df.is_empty() else None
+    )
+    y_valid = valid_df.get_column(target).to_pandas() if not valid_df.is_empty() else None
+    cat_cols = [c for c in categorical_features if c in feature_columns]
+
+    params = {
+        "objective": "regression",
+        "num_leaves": cfg.num_leaves,
+        "min_data_in_leaf": cfg.min_data_in_leaf,
+        "learning_rate": cfg.learning_rate,
+        "feature_fraction": cfg.feature_fraction,
+        "bagging_fraction": cfg.bagging_fraction,
+        "bagging_freq": cfg.bagging_freq,
+        "lambda_l2": cfg.lambda_l2,
+        "min_gain_to_split": cfg.min_gain_to_split,
+        "deterministic": True,
+        "force_col_wise": True,
+        "num_threads": 1,
+        "verbosity": -1,
+        "seed": cfg.seed,
+        "bagging_seed": cfg.seed,
+        "data_random_seed": cfg.seed,
+        "feature_fraction_seed": cfg.seed,
+        "feature_pre_filter": False,
+    }
+    train_set = lgb.Dataset(
+        X_train,
+        label=y_train,
+        categorical_feature=cat_cols if cat_cols else "auto",
+        free_raw_data=False,
+    )
+    valid_sets = [train_set]
+    valid_names = ["train"]
+    callbacks: list = []
+    if X_valid is not None and not X_valid.empty:
+        valid_set = lgb.Dataset(
+            X_valid,
+            label=y_valid,
+            reference=train_set,
+            categorical_feature=cat_cols if cat_cols else "auto",
+            free_raw_data=False,
+        )
+        valid_sets.append(valid_set)
+        valid_names.append("valid")
+        callbacks.append(lgb.early_stopping(cfg.early_stopping_rounds, verbose=False))
+    booster = lgb.train(
+        params,
+        train_set,
+        num_boost_round=cfg.num_boost_round,
+        valid_sets=valid_sets,
+        valid_names=valid_names,
+        callbacks=callbacks,
+    )
+    log.info(
+        "regression_head_trained",
+        name=name,
+        cohort=cohort,
+        best_iter=booster.best_iteration,
+    )
+    return TrainedHead(
+        name=name,
+        cohort=cohort,
+        target=target,
+        feature_columns=feature_columns,
+        quantile_models={0.5: booster},
+        monotone_constraints=mc_vec,
+    )
+
+
 def predict_head(
     head: TrainedHead, X: pl.DataFrame, *, quantiles: tuple[float, ...] = DEFAULT_QUANTILES
 ) -> dict[float, np.ndarray]:

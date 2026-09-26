@@ -123,3 +123,32 @@ class EBHierarchicalBaseline:
 def feature_subset(df: pl.DataFrame, cols: Iterable[str]) -> pl.DataFrame:
     cols = [c for c in cols if c in df.columns]
     return df.select(cols)
+
+
+def attach_eb_residual_targets(
+    df: pl.DataFrame,
+    eb: EBHierarchicalBaseline,
+    *,
+    cohort_col: str = "cohort",
+    real_score_col: str = "real_score",
+) -> pl.DataFrame:
+    """Set ``real_score_residual`` to realized ``real_score`` minus ``eb.predict``.
+
+    ``add_targets`` leaves the column null until an EB model is fit; ``train_picker``
+    calls this before training the ``real_score_residual`` head.
+    """
+    from wnba_oracle.features.spec import cohort_for_position
+
+    if df.is_empty() or real_score_col not in df.columns:
+        return df
+
+    work = df
+    if cohort_col not in work.columns:
+        work = work.with_columns(
+            pl.col("position")
+            .map_elements(cohort_for_position, return_dtype=pl.String)
+            .alias(cohort_col)
+        )
+    preds = eb.predict(work)
+    observed = work.get_column(real_score_col).to_numpy().astype(float)
+    return work.with_columns(pl.Series("real_score_residual", observed - preds, dtype=pl.Float64))

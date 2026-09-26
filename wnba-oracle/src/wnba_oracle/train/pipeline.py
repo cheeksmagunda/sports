@@ -44,12 +44,13 @@ from wnba_oracle.features.spec import (
     feature_columns_for_head,
 )
 from wnba_oracle.train.calibrators import PCHIPIsotonic
-from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline
+from wnba_oracle.train.eb_baseline import EBHierarchicalBaseline, attach_eb_residual_targets
 from wnba_oracle.train.lgbm_heads import (
     LGBMHeadConfig,
     TrainedHead,
     predict_head,
     train_quantile_head,
+    train_regression_head,
 )
 
 log = get_logger("oracle.train.pipeline")
@@ -288,6 +289,24 @@ def train_picker(
         calibrators_consumed_at_serving=False,
     )
 
+    eb: EBHierarchicalBaseline | None = None
+    if target_real_score in label_train.columns:
+        eb = EBHierarchicalBaseline()
+        eb_input = label_train.with_columns(
+            pl.col("position")
+            .map_elements(cohort_for_position, return_dtype=pl.String)
+            .alias("cohort")
+            if "cohort" not in label_train.columns
+            else pl.col("cohort")
+        )
+        eb.fit(eb_input, target=target_real_score)
+        art.eb_baseline = eb
+        art.cohort_means = eb.cohort_means
+        if "real_score" in train_df.columns:
+            train_df = attach_eb_residual_targets(train_df, eb)
+        if not valid_df.is_empty() and "real_score" in valid_df.columns:
+            valid_df = attach_eb_residual_targets(valid_df, eb)
+
     cohorts: tuple[Cohort, ...] = ("G", "F", "C")
     for cohort in cohorts:
         c_train = _filter_cohort(train_df, cohort)
@@ -314,7 +333,10 @@ def train_picker(
             )
             if cell_train.is_empty():
                 continue
-            head = train_quantile_head(
+            head_cfg_yaml = (cfg.get("heads") or {}).get(head_name) or {}
+            objective = str(head_cfg_yaml.get("objective", "quantile"))
+            train_head = train_regression_head if objective == "regression" else train_quantile_head
+            head = train_head(
                 name=head_name,
                 cohort=cohort,
                 target=target,
@@ -326,7 +348,7 @@ def train_picker(
             )
             if refit_full and not cell_valid.is_empty():
                 cell_refit = pl.concat([cell_train, cell_valid])
-                head = train_quantile_head(
+                head = train_head(
                     name=head_name,
                     cohort=cohort,
                     target=target,
@@ -351,20 +373,6 @@ def train_picker(
                 art.calibrators[(head_name, cohort)] = calib
 
     art.cohorts_trained = tuple(sorted({c for (_, c) in art.heads}))
-
-    # EB baseline on the contest-label frame's real_score column (if present).
-    if target_real_score in label_train.columns:
-        eb = EBHierarchicalBaseline()
-        eb_input = label_train.with_columns(
-            pl.col("position")
-            .map_elements(cohort_for_position, return_dtype=pl.String)
-            .alias("cohort")
-            if "cohort" not in train_df.columns
-            else pl.col("cohort")
-        )
-        eb.fit(eb_input, target=target_real_score)
-        art.eb_baseline = eb
-        art.cohort_means = eb.cohort_means
 
     return art
 
