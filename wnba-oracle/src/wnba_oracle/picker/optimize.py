@@ -1,8 +1,11 @@
 """Two-stage lineup optimizer.
 
-Stage 1: filter to top-N players by `pred_real_score * (2.0 + card_boost)`.
-Stage 2: enumerate C(N, 5) lineups, score each by E[payout(lineup_score)],
-         pick argmax. For N=30, C(30,5)=142506. Budget ~30s per slate.
+Stage 1: filter to top-N by
+  `(rank_pred_override or pred_real_score) * (max_slot + card_boost)`.
+Stage 2: enumerate C(N, 5) lineups and score each by the configured
+  objective (default E[payout]; optional E[committed-order total draft
+  value] via ``objective_mode="total_draft_value"``, #433).
+  Pick argmax. For N=30, C(30,5)=142506. Budget ~30s per slate.
 
 Slot assignment is by rearrangement inequality: highest real_score median
 gets the highest slot multiplier (handled in sample.lineup_score_samples).
@@ -25,7 +28,7 @@ import itertools
 from collections import Counter
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Literal, TypeVar
 
 import numpy as np
 
@@ -327,6 +330,12 @@ class OptimizeConfig:
     # the corpus grows:
     # `scripts/lab.py variant --set committed_order_objective=True --last 0`
     committed_order_objective: bool = False
+    # #433 total draft value: select by E[committed-order lineup score]
+    # (slot+boost)×realized instead of E[payout]. Default "payout" keeps
+    # production byte-identical. When "total_draft_value", committed-order
+    # scoring is forced and payout/leverage/ceiling/duplication additives
+    # are skipped so the scan maximises slate TV, not contest placement.
+    objective_mode: Literal["payout", "total_draft_value"] = "payout"
 
 
 @dataclass
@@ -406,9 +415,11 @@ def _scan_lineups(
     n_evaluated = n_skipped_team = n_skipped_anchor = n_skipped_boost = 0
     n_skipped_game_coverage = 0
     boost_cap_on = inputs.effective_boost_sum_cap > 0.0 or inputs.effective_max_single_boost > 0.0
-    leverage_on = cfg.leverage_weight > 0.0
-    ceiling_on = cfg.ceiling_weight > 0.0
-    duplication_penalty_on = cfg.duplication_weight > 0.0
+    tdv_mode = cfg.objective_mode == "total_draft_value"
+    leverage_on = (not tdv_mode) and cfg.leverage_weight > 0.0
+    ceiling_on = (not tdv_mode) and cfg.ceiling_weight > 0.0
+    duplication_penalty_on = (not tdv_mode) and cfg.duplication_weight > 0.0
+    committed_order = tdv_mode or cfg.committed_order_objective
 
     for combo, eligible_unrestricted, eligible_balance_pool in _candidate_pool_combinations(
         inputs.unrestricted_indices,
@@ -444,30 +455,36 @@ def _scan_lineups(
             inputs.keep_boosts,
             list(combo),
             inputs.slot_multipliers,
-            committed_order=cfg.committed_order_objective,
+            committed_order=committed_order,
         )
-        objective = expected_payout(
-            own_samples,
-            inputs.field_scores,
-            inputs.curve,
-            field_size=inputs.field_size_total,
-        )
-        if inputs.field_lineup_counter is not None:
-            clones = inputs.field_lineup_counter.get(frozenset(combo), 0)
-            if clones > 0:
-                objective /= float(1 + clones)
-        if leverage_on:
-            leverage = float(-inputs.keep_log_own[list(combo)].mean())
-            objective += cfg.leverage_weight * leverage
-        if ceiling_on:
-            p50, p90 = np.quantile(own_samples, [0.5, 0.9])
-            denominator = max(abs(float(p50)), 1.0)
-            objective += cfg.ceiling_weight * float((p90 - p50) / denominator)
-        if duplication_penalty_on:
-            duplication_probability = float(np.prod(inputs.ownership[list(combo)]))
-            objective -= (
-                cfg.duplication_weight * duplication_probability * float(inputs.field_size_total)
+        if tdv_mode:
+            # E[committed-order TV]: maximise slate draft value, not payout.
+            objective = float(np.mean(own_samples))
+        else:
+            objective = expected_payout(
+                own_samples,
+                inputs.field_scores,
+                inputs.curve,
+                field_size=inputs.field_size_total,
             )
+            if inputs.field_lineup_counter is not None:
+                clones = inputs.field_lineup_counter.get(frozenset(combo), 0)
+                if clones > 0:
+                    objective /= float(1 + clones)
+            if leverage_on:
+                leverage = float(-inputs.keep_log_own[list(combo)].mean())
+                objective += cfg.leverage_weight * leverage
+            if ceiling_on:
+                p50, p90 = np.quantile(own_samples, [0.5, 0.9])
+                denominator = max(abs(float(p50)), 1.0)
+                objective += cfg.ceiling_weight * float((p90 - p50) / denominator)
+            if duplication_penalty_on:
+                duplication_probability = float(np.prod(inputs.ownership[list(combo)]))
+                objective -= (
+                    cfg.duplication_weight
+                    * duplication_probability
+                    * float(inputs.field_size_total)
+                )
         n_evaluated += 1
         candidate = _Candidate(
             objective=float(objective),
@@ -764,13 +781,14 @@ def _simulate_field_scores(
         seed=cfg.seed + 1,
     )
     field_scores = np.zeros((cfg.n_field_lineups, cfg.n_samples))
+    committed = cfg.objective_mode == "total_draft_value" or cfg.committed_order_objective
     for row in range(cfg.n_field_lineups):
         field_scores[row] = lineup_score_samples(
             real_score_samples,
             pool.boosts,
             list(field_lineups[row]),
             slot_multipliers,
-            committed_order=cfg.committed_order_objective,
+            committed_order=committed,
         )
     return ownership, field_lineups, field_scores
 
