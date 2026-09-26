@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 912 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 913 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1091,6 +1091,7 @@ Generated from `git ls-files`. 912 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_lineup_history.py -- D82: append-only lineup API surface.
 - wnba-oracle/tests/unit/test_live_ownership.py -- #38/F6: same-day live ownership capture gating and safety.
 - wnba-oracle/tests/unit/test_logging_httpx_redact.py -- httpx logs the full request URL (incl. query-string secrets like The Odds
+- wnba-oracle/tests/unit/test_measured_drafts_live_ownership_434.py -- Live ownership capture feeds PIT-safe measured drafts into job2 (#434).
 - wnba-oracle/tests/unit/test_metrics.py -- Metrics tests: CRPS, coverage, ECE.
 - wnba-oracle/tests/unit/test_minutes_backfill.py -- wnba_game_logs refresh (D102): row mapping and truthful outcomes.
 - wnba-oracle/tests/unit/test_minutes_model.py -- Minutes/role model (D55): scoring formula, predictor, ingest, job2 wiring.
