@@ -65,6 +65,12 @@ make test-wnba
   freeze" and "what actually happened," both from canonical PostgreSQL state
   (issue #34).
 - `GET /slate/{date}`: return first-tip, lock, freeze, and pause metadata.
+  Includes `slate_timing_captured` (timing known vs operator pause). Pipeline
+  blockers are not on this route; use `/watchdog/{date}` → `freeze_readiness`.
+- `GET /watchdog/{date}` and `/watchdog/today`: live pipeline checks plus
+  `freeze_readiness` (observation-only, mirrors pre-freeze guard fail-closed
+  rules: hard blockers union live events and cron history, job1 durable status,
+  timing captured, pause window).
 - `GET /dossier/{date}`: return the unified post-slate dossier (issue #35
   phase 3), a pure composition over already-persisted records
   (`frozen_lineups`, `freeze_audit_snapshots`, `ScoringProvenance`,

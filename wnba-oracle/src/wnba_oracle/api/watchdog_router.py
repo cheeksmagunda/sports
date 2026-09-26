@@ -12,11 +12,14 @@ import datetime as dt
 from collections.abc import Mapping
 from typing import Any
 
+import sqlalchemy as sa
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
 from wnba_oracle.common.clock import slate_date as current_slate_date
+from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_api_engine as get_engine
+from wnba_oracle.ops.freeze_readiness import summarize_freeze_readiness
 from wnba_oracle.scheduler.job_runtime import JOB_NAMES
 
 router = APIRouter(prefix="/watchdog", tags=["watchdog"])
@@ -106,7 +109,7 @@ def get_watchdog_for_slate(
 
     from wnba_oracle.scheduler.watchdog import evaluate_watchdog
 
-    live_raw = evaluate_watchdog(slate_date, check_config_drift=False, check_model_artifact=False)
+    live_raw = evaluate_watchdog(slate_date, check_config_drift=False)
     events = []
     for ev in live_raw:
         if severity_rank.get(ev.severity, 0) < min_rank:
@@ -142,13 +145,62 @@ def get_watchdog_for_slate(
             }
         )
 
+    settings = get_settings()
+    picks_paused = settings.picks_paused_on(current_slate_date())
+    job1_row = _latest_job_run(eng, slate_date, "job1")
+    job1_status = str(job1_row["status"]) if job1_row and job1_row.get("status") else None
+    job1_exit_code = job1_row.get("exit_code") if job1_row else None
+    slate_timing_captured = _slate_timing_captured(eng, slate_date)
+    lineup_frozen = _lineup_frozen(eng, slate_date)
+
+    freeze_readiness = summarize_freeze_readiness(
+        picks_paused=picks_paused,
+        slate_timing_captured=slate_timing_captured,
+        lineup_frozen=lineup_frozen,
+        job1_status=job1_status,
+        job1_exit_code=job1_exit_code if isinstance(job1_exit_code, int) else None,
+        events=events,
+        history=history,
+    )
+
     return {
         "slate_date": slate_date,
         "checked_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "events": events,
         "history": history,
         "status": _summarize(events),
+        "freeze_readiness": freeze_readiness,
     }
+
+
+_SLATE_TIMING_Q = text(
+    "SELECT 1 FROM slate_meta WHERE slate_date = :sd "
+    "AND (contest_lock_utc IS NOT NULL OR first_tip_utc IS NOT NULL) LIMIT 1"
+)
+_FROZEN_LINEUP_Q = text("SELECT 1 FROM frozen_lineups WHERE slate_date = :sd LIMIT 1")
+_JOB1_LATEST_Q = text(
+    "SELECT status, exit_code FROM job_runs WHERE slate_date = :sd AND job_name = :job "
+    "ORDER BY started_at DESC LIMIT 1"
+)
+
+
+def _latest_job_run(engine: sa.Engine, slate_date: str, job_name: str) -> dict[str, object] | None:
+    with engine.connect() as connection:
+        row = connection.execute(_JOB1_LATEST_Q, {"sd": slate_date, "job": job_name}).first()
+    if row is None:
+        return None
+    mapping = row._mapping
+    return {"status": mapping.get("status"), "exit_code": mapping.get("exit_code")}
+
+
+def _slate_timing_captured(engine: sa.Engine, slate_date: str) -> bool:
+    with engine.connect() as connection:
+        return connection.execute(_SLATE_TIMING_Q, {"sd": slate_date}).first() is not None
+
+
+def _lineup_frozen(engine: sa.Engine, slate_date: str) -> bool:
+    with engine.connect() as connection:
+        return connection.execute(_FROZEN_LINEUP_Q, {"sd": slate_date}).first() is not None
 
 
 def _summarize(events: list[dict]) -> str:

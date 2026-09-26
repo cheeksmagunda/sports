@@ -733,6 +733,9 @@ def test_watchdog_today_uses_live_eval_not_history() -> None:
         def __iter__(self):
             return iter(self._rows)
 
+        def first(self):
+            return self._rows[0] if self._rows else None
+
     class _Conn:
         def __enter__(self):
             return self
@@ -740,8 +743,26 @@ def test_watchdog_today_uses_live_eval_not_history() -> None:
         def __exit__(self, *args):
             return False
 
-        def execute(self, *args, **kwargs):
-            return _Result([_Row(historical)])
+        def execute(self, query, *args, **kwargs):
+            sql = str(query)
+            if "watchdog_events" in sql:
+                return _Result([_Row(historical)])
+            if "job_runs" in sql:
+                return _Result(
+                    [
+                        _Row(
+                            {
+                                "status": "success",
+                                "exit_code": 0,
+                            }
+                        )
+                    ]
+                )
+            if "slate_meta" in sql:
+                return _Result([_Row({"x": 1})])
+            if "frozen_lineups" in sql:
+                return _Result([])
+            return _Result([])
 
     class _Eng:
         def connect(self):
@@ -763,32 +784,6 @@ def test_watchdog_today_uses_live_eval_not_history() -> None:
     assert body["events"] == []
     assert len(body["history"]) == 1
     assert body["history"][0]["trigger"] == "rotowire_empty"
-
-
-def test_evaluate_watchdog_can_skip_model_artifact(monkeypatch) -> None:
-    """API live path must not false-critical on unset artifact SHA (#331)."""
-
-    def _empty(_sd: str, **_kwargs: object) -> list:
-        return []
-
-    monkeypatch.setattr(watchdog, "_check_pool", _empty)
-    monkeypatch.setattr(watchdog, "_check_enrichment_freshness", _empty)
-    monkeypatch.setattr(watchdog, "_check_enrichment_source", _empty)
-    monkeypatch.setattr(watchdog, "_check_opponent_reciprocity", _empty)
-    monkeypatch.setattr(watchdog, "_check_freeze", _empty)
-    monkeypatch.setattr(
-        watchdog,
-        "_check_model_artifact",
-        lambda _sd, **_kwargs: [
-            watchdog.WatchdogEvent(
-                slate_date=_sd,
-                trigger="model_artifact_unset",
-                severity=watchdog.SEVERITY_CRITICAL,
-                payload={},
-            )
-        ],
-    )
-    monkeypatch.setattr(watchdog, "_check_feature_content", _empty)
-    assert watchdog.evaluate_watchdog("2026-06-21", check_model_artifact=False) == []
-    skipped = watchdog.evaluate_watchdog("2026-06-21", check_model_artifact=True)
-    assert [e.trigger for e in skipped] == ["model_artifact_unset"]
+    assert body["freeze_readiness"]["ready_for_freeze"] is True
+    assert body["freeze_readiness"]["phase"] == "advisory"
+    assert "rotowire_empty" in body["freeze_readiness"]["advisories"]

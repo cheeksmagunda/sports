@@ -22,15 +22,12 @@ from ops_common import (
     write_report,
 )
 
-HARD_WATCHDOG_TRIGGERS = {
-    "enrichment_from_backfill",
-    "job1_pool_degraded",
-    "model_artifact_unresolved",
-    "model_artifact_unset",
-    "no_job1_pool",
-    "pool_degenerate_teams",
-    "pool_too_small",
-}
+from wnba_oracle.ops.freeze_readiness import (
+    HARD_FREEZE_BLOCKERS,
+    triggers_from_watchdog_payload,
+)
+
+HARD_WATCHDOG_TRIGGERS = HARD_FREEZE_BLOCKERS
 
 
 def _api_is_healthy(api_base: str) -> bool:
@@ -104,23 +101,10 @@ def _api_checks(
             )
         else:
             events = payload.get("events")
-            event_list = events if isinstance(events, list) else []
             history = payload.get("history")
+            event_list = events if isinstance(events, list) else []
             history_list = history if isinstance(history, list) else []
-            # Live /watchdog events omit model_artifact_* by design (#331):
-            # api containers lack the job2 artifact SHA. Fail-closed artifact
-            # coverage comes from cron-persisted history instead.
-            live_triggers = {
-                str(event.get("trigger"))
-                for event in event_list
-                if isinstance(event, dict) and event.get("trigger")
-            }
-            history_triggers = {
-                str(event.get("trigger"))
-                for event in history_list
-                if isinstance(event, dict) and event.get("trigger")
-            }
-            triggers = sorted(live_triggers | history_triggers)
+            triggers = sorted(triggers_from_watchdog_payload(event_list, history_list))
             hard = sorted(HARD_WATCHDOG_TRIGGERS.intersection(triggers))
             if hard:
                 checks.append(

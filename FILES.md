@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 898 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,7 +17,9 @@ Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
-- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md
+- FILES.md
+- FILES.md
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - README.md -- Sports Oracle
@@ -843,6 +845,7 @@ Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/api/lineup.py -- Read-only API endpoints for the frozen lineup.
 - wnba-oracle/src/wnba_oracle/api/results.py -- Read-only API endpoint over realized Real Sports slate results.
 - wnba-oracle/src/wnba_oracle/api/slate.py -- Read-only slate-timing endpoint for the frontend countdown (D104).
+- wnba-oracle/src/wnba_oracle/api/slate_router.py
 - wnba-oracle/src/wnba_oracle/api/watchdog_router.py -- Operator-facing watchdog surface.
 
 ## wnba-oracle/src/wnba_oracle/assurance/
@@ -919,6 +922,9 @@ Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/gener
 
 ## wnba-oracle/src/wnba_oracle/monitoring/
 - wnba-oracle/src/wnba_oracle/monitoring/__init__.py
+
+## wnba-oracle/src/wnba_oracle/ops/
+- wnba-oracle/src/wnba_oracle/ops/freeze_readiness.py -- Advance freeze readiness summary (observation only).
 
 ## wnba-oracle/src/wnba_oracle/picker/
 - wnba-oracle/src/wnba_oracle/picker/__init__.py
@@ -1048,6 +1054,7 @@ Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_freeze_append_fix.py -- Regression tests for the 2026-06-13 freeze outage.
 - wnba-oracle/tests/unit/test_freeze_audit_snapshot.py
 - wnba-oracle/tests/unit/test_freeze_idempotency.py -- Lock the true-freeze semantics in job2._freeze.
+- wnba-oracle/tests/unit/test_freeze_readiness.py -- Unit tests for advance freeze readiness summarization (#332).
 - wnba-oracle/tests/unit/test_frozen_append.py -- D82: append-only freeze writes in job2._freeze.
 - wnba-oracle/tests/unit/test_game_script.py -- Game-script tier multipliers + blowout penalty.
 - wnba-oracle/tests/unit/test_game_script_minutes.py -- Game-script (blowout) minutes redistribution.
