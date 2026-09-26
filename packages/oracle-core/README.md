@@ -16,6 +16,11 @@ The public package includes:
 - atomic artifact persistence, integrity checks, and deterministic test fakes;
 - day-close sweep orchestration (`oracle_core.dayclose`): grade a target day,
   then retry a bounded catch-up window for anything still ungraded;
+- WIN/CLOSE fitness band helpers (`oracle_core.fitness`): reduce a corpus of
+  per-slate (winner, rank-20) scores to one band `b = median(rank20/winner)`,
+  then score a variant as WIN (`score >= winner`) or CLOSE
+  (`score >= (1 - b) * winner`). Domain-free; both sport applications use it
+  until it folds into `oracle_core.race`;
 - schema.org / JSON-LD entity helpers (`oracle_core.schemaorg`) for Person,
   SportsTeam, SportsOrganization, SportsEvent, Place, OrganizationRole,
   identifier/PropertyValue, sameAs, Observation, QuantitativeValue, ItemList,
