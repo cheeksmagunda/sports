@@ -90,9 +90,7 @@ def build_race_corpus(
     summary: dict[str, dict[str, int]] = {}
     for season in seasons:
         labels = _load_season_labels(root, season)
-        leaderboards = load_dayclose_top_entries(
-            project_root, season=season, race_root=race_root
-        )
+        leaderboards = load_dayclose_top_entries(project_root, season=season, race_root=race_root)
         if labels.is_empty() and leaderboards.is_empty():
             continue
         if not leaderboards.is_empty():
