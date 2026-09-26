@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 898 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -135,6 +137,8 @@ Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/Dockerfile.production
 - nfl-oracle/Makefile -- Build/test/lint entrypoints
 - nfl-oracle/README.md -- nfl-oracle
+- nfl-oracle/STATUS.md -- Status
+- nfl-oracle/STATUS.md -- Status
 - nfl-oracle/STATUS.md -- Status
 - nfl-oracle/docker-compose.yml
 - nfl-oracle/pyproject.toml -- Package/tool configuration
@@ -460,6 +464,7 @@ Generated from `git ls-files`. 893 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_service_app.py -- Research service scaffold smoke tests.
 - nfl-oracle/tests/unit/test_service_shadow_edges.py -- Research service edge cases for shadow/gates/status (observation only).
 - nfl-oracle/tests/unit/test_strategy_scaffold.py -- Strategy scaffold: clocks, five-card legality, snapshots.
+- nfl-oracle/tests/unit/test_t40_watchdog_workflow_crons.py -- Guard the nfl-t40-watchdog schedule against holiday kickoff regressions.
 - nfl-oracle/tests/unit/test_train_force_flag.py -- train --force must rebuild even when the active model is still young.
 - nfl-oracle/tests/unit/test_value_baselines.py -- Tests for walk-forward Real value baselines (offline).
 - nfl-oracle/tests/unit/test_value_labels.py -- Tests for Real value label schema + Corpus G extraction.
