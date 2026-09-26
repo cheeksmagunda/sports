@@ -242,7 +242,7 @@ class Fidelity:
 class EvalContext:
     """Everything an :data:`EvaluationFn` needs beyond the variant itself."""
 
-    fidelity: Fidelity
+    fidelity: Fidelity = field(default_factory=lambda: Fidelity(level=0))
     seed: int = 0
     generation: int = 0
     now: datetime | None = None
