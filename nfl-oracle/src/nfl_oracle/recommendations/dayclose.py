@@ -44,6 +44,7 @@ from nfl_oracle.contests.parse import load_contest
 from nfl_oracle.contests.store import ContestStore
 from nfl_oracle.ingest.corpus_g import CorpusGStore, ingest_game
 from nfl_oracle.ingest.realsports import capture_live_headers, headers_or_capture
+from nfl_oracle.recommendations.dayclose_persist import persist_dayclose_parquet
 from nfl_oracle.recommendations.grading import grade_frozen_lineup
 from nfl_oracle.recommendations.history import load_history
 from nfl_oracle.recommendations.store import RecommendationStore
@@ -161,15 +162,28 @@ def grade_day(
         return DayCloseOutcome(day, "no_performances", detail=str(excluded))
 
     report = grade_frozen_lineup(frozen, performances)
+    slate_results = _slate_results(ContestStore(project=project_root), contest_id)
     payload = {
         "schema_version": 2,
         "day": day.isoformat(),
         "contest_id": contest_id,
         "field_size": outcome.entrants,
         "grade": report.model_dump(mode="json"),
-        "slate_results": _slate_results(ContestStore(project=project_root), contest_id),
+        "slate_results": slate_results,
     }
     store.put_artifact(dayclose_grade_kind(day), payload)
+    try:
+        persist_dayclose_parquet(
+            project_root=project_root,
+            day=day,
+            season=season,
+            contest_id=contest_id,
+            slate_results=slate_results,
+        )
+    except OSError:
+        # Grade artifact already landed; parquet is the race-corpus side
+        # channel and must not flip a successful grade into a failure.
+        pass
     return DayCloseOutcome(day, "graded", detail=report.status)
 
 

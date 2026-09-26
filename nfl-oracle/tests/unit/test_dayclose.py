@@ -359,3 +359,6 @@ def test_slate_results_capture_the_whole_field_not_just_our_picks(tmp_path: Path
     stat_player_ids = {row["player_id"] for row in slate_results["player_draft_stats"]}
     assert stat_player_ids == {99}
     assert slate_results["top_entries"][0]["entry_id"] == 1
+    race_root = tmp_path / "nfl-oracle" / "data" / "race" / "dayclose" / str(SEASON)
+    assert (race_root / f"{DAY.isoformat()}_leaderboards.parquet").is_file()
+    assert (race_root / f"{DAY.isoformat()}_labels.parquet").is_file()

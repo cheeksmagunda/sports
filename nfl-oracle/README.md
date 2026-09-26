@@ -237,6 +237,16 @@ make -C nfl-oracle picker-knob-sweep CONTEXT_SNAPSHOT=/path/to/context.json \
 
 Production defaults stay identity. Measured Railway flips use
 `NFL_PICKER_BOOST_RANK_BLEND` / `NFL_PICKER_PROFILE` (see STATUS.md, Refs #280).
+Replay CLIs accept optional `--fit-*` knobs so a race can vary the shared
+ridge `FitConfig` without editing code. Knob-sweep `excluded` reasons are
+isolated per profile (shared pool skips stay on every profile).
+
+Nightly day-close writes Corpus C field rows as parquet under
+`data/race/dayclose/<season>/` and `scripts/build_race_corpus.py` aggregates
+them for offline Actions. `scripts/resolve_context_snapshot.py` locates the
+nflverse context snapshot the same way the worker does
+(`NFL_CONTEXT_SNAPSHOT` or newest `data/artifacts/context/*.json`).
+Coverage tracking includes the current calendar year.
 
 ## Local commands
 

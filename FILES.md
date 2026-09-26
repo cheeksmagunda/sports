@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 903 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -173,6 +173,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/scripts/auth-check-live
 - nfl-oracle/scripts/auth_presence_check.py -- Print presence-only Real Sports auth surface status (never values).
 - nfl-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable NFL decision corpus.
+- nfl-oracle/scripts/build_race_corpus.py -- Build per-season NFL race corpora from day-close parquet drops.
 - nfl-oracle/scripts/cache_nflverse_schedules.py -- Download public nflverse/nfldata games.csv and slim into offline schedule cache.
 - nfl-oracle/scripts/capture_storage_state.py -- Capture a private Playwright session for operator-authorized Real Sports calls.
 - nfl-oracle/scripts/daily_shadow.py -- Minimal daily-shadow scaffold (observation only; no contest entry).
@@ -185,6 +186,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/scripts/postgres_store_smoke.py -- Exercise NFL recommendation storage against a temporary local PostgreSQL.
 - nfl-oracle/scripts/production_container_smoke.py -- Build and smoke-test the NFL production image without secrets or a database.
 - nfl-oracle/scripts/research_client_smoke.py -- Offline research FastAPI client smoke (observation only; no contest entry).
+- nfl-oracle/scripts/resolve_context_snapshot.py -- Locate an nflverse context snapshot for offline Actions (#338).
 - nfl-oracle/scripts/restore_corpus.py -- Validate and explicitly restore a verified NFL corpus backup snapshot.
 - nfl-oracle/scripts/seed_storage_state.py -- Materialize scraper/storage_state.json from REALSPORTS_STORAGE_STATE_B64GZ.
 - nfl-oracle/scripts/sweep_picker_knobs.py -- Sweep picker knobs on Corpus C contest-pool replay (shared weekly fits).
@@ -281,6 +283,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/recommendations/cli.py -- Production roles for the NFL recommendation service.
 - nfl-oracle/src/nfl_oracle/recommendations/context.py -- Time-filtered NFL role, matchup and environment features.
 - nfl-oracle/src/nfl_oracle/recommendations/dayclose.py -- Day-close grading: score a frozen NFL lineup against finalized real-world
+- nfl-oracle/src/nfl_oracle/recommendations/dayclose_persist.py -- Persist day-close Corpus C field results as race-ready parquet.
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
@@ -412,6 +415,7 @@ Generated from `git ls-files`. 899 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_data_features_calendar.py -- Data catalog, features schema, calendar helpers.
 - nfl-oracle/tests/unit/test_dayclose.py
 - nfl-oracle/tests/unit/test_dayclose_gate.py
+- nfl-oracle/tests/unit/test_dayclose_persist.py -- Unit tests for day-close parquet persist and race corpus aggregate (#338).
 - nfl-oracle/tests/unit/test_eval_report.py -- Tests for offline walk-forward eval report (baselines vs feature_ridge).
 - nfl-oracle/tests/unit/test_feature_registry_depth.py -- Feature registry depth for pre-lock decisioning.
 - nfl-oracle/tests/unit/test_feature_value_model.py -- Leakage-safe feature_ridge value model + strategy wiring.
