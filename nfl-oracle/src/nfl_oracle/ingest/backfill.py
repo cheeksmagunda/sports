@@ -7,13 +7,15 @@ import asyncio
 import json
 import sys
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from oracle_core.artifacts import atomic_write_json
 
+from nfl_oracle.calendar.season import season_label_for_date
 from nfl_oracle.common.logging import configure_logging, get_logger
 from nfl_oracle.data.label_depth import LABEL_KIND_HIGH_TV, LABEL_KIND_RAW, game_label_kind
 from nfl_oracle.ingest.corpus_g import CorpusGStore, GameIngestResult, ingest_game
@@ -26,6 +28,19 @@ from nfl_oracle.ingest.realsports import (
 log = get_logger("nfl_oracle.ingest.backfill")
 
 DEFAULT_INTER_GAME_DELAY_S = 2.0
+TRACKED_SEASONS_START = 2002
+
+
+def tracked_seasons(*, as_of: date | None = None) -> tuple[int, ...]:
+    """Return tracked season labels from 2002 through the current season label."""
+
+    day = as_of if as_of is not None else datetime.now(ZoneInfo("America/New_York")).date()
+    return tuple(range(TRACKED_SEASONS_START, season_label_for_date(day) + 1))
+
+
+# Seasons we track in the matrix even before game ids are discovered.
+# Upper bound is calendar-derived so the matrix advances with the season.
+TRACKED_SEASONS: tuple[int, ...] = tracked_seasons()
 
 # Seed game ids for honest first-pass proofs. Not a full season census.
 SEED_GAMES: dict[int, list[int]] = {
@@ -68,9 +83,6 @@ class BackfillCursor:
 SEASON_STATUS_KNOWN = "known"
 SEASON_STATUS_UNKNOWN = "unknown"
 SEASON_STATUS_BLOCKED = "blocked"
-
-# Seasons we track in the matrix even before game ids are discovered.
-TRACKED_SEASONS: tuple[int, ...] = tuple(range(2002, 2026))
 
 
 @dataclass

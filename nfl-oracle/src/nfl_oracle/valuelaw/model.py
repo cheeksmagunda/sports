@@ -8,12 +8,13 @@ share is very large. This module fits one linear model per position family on
 accuracy against named baselines, so "the box score explains value" is a
 tested claim, not an assertion.
 
-Split is strictly time-aware: train on season 2024 regular-season rows, test
-on season 2025 regular-season rows. Preseason rows are excluded from both, to
-match the STATUS.md convention (37,710 of 47,209 rows are non-preseason).
-Nothing here reads a 2025 row to inform a prediction for another 2025 row from
-an earlier week; the split is by season, which is what the data on disk
-supports today. A finer walk-forward-by-week split is future work.
+Split is strictly time-aware: train on the next-to-latest season's
+regular-season rows and test on the latest season present in the dataset when
+seasons are not passed explicitly. Preseason rows are excluded from both.
+Nothing here reads a test-season row to inform a prediction for another
+test-season row from an earlier week; the split is by season, which is what
+the data on disk supports today. A finer walk-forward-by-week split is future
+work.
 """
 
 from __future__ import annotations
@@ -161,13 +162,28 @@ def fit_position_model(
     )
 
 
+def latest_two_seasons(rows: Sequence[Mapping[str, Any]]) -> tuple[int, int]:
+    """Return (train_season, test_season) as the two latest seasons in *rows*."""
+
+    seasons = sorted({int(row["season"]) for row in rows if row.get("season") is not None})
+    if len(seasons) < 2:
+        raise ValueError("need_at_least_two_seasons_in_dataset")
+    return seasons[-2], seasons[-1]
+
+
 def fit_all(
     dataset_path: Path,
     *,
-    train_season: int = 2024,
-    test_season: int = 2025,
+    train_season: int | None = None,
+    test_season: int | None = None,
 ) -> ValueModelBundle:
     rows = _load_rows(dataset_path)
+    if train_season is None or test_season is None:
+        derived_train, derived_test = latest_two_seasons(rows)
+        if train_season is None:
+            train_season = derived_train
+        if test_season is None:
+            test_season = derived_test
     positions = sorted({r["position"] for r in rows if r.get("position")})
     models: dict[str, PositionModel] = {}
     for position in positions:

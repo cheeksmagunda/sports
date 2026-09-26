@@ -165,8 +165,9 @@ def _load_context(project: Path, slate: Any, now: datetime) -> ContextSnapshot:
         snapshot = _bootstrap_context(project, now)
     else:
         snapshot = ContextSnapshot.load(path)
-        # Stale snapshots collected before the 2026 schedule published cannot
-        # join TNF/Sunday stadium weather. Refresh nflverse sources in place.
+        # Stale snapshots collected before the current season's schedule
+        # published cannot join TNF/Sunday stadium weather. Refresh nflverse
+        # sources in place.
         if not _schedules_cover_slate(snapshot, slate):
             snapshot = _bootstrap_context(project, now)
     venues_path = Path(
