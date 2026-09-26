@@ -18,7 +18,7 @@ from typing import Any
 
 from nfl_oracle.recommendations.context import enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
-from nfl_oracle.recommendations.model import HistoricalPerformance, attach_enrichment
+from nfl_oracle.recommendations.model import FitConfig, HistoricalPerformance, attach_enrichment
 from nfl_oracle.recommendations.optimizer import OptimizerConfig
 from nfl_oracle.recommendations.sources import ContextSnapshot
 from nfl_oracle.replay.production_backtest import (
@@ -68,6 +68,26 @@ def load_backtest_inputs(history_root: Path, context_snapshot: Path) -> Backtest
     )
 
 
+def add_fit_config_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--fit-ridge-alpha", type=float, default=10.0)
+    parser.add_argument("--fit-holdout-fraction", type=float, default=0.8)
+    parser.add_argument("--fit-min-train-kickoffs", type=int, default=2)
+    parser.add_argument("--fit-min-unique-kickoffs", type=int, default=5)
+    parser.add_argument("--fit-min-training-rows", type=int, default=30)
+    parser.add_argument("--fit-min-design-rows", type=int, default=10)
+
+
+def fit_config_from_args(args: argparse.Namespace) -> FitConfig:
+    return FitConfig(
+        ridge_alpha=args.fit_ridge_alpha,
+        holdout_fraction=args.fit_holdout_fraction,
+        min_train_kickoffs=args.fit_min_train_kickoffs,
+        min_unique_kickoffs=args.fit_min_unique_kickoffs,
+        min_training_rows=args.fit_min_training_rows,
+        min_design_rows=args.fit_min_design_rows,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="nfl-production-backtest",
@@ -96,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Keep full residual sample vectors in the optimizer (slow; same lineup).",
     )
+    add_fit_config_args(parser)
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
     return parser
 
@@ -114,12 +135,14 @@ def main(argv: list[str] | None = None) -> int:
         print(line, file=sys.stderr, flush=True)
 
     started = datetime.now(UTC)
+    fit_config = fit_config_from_args(args)
     results, excluded = backtest_production_pipeline(
         inputs.enriched,
         grouping=args.grouping,
         fold_of=fold_of,
         team_keys=inputs.team_keys,
         optimizer_config=OptimizerConfig(simulations=args.simulations),
+        fit_config=fit_config,
         compact_samples=not args.full_samples,
         progress=progress,
     )
@@ -129,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         "issue": 280,
         "grouping": args.grouping,
         "retrain": args.retrain,
+        "fit_config": fit_config.model_dump(mode="json"),
         "history_rows": len(inputs.rows),
         "history_excluded": inputs.history_excluded,
         "context_rows": inputs.context_rows,

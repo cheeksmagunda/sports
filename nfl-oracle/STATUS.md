@@ -1,5 +1,13 @@
 # Status
 
+## NFL race corpus persist (2026-09-26, Refs #338)
+
+Day-close now writes per-day labels + leaderboard parquet under
+`data/race/dayclose/<season>/` after a successful grade. Coverage tracking
+includes the current calendar year. Offline Actions locate a context
+snapshot via `scripts/resolve_context_snapshot.py`. Not a serving-path
+change.
+
 ## Race evaluate hook (2026-09-25, Refs #339)
 
 Offline `nfl_oracle.replay.racer` maps `ContestPoolResult.production_score` /
