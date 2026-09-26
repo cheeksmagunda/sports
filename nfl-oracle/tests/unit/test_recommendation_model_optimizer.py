@@ -244,6 +244,46 @@ def test_prediction_uses_historical_external_identity_when_real_id_is_new() -> N
     assert "context_unavailable" not in projection.provenance
 
 
+def test_optimizer_clamps_over_cap_boost_instead_of_crashing() -> None:
+    target = slate(one_team=True, one_game=True)
+    base = target.candidates[0]
+    over_cap = Candidate.model_construct(
+        player_id=base.player_id,
+        game_id=base.game_id,
+        team_id=base.team_id,
+        name=base.name,
+        position=base.position,
+        team=base.team,
+        opponent=base.opponent,
+        injury_status=base.injury_status,
+        card_boost=4.5,
+        boost_source=base.boost_source,
+        clock=base.clock,
+    )
+    target = Slate.model_construct(
+        contest=target.contest,
+        games=target.games,
+        candidates=(over_cap,) + target.candidates[1:],
+        captured_at=target.captured_at,
+        source_hashes=target.source_hashes,
+        pool_roster_count=target.pool_roster_count,
+        pool_search_matched_count=target.pool_search_matched_count,
+        pool_unmatched_ids=target.pool_unmatched_ids,
+        pool_complete=target.pool_complete,
+        boost_regime=target.boost_regime,
+        boost_nonzero_count=target.boost_nonzero_count,
+        boost_max=4.5,
+    )
+    result = optimize(
+        target,
+        projections(target),
+        decision_at=BASE + timedelta(days=8),
+        scoring_policy=ScoringPolicy(negative_branch="unverified"),
+        config=OptimizerConfig(simulations=100),
+    )
+    assert len(result.picks) == 5
+
+
 def test_optimizer_returns_five_unique_picks_and_reports_relaxed_diversity() -> None:
     target = slate(one_team=True, one_game=True)
     result = optimize(
