@@ -11,16 +11,26 @@ import csv
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 from nfl_oracle.calendar.schedule import (
     NFLVERSE_SCHEDULE_URL,
     NFLVERSE_SCHEDULE_URL_ALIASES,
+    SCHEDULE_TIMEZONE,
 )
+from nfl_oracle.calendar.season import season_label_for_date
 from nfl_oracle.common.paths import resolve_project_root
 from nfl_oracle.data.paths import resolve_data_paths
 
 KEEP = ("season", "week", "game_id", "gameday", "home_team", "away_team", "game_type")
+
+
+def default_season_max(*, now: datetime | None = None) -> int:
+    """Derive ``--season-max`` from the current Eastern calendar season label."""
+
+    clock = now if now is not None else datetime.now(SCHEDULE_TIMEZONE)
+    return season_label_for_date(clock.astimezone(SCHEDULE_TIMEZONE).date())
 
 
 def _download(urls: tuple[str, ...]) -> bytes:
@@ -65,7 +75,12 @@ def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--season-min", type=int, default=2002)
-    parser.add_argument("--season-max", type=int, default=2026)
+    parser.add_argument(
+        "--season-max",
+        type=int,
+        default=None,
+        help="Inclusive max season label (default: current Eastern season label)",
+    )
     parser.add_argument(
         "--project-root",
         type=Path,
@@ -78,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Reuse existing data/cache/nflverse_games.csv if present",
     )
     args = parser.parse_args(argv)
+    season_max = args.season_max if args.season_max is not None else default_season_max()
 
     root = args.project_root or resolve_project_root(__file__)
     paths = resolve_data_paths(root)
@@ -92,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         raw_path.write_bytes(blob)
         raw_text = blob.decode("utf-8")
 
-    rows = _slim(raw_text, season_min=args.season_min, season_max=args.season_max)
+    rows = _slim(raw_text, season_min=args.season_min, season_max=season_max)
     _write_csv(slim_path, rows)
     seasons = sorted({int(r["season"]) for r in rows})
     print(
