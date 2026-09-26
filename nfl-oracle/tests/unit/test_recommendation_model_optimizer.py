@@ -141,7 +141,10 @@ def projections(slate_value: Slate):
 def test_chronological_model_has_hash_holdout_baselines_and_role_features() -> None:
     model = fit_model(history_rows(), trained_at=BASE + timedelta(days=10))
     assert model.model_fingerprint == fingerprint(model.model_dump(mode="json"))
-    assert len(model.coefficients) == 7 + 2
+    # Core priors (7) + 2 floats per wired context name (value + missing).
+    # #418 force-includes live_ok injury/weather keys even when sparse.
+    assert len(model.coefficients) == 7 + 2 * len(model.context_feature_names)
+    assert len(model.context_feature_names) >= 2  # at least weather_index from fixture + live_ok set
     assert model.evaluation["kind"] == "retrospective_source_clock_frozen_holdout"
     assert "global_mean_mae" in model.evaluation
     assert "position_mean_mae" in model.evaluation
