@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 903 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -781,6 +783,7 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/scripts/backtest_walkforward.py -- Walk-forward backtest: HONEST prediction-quality measurement (no leakage).
 - wnba-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable WNBA corpus.
 - wnba-oracle/scripts/build_model_research_benchmark.py -- Model research benchmark: walk-forward variant sweep over stored slates.
+- wnba-oracle/scripts/build_race_corpus.py -- Build per-season race corpora from the read-only backup Postgres.
 - wnba-oracle/scripts/calibrate_knobs.py -- Calibrate D87-D90 optimizer knobs against 2026 historical slates.
 - wnba-oracle/scripts/calibrate_starter_and_boost.py -- Calibrate STARTER_UNKNOWN_FADE and PICKER_BOOST_TAIL_LIFT from the corpus.
 - wnba-oracle/scripts/check_migrations.py -- Exercise empty and existing-schema Alembic upgrades on a local PostgreSQL server.
@@ -808,6 +811,7 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/scripts/runtime_role_probe.py -- Validate that a built runtime image enforces its configured cron role.
 - wnba-oracle/scripts/rwgql.py -- Call Railway GraphQL with ambient auth and optional variables on stdin.
 - wnba-oracle/scripts/rwgql.sh -- Shell script
+- wnba-oracle/scripts/seasons_common.py -- Shared --seasons parsing for WNBA research and race-corpus scripts.
 - wnba-oracle/scripts/seed_storage_state.py -- Materialize the Playwright storage_state.json from a base64+gzip env var.
 - wnba-oracle/scripts/snapshot_corpus.py -- Materialize a frozen local corpus snapshot for offline model work.
 - wnba-oracle/scripts/snapshot_training_inputs.py -- Snapshot one immutable pair of live training inputs for reproducibility checks.
@@ -932,6 +936,7 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/picker/payout.py -- Payout-curve loader and per-lineup EV computation.
 - wnba-oracle/src/wnba_oracle/picker/popularity.py -- Draft-popularity estimator + anti-popularity contrarian adjustment.
 - wnba-oracle/src/wnba_oracle/picker/sample.py -- Joint sampling via Gaussian copula on log-residuals.
+- wnba-oracle/src/wnba_oracle/picker/shark_signal.py -- Prior-only shark draft-rate signal.
 - wnba-oracle/src/wnba_oracle/picker/stacking.py -- Pure helpers for contextual lineup-balance decisions.
 
 ## wnba-oracle/src/wnba_oracle/predict/
@@ -1117,10 +1122,12 @@ Generated from `git ls-files`. 896 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
 - wnba-oracle/tests/unit/test_sampling_offset.py -- score_offset (K) calibration in the copula sampler (D52).
 - wnba-oracle/tests/unit/test_schemas.py -- Pandera schema sanity checks. Validate that good frames pass and obvious
+- wnba-oracle/tests/unit/test_seasons_and_race_corpus.py -- Unit tests for seasons_common and build_race_corpus (offline, no DB).
 - wnba-oracle/tests/unit/test_secret_contract.py
 - wnba-oracle/tests/unit/test_serving_schema.py -- Serve-time enrichment schema validator (features/serving_schema.py).
 - wnba-oracle/tests/unit/test_settings_pause.py -- picks_paused_on / picks_resume_date: the operator-directed pause window.
 - wnba-oracle/tests/unit/test_shadow.py -- Tests for scheduler.shadow. Pure metric compute + writer contract.
+- wnba-oracle/tests/unit/test_shark_signal.py -- Offline unit tests for ``wnba_oracle.picker.shark_signal``.
 - wnba-oracle/tests/unit/test_slate_api.py -- D104: /slate/{date} timing endpoint feeding the tip-relative countdown.
 - wnba-oracle/tests/unit/test_slate_clock.py
 - wnba-oracle/tests/unit/test_slate_meta.py -- D83: slate timing capture (job1) feeding the late-refreeze lock gate.
