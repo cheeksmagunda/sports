@@ -262,7 +262,11 @@ async def fetch_season_games(
     rows = payload.get("data")
     if not isinstance(rows, list):
         raise TypeError("stats game listing must contain a data array")
-    return [row for row in rows if isinstance(row, dict)]
+    completed_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if isinstance(row, dict) and _int_or_none(row.get("gameStateId")) == 7:
+            completed_rows.append(row)
+    return completed_rows
 
 
 async def fetch_boxscore(client: httpx.AsyncClient, game_id: int) -> dict[str, Any]:
