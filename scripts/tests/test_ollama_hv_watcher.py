@@ -25,8 +25,10 @@ from ollama_hv_watcher.gate import (
     ensure_ollama_training_allowed,
     operator_unlock_enabled,
 )
+from ollama_hv_watcher.advice import build_advice_prompt
 from ollama_hv_watcher.learn import (
     build_learn_prompt,
+    run_advice,
     write_learning_tick,
 )
 from ollama_hv_watcher.live import LiveDataRequiredError
@@ -179,6 +181,31 @@ def test_board_summary_ranks_by_value() -> None:
     assert "2.0x" in prompt or "slot1=2.0x" in prompt
     assert "max_value" in prompt
     assert "total_draft_value" in prompt or "TDV" in prompt
+
+
+def test_advice_prompt_encodes_chalk_vs_multiplier(tmp_path: Path) -> None:
+    summary = summarize_board_payload(
+        {
+            "sport": "wnba",
+            "slate_key": "2026-09-27",
+            "section": "highestBoostedValuePlayers",
+            "players": _five_players(),
+        }
+    )
+    prompt = build_advice_prompt(summary)
+    assert "chalk_vs_multiplier" in prompt
+    assert "max_value" in prompt
+    assert "TDV" in prompt or "total_draft_value" in prompt
+    out = run_advice(
+        summary,
+        data_root=tmp_path,
+        manifest=build_empty_manifest(),
+        dry_run=True,
+    )
+    assert out.name == "advice.json"
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["schema"] == "ollama_slate_advice_v1"
+    assert len(payload["tilts"]) == FIVE_PLAYER_LINEUP_SIZE
 
 
 def test_learning_tick_encodes_chalk_vs_multiplier(tmp_path: Path) -> None:
