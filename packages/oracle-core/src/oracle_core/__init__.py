@@ -74,14 +74,6 @@ from oracle_core.high_tv import (
     select_label_kind,
     summarize_archive_season_depth,
 )
-from oracle_core.hv_board_corpus import (
-    HV_SECTION,
-    HvBoardDocument,
-    HvBoardPlayer,
-    append_hv_board,
-    build_hv_board,
-    write_hv_board,
-)
 from oracle_core.http import (
     AsyncHttpTransport,
     HttpRequestError,
@@ -94,6 +86,14 @@ from oracle_core.http import (
     async_request_with_retry,
     parse_retry_after,
     request_with_retry,
+)
+from oracle_core.hv_board_corpus import (
+    HV_SECTION,
+    HvBoardDocument,
+    HvBoardPlayer,
+    append_hv_board,
+    build_hv_board,
+    write_hv_board,
 )
 from oracle_core.jobs import (
     JobContext,
