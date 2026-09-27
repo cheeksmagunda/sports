@@ -73,10 +73,13 @@ uv run --package nfl-oracle python nfl-oracle/scripts/seed_storage_state.py
 
 NFL does not independently capture its own Real Sports session; it is a copy
 of the one portfolio-wide credential root `AGENTS.md` defines. `nfl-oracle`'s
-Railway copy (`nfl-oracle-worker`) is deliberately unsealed (not the
-historical default) so it can be hash-compared against the canonical value
-with `railway run --service nfl-oracle-worker`; compare by `sha256[:8]`,
-never by printing values.
+Railway copy (`nfl-oracle-worker`) is meant to be unsealed so it can be
+hash-compared against the canonical value with
+`railway run --service nfl-oracle-worker`; compare by `sha256[:8]`, never by
+printing values. A sealed copy does not appear in `railway variables` or
+`railway run` output (the unrendered GraphQL listing returns it as `null`), so
+it can only be verified from inside the running container or overwritten from
+the canonical value. Current seal state is recorded in `STATUS.md`.
 
 If NFL ever needs its own independently-captured session (a separate Real
 Sports account, for example), open a headed browser on an operator machine and
