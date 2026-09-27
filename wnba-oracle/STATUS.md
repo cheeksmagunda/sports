@@ -108,9 +108,23 @@ printed.
 ## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
 
 - `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
+- `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on `wnba-cron-job2` (process env verified via `railway run`; rollback: `payout`).
+- `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE=0.001` on `wnba-cron-job2`.
 - `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
+- `EXPECTED_PROD_CONFIG["optimizer_objective_mode"]` synced to `total_draft_value` so job2 watchdog does not warn `config_drift` against the live flip.
+- Under TDV, job2 skips contrarian sampler fade and floor-tilt (cash/median mid-slot blend); ownership preference is only the fade tiebreaker.
 - Data plane: public Postgres `acela.proxy.rlwy.net:51730` with `sslmode=require` (not verify-ca — missing `root.crt` in container); Redis `altaria.proxy.rlwy.net:13969`.
 - Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO.
+
+## Optional total_draft_value optimizer objective (#433 / #453)  -  2026-09-27
+
+- `"total_draft_value"` selects by E[committed-order lineup score] and skips
+  payout/leverage/ceiling/duplication additives; ownership-fade tiebreaker
+  remains. Serving flip is live on mono `wnba-cron-job2` (see Win-draft knobs).
+- Unit tests in `tests/unit/test_total_draft_value_objective.py`.
+
+This file records live operational state only. Values marked unverified were
+not exposed by the read-only checks available during this audit.
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
@@ -160,12 +174,11 @@ were verified on Railway project **`wnba-oracle`**. Serving is now mono.
   dayclose `degraded` and job1/job1late `failed`. Older entries below that
   describe `ops-guard` or incident issues record past behavior only.
 
-## Optional total_draft_value optimizer objective (#433)  -  2026-09-26
+## Optional total_draft_value optimizer objective (#433 / #453)  -  2026-09-27
 
-- `OptimizeConfig.objective_mode` defaults to `"payout"` (production unchanged).
 - `"total_draft_value"` selects by E[committed-order lineup score] and skips
-  payout/leverage/ceiling/duplication additives. Offline / lab only until a
-  walk-forward TV capture number justifies a serving flip.
+  payout/leverage/ceiling/duplication additives; ownership-fade tiebreaker
+  remains. Serving flip is live on mono `wnba-cron-job2` (see Win-draft knobs).
 - Unit tests in `tests/unit/test_total_draft_value_objective.py`.
 
 This file records live operational state only. Values marked unverified were
