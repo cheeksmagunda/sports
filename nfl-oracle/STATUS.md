@@ -91,10 +91,11 @@ Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
 | `catalog/coverage_matrix.json` | written (seasons 2002-2025 `status=unknown`, no game ids ingested yet) |
 | Dense Corpus G | still on staging (~1.8 GB); mono densify / copy **not** started this session |
 | Deployed CLI | image still lacks `--report-gaps` / `--repair-players` (pre-#512 help surface); matrix refresh only |
+| Entrypoint image | Auto-deploy of squash `a476ae6` **FAILED** build: deny-first `.dockerignore` omitted `!nfl-oracle/docker-entrypoint.sh` (allowlisted in this PR). Live SUCCESS tip remains pre-entrypoint until worker redeploy. |
 
 Rollback for volume content: leave staging volume untouched as copy source.
-Next densify needs #512 image redeploy on worker + RS-session backfill or
-staging→mono copy.
+Hydrate / densify proceeds via root `railway ssh` even before entrypoint image;
+`--repair-players` needs this allowlist + worker redeploy.
 
 ## Corpus G nightly + gap/repair reconcile (2026-09-27, #453 / #503)
 
