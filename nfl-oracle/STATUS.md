@@ -117,25 +117,30 @@ health above are from the live Online worker. Rollback: unset
 note here.
 
 
-## Corpus G mono volume hydrate verify (2026-09-27T04:08Z, #535 / #512)
+## Corpus G mono volume hydrate (2026-09-27 ~04:23Z UTC, #453 / #512 / #535)
 
-Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
-`scripts/codespace-railway-env` against `sports-oracle` / `nfl-production`
-`nfl-oracle-worker` (non-destructive; no credential mint).
+Post-merge ops from Codespace `fluffy-zebra-g4gqq746477q2jg` via
+`scripts/codespace-railway-env`. No Real Sports session minting. No secret
+values printed. **Do not re-copy** — corpus already hydrated.
 
-| Fact | Value |
-|------|-------|
-| Volume mount | `/app/nfl-oracle/data` (oracle-writable) |
-| Volume size | **2322247 bytes (~2.3 MB)** |
-| `raw/corpus_g` files | **0** (directory present after `--refresh-matrix-only`) |
-| `catalog/coverage_matrix.json` | written (seasons 2002-2025 `status=unknown`, no game ids ingested yet) |
-| Dense Corpus G | still on staging (~1.8 GB); mono densify / copy **not** started this session |
-| Deployed CLI | image still lacks `--report-gaps` / `--repair-players` (pre-#512 help surface); matrix refresh only |
-| Entrypoint image | Auto-deploy of squash `a476ae6` **FAILED** build: deny-first `.dockerignore` omitted `!nfl-oracle/docker-entrypoint.sh` (allowlisted in this PR). Live SUCCESS tip remains pre-entrypoint until worker redeploy. |
+### Verified mono volume evidence (SSH, not Railway UI meter)
 
-Rollback for volume content: leave staging volume untouched as copy source.
-Hydrate / densify proceeds via root `railway ssh` even before entrypoint image;
-`--repair-players` needs this allowlist + worker redeploy.
+| Metric | Value |
+|--------|------:|
+| `/app/nfl-oracle/data` size | **507 MB** |
+| `raw/corpus_g` files | **3352** |
+| game dirs (2024+2025) | **668** |
+| `stats.json` / `feed.json` | **668 / 668** |
+| `players.json` | **6** (known 2024 gap; complete triples = 6) |
+| `catalog/coverage_matrix.json` | preserved |
+| Entrypoint image | Allowlist restored on tip via #564 (`53e4a93`) after #551 `dry-run` merge/revert. Worker redeploy from that tip for `--repair-players`. |
+
+Hydrate used non-destructive staging→mono `tar` densify (source ~504 MB /
+3352 files) after live RS backfill returned HTTP 401; no session mint.
+Railway UI `volume list` still showed `0MB/5000MB` immediately after copy
+(UI lag); SSH `du`/`find` above is authoritative. Staging volume remains
+rollback densify source (~1850 MB data root).
+
 
 ## Total Value HV leaderboard corpus scaffold (#526)  -  2026-09-27
 
