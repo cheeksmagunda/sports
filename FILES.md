@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1090 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1108 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -786,6 +786,30 @@ Generated from `git ls-files`. 1090 tracked files. Regenerate with `scripts/gene
 ## scripts/corpus/schema/
 - scripts/corpus/schema/coverage_manifest.schema.json
 
+## scripts/ollama_hv_watcher/
+- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV self-learning slate watcher
+- scripts/ollama_hv_watcher/__init__.py -- Codespace Ollama HV/TDV self-learning slate watcher (#574).
+- scripts/ollama_hv_watcher/__main__.py -- python -m ollama_hv_watcher → CLI (#574).
+- scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
+- scripts/ollama_hv_watcher/cli.py -- CLI for the Ollama HV/TDV slate watcher (#574).
+- scripts/ollama_hv_watcher/client.py -- Minimal Ollama HTTP client for localhost:11434 (#574).
+- scripts/ollama_hv_watcher/discover.py -- Discover open/upcoming slate windows for the HV watcher (#574).
+- scripts/ollama_hv_watcher/gate.py -- Ollama training gate: coverage_manifest complete OR operator unlock (#574).
+- scripts/ollama_hv_watcher/install_codespace.sh -- Shell script
+- scripts/ollama_hv_watcher/learn.py -- Write self-learning notes/ticks from HV board summaries via Ollama (#574).
+- scripts/ollama_hv_watcher/serve.py -- systemd-less Ollama serve helpers: health curl, pidfile, nohup (#574).
+- scripts/ollama_hv_watcher/watcher.py -- Portfolio HV/TDV slate watcher loop (issue #574).
+- scripts/ollama_hv_watcher/windows.py -- Domain-free T-40 → slate-close window math for the HV watcher (#574).
+
+## scripts/ollama_hv_watcher/adapters/
+- scripts/ollama_hv_watcher/adapters/README.md -- Empty package marker for optional sport calendar adapter scripts (#574).
+
+## scripts/ollama_hv_watcher/fixtures/
+- scripts/ollama_hv_watcher/fixtures/hv_board_sample.json -- (test fixture data)
+
+## scripts/ollama_hv_watcher/fixtures/calendars/
+- scripts/ollama_hv_watcher/fixtures/calendars/sample_day.json -- (test fixture data)
+
 ## scripts/realsports_corpus/
 - scripts/realsports_corpus/README.md -- Real Sports contest corpus (portfolio)
 - scripts/realsports_corpus/__init__.py -- Portfolio Real Sports contest corpus layout and export stubs (#526).
@@ -830,6 +854,8 @@ Generated from `git ls-files`. 1090 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_check_issue_link.py
 - scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
+- scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
+- scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).
 - scripts/tests/test_realsports_corpus_layout.py -- Real Sports corpus layout and durable-store export stubs (#526).
 - scripts/tests/test_realsports_corpus_manifest.py -- Offline unit checks for Real Sports corpus staging and coverage (#526).

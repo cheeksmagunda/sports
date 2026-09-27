@@ -583,6 +583,34 @@ proof only; live multi-year scrapes stay operator-gated.
 the corpus sibling. `GITHUB_TOKEN` cannot push to a sibling repo. Agents must
 not mint this token. Auth for scrapes remains the portfolio
 `REALSPORTS_STORAGE_STATE_B64GZ` contract above — never mint a session for
-corpus work. **Ollama is forbidden** until `coverage_manifest.json` reports
-complete historical capture.
+corpus work. **Ollama training** is FORBIDDEN until `coverage_manifest.json` reports
+complete historical capture (binary install + watcher: #574).
 
+## Ollama HV watcher (#574)
+
+Portfolio Codespace helper (not per-app serving). Arms at the earliest slate
+T-40 across sports and stays open until the latest slate `close_at`. Default
+model `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`. Training /
+`ollama generate` requires `coverage_manifest` complete (#526) or
+`SPORTS_OLLAMA_UNLOCK=1`. Commands: `scripts/ollama_hv_watcher/README.md`.
+
+```sh
+bash scripts/ollama_hv_watcher/install_codespace.sh
+PYTHONPATH=scripts python -m ollama_hv_watcher --status
+PYTHONPATH=scripts python -m ollama_hv_watcher --once
+PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
+```
+
+## Ollama HV/TDV slate watcher (#574)
+
+Codespace helper (not a serving path): install via
+`scripts/ollama_hv_watcher/install_codespace.sh`, model `llama3.2:3b`, serve on
+`:11434`. Watcher arms at earliest T-40 across sports and stays until latest
+slate close. Training is gated by `coverage_manifest` completeness or
+`SPORTS_OLLAMA_UNLOCK=1`. Artifacts under `data/ollama_hv/` (gitignored).
+
+```bash
+cd /workspaces/sports
+SPORTS_OLLAMA_UNLOCK=1 PYTHONPATH=scripts:packages/oracle-core/src \
+  python -m ollama_hv_watcher status
+```

@@ -11,10 +11,15 @@ Tracked issue: [#526](https://github.com/cheeksmagunda/sports/issues/526)
 
 1. **Complete representation first** — every Real Sports variable from every
    slate possible (kinds below).
-2. **Only then** — Ollama on the Codespace as an internal smart training helper.
+2. **Only then** — Ollama on the Codespace as an internal smart **training**
+   helper (`ollama generate` / HV self-learn ticks).
 3. Until root `coverage_manifest.json` shows
    `historical_capture_complete: true` for every required family:
-   **Ollama Codespace helper is FORBIDDEN.** Do not install or wire Ollama.
+   **Ollama training is FORBIDDEN** (raises `OllamaForbiddenError`), unless
+   the operator sets `SPORTS_OLLAMA_UNLOCK=1` for Codespace helper override.
+4. **Binary install + `ollama serve` + watcher arming scaffold** are allowed
+   now behind that gate (issue [#574](https://github.com/cheeksmagunda/sports/issues/574)).
+   See `scripts/ollama_hv_watcher/README.md`.
 
 ## Separate GitHub repository
 
