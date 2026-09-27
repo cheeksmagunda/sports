@@ -480,3 +480,5 @@ def filter_train_labels_to_hv(labels: Sequence[ValueLabel]) -> tuple[ValueLabel,
         if row.section == TRAINING_LABEL_SECTION
         or row.label_kind == HighPotentialLabelKind.HIGH_TOTAL_VALUE_BOARD.value
     )
+
+__all__ = ['TRAINING_LABEL_SECTION', '_as_dict', '_as_list', '_section_name', '_is_hv_section', '_player_id', '_required_float', 'approx_total_value', 'extract_hv_board', 'hv_board_to_high_tv', 'hv_rows_to_value_labels', 'report_hv_corpus_gap', 'filter_train_labels_to_hv']
