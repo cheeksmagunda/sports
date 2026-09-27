@@ -45,6 +45,25 @@ not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
 knobs: Max-value / race construction and mono serve sections below. Existing
 valuelaw + feature ridge only; no new model stacks (#523).
 
+## Corpus G mono volume hydrate verify (2026-09-27T04:08Z, #535 / #512)
+
+Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
+`scripts/codespace-railway-env` against `sports-oracle` / `nfl-production`
+`nfl-oracle-worker` (non-destructive; no credential mint).
+
+| Fact | Value |
+|------|-------|
+| Volume mount | `/app/nfl-oracle/data` (oracle-writable) |
+| Volume size | **2322247 bytes (~2.3 MB)** |
+| `raw/corpus_g` files | **0** (directory present after `--refresh-matrix-only`) |
+| `catalog/coverage_matrix.json` | written (seasons 2002-2025 `status=unknown`, no game ids ingested yet) |
+| Dense Corpus G | still on staging (~1.8 GB); mono densify / copy **not** started this session |
+| Deployed CLI | image still lacks `--report-gaps` / `--repair-players` (pre-#512 help surface); matrix refresh only |
+
+Rollback for volume content: leave staging volume untouched as copy source.
+Next densify needs #512 image redeploy on worker + RS-session backfill or
+staging→mono copy.
+
 ## Corpus G nightly + gap/repair reconcile (2026-09-27, #453 / #503)
 
 Reconciled into PR #512 (absorbs overlapping PR #515). Verified from
