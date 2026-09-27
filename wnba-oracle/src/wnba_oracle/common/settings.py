@@ -359,7 +359,9 @@ class Settings(RuntimeConfig):
     # E[committed-order lineup score], maximising raw points over contest
     # placement. Low-ownership fade tiebreaker weight (#453) gives a mild
     # preference for underdrafted names when combos are close in expected TV.
-    optimizer_objective_mode: str = Field(default="payout", alias="OPTIMIZER_OBJECTIVE_MODE")
+    optimizer_objective_mode: Literal["payout", "total_draft_value"] = Field(
+        default="payout", alias="OPTIMIZER_OBJECTIVE_MODE"
+    )
     optimizer_max_value_ownership_fade: float = Field(
         default=0.001, alias="OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE"
     )
@@ -490,10 +492,10 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     # revert requires scripts/build_model_research_benchmark.py after the
     # prior-slate ownership guard. See issue #289 and follow-up E1.
     "optimizer_leverage_weight": 0.28,
-    # #453: total_draft_value mode is off by default (production still uses
-    # E[payout(rank)]). Flip to "total_draft_value" to enable. Ownership fade
-    # defaults to 0.001 (negligible tiebreaker).
-    "optimizer_objective_mode": "payout",
+    # #453 win-draft stack on mono wnba-production: select by E[committed-order
+    # TV] + ownership-fade tiebreaker. Rollback: set OPTIMIZER_OBJECTIVE_MODE
+    # back to "payout" and restore this expected value to match.
+    "optimizer_objective_mode": "total_draft_value",
     "optimizer_max_value_ownership_fade": 0.001,
 }
 

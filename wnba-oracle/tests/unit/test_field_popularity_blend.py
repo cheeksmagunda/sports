@@ -13,6 +13,7 @@ def _spec(
     boost: float,
     drafts: float | None = None,
     popularity: float | None = None,
+    rank_pred_override: float | None = None,
 ) -> FieldPlayerSpec:
     return FieldPlayerSpec(
         player_id=pid,
@@ -20,6 +21,7 @@ def _spec(
         card_boost=boost,
         measured_drafts=drafts,
         popularity_score=popularity,
+        rank_pred_override=rank_pred_override,
     )
 
 
@@ -125,3 +127,26 @@ def test_partial_popularity_scores_fall_back_per_player() -> None:
     assert np.isclose(own.sum(), 1.0)
     assert np.all(own > 0.0)
     assert own[0] > own[4]
+
+
+def test_rank_pred_override_raises_chalk_ownership_vs_post_contrarian() -> None:
+    """Post-contrarian sampler scores must not understate chalk ownership."""
+    without = [
+        _spec(1, pred=2.0, boost=1.0),
+        _spec(2, pred=2.0, boost=1.0),
+        _spec(3, pred=1.5, boost=0.5),
+        _spec(4, pred=1.5, boost=0.5),
+        _spec(5, pred=1.5, boost=0.5),
+    ]
+    with_override = [
+        _spec(1, pred=2.0, boost=1.0, rank_pred_override=5.0),
+        _spec(2, pred=2.0, boost=1.0, rank_pred_override=2.0),
+        _spec(3, pred=1.5, boost=0.5, rank_pred_override=1.5),
+        _spec(4, pred=1.5, boost=0.5, rank_pred_override=1.5),
+        _spec(5, pred=1.5, boost=0.5, rank_pred_override=1.5),
+    ]
+    own_legacy = project_ownership(without)
+    own_visible = project_ownership(with_override)
+    assert np.isclose(own_legacy[0], own_legacy[1])
+    assert own_visible[0] > own_visible[1]
+    assert own_visible[0] > own_legacy[0]

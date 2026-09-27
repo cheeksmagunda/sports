@@ -1004,6 +1004,8 @@ def _assemble_recommendation(
     n_games: int,
     stack_context: _StackContext,
     constraints: _ConstraintState,
+    field_scores: np.ndarray,
+    curve: PayoutCurve,
 ) -> LineupRecommendation:
     selected, stacking_decision = _select_contextual_candidate(
         result,
@@ -1031,11 +1033,15 @@ def _assemble_recommendation(
             stacking_decision=stacking_decision,
         )
 
-    best_ev = selected.objective
     best_indices = selected.indices
     best_samples = selected.samples
 
-    if cfg.ceiling_tilt_slots:
+    # Slot assignment: under total_draft_value, order by E[real_score] so the
+    # committed freeze matches the TV objective (not p50 cash / p90 ceiling tilt).
+    if cfg.objective_mode == "total_draft_value":
+        sort_key = np.mean(real_score_samples[:, list(best_indices)], axis=0)
+        sort_method = "mean (total_draft_value)"
+    elif cfg.ceiling_tilt_slots:
         sort_key = np.quantile(real_score_samples[:, list(best_indices)], 0.9, axis=0)
         sort_method = "p90 (ceiling-tilted)"
     else:
@@ -1044,6 +1050,20 @@ def _assemble_recommendation(
     order = np.argsort(sort_key, kind="stable")[::-1]
     ordered_player_ids = tuple(pool.player_ids[best_indices[index]] for index in order)
     p10, p50, p90 = np.quantile(best_samples, [0.1, 0.5, 0.9])
+
+    # In payout mode, selected.objective is the (possibly leverage-augmented)
+    # E[payout] used for both selection and enter/skip gates. In TDV mode the
+    # objective is E[TV] (~tens of points); gates and freeze provenance must
+    # still use true E[payout(rank)] so skip thresholds stay on payout scale.
+    if cfg.objective_mode == "total_draft_value":
+        best_ev = expected_payout(
+            best_samples,
+            field_scores,
+            curve,
+            field_size=cfg.n_field_lineups + 1,
+        )
+    else:
+        best_ev = selected.objective
 
     if best_ev < cfg.skip_if_expected_payout_below:
         entry_flag = "skip"
@@ -1156,4 +1176,6 @@ def optimize_lineup(
         n_games,
         stack_context,
         constraints,
+        field_scores,
+        curve,
     )

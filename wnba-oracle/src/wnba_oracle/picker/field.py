@@ -13,21 +13,25 @@ We do not have direct access to opponent lineups before lock. Two paths:
 2. ESTIMATOR (fallback, pre-D86 behaviour). Approximate ownership probability
    per player via a softmax of public-visible value:
 
-       ownership_i = softmax( (pred_real_score_i * (1 + card_boost_i)) / tau )
+       ownership_i = softmax( visible_value_i / tau )
+       visible_value_i = (rank_pred_override or pred_real_score) * (1 + card_boost)
+
+   When ``popularity_score`` is present, visible value is geometrically blended
+   with the public-bias popularity signal (W2 / #453) so the simulated field
+   is not a self-mirror of our contrarian-adjusted sampler.
 
    Adjustments:
    - Public injury question marks -> ownership down (multiplicative 0.6).
    - Boost jumped vs prior slate -> ownership up (multiplicative 1.25).
    - Nationally-televised / high-total game -> ownership up (multiplicative 1.15).
 
-Why this matters (D86): the estimator re-derives the field from OUR OWN
-projections, so the simulated field drafts exactly what our value model says is
-good. Against that strawman the optimizer cannot see real duplication and
-systematically underprices leverage -- it ships chalk that the live field also
-owns heavily, then finishes mid-pack when those chalk cards merely meet
-projection. Feeding the real, concentrated draft counts makes the EV/rank math
-penalize duplicated chalk and reward differentiated ceiling the way a
-top-heavy contest actually pays.
+Why this matters (D86 / #453): feeding contrarian-adjusted sampler scores
+into the field estimator understates chalk ownership, so leverage and the
+TDV ownership-fade tiebreaker cannot see real duplication and we crowd the
+same names the public owns. Prefer pre-contrarian visible value (and when
+available, measured drafts / live capture / popularity blend) so EV/rank
+math penalizes duplicated chalk and rewards differentiated ceiling the way
+a top-heavy contest actually pays.
 
 Use: for the lineup optimizer's top-20 / top-1 regimes, leverage =
 sum over chosen players of (1 - ownership_i). Reward leverage in the
@@ -66,23 +70,32 @@ class FieldPlayerSpec:
     popularity_score: float | None = None
 
 
+def _visible_model_value(spec: FieldPlayerSpec) -> float:
+    """Public-visible value for the ownership softmax (#453 chalk-crowding fix).
+
+    Prefer ``rank_pred_override`` (pre-contrarian TV) over ``pred_real_score``.
+    Sampler ``pred_real_score`` is often contrarian-adjusted; feeding that
+    into the field estimator understates chalk ownership, so leverage/fade
+    cannot see duplication and we crowd the same names the public owns.
+    """
+    pred = spec.rank_pred_override if spec.rank_pred_override is not None else spec.pred_real_score
+    return float(pred) * (1.0 + float(spec.card_boost))
+
+
 def _estimated_ownership_unnormalized(
     specs: list[FieldPlayerSpec],
     softmax_temperature: float,
     popularity_blend: float = 0.5,
 ) -> np.ndarray:
-    """Ownership estimator: blended model + public-bias value (W2 / #453).
+    """Ownership estimator: blended public-visible value + popularity (W2 / #453).
 
     When specs carry ``popularity_score``, the base weight is a geometric
-    blend of the model-predicted value and the public-popularity signal.
-    When no popularity score is present, falls back to the legacy self-mirror.
+    blend of the public-visible model value and the public-popularity signal.
+    When no popularity score is present, uses the visible-value softmax alone.
 
     Returns an UNNORMALIZED weight per spec.
     """
-    model_raw = np.array(
-        [s.pred_real_score * (1.0 + s.card_boost) for s in specs],
-        dtype=float,
-    )
+    model_raw = np.array([_visible_model_value(s) for s in specs], dtype=float)
     have_pop = any(s.popularity_score is not None for s in specs)
     if have_pop and popularity_blend > 0.0:
         pop = np.array(

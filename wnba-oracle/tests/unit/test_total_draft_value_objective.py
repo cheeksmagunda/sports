@@ -246,3 +246,40 @@ def test_tdv_settings_wiring() -> None:
         cfg = build_optimize_config(s)
     assert cfg.objective_mode == "total_draft_value"
     assert abs(cfg.max_value_ownership_fade - 0.05) < 1e-9
+
+
+def test_tdv_expected_payout_is_payout_scale_not_tv() -> None:
+    """TDV selection maximizes TV, but freeze expected_payout stays on payout scale.
+
+    A bug that stored selected.objective (E[TV] ~ tens of points) as
+    expected_payout would always pass skip gates and poison audit ROI.
+    """
+    samps, fields = _pool()
+    curve = default_curve_for_regime("top_1")
+    rec = optimize_lineup(
+        samps,
+        fields,
+        curve,
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=400,
+            n_field_lineups=60,
+            max_per_team=5,
+            seed=19,
+            objective_mode="total_draft_value",
+            skip_if_expected_payout_below=0.95,
+            caveat_if_expected_payout_below=1.10,
+            never_skip=True,
+        ),
+    )
+    assert rec.player_ids
+    # Payout multipliers are O(1..50); committed TV for five cards is >> 10.
+    assert rec.expected_payout < 100.0
+    assert rec.lineup_score_p50 > rec.expected_payout
+
+
+def test_expected_prod_config_expects_tdv() -> None:
+    from wnba_oracle.common.settings import EXPECTED_PROD_CONFIG
+
+    assert EXPECTED_PROD_CONFIG["optimizer_objective_mode"] == "total_draft_value"
+    assert EXPECTED_PROD_CONFIG["optimizer_max_value_ownership_fade"] == 0.001
