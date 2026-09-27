@@ -1,3 +1,16 @@
+## Docs lock 2026-09-27 (verified 2026-09-27T11:22Z UTC, #574)
+
+VERIFIED live (Codespace `fluffy-zebra` + public APIs). No secrets printed.
+
+| Fact | Evidence |
+|------|----------|
+| Legacy NFL disarmed | `nfl-oracle-staging` / production `nfl-oracle-worker`: `NFL_RECOMMENDATIONS_ENABLED=0` and service **Crashed** (not writing) |
+| Mono max_value | `sports-oracle` / `nfl-production` worker: `NFL_OPTIMIZER_PROFILE=max_value`, `NFL_RECOMMENDATIONS_ENABLED=1`, Online |
+| Disk | `/slate/2026-09-27` `run.details.disk.percent_used=13.6` (mono; no legacy ~34% alternation) |
+| NFL T-40 | `2026-09-27T16:20:00Z`; 9 early games 13:00 ET (`17:00Z`); `cutoff_at=17:00Z`; `next_live_check_by=16:00Z` |
+| Crons | Mono worker Online (continuous serve path); WNBA mono crons armed (see `wnba-oracle/STATUS.md`) |
+| Ollama | HV helper annotate-only (`llama3.1:8b` daemon `--execute --learn`); does not replace the app five. PR #582 OPEN unmerged. |
+
 ## Own-model feature map phase 1 (#523, 2026-09-26)
 
 ## Corpus C HV / Total Value export scaffold (#526, 2026-09-27)

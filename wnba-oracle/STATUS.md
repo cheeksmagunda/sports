@@ -1,20 +1,20 @@
 # Status
 
-Last verified: 2026-09-27T05:31:49Z
+Last verified: 2026-09-27T11:22:35Z
 
-## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
+## Docs lock 2026-09-27 (verified 2026-09-27T11:22Z UTC, #574)
+
+VERIFIED live (public APIs + Railway `sports-oracle` / `wnba-production`). No secrets printed.
 
 | Check | Result |
 |-------|--------|
-| Slate | `2026-09-27`; first tip `2026-09-27T18:00:00Z`; freeze target `2026-09-27T17:20:00Z` |
-| Pool | `job1_enrichment` **124** rows; live watchdog `rotowire_empty` only (starters still 0) |
-| Job1 | `success` exit 0 (verified after #559) |
-| Freeze readiness | `ready_for_freeze=true`; phase `advisory`; blockers `[]`; advisories `rotowire_empty` |
-| Knobs | `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on `wnba-api` + `wnba-cron-job2` (verified) |
-| Root cause | Sticky history `no_job1_pool` after redeploy race + tip-day RotoWire fail-closed overnight (T-30h) |
-| Fix | [#559](https://github.com/cheeksmagunda/sports/pull/559) live-only hard blockers + RotoWire fail-closed within T-4; cleared sticky `no_job1_pool`/`config_drift` rows; cancelled QUEUED thrash where authorized |
-| Early job1 command | `scripts/codespace-railway-env -- railway run -s wnba-cron-job1 -e wnba-production -- bash -lc 'python3 wnba-oracle/scripts/seed_storage_state.py && uv run --frozen --package wnba-oracle oracle-cron --job job1'` |
-| Residual | Advisory `rotowire_empty` until free-page starters post (~13:00Z job1 / job1-late) |
+| WNBA T-40 | Slate `2026-09-27`; first tip `18:00Z`; freeze target `17:20Z` (`/slate/today`) |
+| Pool / freeze | Pool **124**; `ready_for_freeze=true`; phase `advisory`; blockers `[]`; advisories `rotowire_empty` |
+| Dual-fire | Live `wnba-oracle` / `production`: **no Cron jobs** (schedules disarmed). Mono Online: job1 `0 13`, job1-late `*/30 16-23`, job2 `*/5 14-23,0-3`, dayclose `0 6` |
+| Ollama | HV helper annotate-only (`llama3.1:8b` daemon `--execute --learn`); does not replace the app five. PR #582 OPEN unmerged. |
+| Cross-app | Legacy NFL disarmed + mono `max_value` + disk 13.6% + NFL T-40 16:20Z: see `nfl-oracle/STATUS.md` docs lock |
+
+Residual (unchanged): advisory `rotowire_empty` until free-page starters post (~13:00Z job1 / job1-late). Knobs `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` remain on `wnba-api` + `wnba-cron-job2` (prior verify).
 
 ## DraftStats / recorded_states corpus export (#526)  -  2026-09-27
 
