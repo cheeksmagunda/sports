@@ -4,12 +4,13 @@ Last verified: 2026-09-26 CT (Week 3 baseline skeleton #456 under #453)
 
 This file records application state only.
 
-## Railway mono-project shell (non-serving) (#457)  -  2026-09-27
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
-- No NHL live Railway serving yet. Scaffold env `sports-oracle` /
-  `nhl-staging` (`nhl-api`, `nhl-worker`) is empty / non-serving.
-- Cutover and production promotion remain post-Sunday design work on #457;
-  do not treat the shell as an NHL host.
+- Verified scaffold on `sports-oracle` / `nhl-staging`: `nhl-api`,
+  `nhl-worker`, `nhl-frontend`, Postgres. Non-serving; no NHL live host
+  yet. Design + runbook on #457.
+- Live traffic for other sports remains on old projects through Sunday
+  2026-09-27 (#453); NHL has no live Railway serving to cut over.
 
 ## Application state
 

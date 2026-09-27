@@ -1,11 +1,12 @@
 # Status
 
-## Railway mono-project shell (non-serving) (#457)  -  2026-09-27
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
-- Live NFL serving remains on Railway project `nfl-oracle-staging` /
+- Verified scaffold on `sports-oracle` / `nfl-production`: `nfl-api`,
+  `nfl-oracle-worker`, `nfl-frontend`, Postgres. Non-serving; no domains
+  or secret cutover. Design + runbook on #457.
+- Live NFL traffic remains on Railway project `nfl-oracle-staging` /
   `production` through Sunday 2026-09-27 (#453).
-- Empty target shell `sports-oracle` / `nfl-production` is being stood up
-  only; no domain, secret, or traffic cutover. Decision + runbook on #457.
 
 ## NFL picker knobs live-verified (2026-09-27 ~01:14Z, Refs #453 / #330 / #37)
 

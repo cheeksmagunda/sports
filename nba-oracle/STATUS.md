@@ -4,6 +4,14 @@ Last verified: 2026-09-26 (October 2026-27 readiness audit)
 
 This file records application state only.
 
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+
+- Verified stub scaffold on `sports-oracle` / `nba-staging`: `nba-api`,
+  `nba-worker`, `nba-frontend`, Postgres. Non-serving stubs; app has no
+  Dockerfile yet. Design + runbook on #457.
+- Live traffic for other sports remains on old projects through Sunday
+  2026-09-27 (#453); NBA has no live Railway serving.
+
 ## Application state
 
 - Package: `nba-oracle` workspace member
