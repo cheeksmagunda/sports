@@ -252,6 +252,7 @@ def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
     assert len(payload["five_player_lineup"]) == 5
     assert "wnba" in str(out)
 
+
 def test_training_data_manifest_lists_hv_sources() -> None:
     manifest = load_training_data_manifest()
     assert manifest["objective"] == "highest_value_tdv_max_value"
@@ -260,4 +261,3 @@ def test_training_data_manifest_lists_hv_sources() -> None:
     assert "sibling_realsports_corpus_tv" in ids
     assert manifest["gate"]["unlock_env"] == "SPORTS_OLLAMA_UNLOCK"
     assert manifest["calendars"]["windows_env"] == "SPORTS_OLLAMA_WINDOWS_JSON"
-
