@@ -38,14 +38,26 @@ Code on branch (not yet production-verified on mono):
 
 Locked: train / optimize on Real Sports **Highest value / Total Value Daily
 Leaderboard** (`draftStats.sectionName=highestBoostedValuePlayers`) for every
-slate - Amihere / Copper / Aubrey-style boards down the list.
+slate - Amihere / Copper / Aubrey / Flau'jae / Adams / Henry-style boards.
 **Do not train on prior users' winning drafts** (`contest_leaderboards` /
 `leaderboard_lineup`); those are a reference bar to beat, not fit targets.
-Popularity sections are excluded from the EB label corpus. Backtests grade
-each slate against that slate's Highest value players, not winning drafts.
-Portfolio goal: root `../README.md` (Product goal). Current serve knobs live
-in the mono / Win-draft sections below. Existing EB / ridge surface only; no
-new model stacks (#523).
+Popularity sections are excluded from the EB label corpus
+(`db.reads.read_label_corpus` filters `section=highestBoostedValuePlayers`).
+Backtests grade each slate against that slate's Highest value players
+(`eval.highest_value` / `scripts/backtest_pipeline.py`); approx Value =
+`real_score * (2 + card_boost)`. Verified live DB: 228 HV slates, 4403 HV
+rows. Portfolio goal: root `../README.md` (Product goal). Serve:
+`OPTIMIZER_OBJECTIVE_MODE=total_draft_value` + `PAYOUT_REGIME=top_1` (see
+Win-draft knobs below). Existing EB / ridge surface only; no new model
+stacks (#523). NHL first week differs (zero boost until every franchise
+has 1 GP).
+
+## Script seasons restore (#453 / #516 / #527)  -  2026-09-27
+
+`backfill_minutes.SEASONS` and `seasons_common.DEFAULT_SEASONS` locked to
+**2017-2026** (folded into HV train/backtest PR #522). Serving DB already holds
+the corpus; script-only alignment after #497 drift. No credential or schedule
+change.
 
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
 
@@ -101,6 +113,48 @@ Missing seasons: none.
   standby). Mono serving URL is healthy; Actions probe URL drift is residual
   cutover debt (also `wnba-pre-freeze-guard`, `wnba-backfill-enrichment`).
 
+## Dual-fire + data-plane gate re-verify (#453 / #454)  -  2026-09-27T03:04Z
+
+Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`
++ `railway api` GraphQL `cronSchedule`. No secrets printed. No credential
+minting. **No cron mutation required** (already safe).
+
+### Cron matrix (verified live)
+
+| Service | Project / env | `cronSchedule` | Dual-fire role |
+|---------|---------------|----------------|----------------|
+| `cron-job1` | live `wnba-oracle` / `production` (`ab83f44c`) | **null** | disarmed |
+| `cron-job1-late` | live | **null** | disarmed |
+| `cron-job2` | live | **null** | disarmed (no double job2) |
+| `cron-dayclose` | live | **null** | disarmed |
+| `wnba-cron-job1` | mono `sports-oracle` / `wnba-production` (`cca6b03f`) | `0 13 * * *` | armed |
+| `wnba-cron-job1-late` | mono | `*/30 16-23 * * *` | armed |
+| `wnba-cron-job2` | mono | `*/5 14-23,0-3 * * *` | armed (sole job2) |
+| `wnba-cron-dayclose` | mono | `0 6 * * *` | armed |
+
+### DATA_PLANE_MATCH / hist gate
+
+- Postgres: mono `DATABASE_URL` and live `DATABASE_PUBLIC_URL` share
+  host `acela.proxy.rlwy.net:51730`, db `wnba_oracle`, user `oracle`, same
+  password sha8; URL sha differs only by `sslmode` (`require` on mono vs
+  `verify-ca` on live public). Live internal `DATABASE_URL` sha8=`0cffc88e`
+  (hostname form only).
+- Redis: mono public `altaria.proxy.rlwy.net:13969` password sha matches live
+  internal `REDIS_URL` sha8=`b0421c4c` (same credential, public proxy form).
+- Watchdog hist: LIVE `api-production-7033` and MONO
+  `wnba-api-wnba-production` `/watchdog/today` **identical**
+  (`history_json_sha` both `3269e3c383ee`, slate `2026-09-26`, status `ok`,
+  `job1_last_status=success`). **HIST_MATCH=True**.
+- Tip-day context (#454): `first_tip_utc=2026-09-27T18:00:00Z`,
+  `freeze_target_utc=2026-09-27T17:20:00Z`; now ~03:04Z is tip Eastern date
+  so `starters_expected` applies for today's job1 (~13:00Z). Prior
+  `rotowire_empty` rows remain in history advisories only.
+
+### Risk verdict
+
+**WNBA job2 dual-fire: CLEAR.** Live crons null; only mono job2 armed; shared
+live data plane; hist match confirmed. No Railway cron change taken.
+
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
 
 Operator-authorized Sunday-path cutover to Railway project **`sports-oracle`**
@@ -150,7 +204,7 @@ printed.
   Postgres/Redis (not `*.railway.internal`). Design on #457.
 
 
-## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
+## Win-draft knobs on mono (verified) (#505 / #453)  -  2026-09-27T03:14Z
 
 - `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
 - `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on `wnba-cron-job2` + `wnba-api` (process env verified; rollback: `payout`).
@@ -158,6 +212,7 @@ printed.
 - `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
 - `EXPECTED_PROD_CONFIG["optimizer_objective_mode"]` synced to `total_draft_value` so job2 watchdog does not warn `config_drift` against the live flip.
 - Under TDV, job2 skips contrarian sampler fade and floor-tilt (cash/median mid-slot blend); ownership preference is only the fade tiebreaker.
+- Code fail-safes (#505): Settings/ModelPolicy/models.yaml default `payout_regime=top_1`; freeze slots under `top_1` use p90 not median; NFL `optimizer_config_from_env` defaults to `max_value`.
 - Data plane: public Postgres `acela.proxy.rlwy.net:51730` with `sslmode=require` (not verify-ca — missing `root.crt` in container); Redis `altaria.proxy.rlwy.net:13969`.
 - Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO.
 
@@ -220,13 +275,6 @@ not exposed by the read-only checks available during this audit.
   2026-09-26T19:58Z) was the last issue this channel filed; it reported
   dayclose `degraded` and job1/job1late `failed`. Older entries below that
   describe `ops-guard` or incident issues record past behavior only.
-
-## Optional total_draft_value optimizer objective (#433 / #453)  -  2026-09-27
-
-- `"total_draft_value"` selects by E[committed-order lineup score] and skips
-  payout/leverage/ceiling/duplication additives; ownership-fade tiebreaker
-  remains. Serving flip is live on mono `wnba-cron-job2` (see Win-draft knobs).
-- Unit tests in `tests/unit/test_total_draft_value_objective.py`.
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.

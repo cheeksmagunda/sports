@@ -260,7 +260,8 @@ def _apply_head_tier(
     )
     # Floor tilt blends mid-slot centers toward p10 (cash/median construction).
     # Under total_draft_value the objective is max E[TV], so keep the true
-    # center; ownership fade handles differentiation (#453).
+    # center; ownership fade (fed by live capture measured drafts) handles
+    # differentiation (#453 / #434 / #508).
     floor_weight = (
         0.0
         if policy.optimizer.objective_mode == "total_draft_value"

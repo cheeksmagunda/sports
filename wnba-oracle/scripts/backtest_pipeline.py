@@ -1,28 +1,15 @@
-"""Out-of-sample backtest of the full picker pipeline on the 16 2026
-WNBA slates we have in corpus.
+"""Out-of-sample backtest graded on each slate's Highest value board (#505).
 
 For each slate:
-  1. Build a mock enrichment from slate_labels (the same card_boost
-     values the live cron sees pre-game) but withhold real_score from
-     the predictor (use only as scoring ground truth).
-  2. Run the full job2 pipeline: _build_specs -> optimize_lineup.
-  3. Score the resulting lineup using REALIZED real_scores under the
-     true game scoring formula: sum (slot_mult + card_boost) * real_score.
-  4. Compare to the actual leaderboard: our score vs top-1 / top-5 /
-     top-20 / median.
+  1. Build enrichment from ``highestBoostedValuePlayers`` (card_boost visible
+     pre-game); withhold real_score from the predictor (scoring ground truth).
+  2. Run the job2 picker path under ``PAYOUT_REGIME=top_1`` /
+     ``OPTIMIZER_OBJECTIVE_MODE=total_draft_value``.
+  3. Score the committed lineup with realized real_scores.
+  4. Grade against that slate's Highest value board (top-5 / top-10 players
+     and HV hindsight score) — **not** prior users' winning drafts.
 
-Caveats:
-- The current trained EB artifact saw all 121 slates including these
-  16 (mild data leakage). Reading the placement numbers with that in
-  mind — they're an optimistic upper bound. A proper walk-forward
-  retrains EB on slates < N for each test slate N; left for follow-up.
-- features_json is empty (no Vegas / RotoWire signal in historical
-  parquet), so game_script_multiplier degrades to 1.0x for every player.
-  Live fire will have these signals — expect slight differentiation
-  beyond what this backtest shows.
-- max_per_team=2 + cohort=F-only matches prod settings.
-
-Outputs a per-slate table + aggregate stats.
+Winning-draft leaderboards are intentionally unused here.
 """
 
 from __future__ import annotations
@@ -42,7 +29,6 @@ sys.path.insert(0, str(_SCRIPTS.parent / "src"))
 
 from seasons_common import add_seasons_argument, in_seasons, parse_seasons  # noqa: E402
 
-# Match production env exactly
 os.environ.setdefault(
     "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
     "db18f6c9f495555e9df8f995e17679b93a7d26b1de77b39546d51ce2f5538f62",
@@ -50,29 +36,19 @@ os.environ.setdefault(
 os.environ.setdefault("CONTRARIAN_STRENGTH", "0.3")
 os.environ.setdefault("CONTRARIAN_ENABLED", "true")
 os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
-os.environ.setdefault("PAYOUT_REGIME", "top_20")
+os.environ.setdefault("PAYOUT_REGIME", "top_1")
+os.environ.setdefault("OPTIMIZER_OBJECTIVE_MODE", "total_draft_value")
 
 from wnba_oracle.eval.contest_score import committed_lineup_score  # noqa: E402
+from wnba_oracle.eval.highest_value import (  # noqa: E402
+    HV_SECTION,
+    build_highest_value_reference,
+    filter_highest_value_section,
+    grade_lineup_vs_highest_value,
+)
 from wnba_oracle.picker.optimize import OptimizeConfig, optimize_lineup  # noqa: E402
 from wnba_oracle.picker.payout import default_curve_for_regime  # noqa: E402
 from wnba_oracle.scheduler.job2 import _build_specs  # noqa: E402
-
-
-def score_lineup_against_truth(
-    player_ids: tuple[int, ...],
-    boost_by_pid: dict[int, float],
-    real_score_by_pid: dict[int, float],
-    slot_multipliers: tuple[float, ...] | None = None,
-) -> float:
-    """The lineup score the platform awards post-tip, in committed order."""
-    if slot_multipliers is None:
-        return committed_lineup_score(player_ids, real_score_by_pid, boost_by_pid)
-    return committed_lineup_score(
-        player_ids,
-        real_score_by_pid,
-        boost_by_pid,
-        slot_bases=slot_multipliers,
-    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,21 +57,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     seasons = parse_seasons(args.seasons)
 
-    from wnba_oracle.db.reads import read_leaderboards, read_slate_labels
+    from wnba_oracle.db.reads import read_slate_labels
 
-    sl = read_slate_labels()
-    lb = read_leaderboards()
+    sl_all = read_slate_labels()
+    hv = filter_highest_value_section(sl_all)
     test_slates = sorted(
-        d for d in sl["slate_date"].unique().to_list() if in_seasons(str(d), seasons)
+        d for d in hv["slate_date"].unique().to_list() if in_seasons(str(d), seasons)
     )
-    print(f"Backtesting on {len(test_slates)} slates (seasons: {','.join(seasons)})")
+    print(f"Backtesting on {len(test_slates)} HV slates (seasons: {','.join(seasons)})")
+    print(f"Reference section: {HV_SECTION}")
     print(f"Using artifact SHA: {os.environ['WNBA_ORACLE_MODEL_ARTIFACT_SHA'][:16]}...")
     print()
 
-    rows = []
+    rows: list[dict[str, object]] = []
     for sd in test_slates:
-        slate = sl.filter(pl.col("slate_date") == sd)
-        slate_lb = lb.filter(pl.col("slate_date") == sd).sort("rank")
+        reference = build_highest_value_reference(sl_all, str(sd))
+        if reference is None:
+            print(f"  {sd}  HV board too thin; skip")
+            continue
+
+        slate = hv.filter(pl.col("slate_date") == sd)
         teams = slate["team_key"].unique().to_list()
         team_to_opp = {t: teams[(i + 1) % len(teams)] for i, t in enumerate(teams)}
 
@@ -120,7 +101,6 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
 
-        # Run the same pipeline cron-job2 runs
         samps, fields, _projection_by_pid = _build_specs(enrichment, slate_date=sd)
         if len(samps) < 5:
             print(f"  {sd}  pool too small ({len(samps)}); skip")
@@ -130,64 +110,45 @@ def main(argv: list[str] | None = None) -> int:
             n_samples=300,
             n_field_lineups=50,
             seed=2026,
+            objective_mode="total_draft_value",
         )
-        rec = optimize_lineup(samps, fields, default_curve_for_regime("top_20"), cfg=cfg)
-        our_score = score_lineup_against_truth(rec.player_ids, boost_by_pid, rs_by_pid)
-
-        # Leaderboard scores
-        actual_top1 = float(slate_lb.row(0, named=True)["score"]) if slate_lb.height else 0.0
-        actual_top5 = (
-            float(slate_lb.filter(pl.col("rank") <= 5)["score"].min())
-            if slate_lb.height >= 5
-            else 0.0
-        )
-        actual_top20 = float(slate_lb["score"].min()) if slate_lb.height else 0.0
-        actual_median = float(slate_lb["score"].median()) if slate_lb.height else 0.0
-
-        # Where would we have placed?
-        all_scores = sorted(slate_lb["score"].to_list(), reverse=True)
-        placement = sum(1 for s in all_scores if s >= our_score) + 1
-
-        # Which players did we pick? Which did winners pick?
-        our_pids = {int(p) for p in rec.player_ids}
-        win_pids = set()
-        if slate_lb.height:
-            win_lineup = json.loads(slate_lb.row(0, named=True)["lineup_json"])
-            win_pids = {int(p["playerId"]) for p in win_lineup}
-        overlap = len(our_pids & win_pids)
+        rec = optimize_lineup(samps, fields, default_curve_for_regime("top_1"), cfg=cfg)
+        grade = grade_lineup_vs_highest_value(rec.player_ids, reference)
+        our_score = committed_lineup_score(rec.player_ids, rs_by_pid, boost_by_pid)
 
         rows.append(
             {
                 "slate_date": sd,
-                "our_score": round(our_score, 2),
-                "top1": round(actual_top1, 2),
-                "top5": round(actual_top5, 2),
-                "top20": round(actual_top20, 2),
-                "median": round(actual_median, 2),
-                "placement": placement,
-                "overlap_with_winner": overlap,
+                "our_score": round(float(our_score), 2),
+                "hv_top5_score": round(float(grade["hv_top5_score"]), 2),
+                "hv_capture": round(float(grade["hv_capture_ratio"]), 3),
+                "overlap_hv_top5": int(grade["overlap_hv_top5"]),
+                "overlap_hv_top10": int(grade["overlap_hv_top10"]),
                 "n_pool": len(samps),
+                "hv_board_n": len(reference.players),
             }
         )
 
+    if not rows:
+        print("No graded slates.")
+        return 1
+
     df = pl.DataFrame(rows)
     print()
-    print("Per-slate results:")
-    with pl.Config(tbl_rows=20, tbl_cols=10, tbl_width_chars=140):
+    print("Per-slate results (graded vs Highest value board, not winning drafts):")
+    with pl.Config(tbl_rows=40, tbl_cols=12, tbl_width_chars=140):
         print(df)
 
     print()
-    print("=== Aggregate ===")
+    print("=== Aggregate (HV reference) ===")
     print(f"Slates: {len(rows)}")
-    n_top20 = sum(1 for r in rows if r["placement"] <= 20)
-    n_top5 = sum(1 for r in rows if r["placement"] <= 5)
-    n_top1 = sum(1 for r in rows if r["placement"] == 1)
-    print(f"Top-20 finishes: {n_top20}/{len(rows)} ({100 * n_top20 / len(rows):.0f}%)")
-    print(f"Top-5  finishes: {n_top5}/{len(rows)} ({100 * n_top5 / len(rows):.0f}%)")
-    print(f"Top-1  finishes: {n_top1}/{len(rows)} ({100 * n_top1 / len(rows):.0f}%)")
-    print(f"Median placement: {int(np.median([r['placement'] for r in rows]))}")
-    print(f"Mean score gap vs top-1: {np.mean([r['top1'] - r['our_score'] for r in rows]):.2f}")
-    print(f"Mean overlap with winner: {np.mean([r['overlap_with_winner'] for r in rows]):.2f}/5")
+    print(f"Mean HV capture ratio: {np.mean([float(r['hv_capture']) for r in rows]):.3f}")
+    print(f"Mean overlap HV top-5: {np.mean([int(r['overlap_hv_top5']) for r in rows]):.2f}/5")
+    print(f"Mean overlap HV top-10: {np.mean([int(r['overlap_hv_top10']) for r in rows]):.2f}/5")
+    print(
+        f"Mean score gap vs HV top-5: "
+        f"{np.mean([float(r['hv_top5_score']) - float(r['our_score']) for r in rows]):.2f}"
+    )
     return 0
 
 

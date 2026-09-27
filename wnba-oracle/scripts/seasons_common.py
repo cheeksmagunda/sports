@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-DEFAULT_SEASONS = "2025,2026"
+DEFAULT_SEASONS = "2017,2018,2019,2020,2021,2022,2023,2024,2025,2026"
 _MIN_YEAR = 2000
 _MAX_YEAR = 2099
 
