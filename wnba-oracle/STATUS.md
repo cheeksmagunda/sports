@@ -13,6 +13,7 @@ Last verified: 2026-09-27T05:31:49Z
 | Knobs | `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on `wnba-api` + `wnba-cron-job2` (verified) |
 | Root cause | Sticky history `no_job1_pool` after redeploy race + tip-day RotoWire fail-closed overnight (T-30h) |
 | Fix | [#559](https://github.com/cheeksmagunda/sports/pull/559) live-only hard blockers + RotoWire fail-closed within T-4; cleared sticky `no_job1_pool`/`config_drift` rows; cancelled QUEUED thrash where authorized |
+| Early job1 command | `scripts/codespace-railway-env -- railway run -s wnba-cron-job1 -e wnba-production -- bash -lc 'python3 wnba-oracle/scripts/seed_storage_state.py && uv run --frozen --package wnba-oracle oracle-cron --job job1'` |
 | Residual | Advisory `rotowire_empty` until free-page starters post (~13:00Z job1 / job1-late) |
 
 ## DraftStats / recorded_states corpus export (#526)  -  2026-09-27
