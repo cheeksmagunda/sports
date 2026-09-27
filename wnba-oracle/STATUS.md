@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-26T03:50:00Z
+Last verified: 2026-09-27T01:31:00Z
 
 ## RotoWire-empty fail-closed only on tip day (#441)  -  2026-09-27
 
@@ -12,6 +12,21 @@ Last verified: 2026-09-26T03:50:00Z
 - Fix: `ingest/rotowire.starters_expected` requires the 30h lead and the
   tip's Eastern date. job1, job1-lite, and the watchdog `rotowire_empty`
   check share it. Serving behavior on tip day is unchanged.
+- **LIVE deploy (2026-09-27T01:30:40Z):** source SHA
+  `4c7c9598f18cddf669ddad3367633b84daff9df0` (PR #454 squash-merge) on
+  project `wnba-oracle` production. Auto source deploys had been SKIPPED
+  (`CI check suite failed`); manual `serviceInstanceDeploy` with that SHA:
+  - `api` deploy `b6980bde-bd22-40be-a3b7-c594a15619cc` SUCCESS
+  - `cron-job1` deploy `95353809-5606-4e90-a44c-58a0ca44a891` SUCCESS
+  - `cron-job1-late` deploy `f3dfb782-c830-4bd2-9be1-9898a574d135` SUCCESS
+  No deploy to `sports-oracle`. Rollback: prior SUCCESS image per service
+  via Railway dashboard / redeploy previous SUCCESS id.
+- **Post-deploy probe (2026-09-27T01:30:49Z):**
+  `https://api-production-7033.up.railway.app/health` keys `status`,`version`
+  (`status=ok`). `/watchdog/today` keys
+  `checked_at_utc`,`events`,`freeze_readiness`,`history`,`slate_date`,`status`
+  with live `status=ok`, empty `events` (historical `rotowire_empty` remains
+  under `history` only; no sticky non-tip warn).
 
 ## Scheduled WNBA checks report through their Actions runs, not issues (#442)  -  2026-09-26
 
