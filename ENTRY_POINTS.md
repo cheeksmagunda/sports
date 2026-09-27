@@ -583,20 +583,20 @@ proof only; live multi-year scrapes stay operator-gated.
 the corpus sibling. `GITHUB_TOKEN` cannot push to a sibling repo. Agents must
 not mint this token. Auth for scrapes remains the portfolio
 `REALSPORTS_STORAGE_STATE_B64GZ` contract above — never mint a session for
-corpus work. **Ollama is forbidden** until `coverage_manifest.json` reports
-complete historical capture.
+corpus work. **Ollama training** is FORBIDDEN until `coverage_manifest.json` reports
+complete historical capture (binary install + watcher: #574).
 
-## Ollama HV/TDV slate watcher (Codespace) — issue #574
+## Ollama HV watcher (#574)
 
-Portfolio helper under `scripts/ollama_hv_watcher/`: arms at earliest T-40
-across sport slate windows, stays until latest slate close, and writes
-self-learning notes from HV/TDV boards under gitignored `data/ollama_hv/`.
+Portfolio Codespace helper (not per-app serving). Arms at the earliest slate
+T-40 across sports and stays open until the latest slate `close_at`. Default
+model `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`. Training /
+`ollama generate` requires `coverage_manifest` complete (#526) or
+`SPORTS_OLLAMA_UNLOCK=1`. Commands: `scripts/ollama_hv_watcher/README.md`.
 
-- Training / generate is gated by `coverage_manifest.historical_capture_complete`
-  (`OllamaForbiddenError`). Operator override for the Codespace helper only:
-  `SPORTS_OLLAMA_UNLOCK=1`.
-- Binary install + `ollama serve` healthchecks (`:11434`) are allowed anytime.
-- CLI: `cd scripts && python -m ollama_hv_watcher status|plan|watch|learn|serve`
-- systemd-less: `nohup` + pidfile under `data/ollama_hv/`; optional postStart
-  snippet in `scripts/devcontainer-poststart.sh` ensures serve is up.
-
+```sh
+bash scripts/ollama_hv_watcher/install_codespace.sh
+PYTHONPATH=scripts python -m ollama_hv_watcher --status
+PYTHONPATH=scripts python -m ollama_hv_watcher --once
+PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
+```

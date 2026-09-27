@@ -117,20 +117,30 @@ def run_learn(
     dry_run: bool = False,
     environ: dict[str, str] | None = None,
 ) -> Path:
-    reason = ensure_ollama_training_allowed(manifest, environ=environ)
     prompt = build_learn_prompt(summary)
     if dry_run:
         notes = (
-            "[dry_run] prompt prepared; Ollama generate skipped.\n"
-            f"gate={reason}\n\n{prompt}"
+            "[dry_run] prompt prepared; Ollama generate skipped.
+"
+            f"gate=deferred_until_execute
+
+{prompt}"
         )
-    else:
-        notes = call_ollama_generate(prompt, host=host, model=model)
+        return write_learning_tick(
+            data_root,
+            summary,
+            notes=notes,
+            model=model,
+            gate_reason="dry_run",
+            dry_run=True,
+        )
+    reason = ensure_ollama_training_allowed(manifest, environ=environ)
+    notes = call_ollama_generate(prompt, host=host, model=model)
     return write_learning_tick(
         data_root,
         summary,
         notes=notes,
         model=model,
         gate_reason=reason,
-        dry_run=dry_run,
+        dry_run=False,
     )
