@@ -88,7 +88,7 @@ def ensure_ollama_serve(
     logfile.parent.mkdir(parents=True, exist_ok=True)
     with logfile.open("ab") as log_fh:
         # start_new_session detaches like nohup; avoid wrapping with a shell.
-        proc = subprocess.Popen(  # noqa: S603
+        proc = subprocess.Popen(
             ["ollama", "serve"],
             stdout=log_fh,
             stderr=subprocess.STDOUT,

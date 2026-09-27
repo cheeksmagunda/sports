@@ -31,8 +31,10 @@ class BoardSummary:
 
     def prompt_block(self, *, top_n: int = 10) -> str:
         lines = [
-            f"HV/TDV board label={self.label} sport={self.sport or '?'} "
-            f"slate={self.slate_key or '?'} players={self.player_count}",
+            (
+                f"HV/TDV board label={self.label} sport={self.sport or '?'} "
+                f"slate={self.slate_key or '?'} players={self.player_count}"
+            ),
             "Top players (highest value / max_value / top_1 style ranks):",
         ]
         for i, row in enumerate(self.top_players[:top_n], start=1):
@@ -40,9 +42,7 @@ class BoardSummary:
             value = row.get("value")
             real = row.get("real_score")
             team = row.get("team") or ""
-            lines.append(
-                f"  {i}. {name} team={team} value={value} real_score={real}"
-            )
+            lines.append(f"  {i}. {name} team={team} value={value} real_score={real}")
         return "\n".join(lines)
 
 
@@ -60,7 +60,9 @@ def _normalize_player(row: dict[str, Any]) -> dict[str, Any]:
         "player_id": row.get("player_id") or row.get("id"),
         "name": row.get("name") or row.get("player_name"),
         "team": row.get("team") or row.get("team_abbr"),
-        "value": _as_float(row.get("value") if "value" in row else row.get("max_value")),
+        "value": _as_float(
+            row.get("value") if "value" in row else row.get("max_value")
+        ),
         "real_score": _as_float(row.get("real_score") or row.get("score")),
         "slot": row.get("slot"),
         "drafts": row.get("drafts"),
@@ -87,9 +89,7 @@ def summarize_board_payload(
         )
     )
     label = str(
-        payload.get("label")
-        or payload.get("section")
-        or "total_value_leaderboard"
+        payload.get("label") or payload.get("section") or "total_value_leaderboard"
     )
     return BoardSummary(
         path=path,

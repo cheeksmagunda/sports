@@ -10,14 +10,18 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ollama_hv_watcher.boards import discover_board_paths, load_board_summary
 from ollama_hv_watcher.discover import discover_day_plan
-from ollama_hv_watcher.gate import ensure_ollama_training_allowed, load_manifest_or_empty
+from ollama_hv_watcher.gate import (
+    ensure_ollama_training_allowed,
+    load_manifest_or_empty,
+)
 from ollama_hv_watcher.learn import run_learn
 from ollama_hv_watcher.serve import (
     DEFAULT_HOST,
@@ -66,7 +70,9 @@ def resolve_plan(cfg: WatcherConfig) -> DayWatchPlan | None:
         return None
 
 
-def status_snapshot(cfg: WatcherConfig, *, now: datetime | None = None) -> dict[str, Any]:
+def status_snapshot(
+    cfg: WatcherConfig, *, now: datetime | None = None
+) -> dict[str, Any]:
     now = now or utc_now()
     health = health_check(cfg.host)
     plan = resolve_plan(cfg)

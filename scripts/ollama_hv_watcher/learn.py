@@ -9,9 +9,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from realsports_corpus.coverage_manifest import CoverageManifest
+
 from ollama_hv_watcher.boards import BoardSummary
 from ollama_hv_watcher.gate import ensure_ollama_training_allowed
-from realsports_corpus.coverage_manifest import CoverageManifest
 
 DEFAULT_MODEL = "llama3.2:3b"
 DEFAULT_HOST = "http://127.0.0.1:11434"
@@ -100,7 +101,9 @@ def write_learning_tick(
         "board": summary.to_dict(),
         "notes": notes,
     }
-    out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    out_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return out_path
 
 

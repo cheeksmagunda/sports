@@ -169,7 +169,9 @@ class DayWatchPlan:
         }
 
 
-def build_day_plan(slates: Sequence[SlateWindow] | Iterable[SlateWindow]) -> DayWatchPlan:
+def build_day_plan(
+    slates: Sequence[SlateWindow] | Iterable[SlateWindow],
+) -> DayWatchPlan:
     ordered = tuple(sorted(slates, key=lambda s: (s.arm_at, s.sport, s.slate_id)))
     return DayWatchPlan(slates=ordered)
 

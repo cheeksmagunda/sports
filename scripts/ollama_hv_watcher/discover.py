@@ -12,7 +12,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ollama_hv_watcher.windows import DayWatchPlan, SlateWindow, build_day_plan, load_windows_payload
+from ollama_hv_watcher.windows import (
+    DayWatchPlan,
+    SlateWindow,
+    build_day_plan,
+    load_windows_payload,
+)
 
 WINDOWS_ENV = "SPORTS_OLLAMA_WINDOWS_JSON"
 PACKAGE_DIR = Path(__file__).resolve().parent

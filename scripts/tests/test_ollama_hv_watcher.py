@@ -12,19 +12,25 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
-from ollama_hv_watcher.boards import summarize_board_payload  # noqa: E402
-from ollama_hv_watcher.discover import discover_day_plan, load_fixture_calendars  # noqa: E402
-from ollama_hv_watcher.gate import (  # noqa: E402
+from ollama_hv_watcher.boards import summarize_board_payload
+from ollama_hv_watcher.discover import (
+    discover_day_plan,
+    load_fixture_calendars,
+)
+from ollama_hv_watcher.gate import (
     ensure_ollama_training_allowed,
     operator_unlock_enabled,
 )
-from ollama_hv_watcher.learn import build_learn_prompt, write_learning_tick  # noqa: E402
-from ollama_hv_watcher.windows import (  # noqa: E402
+from ollama_hv_watcher.learn import (
+    build_learn_prompt,
+    write_learning_tick,
+)
+from ollama_hv_watcher.windows import (
     DayWatchPlan,
     SlateWindow,
     build_day_plan,
 )
-from realsports_corpus.coverage_manifest import (  # noqa: E402
+from realsports_corpus.coverage_manifest import (
     OllamaForbiddenError,
     build_empty_manifest,
 )
@@ -126,9 +132,9 @@ def test_training_forbidden_until_unlock_or_coverage() -> None:
     empty = build_empty_manifest()
     with pytest.raises(OllamaForbiddenError):
         ensure_ollama_training_allowed(empty, environ={})
-    assert ensure_ollama_training_allowed(empty, environ={"SPORTS_OLLAMA_UNLOCK": "1"}) == (
-        "operator_unlock"
-    )
+    assert ensure_ollama_training_allowed(
+        empty, environ={"SPORTS_OLLAMA_UNLOCK": "1"}
+    ) == ("operator_unlock")
     assert operator_unlock_enabled({"SPORTS_OLLAMA_UNLOCK": "1"}) is True
     assert operator_unlock_enabled({}) is False
 

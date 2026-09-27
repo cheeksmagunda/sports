@@ -30,23 +30,27 @@ _SCRIPTS = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from ollama_hv_watcher.boards import discover_board_paths, load_board_summary  # noqa: E402
-from ollama_hv_watcher.discover import discover_day_plan  # noqa: E402
-from ollama_hv_watcher.gate import (  # noqa: E402
+from realsports_corpus.coverage_manifest import (
+    OllamaForbiddenError,
+    ollama_helper_allowed,
+)
+
+from ollama_hv_watcher.boards import (
+    discover_board_paths,
+    load_board_summary,
+)
+from ollama_hv_watcher.discover import discover_day_plan
+from ollama_hv_watcher.gate import (
     UNLOCK_ENV,
     load_manifest_or_empty,
     operator_unlock_enabled,
 )
-from ollama_hv_watcher.learn import DEFAULT_MODEL, run_learn  # noqa: E402
-from ollama_hv_watcher.serve import (  # noqa: E402
+from ollama_hv_watcher.learn import DEFAULT_MODEL, run_learn
+from ollama_hv_watcher.serve import (
     DEFAULT_HOST,
     DEFAULT_PIDFILE,
     ensure_ollama_serve,
     health_check,
-)
-from realsports_corpus.coverage_manifest import (  # noqa: E402
-    OllamaForbiddenError,
-    ollama_helper_allowed,
 )
 
 DEFAULT_DATA_ROOT = Path("data/ollama_hv")
@@ -69,7 +73,8 @@ def cmd_status(args: argparse.Namespace) -> int:
             "unlock_env": UNLOCK_ENV,
             "operator_unlock": operator_unlock_enabled(),
             "coverage_complete": ollama_helper_allowed(manifest),
-            "training_allowed": ollama_helper_allowed(manifest) or operator_unlock_enabled(),
+            "training_allowed": ollama_helper_allowed(manifest)
+            or operator_unlock_enabled(),
             "default_model": DEFAULT_MODEL,
             "data_root": str(Path(args.data_root)),
         }
@@ -243,7 +248,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("--windows-json", default="")
     p_watch.add_argument("--no-fixtures", action="store_true")
     p_watch.add_argument("--poll-seconds", type=float, default=30.0)
-    p_watch.add_argument("--once", action="store_true", help="Single status tick then exit")
+    p_watch.add_argument(
+        "--once", action="store_true", help="Single status tick then exit"
+    )
     p_watch.add_argument("--ensure-serve", action="store_true")
     p_watch.add_argument("--pidfile", default=str(DEFAULT_PIDFILE))
     p_watch.set_defaults(func=cmd_watch)
