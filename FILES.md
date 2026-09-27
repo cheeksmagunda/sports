@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 952 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -112,15 +112,22 @@ Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/gener
 - nba-oracle/.env.example
 - nba-oracle/AGENTS.md -- NBA Oracle agent instructions
 - nba-oracle/CLAUDE.md -- NBA Oracle agent instructions
+- nba-oracle/Dockerfile
 - nba-oracle/Makefile -- Build/test/lint entrypoints
 - nba-oracle/README.md -- nba-oracle
 - nba-oracle/STATUS.md -- Status
 - nba-oracle/pyproject.toml -- Package/tool configuration
+- nba-oracle/railway.toml -- Package/tool configuration
 
 ## nba-oracle/src/nba_oracle/
 - nba-oracle/src/nba_oracle/__init__.py -- NBA Oracle application package.
 
+## nba-oracle/src/nba_oracle/api/
+- nba-oracle/src/nba_oracle/api/__init__.py -- NBA Oracle HTTP surface (health scaffold only).
+- nba-oracle/src/nba_oracle/api/app.py -- Health-only FastAPI app for Railway mono `nba-api` scaffold.
+
 ## nba-oracle/tests/
+- nba-oracle/tests/test_health_api.py
 - nba-oracle/tests/test_import.py
 
 ## nfl-oracle/

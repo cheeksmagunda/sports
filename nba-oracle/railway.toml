@@ -1,0 +1,16 @@
+# NBA Oracle Railway build defaults for sports-oracle / nba-staging.
+# NO per-service blocks (Railway 2026 railway.toml does not support them).
+# Per-service overrides (healthcheckPath, startCommand) live on the service.
+#
+# Builder must stay DOCKERFILE. A plain railway redeploy of an older
+# deployment whose serviceManifest.builder was RAILPACK re-runs Railpack and
+# fails without a Dockerfile (issue #279 / #453 nba-staging). Recover with:
+#   scripts/codespace-railway-env -- railway redeploy --service nba-api --from-source -y
+#
+# API start command (default image CMD):
+#   uvicorn nba_oracle.api.app:app --host 0.0.0.0 --port ${PORT:-8000}
+# Worker / frontend: leave source disconnected until real roles exist.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "nba-oracle/Dockerfile"
