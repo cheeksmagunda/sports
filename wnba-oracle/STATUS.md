@@ -2,6 +2,14 @@
 
 Last verified: 2026-09-27T01:43:00Z
 
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+
+- Verified scaffold on `sports-oracle` / `wnba-production`: `wnba-api`,
+  cron services, `wnba-frontend`, Postgres (+ Redis). Non-serving; no
+  domains or secret cutover. Design + runbook on #457.
+- Live WNBA traffic remains on Railway project `wnba-oracle` /
+  `production` through Sunday 2026-09-27 (#453).
+
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
 Live traffic remains on Railway project **`wnba-oracle`** (not

@@ -1,10 +1,10 @@
 """Redacted NHL raw payload persistence with sidecar provenance.
 
 Adapts nfl-oracle's ingest/corpus_g.py Provenance shape for NHL. The store
-root must be passed explicitly (no project-root auto-detection): this
-scaffold is exercised only against synthetic fixtures and test tmp_paths
-until the Week 1 authorization checkpoint (issue #135) is separately granted
-for real provider collection.
+root must be passed explicitly (no project-root auto-detection). Every
+payload is redacted and identity-leak-checked before it touches disk: this
+store persists real Real Sports payloads (Week 2+), so the same discipline
+nfl-oracle's Corpus C/G stores apply is required here too.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from oracle_core.artifacts import atomic_write_bytes, atomic_write_json, sha256_bytes
+
+from nhl_oracle.ingest.redact import assert_no_identity_leak, redact_corpus_payload
 
 NhlEndpointName = Literal[
     "boxscore",
@@ -90,9 +92,12 @@ class NhlCorpusStore:
         source_available_at: str | None = None,
         decision_at: str | None = None,
     ) -> StoredArtifact:
-        body = json.dumps(
-            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        ).encode("utf-8")
+        clean = redact_corpus_payload(dict(payload))
+        assert isinstance(clean, dict)
+        assert_no_identity_leak(clean)
+        body = json.dumps(clean, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
+        )
         digest = sha256_bytes(body)
         prov = Provenance(
             game_id=game_id,

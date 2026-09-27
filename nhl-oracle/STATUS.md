@@ -1,19 +1,27 @@
 # Status
 
-Last verified: 2026-09-27 (#453 Sunday readiness honesty; frontend scaffold #462 on main)
+Last verified: 2026-09-27 (#453 Sunday honesty; discovery/calendar #455; frontend #462; baselines #456)
+
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+
+- Verified scaffold on `sports-oracle` / `nhl-staging`: `nhl-api`,
+  `nhl-worker`, `nhl-frontend`, Postgres. Non-serving; no NHL live host
+  yet. Design + runbook on #457.
+- Live traffic for other sports remains on old projects through Sunday
+  2026-09-27 (#453); NHL has no live Railway serving to cut over.
 
 This file records application state only.
 
 ## Sunday readiness honesty (#453)  -  2026-09-27
 
-- **Week 2 done** (contract/corpus/#325 boost=`none`).
+- **Week 2 done** (contract/corpus/#325 boost=`none`; discovery/calendar #455).
 - **Week 3 started** as an observation-only baseline skeleton (#456 / PR #459):
   `labels/` + `baselines/` with synthetic-label tests. **Not fitted on Real
   corpus. Not serving. No Railway. No hosted API. No contest entry.**
 - Frontend scaffold landed (#462) under `nhl-oracle/frontend` (Vite shell +
   Dockerfile). **Not hosted / not serving contests.** Hosted API still absent.
 - Optimizer / production NHL serving / Railway live contest path: **not started**.
-- Open follow-on for contest discovery/calendar ops code: #455 (PR #471).
+- Contest discovery/calendar ops code: #455 (this change) lands on main.
 - Do not treat NHL as Sunday live contest-ready.
 
 ## Application state
@@ -33,10 +41,12 @@ This file records application state only.
     redacted live fixture (`contest_entry: False`).
   - `ingest/`: NHL-owned `realsports` client (adapted from the NFL pattern;
     no cross-sport import), `redact`, live `audit` CLI
-    (`nhl-live-contract-audit`), and `NhlCorpusStore` provenance. Live
-    redacted corpus seeded under `data/raw/` (gitignored) with coverage
-    denominators. Auth uses Codespace secret `REALSPORTS_STORAGE_STATE_B64GZ`
+    (`nhl-live-contract-audit`), `ingest.discovery` slate probe + contest-ID
+    range scan with identity-mismatch guard, and `NhlCorpusStore` that
+    redacts before every write. Live redacted corpus under `data/raw/`
+    (gitignored). Auth uses Codespace secret `REALSPORTS_STORAGE_STATE_B64GZ`
     only; no new credential type; no contest entry.
+  - `calendar/`: season start-year label helper for corpus paths (#455).
   - `identity/`: in-memory identity map plus a same-name collision
     reconciler that reports and never auto-merges, and
     `drop_ambiguous_identity_rows` to drop-and-audit ambiguous rows from a

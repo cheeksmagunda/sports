@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 952 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -112,15 +112,22 @@ Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/gener
 - nba-oracle/.env.example
 - nba-oracle/AGENTS.md -- NBA Oracle agent instructions
 - nba-oracle/CLAUDE.md -- NBA Oracle agent instructions
+- nba-oracle/Dockerfile
 - nba-oracle/Makefile -- Build/test/lint entrypoints
 - nba-oracle/README.md -- nba-oracle
 - nba-oracle/STATUS.md -- Status
 - nba-oracle/pyproject.toml -- Package/tool configuration
+- nba-oracle/railway.toml -- Package/tool configuration
 
 ## nba-oracle/src/nba_oracle/
 - nba-oracle/src/nba_oracle/__init__.py -- NBA Oracle application package.
 
+## nba-oracle/src/nba_oracle/api/
+- nba-oracle/src/nba_oracle/api/__init__.py -- NBA Oracle HTTP surface (health scaffold only).
+- nba-oracle/src/nba_oracle/api/app.py -- Health-only FastAPI app for Railway mono `nba-api` scaffold.
+
 ## nba-oracle/tests/
+- nba-oracle/tests/test_health_api.py
 - nba-oracle/tests/test_import.py
 
 ## nfl-oracle/
@@ -547,6 +554,10 @@ Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/src/nhl_oracle/baselines/priors.py -- Transparent historical priors for Real ``value`` (no fancy models).
 - nhl-oracle/src/nhl_oracle/baselines/walk_forward.py -- Season walk-forward evaluation of Real value baselines (OOS by season).
 
+## nhl-oracle/src/nhl_oracle/calendar/
+- nhl-oracle/src/nhl_oracle/calendar/__init__.py -- NHL calendar helpers (season labeling).
+- nhl-oracle/src/nhl_oracle/calendar/season.py -- NHL season labeling.
+
 ## nhl-oracle/src/nhl_oracle/common/
 - nhl-oracle/src/nhl_oracle/common/__init__.py -- NHL-owned shared helpers (paths, etc.).
 - nhl-oracle/src/nhl_oracle/common/paths.py -- Project-owned runtime path discovery for nhl-oracle.
@@ -563,8 +574,9 @@ Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/src/nhl_oracle/identity/reconcile.py -- Same-name identity collision reconciliation (offline, observation only).
 
 ## nhl-oracle/src/nhl_oracle/ingest/
-- nhl-oracle/src/nhl_oracle/ingest/__init__.py -- NHL ingest: Real Sports client, redaction, and corpus provenance.
+- nhl-oracle/src/nhl_oracle/ingest/__init__.py -- NHL ingest: Real Sports client, redaction, discovery, and corpus provenance.
 - nhl-oracle/src/nhl_oracle/ingest/audit.py -- Read-only Real Sports NHL contract audit + redacted corpus seed.
+- nhl-oracle/src/nhl_oracle/ingest/discovery.py -- Live NHL contest discovery: probe the current slate and scan contest IDs.
 - nhl-oracle/src/nhl_oracle/ingest/provenance.py -- Redacted NHL raw payload persistence with sidecar provenance.
 - nhl-oracle/src/nhl_oracle/ingest/realsports.py -- Thin Real Sports HTTP client for NHL (read-only).
 - nhl-oracle/src/nhl_oracle/ingest/redact.py -- Redact identity fields from Real Sports NHL payloads before persistence.
@@ -580,12 +592,14 @@ Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/gener
 ## nhl-oracle/tests/
 - nhl-oracle/tests/test_audit_fixtures.py
 - nhl-oracle/tests/test_baselines_walk_forward.py -- Week-3 acceptance: chronological baseline + prediction skeleton.
+- nhl-oracle/tests/test_calendar_season.py
 - nhl-oracle/tests/test_contract_gates.py
 - nhl-oracle/tests/test_contract_schema.py
 - nhl-oracle/tests/test_discovery.py
 - nhl-oracle/tests/test_freeze_cycle.py
 - nhl-oracle/tests/test_identity_reconcile.py
 - nhl-oracle/tests/test_import.py
+- nhl-oracle/tests/test_ingest_discovery.py
 - nhl-oracle/tests/test_provenance.py
 - nhl-oracle/tests/test_realsports_auth_bootstrap.py
 - nhl-oracle/tests/test_redact.py
