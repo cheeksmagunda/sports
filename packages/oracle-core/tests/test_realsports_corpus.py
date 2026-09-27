@@ -16,9 +16,7 @@ from oracle_core.realsports_corpus import (
 
 def test_layout_paths() -> None:
     assert season_from_iso_date("2026-09-25") == "2026"
-    assert slate_or_game_key(slate_date="2026-09-25", contest_id=2100) == (
-        "slate_2026-09-25_2100"
-    )
+    assert slate_or_game_key(slate_date="2026-09-25", contest_id=2100) == ("slate_2026-09-25_2100")
     assert slate_or_game_key(game_id=19457) == "game_19457"
     rel = artifact_path(
         sport="wnba",

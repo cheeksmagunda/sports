@@ -59,11 +59,7 @@ class CoverageManifest:
     def gap_report(self) -> list[dict[str, Any]]:
         gaps: list[dict[str, Any]] = []
         for key, entry in sorted(self.entries.items()):
-            missing = [
-                name
-                for name in self.expected_artifacts
-                if name not in entry.artifacts
-            ]
+            missing = [name for name in self.expected_artifacts if name not in entry.artifacts]
             if missing:
                 gaps.append(
                     {
