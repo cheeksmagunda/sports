@@ -30,6 +30,10 @@ from ollama_hv_watcher.pick import (
     FIVE_PLAYER_LINEUP_SIZE,
     five_player_lineup,
 )
+from ollama_hv_watcher.training_manifest import (
+    load_training_data_manifest,
+    source_ids,
+)
 from ollama_hv_watcher.windows import (
     DayWatchPlan,
     SlateWindow,
@@ -247,3 +251,13 @@ def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
     assert payload["lineup_size"] == 5
     assert len(payload["five_player_lineup"]) == 5
     assert "wnba" in str(out)
+
+def test_training_data_manifest_lists_hv_sources() -> None:
+    manifest = load_training_data_manifest()
+    assert manifest["objective"] == "highest_value_tdv_max_value"
+    ids = source_ids(manifest)
+    assert "nfl_corpus_c_hv_export" in ids
+    assert "sibling_realsports_corpus_tv" in ids
+    assert manifest["gate"]["unlock_env"] == "SPORTS_OLLAMA_UNLOCK"
+    assert manifest["calendars"]["windows_env"] == "SPORTS_OLLAMA_WINDOWS_JSON"
+
