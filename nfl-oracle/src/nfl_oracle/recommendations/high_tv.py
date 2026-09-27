@@ -118,9 +118,7 @@ def high_tv_board_from_draft_stats(parsed: ParsedContest, *, top_n: int = 5) -> 
     if hv_rows:
         # Walrus keeps mypy narrowed: value is Finite | None on DraftStatRow
         # and list-comprehension filters do not propagate into a second loop.
-        values = {
-            row.player_id: float(v) for row in hv_rows for v in (row.value,) if v is not None
-        }
+        values = {row.player_id: float(v) for row in hv_rows for v in (row.value,) if v is not None}
         boosts = [float(b) for row in hv_rows for b in (row.card_boost,) if b is not None]
         source = "nfl_highestBoostedValuePlayers"
         has_tv = True
