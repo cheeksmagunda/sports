@@ -61,6 +61,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon0 \
     libxrandr2 \
     libgomp1 \
+    util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH="/opt/venv/bin:$PATH" \
@@ -83,7 +84,13 @@ COPY nfl-oracle/src/ ./src/
 RUN useradd --create-home --uid 10001 oracle \
     && mkdir -p /app/nfl-oracle \
     && chown -R oracle:oracle /app /opt/nfl-oracle /opt/venv /opt/playwright-browsers
-USER oracle
+
+COPY nfl-oracle/docker-entrypoint.sh /usr/local/bin/nfl-oracle-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/nfl-oracle-entrypoint.sh
+
+# Stay root through ENTRYPOINT so Railway volume mounts can be chown'd to
+# oracle, then drop privileges. Do not set USER oracle here.
+ENTRYPOINT ["/usr/local/bin/nfl-oracle-entrypoint.sh"]
 
 EXPOSE 8000
 

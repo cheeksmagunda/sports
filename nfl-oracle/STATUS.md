@@ -45,35 +45,66 @@ not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
 knobs: Max-value / race construction and mono serve sections below. Existing
 valuelaw + feature ridge only; no new model stacks (#523).
 
-## Max-value / race construction knobs (#453, 2026-09-26)
+## Corpus G nightly + gap/repair reconcile (2026-09-27, #453 / #503)
 
-Env-driven optimizer construction so the worker can chase maximum attainable
-total draft value without a code change. `optimizer_config_from_env`
-(`nfl_oracle.recommendations.optimizer`) is wired into `_policy()` alongside the
-existing `picker_knobs_from_env`. Defaults reproduce production exactly, so this
-is a default-off capability, not a serving-path change.
+Reconciled into PR #512 (absorbs overlapping PR #515). Verified from
+Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`.
+Public DB proxy sha256[:8]=`7b8ce64c` unchanged. No Real Sports session
+minting. Operator-confirmed: mono worker volume **attached** and
+`nfl-oracle-worker` **SUCCESS** on `sports-oracle` / `nfl-production`.
 
-- Env knobs (all default to current production values):
-  `NFL_OPTIMIZER_PROFILE` (`diversified` default | `max_value`),
-  `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS` (3), `NFL_OPTIMIZER_MIN_DISTINCT_GAMES` (2),
-  `NFL_OPTIMIZER_UPSIDE_WEIGHT` (0.15), `NFL_OPTIMIZER_FIELD_WEIGHT` (0.10).
-  Invalid values fail closed (raise). `max_value` drops the diversity floor to
-  1/1 so the single highest projected total-value five is committed.
-- The frozen `Recommendation` records `construction_profile` for audit.
-- Also fixed a broken import on the replay CLI (`_OPTIMIZER_PROFILE_PRESETS` ->
-  public `OPTIMIZER_PROFILE_PRESETS`) introduced by a concurrent merge, and
-  recorded the optimizer config on the replay report payload.
-- Context: the production optimizer already maximizes `value * (slot + boost)`
-  and re-ranks by a contest utility with a right-tail (`upside_weight * (p90-E)`)
-  and field-beat (`field_weight`) term. The gap this closes is env-tunability of
-  those weights plus the diversity floor that can hold the frozen five off the
-  max-attainable set. Measure with `contest-pool-replay --optimizer-profile
-  max_value` before any flip.
-- **No serving knob flipped this change.** Production stays `boost_0.75`
-  (`NFL_PICKER_BOOST_RANK_BLEND=0.75`, `NFL_PICKER_PROFILE=boost_0.75`) on mono
-  `sports-oracle` / `nfl-production` and Real Sports `sha256[:8]=c4a729e2` (both
-  re-verified live 2026-09-27 ~02:32Z; `NFL_OPTIMIZER_*` unset in Railway), so
-  the live Sunday construction is unchanged.
+### Volume entrypoint (durable PermissionError fix)
+
+`docker-entrypoint.sh` (wired from `Dockerfile.production`) runs as root,
+`mkdir -p` + `chown -R oracle:oracle` on `$NFL_DATA_ROOT`, then drops to
+`oracle` via `runuser`/`setpriv`. Redeploy this image before treating an
+attached volume as permanently writable under `USER oracle`.
+
+### Gap matrix (live volume evidence)
+
+| Surface | Season band | Games | Complete (stats+players+feed) | Notes |
+|---------|-------------|------:|------------------------------:|-------|
+| staging `nfl-oracle-worker` volume `9cb6374a` (~1850 MB) | 2002-2023 | 0 | 0 | empty; seed catalog only |
+| staging | 2024 | 334 | 0 | all missing `players.json` (stats+feed present) |
+| staging | 2025 | 334 | 5 | only seed games have players |
+| mono `nfl-production` `nfl-oracle-worker-volume` | all | 0 | 0 | **attached**, worker SUCCESS; empty pending densify |
+
+Training rows in active model bundles (`training_rows=37692`) still reflect
+2024-2025 volume data from staging. Multi-year feed needs (1) 2024 players
+repair, (2) 2002-2023 densification, (3) copy/sync onto mono volume.
+
+### Pipeline / optimizer
+
+- **Nightly:** `.github/workflows/nfl-corpus-g-nightly.yml` at 04:30 UTC
+  (before `nfl-dayclose` 10:00 / `nfl-corpus-backup` 11:30). Commits
+  `coverage_matrix.json` to `backups`; raw GHA artifacts are ephemeral.
+- **Dayclose:** grades/freeze path; race corpus under
+  `data/race/dayclose/<season>/`. Does not densify historical Corpus G.
+- **Optimizer objective:** always `total_value`. Portfolio EV uses
+  `U = E + upside_weight*(p90-E) + field_weight*field_win_rate*max(|E|,1)`.
+  Race / max-draft construction: `NFL_OPTIMIZER_PROFILE=max_value`
+  (diversity floor 1/1). Defaults remain `diversified` (3 teams / 2 games).
+
+### Code unblocks in this PR
+
+- Nightly Corpus G seed-game workflow + backups coverage commit
+- Root entrypoint chown for Railway volume mounts
+- `nfl-corpus-g-backfill --report-gaps` offline completeness scan
+- `nfl-corpus-g-backfill --repair-players` players-only repair for games that
+  already have stats+feed (2024 gap)
+- History collector now persists `players.json` alongside feed+stats
+
+### Next actions (executed or blocked)
+
+1. **Land nightly + repair CLI + entrypoint** — this PR (#512) for #453 / #503.
+2. **Repair 2024 players on staging volume** — probe **executed** on staging
+   worker with existing sealed session only (no mint): game `18669` wrote
+   `players.json` (172 players, 189120 bytes). Remaining 333 of 334 still
+   missing; full season: after merge, `nfl-corpus-g-backfill --repair-players
+   --season 2024` on the volume-mounted worker.
+3. **Seed / densify 2002-2023 onto mono volume** — mono volume attached and
+   worker SUCCESS, but still empty; GHA raw artifacts remain ephemeral.
+   Dense copy/seed is post-merge ops, not this code PR.
 
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
@@ -112,11 +143,10 @@ credential minting. No secret values printed.
   **service** domain (not custom DNS). Claim as custom domain on mono
   `nfl-api` failed; consumers should migrate to the mono URL (or add
   real custom DNS later). Legacy remains until cron/domain cut finishes.
-- Empty mono worker volume (`nfl-oracle-worker-volume`, mount
-  `/app/nfl-oracle/data`) caused `PermissionError` (root-owned volume
-  under image `USER oracle`). **Detached** so worker could boot; volume
-  retained in project for later chown/reattach. Old project worker+volume
-  left running for rollback.
+- Mono worker volume (`nfl-oracle-worker-volume`, mount
+  `/app/nfl-oracle/data`): **reattached** as of 2026-09-27 ~02:56Z verify
+  (#503); oracle-writable, empty (0 MB). Staging volume still holds the
+  ~1.8 GB dense Corpus G for rollback / copy source.
 
 ### Rollback
 

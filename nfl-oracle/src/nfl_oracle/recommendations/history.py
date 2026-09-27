@@ -171,11 +171,16 @@ async def collect_history(
                     audit["skipped"].append(game_id)
                     continue
                 stats = await reader.get(f"/games/{game_id}/sport/nfl/stats")
+                # Players is required for identity hydrate and complete Corpus G
+                # artifacts. Older collectors persisted only feed+stats, which
+                # left 2024 dense games missing players.json (#503).
+                players = await reader.get(f"/games/{game_id}/sport/nfl/players")
                 now = reader.clock()
                 clocks = clocks_for_game(game, captured_at=now.isoformat())
                 payloads: tuple[tuple[EndpointName, dict[str, Any]], ...] = (
                     ("feed", feed),
                     ("stats", stats),
+                    ("players", players),
                 )
                 for endpoint, payload in payloads:
                     store.persist_endpoint(
@@ -194,7 +199,7 @@ async def collect_history(
                         "game_id": game_id,
                         "season": game["season"],
                         "clocks": clocks,
-                        "source_hashes": reader.hashes[-2:],
+                        "source_hashes": reader.hashes[-3:],
                         "collector": "recommendation_history_v1",
                     },
                 )
