@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 963 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 965 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -549,6 +549,7 @@ Generated from `git ls-files`. 963 tracked files. Regenerate with `scripts/gener
 
 ## nhl-oracle/src/nhl_oracle/
 - nhl-oracle/src/nhl_oracle/__init__.py -- NHL Oracle application package.
+- nhl-oracle/src/nhl_oracle/history_loader.py -- Load multi-year NHL public history into Postgres for NHL-only research.
 
 ## nhl-oracle/src/nhl_oracle/baselines/
 - nhl-oracle/src/nhl_oracle/baselines/__init__.py -- Chronological Real value baselines (offline / observation only).
@@ -604,6 +605,7 @@ Generated from `git ls-files`. 963 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/tests/test_contract_schema.py
 - nhl-oracle/tests/test_discovery.py
 - nhl-oracle/tests/test_freeze_cycle.py
+- nhl-oracle/tests/test_history_loader.py
 - nhl-oracle/tests/test_identity_reconcile.py
 - nhl-oracle/tests/test_import.py
 - nhl-oracle/tests/test_ingest_discovery.py

@@ -55,5 +55,6 @@ packages = ["nhl_oracle"]
 mypy_path = ["src"]
 
 [project.scripts]
+nhl-history-load = "nhl_oracle.history_loader:main"
 nhl-live-contract-audit = "nhl_oracle.ingest.audit:main"
 nhl-pipeline = "nhl_oracle.service.cli:main"

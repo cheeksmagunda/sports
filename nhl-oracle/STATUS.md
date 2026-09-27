@@ -17,18 +17,25 @@ Last verified: 2026-09-27 (#482 Docker/Railway staging scaffold; continues #453/
 
 This file records application state only.
 
-## Railway nhl-staging scaffold (#482)  -  2026-09-27
+## Public NHL history staging load (#453)  -  2026-09-27
 
-- Backend image source: `nhl-oracle/Dockerfile` + `nhl-oracle/railway.toml`
-  (DOCKERFILE builder). Same image for `nhl-api` (default `nhl-pipeline serve`)
-  and `nhl-worker` (`nhl-pipeline worker` start override). Observation-only;
-  `contest_entry: false`. No migrate-on-startup; no secrets in the image.
-- Minimal HTTP surface: `/health`, stub `/slate/{date}`, stub `/lineup/{date}`.
-  Worker is an idle heartbeat only (no Real Sports calls yet).
-- Frontend scaffold (#462 / PR #470): `nhl-oracle/frontend` with its own
-  Dockerfile + `railway.toml`. Staging host under sports-oracle `nhl-staging`
-  is non-contest; verify live deploy IDs after #482 landing.
-- **No contest claims. Staging only. No live WNBA/NFL traffic touched.**
+- `sports-oracle` / `nhl-staging` Postgres now holds NHL public-history tables
+  `nhl_history_games`, `nhl_history_player_games`, and
+  `nhl_history_season_coverage`, loaded from the public NHL API with a
+  browser-style User-Agent via `nhl-history-load`.
+- Verified row counts in staging Postgres:
+  - `nhl_history_games`: **5599**
+  - `nhl_history_player_games`: **223901**
+  - `nhl_history_season_coverage`: **4**
+- Verified season coverage in staging:
+  - 2021-22: games **1401/1401**, player rows **56020**, status `complete`
+  - 2022-23: games **1400/1400**, player rows **55980**, status `complete`
+  - 2023-24: games **1400/1400**, player rows **55988**, status `complete`
+  - 2024-25: games **1398/1398**, player rows **55913**, status `complete`
+- Scope note: this is official/public NHL game history only. It is useful for
+  NHL-owned chronology, schedule, and stat features, but it is **not** the
+  Real Sports value-label corpus and does not change the `contest_entry: False`
+  posture.
 
 ## Sunday readiness honesty (#453)  -  2026-09-27
 
@@ -65,6 +72,11 @@ This file records application state only.
     (gitignored). Auth uses Codespace secret `REALSPORTS_STORAGE_STATE_B64GZ`
     only; no new credential type; no contest entry.
   - `calendar/`: season start-year label helper for corpus paths (#455).
+  - `history_loader.py`: public NHL multi-year loader for staging Postgres.
+    Current verified `nhl-staging` coverage is 2021-22 through 2024-25,
+    complete for played regular-season + playoff games only, with
+    `nhl_history_games` / `nhl_history_player_games` / `nhl_history_season_coverage`
+    populated from official NHL boxscores.
   - `identity/`: in-memory identity map plus a same-name collision
     reconciler that reports and never auto-merges, and
     `drop_ambiguous_identity_rows` to drop-and-audit ambiguous rows from a
@@ -145,9 +157,12 @@ Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
   slice is closed.
 - **Week 3 (chronological baseline + prediction skeleton): started (#456).**
   NHL-owned `labels/` + `baselines/` landed with unit tests. No
-  cross-sport import. No contest entry. No Railway.
+  cross-sport import. No contest entry. Public NHL multi-year history is now
+  staged in Postgres for chronology/stat features; Real value labels still
+  need to be joined separately.
   **Next step:** fit priors / walk-forward on seeded Real value labels from
-  the Week 2 corpus (and any expanded historical capture), publish an
+  the Week 2 corpus, joined where useful to the staged public NHL history,
+  then publish an
   observation-only eval report, then expand skater/goalie approaches only
   with OOS evidence. Still not started after that: contest-law optimizer,
   hosted API, frontend, deployment (roadmap steps 4–6).

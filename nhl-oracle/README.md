@@ -56,6 +56,7 @@ From this directory:
 make test
 make lint
 make typecheck
+make history-load   # uses NHL_DATABASE_URL / DATABASE_URL
 ```
 
 From the repository root:
@@ -65,6 +66,18 @@ make test-app APP=nhl-oracle
 make check-applications
 make check-boundaries
 ```
+
+Historical load CLI:
+
+```sh
+cd nhl-oracle
+NHL_DATABASE_URL=postgresql://... \
+  uv run --frozen --package nhl-oracle --extra dev \
+  nhl-history-load --start-season 2021 --end-season 2024 --game-types 2,3
+```
+
+For Railway staging, use the Codespace tunnel flow in `../ENTRY_POINTS.md`
+rather than printing or copying connection strings locally.
 
 ## Roadmap
 
