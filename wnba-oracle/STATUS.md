@@ -1,5 +1,12 @@
 # Status
 
+## Manual minutes backfill seasons restored (#453 / #492)
+
+`scripts/backfill_minutes.py` `SEASONS` is restored to **2017-2026** after
+PR #497 accidentally reverted the #498 alignment. Serving `wnba_game_logs`
+already holds the 10-season corpus; this is script-only.
+
+
 Last verified: 2026-09-27T02:00:00Z
 
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
