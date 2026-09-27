@@ -8,25 +8,74 @@
 - Live NFL traffic remains on Railway project `nfl-oracle-staging` /
   `production` through Sunday 2026-09-27 (#453).
 
-## NFL picker knobs live-verified (2026-09-27 ~01:14Z, Refs #453 / #330 / #37)
+## Sunday 2026-09-27 T-40 live verify (2026-09-27 ~01:15Z UTC, issue #453)
 
+Evidence-only pass against Railway `nfl-oracle-staging` / `production` from
 Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`
-against Railway project `nfl-oracle-staging` / `production`. No secret values
-printed.
+on live `main` `4b2e6ae44`. No credential minting. No secret values printed.
+No train `--force`. No env mutation; authorized picker knobs already matched
+#330 / #37 targets (also confirmed ~01:14Z).
 
-- `NFL_PICKER_BOOST_RANK_BLEND=0.75` and `NFL_PICKER_PROFILE=boost_0.75` are
-  **set** on both `nfl-oracle-worker` and `nfl-oracle` (API). Confirmed via
-  `railway variables --json` and `railway run` process env. No env mutation or
-  restart was required; knobs already matched the authorized #330 / #37 targets.
-- `NFL_PICKER_POSITION_CALIBRATION` absent on both (expected; leave unset).
-- `REALSPORTS_STORAGE_STATE_B64GZ` on worker: present when rendered
-  (`railway run`); CLI listing sealed/empty. `sha256[:8]=c4a729e2`, len=9248
-  (matches canonical). Absent on API (worker-only; expected).
-- Worker Online (deployment `ba995a0d-…`), polling `waiting_or_locked` after
-  container start `2026-09-27T01:11:55Z`. Current-deploy logs: no
-  error/exception/failed lines (redacted review).
-- API `https://nfl-oracle-production.up.railway.app/health` ->
-  `status=ok`, `recommendation_database=ok`.
+### Services
+
+- `nfl-oracle-worker`: Online; deployment `ba995a0d` SUCCESS at
+  `2026-09-27T01:11:20Z`; `RAILWAY_GIT_COMMIT_SHA=4b2e6ae44...` (includes
+  #340 zero-boost equal-boost no-op). Volume ~1.8 / 4.9 GB; disk ok
+  (~34% used). Polling `waiting_or_locked` after start, then
+  `waiting_offline_pregate` once the Sunday slate is visible. Current-deploy
+  logs: no error/exception/failed lines (redacted review).
+- `nfl-oracle` (API): Online at
+  `https://nfl-oracle-production.up.railway.app`; `/health` ->
+  `status=ok` with `recommendation_database=ok`.
+- `/slate/2026-09-27` -> `status=waiting`,
+  `detail_code=waiting_offline_pregate`,
+  `next_live_check_by=2026-09-27T16:00:00Z`,
+  `cutoff_at=2026-09-27T17:00:00Z`.
+
+### Model / picker / schedule
+
+- Active model `sha8=4406c87e`, `trained_at=2026-09-25T02:57:26.663677Z`,
+  `activated_at=2026-09-25T03:01:58.869306+00:00`, `training_rows=37692`,
+  `selected_estimator=ridge`, `model_max_age_days=8`.
+- Age at Sunday T-40 (`2026-09-27T16:20:00Z`) ~2.56d.
+  `model_staleness_reason(... schedule loaded ...)` -> `None`; week
+  boundary `2026-09-22T04:00:00+00:00`. No retrain required.
+- Worker+API env (non-secret): `NFL_PICKER_BOOST_RANK_BLEND=0.75`,
+  `NFL_PICKER_PROFILE=boost_0.75`; worker
+  `NFL_RECOMMENDATIONS_ENABLED=1`. `NFL_PICKER_POSITION_CALIBRATION`
+  absent on both (expected). Confirmed via `railway variables` /
+  `railway run` process env.
+- Volume `data/schedule/schedules.csv` has `gametime`; 14 Sunday games,
+  all with `kickoff_at`; earliest kickoff `2026-09-27T17:00:00Z`.
+
+### Real Sports session (names / hash only)
+
+- Worker `REALSPORTS_STORAGE_STATE_B64GZ` sealed in CLI listing but present
+  when rendered (`railway run` / in-container);
+  `sha256[:8]=c4a729e2`, len=9248 (matches canonical). Not set on API.
+- Volume `data/scraper/storage_state.json` and `request_token_cache.json`
+  mode `0600`, mtime `2026-09-27T01:08Z`; required header names present
+  in the token cache.
+
+### Watchdog / auth
+
+- `nfl-t40-watchdog` active; latest scheduled run `36277667609`
+  (2026-09-26T22:52Z) success with `status=no_slate
+  reason=no_scheduled_games day=2026-09-26` (Saturday, expected).
+  Escalation is the Actions run + job summary (#442 / #443), not issues.
+- Codespace `scripts/auth-check nfl-oracle --offline` and `--live` passed.
+  Codespace has no local derived Real Sports session; Railway worker holds
+  the portfolio copy.
+
+### Residuals (not T-40 blockers)
+
+- Corpus C selection gap vs visible winner remains (~57.9% vs ~79.9%,
+  #280); measured knobs are live, not a closed win.
+- `NFL_DEVICE_UUID` still a placeholder literal on both services; session
+  path is healthy via storage_state.
+- Post-T-40 live freeze outcome still to confirm on Sunday (freeze once,
+  publish, no re-freeze).
+
 
 
 ## Scheduled NFL jobs report through their Actions runs, not issues (2026-09-26, issue #442)
