@@ -95,7 +95,7 @@ def load_coverage_manifest(corpus_root: Path) -> CoverageManifest:
         schema_version=int(raw.get("schema_version") or MANIFEST_SCHEMA_VERSION),
         updated_at=str(raw.get("updated_at") or ""),
         entries=entries,
-        expected_artifacts=expected,  # type: ignore[arg-type]
+        expected_artifacts=expected,
     )
 
 
