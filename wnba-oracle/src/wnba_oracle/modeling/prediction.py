@@ -600,6 +600,7 @@ def materialize_specs(
     always carries pre-contrarian TV (maxed with boost-tail lift when set)
     so popularity tilt cannot eject high-TV chalk from ``top_n_filter``.
     """
+    _ = popularity_scores  # reserved for public-bias field blend
     samps: list[PlayerSamplingSpec] = []
     fields: list[FieldPlayerSpec] = []
     projection_by_pid: dict[int, dict[str, Any]] = {}
