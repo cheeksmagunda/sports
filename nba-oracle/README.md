@@ -59,3 +59,13 @@ uv run --package nba-oracle nba-corpus-g-backfill --dry-run
 - `nba-corpus-g-backfill` writes that matrix and exits non-zero when
   portfolio `REALSPORTS_*` material is absent. It does not mint credentials
   and does not claim historical rows loaded.
+
+## Public history loader
+
+Observation-only multi-year loader for staging Postgres (no Real Sports auth):
+
+```sh
+uv run --package nba-oracle nba-history-load --start-season 2021 --end-season 2024
+```
+
+Requires `DATABASE_PUBLIC_URL` (public TCP / `*.proxy.rlwy.net`, `sslmode=require`).

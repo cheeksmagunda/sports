@@ -125,6 +125,7 @@ Generated from `git ls-files`. 998 tracked files. Regenerate with `scripts/gener
 
 ## nba-oracle/src/nba_oracle/
 - nba-oracle/src/nba_oracle/__init__.py -- NBA Oracle application package.
+- nba-oracle/src/nba_oracle/history_loader.py -- Load multi-year NBA public history into Postgres for NBA-only research.
 
 ## nba-oracle/src/nba_oracle/api/
 - nba-oracle/src/nba_oracle/api/__init__.py -- NBA Oracle HTTP surface (health scaffold only).
@@ -148,6 +149,7 @@ Generated from `git ls-files`. 998 tracked files. Regenerate with `scripts/gener
 ## nba-oracle/tests/
 - nba-oracle/tests/test_calendar_and_ingest_gate.py
 - nba-oracle/tests/test_health_api.py
+- nba-oracle/tests/test_history_loader.py
 - nba-oracle/tests/test_import.py
 
 ## nfl-oracle/
