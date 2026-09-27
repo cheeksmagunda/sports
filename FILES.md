@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1109 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1110 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -857,6 +857,7 @@ Generated from `git ls-files`. 1109 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
 - scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
+- scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).
 - scripts/tests/test_realsports_corpus_layout.py -- Real Sports corpus layout and durable-store export stubs (#526).
 - scripts/tests/test_realsports_corpus_manifest.py -- Offline unit checks for Real Sports corpus staging and coverage (#526).
