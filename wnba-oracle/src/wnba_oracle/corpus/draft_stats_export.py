@@ -77,12 +77,19 @@ def _as_float(value: object) -> float | None:
 
 
 def _as_int(value: object) -> int | None:
-    if value is None:
+    # bool is an int subclass; reject to avoid True/False → 1/0.
+    if value is None or isinstance(value, bool):
         return None
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, (str, bytes, bytearray)):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _atomic_write_bytes(path: Path, payload: bytes) -> None:
