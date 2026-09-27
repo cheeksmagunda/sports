@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1041 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -277,6 +277,7 @@ Generated from `git ls-files`. 1041 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/features/opponent_defense.py -- Walk-forward Real-value-allowed priors for the opponent defense.
 - nfl-oracle/src/nfl_oracle/features/own_model_map.py -- Own-model feature consumption map for NFL (#523).
 - nfl-oracle/src/nfl_oracle/features/rows.py -- Build observation-only feature rows from walk-forward priors.
+- nfl-oracle/src/nfl_oracle/features/rs_aliases.py -- Real Sports leaf-key → own-model feature aliases (#523 / #526).
 - nfl-oracle/src/nfl_oracle/features/rs_field_map.py -- Real Sports exposed-field → own-model map for NFL (#523 / #526).
 - nfl-oracle/src/nfl_oracle/features/schema.py -- FeatureSpec v1: availability clocks + train/live flags.
 - nfl-oracle/src/nfl_oracle/features/stubs.py -- Offline placeholder values for any FeatureSpec still marked ``offline_stub``.
@@ -514,6 +515,7 @@ Generated from `git ls-files`. 1041 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_ridge_wired_features_212.py -- Issue #212: activate ridge when context is wired; offline pick attribution.
 - nfl-oracle/tests/unit/test_rs_corpus_dump_526.py -- Corpus key-dump scaffold (#526).
 - nfl-oracle/tests/unit/test_rs_field_map_523.py -- RS field matrix + corpus key dump scaffold (#523 / #526).
+- nfl-oracle/tests/unit/test_rs_priority_aliases_523.py -- Priority RS leaf aliases → NFL own-model ridge context (#523).
 - nfl-oracle/tests/unit/test_schedule_bootstrap.py -- Tests for schedule bootstrap into an empty worker data volume.
 - nfl-oracle/tests/unit/test_schedule_census_and_aliases.py -- Identity alias reconciliation + schedule helper smoke (offline).
 - nfl-oracle/tests/unit/test_schedule_coverage_edges.py -- Edge cases: schedule density, empty coverage, posture, algebra override.
@@ -1068,6 +1070,7 @@ Generated from `git ls-files`. 1041 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/src/wnba_oracle/features/own_model_map.py -- Own-model feature map for WNBA EB + serving_features (#523).
 - wnba-oracle/src/wnba_oracle/features/provenance.py -- Feature-pipeline provenance hash.
 - wnba-oracle/src/wnba_oracle/features/rolling.py -- Rolling-window features computed strictly before slate_date.
+- wnba-oracle/src/wnba_oracle/features/rs_aliases.py -- Real Sports leaf-key → WNBA own-model feature aliases (#523 / #526).
 - wnba-oracle/src/wnba_oracle/features/rs_field_map.py -- Real Sports exposed-field → own-model map for WNBA (#523 / #526).
 - wnba-oracle/src/wnba_oracle/features/serving_features.py -- Build head feature rows for a slate at serve time (D69 / Phase 2b).
 - wnba-oracle/src/wnba_oracle/features/serving_schema.py -- Serve-time enrichment schema (pandera[polars]).
@@ -1305,6 +1308,7 @@ Generated from `git ls-files`. 1041 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_rotowire_url.py -- D74: RotoWire URL + CSS selector fix.
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
 - wnba-oracle/tests/unit/test_rs_field_map_523.py -- WNBA RS field matrix (#523 / #526).
+- wnba-oracle/tests/unit/test_rs_priority_aliases_523.py -- Priority RS leaf aliases → WNBA EB / head_features (#523).
 - wnba-oracle/tests/unit/test_sampling_offset.py -- score_offset (K) calibration in the copula sampler (D52).
 - wnba-oracle/tests/unit/test_schemas.py -- Pandera schema sanity checks. Validate that good frames pass and obvious
 - wnba-oracle/tests/unit/test_seasons_and_race_corpus.py -- Unit tests for seasons_common and build_race_corpus (offline, no DB).

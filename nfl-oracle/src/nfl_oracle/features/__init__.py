@@ -22,6 +22,11 @@ from nfl_oracle.features.opponent_defense import (
 )
 from nfl_oracle.features.own_model_map import own_model_gap_matrix
 from nfl_oracle.features.rows import build_prior_rows_for_players, prior_feature_row
+from nfl_oracle.features.rs_aliases import (
+    REQUIRED_RS_POOL_CONTEXT_FEATURES,
+    RS_FEATURE_ALIASES,
+    extract_pool_card_features,
+)
 from nfl_oracle.features.rs_field_map import rs_field_matrix
 from nfl_oracle.features.schema import (
     FeatureSpec,
@@ -36,11 +41,14 @@ from nfl_oracle.features.stubs import offline_stub_feature_row
 __all__ = [
     "NFL_DIVISIONS",
     "REQUIRED_LIVE_OK_CONTEXT_FEATURES",
+    "REQUIRED_RS_POOL_CONTEXT_FEATURES",
     "REQUIRED_SLATE_CONTEXT_FEATURES",
+    "RS_FEATURE_ALIASES",
     "FeatureSpec",
     "RealValueHistoryIndex",
     "build_prior_rows_for_players",
     "division_for_team",
+    "extract_pool_card_features",
     "feature_registry",
     "features_by_group",
     "features_document",

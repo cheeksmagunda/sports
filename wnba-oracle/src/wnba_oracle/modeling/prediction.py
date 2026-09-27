@@ -433,10 +433,18 @@ def _apply_eb_tier(
         if total > 0.0:
             vegas_total = total
     card_boost = None
+    overall_rank = None
+    team_moneyline = None
     if isinstance(head_feats, Mapping):
         fused_boost = _finite_head_float(head_feats, "card_boost")
         if fused_boost is not None:
             card_boost = fused_boost
+        rank = _finite_head_float(head_feats, "overall_rank")
+        if rank is not None:
+            overall_rank = rank
+        ml = _finite_head_float(head_feats, "team_moneyline")
+        if ml is not None and float(head_feats.get("moneyline_available", 1.0) or 0.0):
+            team_moneyline = ml
     if card_boost is None and np.isfinite(player.boost):
         card_boost = float(player.boost)
     eb_prediction = eb_predict_one(
@@ -447,6 +455,8 @@ def _apply_eb_tier(
         opp_pace=opp_pace,
         vegas_total=vegas_total,
         card_boost=card_boost,
+        overall_rank=overall_rank,
+        team_moneyline=team_moneyline,
     )
     if eb_prediction is None:
         return False
@@ -476,6 +486,8 @@ def _apply_eb_tier(
             "opp_pace": opp_pace,
             "vegas_total": vegas_total,
             "card_boost": card_boost,
+            "overall_rank": overall_rank,
+            "team_moneyline": team_moneyline,
         },
         "pre_availability_score": float(predictions.pred_real_scores[player.pid]),
     }

@@ -121,6 +121,13 @@ def parse_contest(
 def parse_game(raw: dict[str, Any]) -> Game:
     if raw.get("sport") != "nfl":
         raise ProviderError("game_sport_mismatch")
+
+    def _opt_float(key: str) -> float | None:
+        value = raw.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value)
+
     return Game(
         game_id=raw["id"],
         season=raw["season"],
@@ -130,6 +137,8 @@ def parse_game(raw: dict[str, Any]) -> Game:
         home_team=raw["homeTeamKey"],
         away_team=raw["awayTeamKey"],
         status=raw["status"],
+        home_moneyline=_opt_float("homeMoneyline"),
+        away_moneyline=_opt_float("awayMoneyline"),
     )
 
 
@@ -309,6 +318,8 @@ class NFLReader:
         for pid, player in sorted(rated.items()):
             _, game = roster[pid]
             home_player = player["teamId"] == game.home_team_id
+            overall_rank = player.get("overallRank")
+            body_part = player.get("injuryBodyPart")
             candidates.append(
                 Candidate(
                     player_id=pid,
@@ -322,6 +333,15 @@ class NFLReader:
                     card_boost=snap_boost(player["multiplierBonus"]),
                     clock=EvidenceClock(
                         source_available_at=observed_at[pid], captured_at=observed_at[pid]
+                    ),
+                    overall_rank=(
+                        float(overall_rank)
+                        if isinstance(overall_rank, (int, float))
+                        and not isinstance(overall_rank, bool)
+                        else None
+                    ),
+                    injury_body_part=(
+                        str(body_part) if body_part is not None and str(body_part).strip() else None
                     ),
                 )
             )

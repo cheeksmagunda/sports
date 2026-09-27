@@ -48,14 +48,24 @@ def fuse_slate_enrichment_into_head_features(
     is_starter: int,
     starter_slot: int,
     rotowire_confirmed: int,
+    overall_rank: float | None = None,
+    injury_body_part: str | None = None,
+    team_moneyline: float | None = None,
+    opponent_moneyline: float | None = None,
+    last_ten_wins: float | None = None,
+    season_averages: Mapping[str, Any] | None = None,
 ) -> dict[str, float]:
     """Merge live slate enrichment into a head_features row (#523).
 
-    Always returns a dict (creates one when rolling features missed) so
-    boost / Vegas / home / starter enter the model path even on cold-start
-    identity misses. ``is_confirmed_starter`` matches the train corpus name
-    in ``_BASE_FEATURES`` (confirmed starter, not merely expected).
+    Priority RS aliases (overallRank, injuryBodyPart, moneylines,
+    lastTenWins, seasonAverages) fuse when observed; same-slate HV / box
+    finals are not accepted here.
     """
+
+    from wnba_oracle.features.rs_aliases import (
+        extract_injury_body_part,
+        extract_season_averages,
+    )
 
     out: dict[str, float] = {}
     if isinstance(head, Mapping):
@@ -75,6 +85,27 @@ def fuse_slate_enrichment_into_head_features(
     out["is_starter"] = float(is_starter)
     out["starter_slot"] = float(starter_slot)
     out["is_confirmed_starter"] = float(1.0 if int(rotowire_confirmed) and int(is_starter) else 0.0)
+    if overall_rank is not None:
+        try:
+            out["overall_rank"] = float(overall_rank)
+        except (TypeError, ValueError):
+            pass
+    out.update(extract_injury_body_part(injury_body_part))
+    if team_moneyline is not None or opponent_moneyline is not None:
+        out["moneyline_available"] = 1.0
+        if team_moneyline is not None:
+            out["team_moneyline"] = float(team_moneyline)
+        if opponent_moneyline is not None:
+            out["opponent_moneyline"] = float(opponent_moneyline)
+    else:
+        out.setdefault("moneyline_available", 0.0)
+    if last_ten_wins is not None:
+        try:
+            out["last_ten_wins"] = float(last_ten_wins)
+            out["team_l10_wins"] = float(last_ten_wins)
+        except (TypeError, ValueError):
+            pass
+    out.update(extract_season_averages(season_averages))
     return out
 
 

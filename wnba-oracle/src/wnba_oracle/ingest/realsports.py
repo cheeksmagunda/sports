@@ -124,6 +124,8 @@ class PlatformPlayer:
     # Stable provider game id from /home plus the per-game roster endpoint.
     # Empty for legacy payloads that did not retain roster identity.
     game_id: str = ""
+    overall_rank: float | None = None
+    injury_body_part: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -688,6 +690,8 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
             team = (team_obj.get("key") or team_obj.get("abbreviation") or "").upper()
         else:
             team = (team_obj or "").upper()
+        overall_rank = p.get("overallRank")
+        body_part = p.get("injuryBodyPart")
         out.append(
             PlatformPlayer(
                 platform_id=str(p.get("id", "")),
@@ -702,6 +706,14 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
                 injury_status=p.get("injuryStatus") or "",
                 game_start_utc=str(p.get("gameStartUtc") or ""),
                 game_id=str(p.get("gameId") or "").strip(),
+                overall_rank=(
+                    float(overall_rank)
+                    if isinstance(overall_rank, (int, float)) and not isinstance(overall_rank, bool)
+                    else None
+                ),
+                injury_body_part=(
+                    str(body_part) if body_part is not None and str(body_part).strip() else None
+                ),
             )
         )
     return out

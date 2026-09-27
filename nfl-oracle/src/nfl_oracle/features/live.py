@@ -20,6 +20,8 @@ import re
 from collections.abc import Mapping
 from typing import Any, Final
 
+from nfl_oracle.features.rs_aliases import REQUIRED_RS_POOL_CONTEXT_FEATURES
+
 INJURY_CATEGORIES: Final[tuple[str, ...]] = (
     "active",
     "questionable",
@@ -94,6 +96,7 @@ REQUIRED_LIVE_OK_CONTEXT_FEATURES: Final[tuple[str, ...]] = tuple(
         | set(WEATHER_FEATURE_NAMES)
         | {"weather_available"}
         | set(REQUIRED_SLATE_CONTEXT_FEATURES)
+        | set(REQUIRED_RS_POOL_CONTEXT_FEATURES)
     )
 )
 

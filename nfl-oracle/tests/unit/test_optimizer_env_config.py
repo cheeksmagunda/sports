@@ -1,9 +1,9 @@
 """Env-driven optimizer construction config (max-value / race mode) for #453.
 
-Defaults must reproduce production exactly so an unset worker freezes the same
-five cards as before. The ``max_value`` profile drops the diversity floor to
-1/1 to chase the maximum attainable total value, and the upside/field weight
-knobs tune the contest-utility re-rank.
+Serving defaults via ``optimizer_config_from_env`` are win-draft ``max_value``
+(#505 / #552). Bare ``OptimizerConfig()`` stays diversified for call sites that
+construct configs in-process. The ``max_value`` profile drops the diversity
+floor to 1/1; upside/field weight knobs tune the contest-utility re-rank.
 """
 
 from __future__ import annotations
@@ -19,12 +19,17 @@ from nfl_oracle.recommendations.optimizer import (
 
 def test_empty_env_reproduces_production_defaults() -> None:
     cfg = optimizer_config_from_env({})
-    default = OptimizerConfig()
-    assert cfg.profile == "diversified"
-    assert cfg.min_distinct_teams == default.min_distinct_teams == 3
-    assert cfg.min_distinct_games == default.min_distinct_games == 2
-    assert cfg.upside_weight == default.upside_weight
-    assert cfg.field_weight == default.field_weight
+    bare = OptimizerConfig()
+    assert cfg.profile == "max_value"
+    assert cfg.min_distinct_teams == 1
+    assert cfg.min_distinct_games == 1
+    assert OPTIMIZER_PROFILE_PRESETS["max_value"] == (1, 1)
+    # Bare dataclass default remains diversified for in-process callers.
+    assert bare.profile == "diversified"
+    assert bare.min_distinct_teams == 3
+    assert bare.min_distinct_games == 2
+    assert cfg.upside_weight == bare.upside_weight
+    assert cfg.field_weight == bare.field_weight
     assert cfg.objective == "total_value"
 
 
@@ -86,7 +91,7 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
         projections(target),
         decision_at=BASE + timedelta(days=8),
         scoring_policy=ScoringPolicy(),
-        config=optimizer_config_from_env({}),
+        config=optimizer_config_from_env({"NFL_OPTIMIZER_PROFILE": "diversified"}),
     )
     assert diversified.construction_profile == "diversified"
 
@@ -95,7 +100,7 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
         projections(target),
         decision_at=BASE + timedelta(days=8),
         scoring_policy=ScoringPolicy(),
-        config=optimizer_config_from_env({"NFL_OPTIMIZER_PROFILE": "max_value"}),
+        config=optimizer_config_from_env({}),
     )
     assert max_value.construction_profile == "max_value"
     assert max_value.requested_distinct_teams == 1

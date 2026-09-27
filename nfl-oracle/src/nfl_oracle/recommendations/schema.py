@@ -49,6 +49,10 @@ class Game(Record):
     home_team: str
     away_team: str
     status: str
+    home_moneyline: Finite | None = None
+    away_moneyline: Finite | None = None
+    home_last_ten_wins: Finite | None = None
+    away_last_ten_wins: Finite | None = None
 
     _aware = field_validator("kickoff_at")(utc)
 
@@ -101,6 +105,8 @@ class Candidate(Record):
     card_boost: Annotated[Finite, Field(ge=0, le=3)]
     boost_source: Literal["prelock_rating_search"] = "prelock_rating_search"
     clock: EvidenceClock
+    overall_rank: Finite | None = None
+    injury_body_part: str | None = None
 
 
 class Slate(Record):

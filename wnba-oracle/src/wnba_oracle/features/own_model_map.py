@@ -2,10 +2,11 @@
 
 LightGBM heads remain optional behind ``WNBA_SERVE_PRIMARY=heads``; the
 default forward path is EBHierarchicalBaseline (cohort + player alpha +
-pace / vegas / boost terms) fed by serve-time ``head_features`` and pool
-``card_boost``. Starter confirmation is a serve-time multiplier, not a
-raw EB float. Job 1 fuses enrichment (boost / vegas / home / starter)
-into ``head_features`` for both paths.
+pace / vegas / boost / rank / moneyline terms) fed by serve-time
+``head_features`` and pool ``card_boost``. Starter confirmation is a
+serve-time multiplier, not a raw EB float. Job 1 fuses enrichment
+(boost / vegas / home / starter / priority RS aliases) into
+``head_features`` for both paths.
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ WnbaOwnStatus = Literal[
     "eb_pace",
     "eb_vegas",
     "eb_boost",
+    "eb_rank",
+    "eb_moneyline",
     "serve_starter_multiplier",
     "serving_to_picker_via_minutes",
     "lgbm_optional",
@@ -28,6 +31,8 @@ WnbaOwnStatus = Literal[
 EB_PACE_FEATURES: frozenset[str] = frozenset({"team_pace", "opp_pace", "game_pace_implied"})
 EB_VEGAS_FEATURES: frozenset[str] = frozenset({"vegas_total", "implied_team_total", "vegas_spread"})
 EB_BOOST_FEATURES: frozenset[str] = frozenset({"card_boost"})
+EB_RANK_FEATURES: frozenset[str] = frozenset({"overall_rank"})
+EB_MONEYLINE_FEATURES: frozenset[str] = frozenset({"team_moneyline", "opponent_moneyline"})
 STARTER_SERVE_FEATURES: frozenset[str] = frozenset({"is_confirmed_starter", "starter_slot"})
 
 MONOTONE_CONSTRAINT_NAMES: frozenset[str] = frozenset(
@@ -56,6 +61,10 @@ def classify_serving_feature(name: str) -> WnbaOwnStatus:
         return "eb_vegas"
     if name in EB_BOOST_FEATURES:
         return "eb_boost"
+    if name in EB_RANK_FEATURES:
+        return "eb_rank"
+    if name in EB_MONEYLINE_FEATURES:
+        return "eb_moneyline"
     if name in STARTER_SERVE_FEATURES:
         return "serve_starter_multiplier"
     if name in {
@@ -94,6 +103,10 @@ def _surface(status: WnbaOwnStatus) -> str:
         return "EBHierarchicalBaseline vegas_total term (+ implied via head)"
     if status == "eb_boost":
         return "EBHierarchicalBaseline card_boost term"
+    if status == "eb_rank":
+        return "EBHierarchicalBaseline overall_rank term"
+    if status == "eb_moneyline":
+        return "EBHierarchicalBaseline team_moneyline term"
     if status == "serve_starter_multiplier":
         return "serve _starter_multiplier on EB / ladder"
     if status == "serving_to_picker_via_minutes":

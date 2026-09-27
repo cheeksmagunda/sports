@@ -54,6 +54,8 @@ def eb_predict_one(
     opp_pace: float | None = None,
     vegas_total: float | None = None,
     card_boost: float | None = None,
+    overall_rank: float | None = None,
+    team_moneyline: float | None = None,
 ) -> float | None:
     """Return one empirical-Bayes prediction without loading external state.
 
@@ -84,4 +86,12 @@ def eb_predict_one(
     league_boost = float(getattr(baseline, "league_boost", 0.0) or 0.0)
     if card_boost is not None and boost_beta:
         prediction += boost_beta * (float(card_boost) - league_boost)
+    rank_beta = float(getattr(baseline, "overall_rank_beta", 0.0) or 0.0)
+    league_rank = float(getattr(baseline, "league_overall_rank", 0.0) or 0.0)
+    if overall_rank is not None and rank_beta:
+        prediction += rank_beta * (float(overall_rank) - league_rank)
+    ml_beta = float(getattr(baseline, "moneyline_beta", 0.0) or 0.0)
+    league_ml = float(getattr(baseline, "league_moneyline", 0.0) or 0.0)
+    if team_moneyline is not None and ml_beta:
+        prediction += ml_beta * (float(team_moneyline) - league_ml)
     return max(0.5, float(prediction))

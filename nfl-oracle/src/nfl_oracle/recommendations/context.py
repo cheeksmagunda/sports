@@ -30,6 +30,12 @@ from nfl_oracle.features.opponent_defense import (
     opponent_adjusted_prior,
     opponent_defense_factor,
 )
+from nfl_oracle.features.rs_aliases import (
+    extract_injury_body_part,
+    extract_last_ten_wins,
+    extract_moneyline_priors,
+    extract_overall_rank,
+)
 from nfl_oracle.recommendations.schema import EvidenceClock, Record, Slate, utc
 from nfl_oracle.recommendations.sources import ContextSnapshot, Row, forecast_features
 
@@ -632,6 +638,20 @@ def build_context(
         vector.update(injury_indicator_features(player.injury_status))
         if injury_category(player.injury_status) == "unknown":
             gaps.append("injury_status_unknown")
+        if player.overall_rank is not None:
+            vector.update(extract_overall_rank({"overallRank": player.overall_rank}))
+        vector.update(extract_injury_body_part(player.injury_body_part))
+        vector.update(
+            extract_moneyline_priors(
+                home_moneyline=game.home_moneyline,
+                away_moneyline=game.away_moneyline,
+                is_home=bool(is_home),
+            )
+        )
+        if is_home and game.home_last_ten_wins is not None:
+            vector.update(extract_last_ten_wins({"lastTenWins": game.home_last_ten_wins}))
+        elif (not is_home) and game.away_last_ten_wins is not None:
+            vector.update(extract_last_ten_wins({"lastTenWins": game.away_last_ten_wins}))
         if depth and gsis_id:
             depth_rank, depth_conflict = history.latest_depth(gsis_id, player.team, now)
             if depth_rank is not None:
