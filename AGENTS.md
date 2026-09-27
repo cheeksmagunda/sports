@@ -200,6 +200,10 @@ agents attached to this repository).
   `env -u GH_TOKEN -u GITHUB_TOKEN gh ...` rather than re-diagnosing this.
 - Claude, Codex, and Copilot are clients for the Codespace, live checkout, or
   live GitHub repository. They are not separate GitHub credential homes.
+- Claude cloud may hold one operator-authorized GitHub token with `codespace`
+  scope in its **API credentials** (attach key for `gh codespace` only). Do
+  not put Real Sports or Railway secrets there. Recipe: root `ENTRY_POINTS.md`
+  **Claude cloud environment** (issue #448).
 - Grok Bot is the only Cursor-based surface. Use Cursor cloud agents on this
   repo or an operator-authorized one-session `gh` login only. Do not copy
   Codespaces credentials into chat, Cursor, or other agents.
