@@ -1,0 +1,121 @@
+name: nhl-history-nightly
+
+on:
+  schedule:
+    # 05:00 UTC daily: after nfl-corpus-g-nightly (04:30), before WNBA
+    # corpus-backup (06:43). Public NHL API only; no Real Sports.
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+    inputs:
+      start_season:
+        description: >
+          First NHL season start year to reload (e.g. 2021).
+          Leave blank to auto-run prior + current season.
+        required: false
+        type: string
+      end_season:
+        description: >
+          Last NHL season start year to reload (e.g. 2025).
+          Leave blank to auto-run prior + current season.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nhl-history-nightly
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Require NHL_HISTORY_DATABASE_URL
+        env:
+          NHL_HISTORY_DATABASE_URL: ${{ secrets.NHL_HISTORY_DATABASE_URL }}
+        run: |
+          if [ -z "$NHL_HISTORY_DATABASE_URL" ]; then
+            {
+              echo "## NHL history nightly: not_configured"
+              echo ""
+              echo "\`NHL_HISTORY_DATABASE_URL\` repo secret is unset."
+              echo "Set it to the public TCP URL for \`sports-oracle\` /"
+              echo "\`nhl-staging\` Postgres (same DB \`nhl-history-load\` uses)."
+              echo "No Real Sports credential is required or minted."
+              echo ""
+              echo "Refs #453."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::not_configured: NHL_HISTORY_DATABASE_URL secret is unset (refs #453)"
+            exit 1
+          fi
+
+      - name: Prepare TLS certificate (optional)
+        env:
+          PG_SSL_ROOT_CERT: ${{ secrets.PG_SSL_ROOT_CERT }}
+        run: |
+          if [ -n "$PG_SSL_ROOT_CERT" ]; then
+            umask 077
+            printf '%s' "$PG_SSL_ROOT_CERT" > "$RUNNER_TEMP/pg_root.crt"
+            echo "PGSSLROOTCERT=$RUNNER_TEMP/pg_root.crt" >> "$GITHUB_ENV"
+          else
+            echo "PG_SSL_ROOT_CERT unset; relying on URL sslmode"
+          fi
+
+      - name: Resolve season window
+        id: seasons
+        run: |
+          if [ -n "${{ inputs.start_season }}" ] && [ -n "${{ inputs.end_season }}" ]; then
+            echo "start=${{ inputs.start_season }}" >> "$GITHUB_OUTPUT"
+            echo "end=${{ inputs.end_season }}" >> "$GITHUB_OUTPUT"
+          else
+            python3 - << 'EOF'
+          import os
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+
+          today = datetime.now(ZoneInfo("America/New_York")).date()
+          # NHL season start year flips in September (training camps / preseason).
+          end = today.year if today.month >= 9 else today.year - 1
+          start = end - 1
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"start={start}\n")
+              fh.write(f"end={end}\n")
+          EOF
+          fi
+
+      - name: Load public NHL history (idempotent replace)
+        env:
+          NHL_DATABASE_URL: ${{ secrets.NHL_HISTORY_DATABASE_URL }}
+        run: |
+          uv run --frozen --package nhl-oracle nhl-history-load \
+            --start-season "${{ steps.seasons.outputs.start }}" \
+            --end-season "${{ steps.seasons.outputs.end }}" \
+            --game-types 2,3 \
+            2>&1 | tee "$RUNNER_TEMP/nhl-history.txt"
+
+      - name: Build job summary
+        if: always()
+        run: |
+          {
+            echo "# NHL history nightly ($(date -u +%Y-%m-%dT%H:%MZ))"
+            echo ""
+            echo "seasons: \`${{ steps.seasons.outputs.start }}\` .. \`${{ steps.seasons.outputs.end }}\`"
+            echo ""
+            echo "Public NHL API only. No Real Sports session."
+            echo ""
+            if [ -s "$RUNNER_TEMP/nhl-history.txt" ]; then
+              echo "## Loader output"
+              echo '```'
+              cat "$RUNNER_TEMP/nhl-history.txt"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
