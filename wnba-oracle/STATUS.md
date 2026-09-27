@@ -1,6 +1,60 @@
 # Status
 
-Last verified: 2026-09-27T02:00:00Z
+Last verified: 2026-09-27T03:03:43Z
+
+## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
+
+Read-only verify via Codespace `fluffy-zebra-g4gqq746477q2jg` +
+`scripts/codespace-railway-env` against `sports-oracle` / `wnba-production`.
+App `DATABASE_URL` / `DATABASE_PUBLIC_URL` on `wnba-api` and
+`wnba-cron-dayclose`: host `acela.proxy.rlwy.net:51730`, `sslmode=require`,
+`sha256[:8]=088a0da2` (no secrets printed).
+
+### `wnba_game_logs` per season
+
+| Season | Rows | Min date | Max date | Flag |
+|--------|------|----------|----------|------|
+| 2017 | 4747 | 2017-04-29 | 2017-10-04 | ok |
+| 2018 | 4824 | 2018-05-06 | 2018-09-12 | ok |
+| 2019 | 4697 | 2019-05-09 | 2019-10-10 | ok |
+| 2020 | 2796 | 2020-07-25 | 2020-10-06 | ok (COVID bubble; below prior-season median 4771 but above 50% floor) |
+| 2021 | 4102 | 2021-05-05 | 2021-10-17 | ok |
+| 2022 | 4771 | 2022-04-23 | 2022-09-18 | ok |
+| 2023 | 5215 | 2023-05-05 | 2023-10-18 | ok |
+| 2024 | 5249 | 2024-05-03 | 2024-10-20 | ok |
+| 2025 | 6275 | 2025-05-02 | 2025-10-10 | ok |
+| 2026 | 7080 | 2026-04-25 | 2026-09-24 | current season (partial) |
+| **Total** | **49756** | | | matches #498 expected |
+
+No season 2017-2025 underfilled relative to a 50% prior-season-median floor.
+Missing seasons: none.
+
+### Enrichment freshness
+
+- `job1_enrichment`: 14491 rows / 252 distinct slates; max `captured_at`
+  `2026-09-27T02:49:12Z` on slate `2026-09-26` (pool 124).
+- Last 14d: `empty_feat=0`, `blank_opponent=0`, `starters=299` / 1837 rows.
+- Tip-weekend gap (known #441 / RotoWire): slate `2026-09-25` and
+  `2026-09-26` have `starters=0`; game-day `2026-09-24` has `starters=48`.
+- `features_json` includes `head_features` on most recent-pool rows
+  (e.g. 119/124 on `2026-09-26`).
+- `slate_labels` latest durable slate: `2026-09-24` (dayclose product;
+  09-25/09-26 not labeled yet at check time).
+
+### Nightly / ops health
+
+- Mono API `/health` ok; `/watchdog/today` `status=ok`, live `events=[]`,
+  slate `2026-09-26`; freeze advisory still lists `rotowire_empty`
+  (observation-only); `job1_last_status=success`.
+- `wnba-cron-dayclose` latest SUCCESS deploy `822fa2f4` at
+  `2026-09-27T02:45:25Z` (schedule `0 6 * * *`, next ~3h at check).
+- Actions `wnba-dayclose-verify` last success
+  [run 36240844716](https://github.com/cheeksmagunda/sports/actions/runs/36240844716)
+  (2026-09-26T12:05Z).
+- Actions `watchdog-monitor` still failing: workflows hardcode
+  `WNBA_API_BASE=https://api-production-7033.up.railway.app` (legacy cold
+  standby). Mono serving URL is healthy; Actions probe URL drift is residual
+  cutover debt (also `wnba-pre-freeze-guard`, `wnba-backfill-enrichment`).
 
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
 
@@ -18,7 +72,8 @@ printed.
 | API health | `https://wnba-api-wnba-production.up.railway.app/health` → `{"status":"ok","version":"0.1.0"}` |
 | Frontend | `https://wnba-frontend-wnba-production.up.railway.app/` → HTTP 200 |
 | Domains | Generated `*.up.railway.app` only (live had no custom domains to move). CLI domain move N/A. Old live URLs (`api-production-7033`, `frontend-production-a739`) remain on `wnba-oracle` until callers switch. |
-| Data plane | All `wnba-*` app services `DATABASE_URL` + `REDIS_URL` (and api `DATABASE_PUBLIC_URL`) hash-match **live** `wnba-oracle` / `api` values (`DB sha256[:8]=0cffc88e`, `REDIS sha256[:8]=b0421c4c`, `DBPUB sha256[:8]=42376805`). Mono Postgres stays empty for later migrate. |
+| Data plane (cutover-time) | App URLs then hash-matched live `wnba-oracle` / `api` (`DB sha256[:8]=0cffc88e`, `REDIS sha256[:8]=b0421c4c`, `DBPUB sha256[:8]=42376805`). Mono Railway Postgres service stayed empty. |
+| Data plane (re-verified 2026-09-27T03:00Z) | `wnba-api` / `wnba-cron-dayclose` `DATABASE_URL` + `DATABASE_PUBLIC_URL` → `acela.proxy.rlwy.net:51730` `sslmode=require` `sha256[:8]=088a0da2` (full `wnba_game_logs` corpus; see #509). Mono Railway `Postgres` service still separate/internal. |
 | Cron schedules (mono) | job1 `0 13 * * *`; job1-late `*/30 16-23 * * *`; job2 `*/5 14-23,0-3 * * *`; dayclose `0 6 * * *` (GraphQL `serviceInstanceUpdate`) |
 | Live old project crons | `wnba-oracle` / `production` cron-job1, job1-late, job2, dayclose schedules set to **null** (no dual-fire). Project **not** deleted. |
 | Frontend API URL | Mono `VITE_API_URL=https://wnba-api-wnba-production.up.railway.app` |
