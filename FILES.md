@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1120 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,8 +17,6 @@ Generated from `git ls-files`. 1120 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
-- FILES.md -- File manifest (generated, do not hand-edit)
-- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -793,8 +791,6 @@ Generated from `git ls-files`. 1120 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/__init__.py -- Codespace Ollama HV/TDV self-learning slate watcher (#574).
 - scripts/ollama_hv_watcher/__main__.py -- python -m ollama_hv_watcher → CLI (#574).
 - scripts/ollama_hv_watcher/app_daemon.py -- App-driven T-40 helper daemon (#574).
-- scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
-- scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
 - scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
 - scripts/ollama_hv_watcher/cli.py -- CLI for the Ollama HV/TDV slate helper (#574).
 - scripts/ollama_hv_watcher/client.py -- Minimal Ollama HTTP client for localhost:11434 (#574).
