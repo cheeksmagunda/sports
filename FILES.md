@@ -62,6 +62,7 @@ Generated from `git ls-files`. 985 tracked files. Regenerate with `scripts/gener
 - .github/workflows/nfl-race.yml -- GitHub Actions workflow
 - .github/workflows/nfl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
+- .github/workflows/nhl-history-nightly.yml -- GitHub Actions workflow
 - .github/workflows/secret-audit.yml -- GitHub Actions workflow
 - .github/workflows/watchdog-monitor.yml -- GitHub Actions workflow
 - .github/workflows/wnba-backfill-enrichment.yml -- GitHub Actions workflow

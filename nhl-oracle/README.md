@@ -60,6 +60,11 @@ make test
 make lint
 make typecheck
 make history-load   # uses NHL_DATABASE_URL / DATABASE_URL
+
+Nightly refresh: `.github/workflows/nhl-history-nightly.yml` (05:00 UTC +
+`workflow_dispatch`) reloads prior + current seasons into staging
+Postgres via the public NHL API. Requires Actions secret
+`NHL_HISTORY_DATABASE_URL` (no Real Sports). See `STATUS.md`.
 ```
 
 From the repository root:

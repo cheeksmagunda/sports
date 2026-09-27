@@ -49,6 +49,37 @@ Last verified: 2026-09-27 (#501 hard zero-boost gate; continues #453/#325;
   Postgres, Redis. Live WNBA/NFL traffic remains on prior projects through
   Sunday windows (#453) except as separately authorized.
 
+## Public NHL history nightly (workflow on branch, issue #453)
+
+`.github/workflows/nhl-history-nightly.yml` runs daily at 05:00 UTC and on
+`workflow_dispatch`. It reloads prior + current NHL seasons into staging
+Postgres via `nhl-history-load` (public NHL API only; no Real Sports).
+
+**Secret gate:** requires repo secret `NHL_HISTORY_DATABASE_URL` (public TCP
+URL for `sports-oracle` / `nhl-staging` Postgres). Until that secret is set,
+scheduled runs fail closed with `not_configured`. Optional
+`PG_SSL_ROOT_CERT` is used when present. No new Real Sports credential.
+
+## Public NHL history staging load (#453)  -  2026-09-27
+
+- `sports-oracle` / `nhl-staging` Postgres now holds NHL public-history tables
+  `nhl_history_games`, `nhl_history_player_games`, and
+  `nhl_history_season_coverage`, loaded from the public NHL API with a
+  browser-style User-Agent via `nhl-history-load`.
+- Verified row counts in staging Postgres:
+  - `nhl_history_games`: **5599**
+  - `nhl_history_player_games`: **223901**
+  - `nhl_history_season_coverage`: **4**
+- Verified season coverage in staging:
+  - 2021-22: games **1401/1401**, player rows **56020**, status `complete`
+  - 2022-23: games **1400/1400**, player rows **55980**, status `complete`
+  - 2023-24: games **1400/1400**, player rows **55988**, status `complete`
+  - 2024-25: games **1398/1398**, player rows **55913**, status `complete`
+- Scope note: this is official/public NHL game history only. It is useful for
+  NHL-owned chronology, schedule, and stat features, but it is **not** the
+  Real Sports value-label corpus and does not change the `contest_entry: False`
+  posture.
+
 ## Sunday readiness honesty (#453)  -  2026-09-27
 
 - **Week 2 done** (contract/corpus/#325 boost=`none`; discovery/calendar #455).
