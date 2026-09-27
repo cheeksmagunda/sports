@@ -210,6 +210,23 @@ make -C nfl-oracle production-backtest CONTEXT_SNAPSHOT=/path/to/context.json \
 `nfl_oracle.replay.backtest`; `--grouping day` groups games by US/Eastern date.
 Current results live in `STATUS.md`.
 
+`nfl_oracle.replay.contest_pool_replay` runs the same walk-forward pipeline on
+each finalized Corpus C contest's own visible pool (draft-stats players joined
+to Corpus G by Real Sports `player_id` on the contest's US/Eastern day) with
+that contest's card boosts. It scores every lineup with the contest's finalized
+values against the same boost-aware ceiling as the visible winner
+(`harness.hindsight_best_lineup`), so production and the winner share one
+denominator. It also reports `ordered_capture_ratio` (production's own five
+cards re-slotted by realized value), which splits the shortfall into player
+selection and slot order, plus how many of the visible top-20 entries
+production beats (never a field percentile).
+
+```sh
+# needs local data/raw/corpus_g, data/raw/corpus_c, and a saved ContextSnapshot
+make -C nfl-oracle contest-pool-replay CONTEXT_SNAPSHOT=/path/to/context.json \
+  BACKTEST_ARGS="--out /tmp/contest_pool_replay.json"
+```
+
 ## Local commands
 
 ```sh
