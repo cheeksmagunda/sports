@@ -15,6 +15,10 @@ from zoneinfo import ZoneInfo
 from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.calendar import ScheduledGame, games_in_week, season_week_for_date
+from nfl_oracle.recommendations.boost_projection import (
+    DEFAULT_BOOST_SIGNAL_PER_POINT,
+    apply_boost_aware_projections,
+)
 from nfl_oracle.recommendations.context import ContextBundle
 from nfl_oracle.recommendations.model import (
     ContextAdjustment,
@@ -39,6 +43,10 @@ class PipelinePolicy(Record):
     freeze_minutes: Literal[40] = 40
     input_max_age_seconds: int = Field(default=900, ge=60, le=900)
     model_max_age_days: int = Field(default=8, ge=1, le=30)
+    # Additive Real-value lift per card_boost point on boosted slates (#327).
+    boost_signal_per_point: float = Field(
+        default=DEFAULT_BOOST_SIGNAL_PER_POINT, ge=0, le=2
+    )
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
     contest_entry: Literal[False] = False
 
@@ -225,6 +233,11 @@ class RecommendationPipeline:
         }
         projections = predict(
             slate, bundle.model, bundle.history, decision_at=now, context=adjustments
+        )
+        projections = apply_boost_aware_projections(
+            projections,
+            slate,
+            signal_per_boost_point=self.policy.boost_signal_per_point,
         )
         lineup = optimize(
             slate,
