@@ -68,6 +68,27 @@ RS_FIELD_MATRIX: tuple[tuple[str, str, str, str, RsStatus], ...] = (
         "leakage-blocked",
     ),
     (
+        "overallRank / injuryBodyPart / moneylines / lastTenWins",
+        "job1 pool + odds → head_features fuse",
+        "head_features + EB rank/moneyline terms",
+        "EBHierarchicalBaseline + fuse_slate_enrichment",
+        "mapped",
+    ),
+    (
+        "seasonAverages.*",
+        "feed / pool when present",
+        "head_features season_avg_*",
+        "optional head_features",
+        "mapped",
+    ),
+    (
+        "baseBoostedValue / draftStats score/rank (same slate)",
+        "dayclose HV boards",
+        "label / prior_* only",
+        "LEAKAGE_BLOCKED_SAME_SLATE",
+        "leakage-blocked",
+    ),
+    (
         "draftStats / popularPlayers / mostCommon3x",
         "contest finalized stats",
         "corpus dump every key (#526)",

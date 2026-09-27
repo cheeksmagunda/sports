@@ -36,6 +36,14 @@ Safe live_ok slate-context features force-included on the production
 - Injury one-hots + `injury_status_available` (pre-existing #418)
 - Weather magnitudes + `weather_available` (pre-existing #418)
 
+### Priority RS leaf aliases (phase 1b)
+- Live_ok: `overall_rank`, `injury_body_part_hash`, moneylines,
+  `last_ten_wins`, `prior_did_not_play`/`prior_started`/`prior_minutes`,
+  `season_avg_*` when present
+- Leakage-blocked same-slate: `base_boosted_value`, `draft_stats_score`/`rank`,
+  raw box `did_not_play`/`started`/`minutes` (use `prior_*` only)
+- Extractors: `features.rs_aliases`; Candidate/Game + context merge
+
 ### FeatureDrivenValueModel
 - Core bank adds `player_prior_median`
 - Design matrix appends the same required context set with value/missing

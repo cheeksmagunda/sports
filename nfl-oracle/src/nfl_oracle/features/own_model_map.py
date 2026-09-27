@@ -38,6 +38,7 @@ IDENTITY_ENCODE_FEATURES: frozenset[str] = frozenset(
         "team_id",
         "prior_fallback_level",
         "injury_status",
+        "injury_body_part",
     }
 )
 
@@ -48,6 +49,12 @@ LEAKAGE_BLOCKED_FEATURES: frozenset[str] = frozenset(
     {
         "card_boost_post_settlement",
         "same_slate_final_value",
+        "base_boosted_value",
+        "draft_stats_score",
+        "draft_stats_rank",
+        "did_not_play",
+        "started",
+        "minutes",
     }
 )
 

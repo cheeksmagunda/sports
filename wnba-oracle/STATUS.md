@@ -65,6 +65,15 @@ Code on branch (not yet production-verified on mono):
   set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
   redeploy (cron variable changes need a real redeploy).
 
+
+## Priority RS aliases into EB (#523)  -  2026-09-27
+
+Fuse `overall_rank`, hashed `injury_body_part`, moneylines,
+`last_ten_wins`→`team_l10_wins`, `season_avg_*` into head_features;
+EB learns optional `overall_rank_beta` / `moneyline_beta`. Same-slate
+HV score/rank/baseBoostedValue and same-game box participation stay
+leakage-blocked. No LightGBM. Refs #523 #526 #453.
+
 ## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
 
 Locked: train / optimize on Real Sports **Highest value / Total Value Daily

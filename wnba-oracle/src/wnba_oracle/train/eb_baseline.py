@@ -66,10 +66,14 @@ class EBHierarchicalBaseline:
     opp_pace_beta: float = 0.0
     vegas_beta: float = 0.0
     boost_beta: float = 0.0
+    overall_rank_beta: float = 0.0
+    moneyline_beta: float = 0.0
     league_pace: float = 0.0
     league_opp_pace: float = 0.0
     league_vegas: float = 0.0
     league_boost: float = 0.0
+    league_overall_rank: float = 0.0
+    league_moneyline: float = 0.0
 
     def fit(
         self,
@@ -82,6 +86,8 @@ class EBHierarchicalBaseline:
         opp_pace_col: str = "opp_pace",
         vegas_col: str = "vegas_total",
         boost_col: str = "card_boost",
+        overall_rank_col: str = "overall_rank",
+        moneyline_col: str = "team_moneyline",
     ) -> None:
         if df.is_empty():
             return
@@ -126,7 +132,13 @@ class EBHierarchicalBaseline:
             df, y_resid, opp_pace_col
         )
         self.vegas_beta, self.league_vegas, y_resid = _fit_centered_term(df, y_resid, vegas_col)
-        self.boost_beta, self.league_boost, _ = _fit_centered_term(df, y_resid, boost_col)
+        self.boost_beta, self.league_boost, y_resid = _fit_centered_term(df, y_resid, boost_col)
+        self.overall_rank_beta, self.league_overall_rank, y_resid = _fit_centered_term(
+            df, y_resid, overall_rank_col
+        )
+        self.moneyline_beta, self.league_moneyline, _ = _fit_centered_term(
+            df, y_resid, moneyline_col
+        )
 
     def predict(self, df: pl.DataFrame) -> np.ndarray:
         if df.is_empty():
@@ -153,6 +165,16 @@ class EBHierarchicalBaseline:
             if "card_boost" in df.columns
             else np.zeros(len(df))
         )
+        ranks = (
+            df.get_column("overall_rank").to_numpy()
+            if "overall_rank" in df.columns
+            else np.zeros(len(df))
+        )
+        moneylines = (
+            df.get_column("team_moneyline").to_numpy()
+            if "team_moneyline" in df.columns
+            else np.zeros(len(df))
+        )
         out = np.zeros(len(df), dtype=float)
         for i, (c, p) in enumerate(zip(cohorts, players, strict=True)):
             mu = self.cohort_means.get(str(c), 0.0)
@@ -164,6 +186,8 @@ class EBHierarchicalBaseline:
                 + self.opp_pace_beta * (float(opp_paces[i]) - self.league_opp_pace)
                 + self.vegas_beta * (float(vegas[i]) - self.league_vegas)
                 + self.boost_beta * (float(boosts[i]) - self.league_boost)
+                + self.overall_rank_beta * (float(ranks[i]) - self.league_overall_rank)
+                + self.moneyline_beta * (float(moneylines[i]) - self.league_moneyline)
             )
         return out
 
