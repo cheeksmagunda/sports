@@ -1,14 +1,12 @@
 # nhl-oracle
 
-NHL Oracle application scaffold.
+NHL Oracle application: verified Real Sports contest contract, read-only
+ingest, redacted corpus store, identity reconciler, contest-range discovery,
+and a freeze-cycle job skeleton. See `STATUS.md` for the current ready bar
+and explicit next blockers.
 
-Current scope is a pre-provider-access scaffold exercised only against
-synthetic fixtures: package wiring, boundary-safe layout, verification
-targets, a candidate contest contract and audit gates (`contract/`), a
-redacted payload provenance store (`ingest/`), an identity map and collision
-reconciler (`identity/`), and a freeze-cycle job skeleton (`scheduler/`). No
-live NHL provider, model, optimizer, hosted API, frontend, or deployment
-exists yet; see `STATUS.md` for current detail.
+No model, optimizer, hosted API, frontend, Railway project, or contest entry
+path exists yet.
 
 ## Connection surfaces
 
@@ -27,6 +25,13 @@ provider credentials, contest entry paths, or per-agent PATs unless a scoped
 issue explicitly authorizes that work. Cloud projects must include the root
 snapshot bundle plus `nhl-oracle/AGENTS.md`, `nhl-oracle/README.md`, and
 `nhl-oracle/STATUS.md`, then verify against live `main` before material work.
+
+Live read-only Real Sports contact uses the shared session
+(`REALSPORTS_STORAGE_STATE_B64GZ` / Codespace secret only). CLI:
+
+```sh
+nhl-live-contract-audit
+```
 
 ## Commands
 

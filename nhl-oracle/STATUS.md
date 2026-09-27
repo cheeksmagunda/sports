@@ -1,17 +1,15 @@
 # Status
 
-Last verified: 2026-09-25 CT (pre-boost live re-audit #325; continues #299)
+Last verified: 2026-09-26 CT (finish campaign #455 / parent #453)
 
 This file records application state only.
 
 ## Application state
 
 - Package: `nhl-oracle` workspace member
-- Scope live now: Week 2 live, read-only Real Sports contract audit complete
-  (#299). Contested fields were resolved from historical NHL contest **1901**
-  (no NHL contests on the current home slate at audit time) plus current-slate
-  game player cards and contest `/stats` draftStats.
-  - `contract/`: `NhlContestContract` defaults now reflect live evidence:
+- Ready bar (honest): Week 2 live contract + corpus tooling is operational for
+  **read-only** Real Sports work. Not a hosted prediction product.
+  - `contract/`: `NhlContestContract` defaults reflect live evidence:
     `five_card_ordered`, lock `per_contest`, boost `none` (pre-boost until
     every NHL team has played; #325), score label `"value"`, roster size 5,
     slot multipliers `(2.0, 1.8, 1.6, 1.4, 1.2)`, `goalie_eligible=True`.
@@ -21,10 +19,12 @@ This file records application state only.
     redacted live fixture (`contest_entry: False`).
   - `ingest/`: NHL-owned `realsports` client (adapted from the NFL pattern;
     no cross-sport import), `redact`, live `audit` CLI
-    (`nhl-live-contract-audit`), and `NhlCorpusStore` provenance. Live
-    redacted corpus seeded under `data/raw/` (gitignored) with coverage
-    denominators. Auth uses Codespace secret `REALSPORTS_STORAGE_STATE_B64GZ`
+    (`nhl-live-contract-audit`), `ingest.discovery` slate probe + contest-ID
+    range scan with identity-mismatch guard, and `NhlCorpusStore` that
+    redacts before every write. Live redacted corpus under `data/raw/`
+    (gitignored). Auth uses Codespace secret `REALSPORTS_STORAGE_STATE_B64GZ`
     only; no new credential type; no contest entry.
+  - `calendar/`: season start-year label helper for corpus paths.
   - `identity/`: in-memory identity map plus a same-name collision
     reconciler that reports and never auto-merges, and
     `drop_ambiguous_identity_rows` to drop-and-audit ambiguous rows from a
@@ -37,10 +37,22 @@ This file records application state only.
     No real collector, model, or publisher is wired in; every step is an
     injected callable.
 - Wired for root checks: test, lint, typecheck, build, boundary, and app contract
-- Not started: chronological baselines / walk-forward predictions, contest-law
-  optimizer, hosted API, frontend, deployment. No backtest harness exists yet;
-  any future picker/backtest must assume zero boosts until every NHL team has
-  played
+- CI: `make test-nhl` runs in `backend-ci.yml`
+- Railway: none (intentional; do not invent services without a scoped issue)
+- Real Sports auth: shared portfolio session only; attach verified via Codespace
+  secret presence (value never printed). Recovery is interactive browser login
+  only, on explicit operator action.
+
+## Next blockers (explicit)
+
+- Chronological baselines / walk-forward (`observation_only: True`) not started
+- Contest-law optimizer not started
+- Hosted API / worker / frontend / Railway not started
+- No backtest harness; any future picker must assume zero boosts until every
+  NHL team has played
+- Historical corpus depth beyond the Week 2 seed is operator-open (rescue
+  branch `rescue/444-nhl-week2` holds local corpus JSON archive only; not
+  merged as product code)
 
 ## Boundaries
 
@@ -56,15 +68,14 @@ This file records application state only.
 Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
 (#135 and #148 closed; per root `AGENTS.md`, roadmaps live in app docs).
 
-- **Week 1 (contract and corpus skeleton): done.** #136, PR #137. Scaffold
-  under Application state (pre-audit).
+- **Week 1 (contract and corpus skeleton): done.** #136, PR #137.
 - **Week 2 (live contract audit, real corpus seed): done for the contract and
   corpus-seed slice (#299, PR #308), with boost-regime correction (#325).**
-  Live read-only Real Sports contact used the existing shared session
-  (`REALSPORTS_STORAGE_STATE_B64GZ`); no new credential type; no contest
-  entry; no Railway for NHL.
+  Finish slice #455 landed contest-range discovery + calendar season label
+  from unfinished rescue work (unique non-data code only; raw corpus blobs
+  stay gitignored / on rescue archive).
   Verified facts (historical contest 1901 for format/lock/scoring + current
-  slate players for boost/goalie):
+  slate players for boost/goalie; last live re-audit 2026-09-25 CT under #325):
   - format: `five_card_ordered` (lineupSize=5, defaultMultipliers length 5)
   - lock_scope: `per_contest` (contest-level `isLocked`)
   - boost_regime: `none` (pre-boost). Live re-audit 2026-09-25 CT: current
@@ -83,6 +94,5 @@ Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
   the redacted fixture. Coverage at #325 live re-audit: games 4/4;
   players_resolved/seen 30/30 (scored contest pool); live cards inspected
   for boosts 244; `gates_ok=true`; `contest_entry=false`.
-  Still not started in Week 2: chronological baselines adapted from NFL
-  `baselines/` + walk-forward (`observation_only: True`).
-- **Weeks 3+ (roadmap steps 3 to 6): not started.**
+- **Weeks 3+ (roadmap steps 3 to 6): not started** (baselines through
+  autonomous delivery).

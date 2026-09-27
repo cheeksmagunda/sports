@@ -520,7 +520,7 @@ Generated from `git ls-files`. 914 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/src/nhl_oracle/identity/reconcile.py -- Same-name identity collision reconciliation (offline, observation only).
 
 ## nhl-oracle/src/nhl_oracle/ingest/
-- nhl-oracle/src/nhl_oracle/ingest/__init__.py -- NHL ingest: Real Sports client, redaction, and corpus provenance.
+- nhl-oracle/src/nhl_oracle/ingest/__init__.py -- NHL ingest: Real Sports client, redaction, discovery, and corpus provenance.
 - nhl-oracle/src/nhl_oracle/ingest/audit.py -- Read-only Real Sports NHL contract audit + redacted corpus seed.
 - nhl-oracle/src/nhl_oracle/ingest/provenance.py -- Redacted NHL raw payload persistence with sidecar provenance.
 - nhl-oracle/src/nhl_oracle/ingest/realsports.py -- Thin Real Sports HTTP client for NHL (read-only).
