@@ -1,9 +1,20 @@
 # Status
 
-Last verified: 2026-09-26 CT (frontend scaffold #462 under #453; Week 3
-baselines #456 unchanged)
+Last verified: 2026-09-27 (#453 Sunday readiness honesty; frontend scaffold #462 on main)
 
 This file records application state only.
+
+## Sunday readiness honesty (#453)  -  2026-09-27
+
+- **Week 2 done** (contract/corpus/#325 boost=`none`).
+- **Week 3 started** as an observation-only baseline skeleton (#456 / PR #459):
+  `labels/` + `baselines/` with synthetic-label tests. **Not fitted on Real
+  corpus. Not serving. No Railway. No hosted API. No contest entry.**
+- Frontend scaffold landed (#462) under `nhl-oracle/frontend` (Vite shell +
+  Dockerfile). **Not hosted / not serving contests.** Hosted API still absent.
+- Optimizer / production NHL serving / Railway live contest path: **not started**.
+- Open follow-on for contest discovery/calendar ops code: #455 (PR #471).
+- Do not treat NHL as Sunday live contest-ready.
 
 ## Application state
 

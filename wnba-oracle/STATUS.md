@@ -1,8 +1,11 @@
 # Status
 
-Last verified: 2026-09-27T01:36:00Z
+Last verified: 2026-09-27T01:43:00Z
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
+
+Live traffic remains on Railway project **`wnba-oracle`** (not
+`sports-oracle`) through Sunday.
 
 - Merged #454 (`4c7c9598`) into `main` (replaces closed #445 after branch
   rename for issue-link enforcement). Follow-up #465 regenerated `FILES.md`.
@@ -11,9 +14,9 @@ Last verified: 2026-09-27T01:36:00Z
   - `cron-job1` SUCCESS `95353809` on `4c7c9598`
   - `cron-job1-late` SUCCESS `f3dfb782` on `4c7c9598`
   - `cron-job2` SUCCESS `cc2a7a0a` on `4c7c9598`
-  - `cron-dayclose` still SUCCESS on prior `463e8d9a` (#442); tip-day
-    deploy was SKIPPED (`CI check suite failed` on the #454 push). Dayclose
-    does not call `starters_expected`; residual is image-parity only.
+  - `cron-dayclose` SUCCESS deploy `cd69934d-1aa5-4068-ab39-d7e9526f96e9`
+    on `1adb1250530a` (from-source after tip-day; tip-day `4c7c9598` is an
+    ancestor). Verified 2026-09-27T01:43Z via Codespace Railway CLI.
 - Live API at 2026-09-27T01:36Z:
   - `/health` -> `status=ok`
   - `/watchdog/today` slate `2026-09-26` -> `status=ok`, `events=[]`
