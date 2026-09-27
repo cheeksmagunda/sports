@@ -445,6 +445,17 @@ logs, variable changes) run **from inside the GitHub Codespace**, after
 Railway from the operator Mac, and do not use `SPORTS_ALLOW_LOCAL_RAILWAY` as
 the normal path.
 
+### Mono-project shell (`sports-oracle`)
+
+Target Railway home (issue #457): project `sports-oracle`
+(`cca6b03f-8a84-4fb5-aaa5-decb3830392d`) with per-sport environments
+`wnba-production`, `nfl-production`, `nhl-staging` (plus unused placeholder
+`production`). **Stand up the shell now; do not cut over live traffic until
+after Sunday 2026-09-27 windows** (#453). Live serving remains on projects
+`wnba-oracle` and `nfl-oracle-staging` until a verified post-Sunday migration.
+Design, env/service map, `REALSPORTS_*` hash continuity, runbook, and rollback
+live on #457 — do not restate them here.
+
 ### Canonical auth: synced Mac CLI session
 
 Canonical Codespace Railway auth is a **synced Mac `~/.railway` CLI OAuth

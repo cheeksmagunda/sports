@@ -1,5 +1,12 @@
 # Status
 
+## Railway mono-project shell (non-serving) (#457)  -  2026-09-27
+
+- Live NFL serving remains on Railway project `nfl-oracle-staging` /
+  `production` through Sunday 2026-09-27 (#453).
+- Empty target shell `sports-oracle` / `nfl-production` is being stood up
+  only; no domain, secret, or traffic cutover. Decision + runbook on #457.
+
 ## NFL picker knobs live-verified (2026-09-27 ~01:14Z, Refs #453 / #330 / #37)
 
 Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`
