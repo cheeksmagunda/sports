@@ -2,12 +2,11 @@
 
 Last verified: 2026-09-27T03:25:00Z (mono TDV knobs + health; #453 / #523)
 
-## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
+## Training target: Highest value board (#453 / #505 / #523)  -  2026-09-27
 
 Locked: train / optimize on Real Sports **Highest value / Total Value Daily
 Leaderboard** (`draftStats.sectionName=highestBoostedValuePlayers`) for every
-slate — Amihere / Copper / Aubrey-style boards down the list.
-**Do not train on prior users' winning drafts**
+slate. **Do not train on prior users' winning drafts**
 (`contest_leaderboards` / `leaderboard_lineup`); those are a reference bar to
 beat, not fit targets. Popularity sections are excluded from the EB label
 corpus. Backtests grade each slate against that slate's Highest value
