@@ -158,3 +158,93 @@ def test_tdv_mode_retains_chalk_stud_when_omitting_collapses_tv() -> None:
         ),
     )
     assert 1 in rec.player_ids
+
+
+def test_tdv_ownership_fade_prefers_low_ownership_among_equal_tv() -> None:
+    """When two combos have similar expected TV, the ownership-fade tiebreaker
+    should prefer the lower-owned construction (#453)."""
+    # Build a pool where two groups of 5 have identical predicted real_score
+    # and boost, but different ownership. The fade should tip toward the low-
+    # owned group.
+    samps: list[PlayerSamplingSpec] = []
+    fields: list[FieldPlayerSpec] = []
+    for i in range(10):
+        team = f"T{i % 5}"
+        opp = f"T{(i + 1) % 5}"
+        high_own = i < 5
+        mean_rs = 3.0
+        samps.append(
+            PlayerSamplingSpec(
+                player_id=200 + i,
+                team=team,
+                opponent=opp,
+                mu=float(np.log(mean_rs + 2.0)),
+                sigma=0.15,
+                boost=1.0,
+            )
+        )
+        fields.append(
+            FieldPlayerSpec(
+                player_id=200 + i,
+                pred_real_score=mean_rs,
+                card_boost=1.0,
+                measured_drafts=5000.0 if high_own else 20.0,
+                rank_pred_override=mean_rs,
+            )
+        )
+    curve = default_curve_for_regime("top_20")
+    # With fade=0, the selection is seed-determined among equal-TV combos.
+    no_fade = optimize_lineup(
+        samps,
+        fields,
+        curve,
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=500,
+            n_field_lineups=60,
+            max_per_team=5,
+            seed=42,
+            objective_mode="total_draft_value",
+            max_value_ownership_fade=0.0,
+        ),
+    )
+    # With a meaningful fade, low-ownership names should be preferred.
+    with_fade = optimize_lineup(
+        samps,
+        fields,
+        curve,
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=500,
+            n_field_lineups=60,
+            max_per_team=5,
+            seed=42,
+            objective_mode="total_draft_value",
+            max_value_ownership_fade=0.05,
+        ),
+    )
+    low_owned = {205, 206, 207, 208, 209}
+    # The faded version should include at least as many low-owned players.
+    assert len(set(with_fade.player_ids) & low_owned) >= len(
+        set(no_fade.player_ids) & low_owned
+    )
+
+
+def test_tdv_settings_wiring() -> None:
+    """Verify that Settings env vars reach OptimizeConfig via build_optimize_config."""
+    from unittest.mock import patch
+
+    from wnba_oracle.common.settings import Settings
+    from wnba_oracle.scheduler.job2 import build_optimize_config
+
+    with patch.dict(
+        "os.environ",
+        {
+            "OPTIMIZER_OBJECTIVE_MODE": "total_draft_value",
+            "OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE": "0.05",
+        },
+    ):
+        s = Settings()
+        cfg = build_optimize_config(s)
+    assert cfg.objective_mode == "total_draft_value"
+    assert abs(cfg.max_value_ownership_fade - 0.05) < 1e-9

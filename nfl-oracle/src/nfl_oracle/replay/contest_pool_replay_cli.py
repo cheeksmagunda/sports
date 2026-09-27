@@ -17,7 +17,10 @@ from typing import Any
 
 from nfl_oracle.contests.parse import iter_contests
 from nfl_oracle.contests.store import ContestStore
-from nfl_oracle.recommendations.optimizer import OptimizerConfig
+from nfl_oracle.recommendations.optimizer import (
+    _OPTIMIZER_PROFILE_PRESETS,
+    OptimizerConfig,
+)
 from nfl_oracle.recommendations.picker_knobs import PickerKnobs
 from nfl_oracle.replay.contest_pool_replay import (
     ContestPool,
@@ -77,6 +80,27 @@ def build_parser() -> argparse.ArgumentParser:
         default="identity",
         help="Label recorded on each result for this knob setting.",
     )
+    parser.add_argument(
+        "--optimizer-profile",
+        choices=("diversified", "max_value"),
+        default="diversified",
+        help=(
+            "Construction profile. 'diversified' (default) requests 3 teams / 2 games; "
+            "'max_value' drops the diversity floor to 1/1 to chase max attainable value."
+        ),
+    )
+    parser.add_argument(
+        "--min-distinct-teams",
+        type=int,
+        default=None,
+        help="Override the profile's requested distinct-team floor (1..5).",
+    )
+    parser.add_argument(
+        "--min-distinct-games",
+        type=int,
+        default=None,
+        help="Override the profile's requested distinct-game floor (1..5).",
+    )
     add_fit_config_args(parser)
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
     return parser
@@ -107,12 +131,23 @@ def main(argv: list[str] | None = None) -> int:
         position_calibration=args.position_calibration,
         profile=args.picker_profile,
     )
+    preset_teams, preset_games = _OPTIMIZER_PROFILE_PRESETS[args.optimizer_profile]
+    optimizer_config = OptimizerConfig(
+        simulations=args.simulations,
+        min_distinct_teams=(
+            args.min_distinct_teams if args.min_distinct_teams is not None else preset_teams
+        ),
+        min_distinct_games=(
+            args.min_distinct_games if args.min_distinct_games is not None else preset_games
+        ),
+        profile=args.optimizer_profile,
+    )
     results, excluded = replay_contest_pools(
         inputs.enriched,
         contests,
         fold_of=fold_of,
         team_keys=inputs.team_keys,
-        optimizer_config=OptimizerConfig(simulations=args.simulations),
+        optimizer_config=optimizer_config,
         fit_config=fit_config,
         compact_samples=not args.full_samples,
         picker=picker,

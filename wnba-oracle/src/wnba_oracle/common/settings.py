@@ -354,6 +354,17 @@ class Settings(RuntimeConfig):
     optimizer_committed_order_objective: bool = Field(
         default=False, alias="OPTIMIZER_COMMITTED_ORDER_OBJECTIVE"
     )
+    # #433/#453 total-draft-value objective mode. "payout" (default) keeps
+    # the E[payout(rank)] objective. "total_draft_value" selects by
+    # E[committed-order lineup score], maximising raw points over contest
+    # placement. Low-ownership fade tiebreaker weight (#453) gives a mild
+    # preference for underdrafted names when combos are close in expected TV.
+    optimizer_objective_mode: str = Field(
+        default="payout", alias="OPTIMIZER_OBJECTIVE_MODE"
+    )
+    optimizer_max_value_ownership_fade: float = Field(
+        default=0.001, alias="OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE"
+    )
     # D89 (Phase 4, ceiling/variance modeling). Environment-conditioned
     # sigma scaling for the per-player lognormal marginal in the copula
     # sampler. The synthesis recommends widening sigma -- not just nudging
@@ -481,6 +492,11 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     # revert requires scripts/build_model_research_benchmark.py after the
     # prior-slate ownership guard. See issue #289 and follow-up E1.
     "optimizer_leverage_weight": 0.28,
+    # #453: total_draft_value mode is off by default (production still uses
+    # E[payout(rank)]). Flip to "total_draft_value" to enable. Ownership fade
+    # defaults to 0.001 (negligible tiebreaker).
+    "optimizer_objective_mode": "payout",
+    "optimizer_max_value_ownership_fade": 0.001,
 }
 
 
