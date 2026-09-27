@@ -1,4 +1,4 @@
-"""When an empty RotoWire page is a real failure (#319, #441)."""
+"""When an empty RotoWire page is a real failure (#319, #441, #535)."""
 
 from __future__ import annotations
 
@@ -55,3 +55,21 @@ def test_job1_near_tip_quiet_day_before_next_day_tip() -> None:
 def test_job1_near_tip_unknown_tip_stays_quiet() -> None:
     with patch("wnba_oracle.scheduler.job2_io._load_slate_lock_time", return_value=None):
         assert job1._rotowire_near_tip("2026-09-26", now_utc=_at(27, 13, 0)) is False
+
+
+def test_job1_fail_closed_only_within_four_hours_of_tip() -> None:
+    """Overnight / 13:00Z tip-day empty RW warns; fail-closed from T-4 (#535)."""
+    with patch("wnba_oracle.scheduler.job2_io._load_slate_lock_time", return_value=TIP):
+        assert job1._rotowire_fail_closed("2026-09-27", now_utc=_at(27, 4, 30)) is False
+        assert job1._rotowire_fail_closed("2026-09-27", now_utc=_at(27, 13, 0)) is False
+        assert job1._rotowire_fail_closed("2026-09-27", now_utc=_at(27, 14, 0)) is True
+
+
+def test_job1_empty_degraded_warns_early_tip_day() -> None:
+    with (
+        patch.object(job1, "_rotowire_fail_closed", return_value=False),
+        patch.object(job1, "_rotowire_near_tip", return_value=True),
+    ):
+        assert job1._rotowire_empty_degraded("2026-09-27", []) == ()
+    with patch.object(job1, "_rotowire_fail_closed", return_value=True):
+        assert job1._rotowire_empty_degraded("2026-09-27", []) == ("rotowire_empty_near_tip",)

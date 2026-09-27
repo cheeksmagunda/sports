@@ -1,6 +1,21 @@
 # Status
 
-Last verified: 2026-09-27T03:45:00Z
+Last verified: 2026-09-27T04:59:35Z
+
+## Overnight freeze readiness (#535)  -  2026-09-27T04:25Z
+
+| Check | Result |
+|-------|--------|
+| Slate | `2026-09-27`; first tip `2026-09-27T18:00:00Z`; freeze target `2026-09-27T17:20:00Z` |
+| Pool | `job1_enrichment` **124** rows / 8 teams; `captured_at` `2026-09-27T04:07:40Z`; starters **0** |
+| Live watchdog | `status=warn`; live trigger `rotowire_empty` only |
+| Freeze readiness (pre-fix image) | `ready_for_freeze=false`; sticky history blocker `no_job1_pool` (cleared live); `job1_last_status` thrashing `failed`/`running` |
+| Root cause | (1) `freeze_readiness` unioned history hard triggers after live pool recovered; (2) tip-day empty RotoWire fail-closed from Eastern midnight (T-30h) made overnight job1 exit 1; (3) main-merge QUEUED redeploy storm |
+| Mitigation | Cancelled QUEUED/BUILDING redeploys via `deploymentCancel` (kept SUCCESS tip `70b315e` on api/job*); PR softens RW fail-closed to T-4 and live-only hard blockers |
+| Early job1 | After merge+api/job1 image settle: `scripts/codespace-railway-env -- railway ssh -s wnba-cron-job1 -e wnba-production -- oracle-cron --job job1` (safe; refreshes pool). Else scheduled `0 13 * * *` (~13:00Z) |
+
+Last verified: 2026-09-27T04:25:00Z
+
 
 ## DraftStats / recorded_states corpus export (#526)  -  2026-09-27
 
@@ -17,8 +32,6 @@ Last verified: 2026-09-27T03:45:00Z
   `DATABASE_URL` (Codespace railway-env). No Ollama. No credential minting.
 - Live full-table export on mono: unverified until operator runs with
   railway-env.
-
-Last verified: 2026-09-27T03:50:00Z
 
 ## EB serve after #531 (2026-09-27T04:08Z, #535)
 
@@ -64,15 +77,6 @@ Code on branch (not yet production-verified on mono):
 - Production mono job2: unverified until merge + redeploy. Rollback:
   set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
   redeploy (cron variable changes need a real redeploy).
-
-
-## Priority RS aliases into EB (#523)  -  2026-09-27
-
-Fuse `overall_rank`, hashed `injury_body_part`, moneylines,
-`last_ten_wins`→`team_l10_wins`, `season_avg_*` into head_features;
-EB learns optional `overall_rank_beta` / `moneyline_beta`. Same-slate
-HV score/rank/baseBoostedValue and same-game box participation stay
-leakage-blocked. No LightGBM. Refs #523 #526 #453.
 
 ## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
 

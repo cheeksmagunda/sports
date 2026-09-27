@@ -104,8 +104,15 @@ def _api_checks(
             history = payload.get("history")
             event_list = events if isinstance(events, list) else []
             history_list = history if isinstance(history, list) else []
+            # Hard blockers from live evaluation only (#319 / #535); history is
+            # advisory/display so a cleared no_job1_pool cannot sticky-fail.
+            live_triggers = {
+                str(e.get("trigger"))
+                for e in event_list
+                if isinstance(e, Mapping) and e.get("trigger")
+            }
             triggers = sorted(triggers_from_watchdog_payload(event_list, history_list))
-            hard = sorted(HARD_WATCHDOG_TRIGGERS.intersection(triggers))
+            hard = sorted(HARD_WATCHDOG_TRIGGERS.intersection(live_triggers))
             if hard:
                 checks.append(
                     Check("Pipeline watchdog", "alert", f"Active triggers: {', '.join(hard)}.")
