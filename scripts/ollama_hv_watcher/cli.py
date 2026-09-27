@@ -1,20 +1,10 @@
 """CLI for the Ollama HV/TDV slate watcher (#574).
 
-Commands:
-  status   — Ollama health + model list
-  plan     — discover day windows and print arm/release
-  watch    — sleep until earliest T-40; stay until latest close
-  learn    — offline HV board learn tick (gated; dry-run by default)
-  serve    — ensure ``ollama serve`` is healthy (nohup + pidfile)
+Modes (mutually exclusive)::
 
-Examples::
-
-    python -m ollama_hv_watcher status
-    python -m ollama_hv_watcher plan --windows-json path/to/windows.json
-    SPORTS_OLLAMA_UNLOCK=1 python -m ollama_hv_watcher learn --board hv.json
-    SPORTS_OLLAMA_UNLOCK=1 nohup python -m ollama_hv_watcher watch \\
-        --windows-json windows.json --ensure-serve \\
-        >data/ollama_hv/watcher.log 2>&1 &
+    PYTHONPATH=scripts python -m ollama_hv_watcher --status
+    PYTHONPATH=scripts python -m ollama_hv_watcher --once
+    PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
 """
 
 from __future__ import annotations
@@ -223,49 +213,31 @@ def build_parser() -> argparse.ArgumentParser:
         prog="ollama_hv_watcher",
         description="Ollama HV/TDV self-learning slate watcher (#574)",
     )
-    parser.add_argument(
-        "--data-root",
-        default=str(DEFAULT_DATA_ROOT),
-        help="Durable artifact root (default: data/ollama_hv)",
-    )
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--status", action="store_true", help="Health + gate + window")
+    mode.add_argument("--once", action="store_true", help="Single watch tick then exit")
+    mode.add_argument("--daemon", action="store_true", help="Watch until latest close")
+    parser.add_argument("--data-root", default=str(DEFAULT_DATA_ROOT))
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--manifest", default="", help="Path to coverage_manifest.json")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    p_status = sub.add_parser("status", help="Ollama health + gate status")
-    p_status.set_defaults(func=cmd_status)
-
-    p_serve = sub.add_parser("serve", help="Ensure ollama serve is up")
-    p_serve.add_argument("--pidfile", default=str(DEFAULT_PIDFILE))
-    p_serve.set_defaults(func=cmd_serve)
-
-    p_plan = sub.add_parser("plan", help="Print day arm/release plan")
-    p_plan.add_argument("--windows-json", default="")
-    p_plan.add_argument("--no-fixtures", action="store_true")
-    p_plan.set_defaults(func=cmd_plan)
-
-    p_watch = sub.add_parser("watch", help="Arm at earliest T-40 until latest close")
-    p_watch.add_argument("--windows-json", default="")
-    p_watch.add_argument("--no-fixtures", action="store_true")
-    p_watch.add_argument("--poll-seconds", type=float, default=30.0)
-    p_watch.add_argument(
-        "--once", action="store_true", help="Single status tick then exit"
-    )
-    p_watch.add_argument("--ensure-serve", action="store_true")
-    p_watch.add_argument("--pidfile", default=str(DEFAULT_PIDFILE))
-    p_watch.set_defaults(func=cmd_watch)
-
-    p_learn = sub.add_parser("learn", help="Offline HV learn tick (gated)")
-    p_learn.add_argument("--board-root", default=".")
-    p_learn.add_argument("--board", default="", help="Single HV board JSON path")
-    p_learn.add_argument("--model", default=DEFAULT_MODEL)
-    p_learn.add_argument(
+    parser.add_argument("--windows-json", default="")
+    parser.add_argument("--no-fixtures", action="store_true")
+    parser.add_argument("--poll-seconds", type=float, default=30.0)
+    parser.add_argument("--ensure-serve", action="store_true")
+    parser.add_argument("--pidfile", default=str(DEFAULT_PIDFILE))
+    parser.add_argument("--board-root", default=".")
+    parser.add_argument("--board", default="")
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
         "--execute",
         action="store_true",
-        help="Call Ollama generate (requires unlock or coverage complete)",
+        help="With learn path: call Ollama generate (requires unlock)",
     )
-    p_learn.set_defaults(func=cmd_learn)
-
+    parser.add_argument(
+        "--learn",
+        action="store_true",
+        help="During --once/--daemon armed tick, also run HV board learn",
+    )
     return parser
 
 
@@ -278,7 +250,21 @@ def main(argv: list[str] | None = None) -> int:
         args.manifest = None
     if getattr(args, "board", "") == "":
         args.board = None
-    return int(args.func(args))
+    if args.status:
+        return cmd_status(args)
+    if args.once:
+        args.once = True
+        if args.learn and args.board:
+            # one-shot learn then watch tick
+            code = cmd_learn(args)
+            if code not in (0, 3):
+                return code
+        return cmd_watch(args)
+    if args.daemon:
+        args.once = False
+        return cmd_watch(args)
+    parser.error("one of --status / --once / --daemon is required")
+    return 2
 
 
 if __name__ == "__main__":

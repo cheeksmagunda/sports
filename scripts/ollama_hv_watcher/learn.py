@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -12,10 +10,8 @@ from typing import Any
 from realsports_corpus.coverage_manifest import CoverageManifest
 
 from ollama_hv_watcher.boards import BoardSummary
+from ollama_hv_watcher.client import DEFAULT_HOST, DEFAULT_MODEL, generate
 from ollama_hv_watcher.gate import ensure_ollama_training_allowed
-
-DEFAULT_MODEL = "llama3.2:3b"
-DEFAULT_HOST = "http://127.0.0.1:11434"
 
 
 def utc_now_iso() -> str:
@@ -45,37 +41,6 @@ def build_learn_prompt(summary: BoardSummary) -> str:
         f"{summary.prompt_block()}\n"
     )
 
-
-def call_ollama_generate(
-    prompt: str,
-    *,
-    host: str = DEFAULT_HOST,
-    model: str = DEFAULT_MODEL,
-    timeout_s: float = 120.0,
-) -> str:
-    url = f"{host.rstrip('/')}/api/generate"
-    body = json.dumps(
-        {
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"ollama_generate_failed:{exc}") from exc
-    text = payload.get("response")
-    if not isinstance(text, str) or not text.strip():
-        raise RuntimeError("ollama_generate_empty_response")
-    return text.strip()
 
 
 def write_learning_tick(
@@ -132,7 +97,7 @@ def run_learn(
             dry_run=True,
         )
     reason = ensure_ollama_training_allowed(manifest, environ=environ)
-    notes = call_ollama_generate(prompt, host=host, model=model)
+    notes = generate(prompt, host=host, model=model)
     return write_learning_tick(
         data_root,
         summary,
