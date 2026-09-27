@@ -2,6 +2,14 @@
 
 Last verified: 2026-09-27 (#453 Sunday readiness honesty; frontend scaffold #462 on main)
 
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+
+- Verified scaffold on `sports-oracle` / `nhl-staging`: `nhl-api`,
+  `nhl-worker`, `nhl-frontend`, Postgres. Non-serving; no NHL live host
+  yet. Design + runbook on #457.
+- Live traffic for other sports remains on old projects through Sunday
+  2026-09-27 (#453); NHL has no live Railway serving to cut over.
+
 This file records application state only.
 
 ## Sunday readiness honesty (#453)  -  2026-09-27

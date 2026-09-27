@@ -439,6 +439,17 @@ operator re-uploads snapshots to any configured static project:
 
 ## Railway from the Codespace
 
+### Mono-project shell (`sports-oracle`)
+
+Target Railway home (issue #457): project `sports-oracle`
+(`cca6b03f-8a84-4fb5-aaa5-decb3830392d`) with per-sport environments
+`wnba-production`, `nfl-production`, `nhl-staging`, `nba-staging` (plus
+unused placeholder `production`). **Stand up the shell now; do not cut over live traffic until
+after Sunday 2026-09-27 windows** (#453). Live serving remains on projects
+`wnba-oracle` and `nfl-oracle-staging` until a verified post-Sunday migration.
+Design, env/service map, `REALSPORTS_*` hash continuity, runbook, and rollback
+live on #457 — do not restate them here.
+
 All Railway mutations and worker SSH (link, restart, redeploy, `train --force`,
 logs, variable changes) run **from inside the GitHub Codespace**, after
 `railway whoami` shows the operator account (Cheeks Magunda). Do not run
