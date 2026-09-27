@@ -113,7 +113,9 @@ def _family_rollup(manifest: CoverageManifest) -> dict[str, dict[str, str]]:
     return out
 
 
-def run_offline_fixture_export(corpus_root: Path) -> tuple[CoverageManifest, list[ExportResult]]:
+def run_offline_fixture_export(
+    corpus_root: Path,
+) -> tuple[CoverageManifest, list[ExportResult]]:
     """Project durable-store fixtures into corpus_root and return merged manifest."""
 
     ensure_kind_roots(corpus_root)
@@ -198,9 +200,7 @@ def build_status_report(manifest: CoverageManifest) -> dict[str, Any]:
 
     rollup = _family_rollup(manifest)
     complete = is_historical_capture_complete(manifest)
-    ollama_gate = (
-        "ALLOWED (historical_capture_complete)" if complete else "FORBIDDEN"
-    )
+    ollama_gate = "ALLOWED (historical_capture_complete)" if complete else "FORBIDDEN"
     if complete:
         assert_ollama_helper_forbidden(manifest)
     else:
@@ -281,9 +281,7 @@ def render_markdown(report: dict[str, Any]) -> str:
             "",
             "## Fixture dry-run family rollup",
             "",
-            "| Sport | "
-            + " | ".join(REQUIRED_VARIABLE_FAMILIES)
-            + " |",
+            "| Sport | " + " | ".join(REQUIRED_VARIABLE_FAMILIES) + " |",
             "|---|" + "|".join(["---"] * len(REQUIRED_VARIABLE_FAMILIES)) + "|",
         ]
     )
