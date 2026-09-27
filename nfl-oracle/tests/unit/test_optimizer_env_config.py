@@ -1,7 +1,7 @@
 """Env-driven optimizer construction config (max-value / race mode) for #453.
 
-Defaults must reproduce production exactly so an unset worker freezes the same
-five cards as before. The ``max_value`` profile drops the diversity floor to
+Unset env selects ``max_value`` (production win-draft default, #493/#505).
+The ``max_value`` profile drops the diversity floor to
 1/1 to chase the maximum attainable total value, and the upside/field weight
 knobs tune the contest-utility re-rank.
 """
@@ -18,11 +18,12 @@ from nfl_oracle.recommendations.optimizer import (
 
 
 def test_empty_env_reproduces_production_defaults() -> None:
+    """Unset env selects the max_value profile (#493 / #505 win-draft default)."""
     cfg = optimizer_config_from_env({})
     default = OptimizerConfig()
-    assert cfg.profile == "diversified"
-    assert cfg.min_distinct_teams == default.min_distinct_teams == 3
-    assert cfg.min_distinct_games == default.min_distinct_games == 2
+    assert cfg.profile == "max_value"
+    assert cfg.min_distinct_teams == 1
+    assert cfg.min_distinct_games == 1
     assert cfg.upside_weight == default.upside_weight
     assert cfg.field_weight == default.field_weight
     assert cfg.objective == "total_value"
@@ -88,7 +89,7 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
         scoring_policy=ScoringPolicy(),
         config=optimizer_config_from_env({}),
     )
-    assert diversified.construction_profile == "diversified"
+    assert diversified.construction_profile == "max_value"
 
     max_value = optimize(
         target,
