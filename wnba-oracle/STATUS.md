@@ -808,3 +808,11 @@ instances via the CLI, only the durable `job_runs` row does):
 
 Development plans, branch history, check output, decisions, and completed work
 belong in GitHub Issues and Pull Requests, not this file.
+
+## Real Sports corpus export CLI (#526 / #539)  -  2026-09-27
+
+Offline exporter `wnba-oracle/scripts/export_realsports_corpus.py` writes
+slate_labels + contest_leaderboards shards. Live DB proof this session:
+**228 slates / 4403 HV / 7010 draftStats** rows (operator mono store).
+No credential mint; sibling corpus publish still needs CORPUS_REPO_TOKEN.
+

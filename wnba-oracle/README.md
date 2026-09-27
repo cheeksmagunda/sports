@@ -303,6 +303,24 @@ enforced read-only; migrations and scheduled writers use separate job paths.
 | Label corpus | player-slate | `slate_labels` | Baseline, blend, and calibration |
 | Canonical cross-corpus identity | player | `canonical_player_identities` | Identity-aware evaluation, benchmark coverage reporting, and authorized backfill prep |
 
+### Real Sports contest corpus export (#526)
+
+`scripts/export_realsports_corpus.py` dumps durable Postgres `slate_labels`
+(all draftStats sections, plus an HV-only view) and `contest_leaderboards`
+(top-20 lineups as `recorded_states`) into the sibling corpus layout::
+
+    sport=wnba/season=YYYY/slate=YYYY-MM-DD/
+      total_value_leaderboard.json
+      draft_stats_all_sections.jsonl
+      lineups_top20.json
+      manifest.json
+
+Point `--corpus-root` at a checkout of `sports-realsports-corpus`, or at the
+gitignored monorepo `corpus/` staging tree. Prefer
+`DATABASE_PUBLIC_URL` / `DATABASE_URL` from Codespace/Railway
+(`scripts/codespace-railway-env`). Use `--dry-run` for schema-faithful demo
+rows without opening a database. Never prints connection strings.
+
 These frames use different identifiers and are not interchangeable. WNBA-owned
 identity resolution belongs in this application. The canonical identity table
 persists the existing Real Sports -> stats.wnba.com resolver output from Job 1
@@ -314,6 +332,7 @@ separate, explicit operation and is not part of ordinary ingestion.
 ```text
 src/wnba_oracle/api/        WNBA routers and response contracts
 src/wnba_oracle/assurance/  Value-free connector and source-evidence manifests
+src/wnba_oracle/corpus/     Real Sports contest corpus export (#526)
 src/wnba_oracle/ingest/     WNBA provider implementations and parsers
 src/wnba_oracle/features/   Feature builders and rolling windows
 src/wnba_oracle/train/      WNBA model training and artifact CLI

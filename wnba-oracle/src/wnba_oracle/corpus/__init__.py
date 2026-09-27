@@ -8,12 +8,20 @@ from wnba_oracle.corpus.draft_stats_export import (
     write_section_catalog,
     write_slate_export,
 )
+from wnba_oracle.corpus.realsports_export import (
+    SCHEMA_VERSION,
+    slate_dir,
+    write_slate_shard,
+)
 
 __all__ = [
     "HV_SECTION",
+    "SCHEMA_VERSION",
     "SlateExportSummary",
     "export_slates",
     "fake_demo_rows",
+    "slate_dir",
     "write_section_catalog",
     "write_slate_export",
+    "write_slate_shard",
 ]

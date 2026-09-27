@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1062 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -991,6 +991,7 @@ Generated from `git ls-files`. 1062 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/scripts/export_game_identity.py -- Export validated (slate_date, team, opponent) identity from job1_enrichment.
 - wnba-oracle/scripts/export_game_logs.py -- Export the full ``wnba_game_logs`` corpus for offline tournament/benchmark use.
 - wnba-oracle/scripts/export_hv_board.py -- Export one WNBA Highest-value board into the durable HV corpus layout (#526).
+- wnba-oracle/scripts/export_realsports_corpus.py -- Export WNBA slate_labels + contest_leaderboards into corpus layout (#526).
 - wnba-oracle/scripts/lab.py -- Offline model lab: the one entry point for evaluating a change.
 - wnba-oracle/scripts/loss_ledger.py -- Per-slate loss ledger: where our frozen lineup lost points, and why.
 - wnba-oracle/scripts/manual_fire.py -- End-to-end manual fire against the live Real Sports slate.
@@ -1068,6 +1069,7 @@ Generated from `git ls-files`. 1062 tracked files. Regenerate with `scripts/gene
 ## wnba-oracle/src/wnba_oracle/corpus/
 - wnba-oracle/src/wnba_oracle/corpus/__init__.py -- WNBA corpus export helpers for Real Sports history dumps (#526).
 - wnba-oracle/src/wnba_oracle/corpus/draft_stats_export.py -- Export WNBA slate_labels + contest_leaderboards into kind-first corpus layout.
+- wnba-oracle/src/wnba_oracle/corpus/realsports_export.py -- Export durable WNBA Real Sports contest tables into corpus layout (#526).
 
 ## wnba-oracle/src/wnba_oracle/db/
 - wnba-oracle/src/wnba_oracle/db/__init__.py
@@ -1257,6 +1259,7 @@ Generated from `git ls-files`. 1062 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_draft_stats_export.py -- Tests for WNBA draftStats / recorded_states corpus export (#526).
 - wnba-oracle/tests/unit/test_eb_residual_targets.py -- EB residual target wiring (#350).
 - wnba-oracle/tests/unit/test_eval_racer.py -- Offline unit tests for wnba_oracle.eval.racer (#356).
+- wnba-oracle/tests/unit/test_export_realsports_corpus_526.py -- Unit tests for WNBA Real Sports corpus export layout (#526).
 - wnba-oracle/tests/unit/test_feature_payload.py
 - wnba-oracle/tests/unit/test_features_cohort.py -- Spec / cohort assignment tests.
 - wnba-oracle/tests/unit/test_field_measured_ownership.py -- Field-ownership model: measured-drafts path (D86).

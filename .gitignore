@@ -35,3 +35,8 @@
 drive/corpus_g_coverage_samples/
 **/storage_state.json
 **/request_token_cache.json
+
+# Local staging for sibling sports-realsports-corpus (#526); never commit dumps
+/corpus/
+**/corpus/sport=*/
+**/corpus/manifest/
