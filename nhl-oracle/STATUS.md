@@ -1,6 +1,7 @@
 # Status
 
-Last verified: 2026-09-26 CT (Week 3 baseline skeleton #456 under #453)
+Last verified: 2026-09-26 CT (frontend scaffold #462 under #453; Week 3
+baselines #456 unchanged)
 
 This file records application state only.
 
@@ -48,8 +49,14 @@ This file records application state only.
   `observation_only: True`, `contest_entry: False`, boost regime `none`).
   Synthetic-label unit tests lock the acceptance contract. Not yet fitted on
   seeded Real corpus; no picker/optimizer.
+- Frontend scaffold (#462): `nhl-oracle/frontend` Vite+React+TS shell with
+  NHL dark-ice branding, `/health` client stub, slate placeholder page,
+  Dockerfile + `railway.toml` matching the WNBA frontend deploy shape.
+  Hosted API still absent; UI treats `/health` failures as expected until
+  `nhl-api` serves. Railway: sports-oracle `nhl-staging` should host
+  `nhl-frontend` rooted at `nhl-oracle/frontend` (verify live after merge).
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
-  optimizer, hosted API, frontend, deployment / Railway. Any future
+  optimizer, hosted API implementation, production NHL serving. Any future
   picker/backtest must assume zero boosts until every NHL team has played
 
 ## Boundaries
