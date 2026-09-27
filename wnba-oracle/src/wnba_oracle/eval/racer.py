@@ -9,6 +9,11 @@ Fitness uses ``oracle_core.fitness``:
 
 * **WIN** -- ``score >= winner``
 * **CLOSE** -- ``score >= (1 - b) * winner``
+
+For draft-win / max total-value campaigns (#453 / #505), callers should set
+``winner_score`` to that slate's Highest value board reference (HV top-5
+hindsight score from ``eval.highest_value``), **not** the contest's user
+winning-draft score. Winning drafts are observation-only.
 """
 
 from __future__ import annotations

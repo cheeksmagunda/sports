@@ -420,7 +420,8 @@ def _build_specs(
     # Contrarian reshapes sampler means toward low-ownership names. That is
     # correct for E[payout] under top_1, but under total_draft_value it
     # undervalues high-TV chalk in the Monte Carlo objective itself (#453).
-    # Ownership preference in TDV is only the max_value_ownership_fade term.
+    # Ownership preference in TDV is only the max_value_ownership_fade term,
+    # which reads measured drafts from live capture when enabled (#434).
     if policy.optimizer.objective_mode == "total_draft_value":
         adjusted = dict(preds.pred_real_scores)
     else:

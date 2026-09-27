@@ -257,7 +257,11 @@ def test_expected_prod_config_matches_live_tdv_flip() -> None:
 
 
 def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:
-    """Under TDV, sampler mu must not be faded by contrarian (#453)."""
+    """Under TDV, sampler mu must not be faded by contrarian (#453).
+
+    Live ownership capture feeds measured drafts into the fade tiebreaker;
+    contrarian must not also reshape sampler means under TDV.
+    """
     from wnba_oracle.modeling.policy import ModelPolicy
     from wnba_oracle.modeling.prediction import PlayerPredictions
     from wnba_oracle.picker.optimize import OptimizeConfig
@@ -326,11 +330,9 @@ def test_tdv_disables_floor_tilt_multiplier() -> None:
     from wnba_oracle.modeling.scoring import _floor_tilt_multiplier
     from wnba_oracle.picker.optimize import OptimizeConfig
 
-    # Sanity: floor tilt still works when weight > 0 under payout path math.
     tilted = _floor_tilt_multiplier(1.0, 4.0, boost=0.5, weight=0.2, max_boost=2.0)
     assert tilted < 1.0
 
-    # TDV path zeros the weight before calling (mirrors prediction.py).
     policy = ModelPolicy(
         optimizer=OptimizeConfig(objective_mode="total_draft_value"),
         picker_floor_tilt_weight=0.2,

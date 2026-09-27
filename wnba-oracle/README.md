@@ -192,7 +192,7 @@ performance advantage from unresolved placements.
 portfolio backtest race (#332): full-pool `slate_labels` (realized scores
 included) and top-N `contest_leaderboards` rows with raw `user_id` preserved.
 Season selection uses the shared `--seasons` flag (see `scripts/seasons_common.py`;
-default `2025,2026`). Research scripts that previously hard-coded `2026-` slate
+default `2017`–`2026`). Research scripts that previously hard-coded `2026-` slate
 filters now accept the same flag.
 
 Reads the read-only backup Postgres via `BACKUP_DATABASE_URL` when set
@@ -209,7 +209,7 @@ BACKUP_DATABASE_URL=... uv run --frozen --package wnba-oracle python \
 ## Model research benchmark
 
 `scripts/build_model_research_benchmark.py` replays stored slates (default
-`--seasons 2025,2026`) through
+`--seasons` from `seasons_common.DEFAULT_SEASONS`, currently 2017–2026) through
 the production optimizer under a deterministic variant grid: the compiled
 production policy (`EXPECTED_PROD_CONFIG` applied the same way
 `job2.build_model_policy` does, not a hand-maintained partial config), one
