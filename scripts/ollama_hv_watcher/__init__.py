@@ -7,7 +7,11 @@ offline from HV/TDV boards when the coverage_manifest gate (or
 
 from __future__ import annotations
 
-from ollama_hv_watcher.boards import BoardSummary, load_board_summary, summarize_board_payload
+from ollama_hv_watcher.boards import (
+    BoardSummary,
+    load_board_summary,
+    summarize_board_payload,
+)
 from ollama_hv_watcher.discover import discover_day_plan
 from ollama_hv_watcher.gate import ensure_ollama_training_allowed
 from ollama_hv_watcher.windows import (

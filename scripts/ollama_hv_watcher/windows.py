@@ -1,15 +1,16 @@
 """Domain-free T-40 → slate-close window math for the HV watcher (#574).
 
 No sport imports. Each slate supplies freeze/kickoff and close instants;
-``portfolio_window`` arms at the earliest T-40 and releases at the latest
+the portfolio day plan arms at the earliest T-40 and releases at the latest
 close. Session identity is ``{sport}:{slate_id}``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 DEFAULT_T40_MINUTES = 40
 
@@ -62,10 +63,25 @@ class SlateWindow:
     def arm_at(self) -> datetime:
         return self.t40_at
 
+    def is_armed(self, now: datetime) -> bool:
+        if now.tzinfo is None:
+            raise ValueError("now_must_be_timezone_aware")
+        return self.arm_at <= now < self.close_at
+
     def is_active(self, now: datetime) -> bool:
         if now.tzinfo is None:
             raise ValueError("now_must_be_timezone_aware")
         return self.arm_at <= now <= self.close_at
+
+    def is_before_arm(self, now: datetime) -> bool:
+        if now.tzinfo is None:
+            raise ValueError("now_must_be_timezone_aware")
+        return now < self.arm_at
+
+    def is_closed(self, now: datetime) -> bool:
+        if now.tzinfo is None:
+            raise ValueError("now_must_be_timezone_aware")
+        return now >= self.close_at
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -94,37 +110,58 @@ class SlateWindow:
 
 
 @dataclass(frozen=True)
-class PortfolioWindow:
-    """Portfolio watch span: earliest T-40 through latest slate close."""
+class DayWatchPlan:
+    """Portfolio watch plan across one or more distinct slate sessions."""
 
-    arm_at: datetime
-    close_at: datetime
     slates: tuple[SlateWindow, ...]
 
     def __post_init__(self) -> None:
         if not self.slates:
-            raise ValueError("portfolio_requires_at_least_one_slate")
-        if self.arm_at.tzinfo is None or self.close_at.tzinfo is None:
-            raise ValueError("portfolio_timestamps_must_be_timezone_aware")
+            raise ValueError("day_plan_requires_at_least_one_slate")
         seen: set[str] = set()
         for slate in self.slates:
             if slate.session_id in seen:
                 raise ValueError(f"duplicate_session_id:{slate.session_id}")
             seen.add(slate.session_id)
 
-    def is_active(self, now: datetime) -> bool:
-        """True from earliest arm through latest close (inclusive)."""
+    @property
+    def arm_at(self) -> datetime:
+        return min(s.arm_at for s in self.slates)
 
-        if now.tzinfo is None:
-            raise ValueError("now_must_be_timezone_aware")
-        return self.arm_at <= now <= self.close_at
+    @property
+    def release_at(self) -> datetime:
+        return max(s.close_at for s in self.slates)
+
+    @property
+    def close_at(self) -> datetime:
+        return self.release_at
+
+    def active_sessions(self, now: datetime) -> tuple[SlateWindow, ...]:
+        return tuple(s for s in self.slates if s.is_armed(now))
 
     def active_slates(self, now: datetime) -> tuple[SlateWindow, ...]:
         return tuple(s for s in self.slates if s.is_active(now))
 
+    def pending_sessions(self, now: datetime) -> tuple[SlateWindow, ...]:
+        return tuple(s for s in self.slates if s.is_before_arm(now))
+
+    def closed_sessions(self, now: datetime) -> tuple[SlateWindow, ...]:
+        return tuple(s for s in self.slates if s.is_closed(now))
+
+    def should_run(self, now: datetime) -> bool:
+        if now.tzinfo is None:
+            raise ValueError("now_must_be_timezone_aware")
+        return self.arm_at <= now < self.release_at
+
+    def is_active(self, now: datetime) -> bool:
+        if now.tzinfo is None:
+            raise ValueError("now_must_be_timezone_aware")
+        return self.arm_at <= now <= self.release_at
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "arm_at": self.arm_at.isoformat().replace("+00:00", "Z"),
+            "release_at": self.release_at.isoformat().replace("+00:00", "Z"),
             "close_at": self.close_at.isoformat().replace("+00:00", "Z"),
             "slate_count": len(self.slates),
             "session_ids": [s.session_id for s in self.slates],
@@ -132,33 +169,25 @@ class PortfolioWindow:
         }
 
 
+def build_day_plan(slates: Sequence[SlateWindow] | Iterable[SlateWindow]) -> DayWatchPlan:
+    ordered = tuple(sorted(slates, key=lambda s: (s.arm_at, s.sport, s.slate_id)))
+    return DayWatchPlan(slates=ordered)
+
+
 def portfolio_window(
     slates: Sequence[SlateWindow] | Iterable[SlateWindow],
-) -> PortfolioWindow | None:
-    """Return arm_at=min(T-40), close_at=max(close), or None when empty."""
-
-    ordered = tuple(
-        sorted(
-            slates,
-            key=lambda s: (s.t40_at, s.sport, s.slate_id),
-        )
-    )
-    if not ordered:
+) -> DayWatchPlan | None:
+    material = list(slates)
+    if not material:
         return None
-    return PortfolioWindow(
-        arm_at=min(s.t40_at for s in ordered),
-        close_at=max(s.close_at for s in ordered),
-        slates=ordered,
-    )
+    return build_day_plan(material)
 
 
-# Alias used by early offline tests / callers.
 build_portfolio_window = portfolio_window
+PortfolioWindow = DayWatchPlan
 
 
-def load_windows_payload(payload: dict[str, Any] | list[Any]) -> PortfolioWindow | None:
-    """Load a portfolio window from ``{"slates": [...]}`` or a bare list."""
-
+def load_windows_payload(payload: dict[str, Any] | list[Any]) -> DayWatchPlan:
     if isinstance(payload, list):
         rows = payload
     else:
@@ -166,4 +195,7 @@ def load_windows_payload(payload: dict[str, Any] | list[Any]) -> PortfolioWindow
         if not isinstance(rows, list):
             raise TypeError("windows_json_requires_slates_list")
     windows = [SlateWindow.from_dict(row) for row in rows if isinstance(row, dict)]
-    return portfolio_window(windows)
+    plan = portfolio_window(windows)
+    if plan is None:
+        raise ValueError("windows_json_empty_slates")
+    return plan
