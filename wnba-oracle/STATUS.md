@@ -41,18 +41,13 @@ printed.
   still returned HTTP 200. Retry port pin when rate limit clears if needed.
 - Old `wnba-oracle` api/frontend still online as cold standby (crons disarmed).
 
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+## Mono URL / data-plane note (#457 / #453)
 
-- Earlier scaffold note superseded by the serving cutover section above.
-- Design + runbook remain on #457.
-
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
-
-- Verified scaffold on `sports-oracle` / `wnba-production`: `wnba-api`,
-  cron services, `wnba-frontend`, Postgres (+ Redis). Non-serving; no
-  domains or secret cutover. Design + runbook on #457.
-- Live WNBA traffic remains on Railway project `wnba-oracle` /
-  `production` through Sunday 2026-09-27 (#453).
+- Canonical mono URLs are in the cutover table above.
+- Legacy `wnba-oracle-production.up.railway.app` → HTTP 404; old
+  `api-production-7033` / `frontend-production-a739` may remain until
+  callers switch. Data-plane must use the **public TCP proxy** form of
+  Postgres/Redis (not `*.railway.internal`). Design on #457.
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 

@@ -5,10 +5,15 @@ Last verified: 2026-09-27 (#453 Sunday honesty; discovery/calendar #455; fronten
 ## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
 - Verified scaffold on `sports-oracle` / `nhl-staging`: `nhl-api`,
-  `nhl-worker`, `nhl-frontend`, Postgres. Non-serving; no NHL live host
-  yet. Design + runbook on #457.
-- Live traffic for other sports remains on old projects through Sunday
-  2026-09-27 (#453); NHL has no live Railway serving to cut over.
+  `nhl-worker`, `nhl-frontend`, Postgres. **Non-serving** for NHL; no
+  public NHL API/frontend domain claimed yet. Design + runbook on #457.
+- Sibling mono public URLs already answering (other sports, #457/#453):
+  - WNBA API `https://wnba-api-wnba-production.up.railway.app`
+  - WNBA frontend `https://wnba-frontend-wnba-production.up.railway.app`
+  - NFL API `https://nfl-api-nfl-production.up.railway.app`
+- Legacy NFL `nfl-oracle-production.up.railway.app` still HTTP 200 until
+  domain/cron cut completes; data-plane must use the public TCP proxy URL,
+  not private Railway hostnames.
 
 This file records application state only.
 
