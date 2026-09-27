@@ -60,6 +60,45 @@ WEATHER_FEATURE_NAMES: Final[tuple[str, ...]] = (
     "weather_precip_prob",
 )
 
+# Coarse kickoff buckets for FeatureSpec ``kickoff_slot`` (#523).
+KICKOFF_SLOT_NAMES: Final[tuple[str, ...]] = (
+    "early",
+    "late",
+    "snf",
+    "mnf",
+    "other",
+)
+
+KICKOFF_SLOT_FEATURE_NAMES: Final[tuple[str, ...]] = tuple(
+    f"kickoff_slot_{name}" for name in KICKOFF_SLOT_NAMES
+)
+
+# Slate / matchup / pace priors emitted by recommendations.context.
+# Force-include on production RatingModel + FeatureDrivenValueModel (#523).
+REQUIRED_SLATE_CONTEXT_FEATURES: Final[tuple[str, ...]] = (
+    "is_home",
+    "home_away",
+    "is_divisional",
+    "days_rest",
+    "opponent_adjusted_prior",
+    "opp_def_value_allowed_prior",
+    "team_pace_prior",
+    "opponent_pace_prior",
+    *KICKOFF_SLOT_FEATURE_NAMES,
+)
+
+MATCHUP_PACE_CONTEXT_FEATURE_NAMES: Final[tuple[str, ...]] = REQUIRED_SLATE_CONTEXT_FEATURES
+
+REQUIRED_LIVE_OK_CONTEXT_FEATURES: Final[tuple[str, ...]] = tuple(
+    sorted(
+        {f"injury_{name}" for name in INJURY_CATEGORIES}
+        | {"injury_status_available"}
+        | set(WEATHER_FEATURE_NAMES)
+        | {"weather_available"}
+        | set(REQUIRED_SLATE_CONTEXT_FEATURES)
+    )
+)
+
 
 def injury_category(value: str | None) -> str:
     """Coarse, probability-free availability category for a raw designation."""
@@ -120,3 +159,39 @@ def weather_availability_flag(vector: Mapping[str, float]) -> float:
     """Availability float for a context vector already carrying weather keys."""
 
     return float(any(name in vector for name in WEATHER_FEATURE_NAMES))
+
+
+def kickoff_slot_name(kickoff_at: Any) -> str:
+    """Map a kickoff instant to a coarse Eastern window bucket.
+
+    Sunday early (before 16:00 ET), Sunday late (16:00-19:00 ET), SNF
+    (Sunday 19:00+ ET), MNF (Monday), else ``other`` (TNF / international).
+    """
+
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    if not isinstance(kickoff_at, datetime):
+        return "other"
+    if kickoff_at.tzinfo is None:
+        return "other"
+    eastern = kickoff_at.astimezone(ZoneInfo("America/New_York"))
+    weekday = eastern.weekday()  # Mon=0 ... Sun=6
+    hour = eastern.hour + eastern.minute / 60.0
+    if weekday == 0:  # Monday
+        return "mnf"
+    if weekday == 6:  # Sunday
+        if hour < 16.0:
+            return "early"
+        if hour < 19.0:
+            return "late"
+        return "snf"
+    return "other"
+
+
+def kickoff_slot_features(kickoff_at: Any) -> dict[str, float]:
+    """One-hot ``kickoff_slot_*`` floats for the ridge context vector."""
+
+    slot = kickoff_slot_name(kickoff_at)
+    return {f"kickoff_slot_{name}": float(slot == name) for name in KICKOFF_SLOT_NAMES}
+

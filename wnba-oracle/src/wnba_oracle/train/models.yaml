@@ -76,10 +76,11 @@ heads:
     objective: regression
     target: real_score_residual
 
-# Ensemble weights (Part 6.11).
+# Ensemble weights (Part 6.11). Own-model path (#523): EB is the primary
+# serve member; LightGBM heads stay optional for research / shadow.
 ensemble:
-  lightgbm: 0.70
-  eb_baseline: 0.30
+  lightgbm: 0.0
+  eb_baseline: 1.0
   # Fallback path: if multi-task head CRPS regresses >5% vs single-head
   # real_score on holdout, fall back to single-head and document.
   multitask_max_crps_regression_pct: 5.0

@@ -1,9 +1,12 @@
 """Feature schema scaffolding for nfl-oracle."""
 
 from nfl_oracle.features.live import (
+    REQUIRED_LIVE_OK_CONTEXT_FEATURES,
+    REQUIRED_SLATE_CONTEXT_FEATURES,
     injury_category,
     injury_features,
     injury_indicator_features,
+    kickoff_slot_features,
     weather_features,
 )
 from nfl_oracle.features.matchup import (
@@ -17,7 +20,9 @@ from nfl_oracle.features.opponent_defense import (
     opponent_adjusted_prior,
     opponent_defense_factor,
 )
+from nfl_oracle.features.own_model_map import own_model_gap_matrix
 from nfl_oracle.features.rows import build_prior_rows_for_players, prior_feature_row
+from nfl_oracle.features.rs_field_map import rs_field_matrix
 from nfl_oracle.features.schema import (
     FeatureSpec,
     feature_registry,
@@ -30,6 +35,8 @@ from nfl_oracle.features.stubs import offline_stub_feature_row
 
 __all__ = [
     "NFL_DIVISIONS",
+    "REQUIRED_LIVE_OK_CONTEXT_FEATURES",
+    "REQUIRED_SLATE_CONTEXT_FEATURES",
     "FeatureSpec",
     "RealValueHistoryIndex",
     "build_prior_rows_for_players",
@@ -41,12 +48,15 @@ __all__ = [
     "injury_features",
     "injury_indicator_features",
     "is_divisional_matchup",
+    "kickoff_slot_features",
     "live_ok_feature_names",
     "observations_from_history",
     "offline_stub_feature_names",
     "offline_stub_feature_row",
     "opponent_adjusted_prior",
     "opponent_defense_factor",
+    "own_model_gap_matrix",
     "prior_feature_row",
+    "rs_field_matrix",
     "weather_features",
 ]

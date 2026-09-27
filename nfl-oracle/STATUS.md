@@ -1,4 +1,38 @@
-# Status
+## Own-model feature map phase 1 (#523, 2026-09-26)
+
+Safe live_ok slate-context features force-included on the production
+`recommendations.model` ridge context vector and aligned on research
+`FeatureDrivenValueModel` (stdlib ridge only; no LightGBM / PyTorch).
+
+### Wired into REQUIRED_LIVE_OK_CONTEXT_FEATURES (already emitted by context)
+- Matchup / rest: `is_home`, `home_away` (alias), `is_divisional`, `days_rest`
+- Defense / pace: `opponent_adjusted_prior`, `opp_def_value_allowed_prior`,
+  `team_pace_prior`, `opponent_pace_prior`
+- Kickoff buckets: `kickoff_slot_{early,late,snf,mnf,other}`
+- Injury one-hots + `injury_status_available` (pre-existing #418)
+- Weather magnitudes + `weather_available` (pre-existing #418)
+
+### FeatureDrivenValueModel
+- Core bank adds `player_prior_median`
+- Design matrix appends the same required context set with value/missing
+  encoding; `ValueLabel.context_features` carries optional slate floats
+- Labels / high-TV sample weights unchanged
+
+### Inventory
+- `features.own_model_map` classifies every live_ok FeatureSpec vs
+  ridge_core / context_required / identity_encode / leakage_blocked
+- `features.rs_field_map` maps RS field → ingest → store → own-model slot
+- Corpus dump scaffold: `scripts/rs_corpus/` (#526)
+
+### Newly mapped this PR (count)
+- 13 slate context features force-included on production ridge
+- 1 ridge core (`player_prior_median`)
+- 29 context slots appended to FeatureDrivenValueModel design matrix
+  (injury/weather/slate with value+missing encoding)
+
+### Not in this phase
+- Season/week/gameday/opponent_team as free-float ridge slots (identity_encode)
+- Serving-path model SHA flip (docs only until merge + retrain)
 
 ## Max-value / race construction knobs (#453, 2026-09-26)
 

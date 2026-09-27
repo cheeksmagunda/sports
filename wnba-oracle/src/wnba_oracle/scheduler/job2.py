@@ -116,6 +116,7 @@ MODEL_POLICY_SETTING_FIELDS = frozenset(
         "picker_floor_tilt_weight",
         "prop_signal_scale",
         "sampling_score_offset",
+        "serve_primary",
         "starter_minutes_lift_cap",
         "starter_minutes_lift_enabled",
         "starter_minutes_lift_weight",
@@ -305,6 +306,7 @@ def build_model_policy(settings: Settings) -> ModelPolicy:
         ceiling_sigma_blowout_boost=settings.ceiling_sigma_blowout_boost,
         ceiling_sigma_low_history_boost=settings.ceiling_sigma_low_history_boost,
         field_measured_ownership_enabled=settings.field_measured_ownership_enabled,
+        serve_primary=settings.serve_primary,
         game_script=(
             GameScriptConfig(blowout_penalty=1.0)
             if game_script_minutes_enabled
@@ -380,11 +382,12 @@ def _build_specs(
     # D45 wiring. This makes deployment of a new model SHA non-destructive.
     if not artifact_resolved:
         art = _load_model_artifact(policy.artifact_sha)
-    # D69 / Phase 2b Tier-0: batch-predict from the D63 quantile heads up-front.
-    # Empty dict means no head served (no features, no trained heads, or predict
-    # failure) -- the per-player loop falls through to the existing ladder for
-    # every pid not in this map, preserving the byte-identical pre-D69 freeze.
-    head_predictions = _predict_heads_for_pool(art, enrichment)
+    # Quantile heads only when serve_primary restores the legacy LightGBM
+    # Tier-0 path. Default ``eb`` skips heads so own EB is primary (#523).
+    if policy.serve_primary == "heads":
+        head_predictions = _predict_heads_for_pool(art, enrichment)
+    else:
+        head_predictions = {}
 
     # #434: prefer same-dispatch capture counts when present; else gate the
     # slate_labels read on LIVE_OWNERSHIP_CAPTURE_ENABLED + as_of so pre-lock
@@ -700,6 +703,7 @@ def _freeze_recommendation(
         "max_value_ownership_fade": cfg.max_value_ownership_fade,
         "field_measured_ownership_enabled": policy.field_measured_ownership_enabled,
         "mixture_variance_enabled": policy.mixture_variance_enabled,
+        "serve_primary": policy.serve_primary,
         "never_skip": cfg.never_skip,
         "caveat_is_skip": cfg.caveat_is_skip,
     }

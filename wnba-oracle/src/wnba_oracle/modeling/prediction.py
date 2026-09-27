@@ -8,12 +8,18 @@ three phases: popularity scoring, the tiered real_score/minutes predictor
 heuristic, plus the D57 game-script/availability/anchor machinery), and
 spec/projection materialization (D89 ceiling sigma, D105 archetypes). Each
 phase is now a function with an explicit input/output contract; job2._build_specs
-composes them in the same order the original code ran them, so this is a
-pure reorganization -- no tier, multiplier, or ordering changed.
+composes them in that contract order.
+
+Serve Tier-0 (#523 Option A): ``ModelPolicy.serve_primary`` selects the
+primary own-ML path. Default ``eb`` prefers ``EBHierarchicalBaseline`` (with
+optional ``team_pace`` from head_features); minutes blend / history /
+heuristic are cold-start only. ``heads`` restores the pre-#523 LightGBM
+quantile Tier-0 path. Train code for LGBM heads is unchanged.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -377,11 +383,106 @@ def _apply_minutes_tier(
     return True
 
 
+def _finite_head_float(head_feats: Mapping[str, object], key: str) -> float | None:
+    raw = head_feats.get(key)
+    if raw is None:
+        return None
+    try:
+        value = float(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(value):
+        return None
+    return value
+
+
+def _apply_eb_tier(
+    player: _PlayerContext,
+    context: _PredictionContext,
+    work: _PredictionWork,
+) -> bool:
+    """Own-model EB path with serve-time pace/vegas/boost (#523)."""
+
+    policy = context.policy
+    head_feats = player.features.get("head_features")
+    team_pace = None
+    opp_pace = None
+    vegas_total = None
+    if isinstance(head_feats, Mapping):
+        pace = _finite_head_float(head_feats, "team_pace")
+        if pace is not None and pace > 0.0:
+            team_pace = pace
+        opp = _finite_head_float(head_feats, "opp_pace")
+        if opp is not None and opp > 0.0:
+            opp_pace = opp
+        vegas = _finite_head_float(head_feats, "vegas_total")
+        if vegas is not None and vegas > 0.0:
+            vegas_total = vegas
+    if vegas_total is None:
+        # Pool-row features_json also carries vegas from job1 odds join.
+        total, _spread = _vegas_from_features(player.row.get("features_json"))
+        if total > 0.0:
+            vegas_total = total
+    card_boost = None
+    if isinstance(head_feats, Mapping):
+        fused_boost = _finite_head_float(head_feats, "card_boost")
+        if fused_boost is not None:
+            card_boost = fused_boost
+    if card_boost is None and np.isfinite(player.boost):
+        card_boost = float(player.boost)
+    eb_prediction = eb_predict_one(
+        context.artifact,
+        player.pid,
+        player.position,
+        team_pace=team_pace,
+        opp_pace=opp_pace,
+        vegas_total=vegas_total,
+        card_boost=card_boost,
+    )
+    if eb_prediction is None:
+        return False
+    starter_multiplier = _starter_multiplier(
+        player.row.get("features_json"),
+        enabled=policy.starter_signal_enabled,
+        use_expected=policy.starter_signal_use_expected,
+        unknown_fade=policy.starter_unknown_fade,
+    )
+    predictions = work.predictions
+    predictions.pred_real_scores[player.pid] = max(
+        0.5, eb_prediction * player.game_script_multiplier * starter_multiplier
+    )
+    predictions.pred_minutes_by_pid[player.pid] = minutes_interval_from_role(
+        rotowire_confirmed=player.effective_confirmed,
+        is_starter=bool(int(player.features.get("is_starter", 0) or 0)),
+        cfg=context.minutes_cfg,
+    )
+    predictions.rows_by_pid[player.pid] = player.row
+    predictions.prediction_audit_by_pid[player.pid] = {
+        "tier": "eb_baseline",
+        "base_components": {
+            "base_score": float(eb_prediction),
+            "starter_multiplier": float(starter_multiplier),
+            "game_script_multiplier": float(player.game_script_multiplier),
+            "team_pace": team_pace,
+            "opp_pace": opp_pace,
+            "vegas_total": vegas_total,
+            "card_boost": card_boost,
+        },
+        "pre_availability_score": float(predictions.pred_real_scores[player.pid]),
+    }
+    work.mix.eb += 1
+    return True
+
+
 def _apply_fallback_tier(
     player: _PlayerContext,
     context: _PredictionContext,
     work: _PredictionWork,
+    *,
+    include_eb: bool = True,
 ) -> None:
+    if include_eb and _apply_eb_tier(player, context, work):
+        return
     policy = context.policy
     starter_multiplier = _starter_multiplier(
         player.row.get("features_json"),
@@ -389,12 +490,7 @@ def _apply_fallback_tier(
         use_expected=policy.starter_signal_use_expected,
         unknown_fade=policy.starter_unknown_fade,
     )
-    eb_prediction = eb_predict_one(context.artifact, player.pid, player.position)
-    if eb_prediction is not None:
-        base = eb_prediction
-        work.mix.eb += 1
-        tier = "eb_baseline"
-    elif context.player_history is not None and player.pid in context.player_history:
+    if context.player_history is not None and player.pid in context.player_history:
         base = max(0.5, context.player_history[player.pid])
         work.mix.history += 1
         tier = "player_history"
@@ -542,11 +638,18 @@ def predict_players(
             minutes=minutes,
         )
         _register_player_state(player, context, work)
-        if _apply_head_tier(player, context, work):
+        if context.policy.serve_primary == "heads" and _apply_head_tier(player, context, work):
+            continue
+        if context.policy.serve_primary == "eb" and _apply_eb_tier(player, context, work):
             continue
         if _apply_minutes_tier(player, context, work):
             continue
-        _apply_fallback_tier(player, context, work)
+        _apply_fallback_tier(
+            player,
+            context,
+            work,
+            include_eb=(context.policy.serve_primary == "heads"),
+        )
 
     _apply_game_script_redistribution(context, work)
     log.info(

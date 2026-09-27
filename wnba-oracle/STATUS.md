@@ -1,6 +1,25 @@
 # Status
 
-Last verified: 2026-09-27T03:03:43Z
+Last verified: 2026-09-27T03:30:00Z
+
+## Serve Tier-0 -> EB primary + vegas/boost (#523)  -  2026-09-27
+
+Code on branch (not yet production-verified on mono):
+
+- Serve ladder default is `WNBA_SERVE_PRIMARY=eb`: Tier-0 uses
+  `EBHierarchicalBaseline` with optional `team_pace` / `opp_pace` /
+  `vegas_total` / `card_boost` from `head_features` + pool row.
+  Starter confirmation remains a serve-time multiplier.
+  Minutes blend / player-history / heuristic remain cold-start only.
+- LightGBM quantile heads stay in the train artifact and fire only when
+  `WNBA_SERVE_PRIMARY=heads` (rollback without removing train code).
+- `models.yaml` documents EB weight 1.0 / LGBM 0.0 (serve never applied
+  the old 70/30). Train/grade labels remain Highest-value boards (#505).
+- RS field matrix: `features.rs_field_map`; corpus scaffold under
+  `scripts/rs_corpus/` (#526).
+- Production mono job2: unverified until merge + redeploy. Rollback:
+  set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
+  redeploy (cron variable changes need a real redeploy).
 
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
 
@@ -55,6 +74,26 @@ Missing seasons: none.
   `WNBA_API_BASE=https://api-production-7033.up.railway.app` (legacy cold
   standby). Mono serving URL is healthy; Actions probe URL drift is residual
   cutover debt (also `wnba-pre-freeze-guard`, `wnba-backfill-enrichment`).
+
+## Serve Tier-0 -> EB primary (#523 Option A)  -  2026-09-27
+
+Code on branch (not yet production-verified on mono):
+
+- Serve ladder default is now `WNBA_SERVE_PRIMARY=eb`: Tier-0 uses
+  `EBHierarchicalBaseline` (optional `team_pace` / `opp_pace` from
+  `head_features`). Minutes blend / player-history / heuristic remain
+  cold-start only.
+- LightGBM quantile heads stay in the train artifact and fire only when
+  `WNBA_SERVE_PRIMARY=heads` (rollback without removing train code).
+- `models.yaml` ensemble weights set to EB=1.0 / LGBM=0.0 for the own-model
+  contract; serve path does not blend those weights (Tier-0 selection is
+  `serve_primary`). Train/grade labels remain Highest-value boards (#505).
+- Inventory: `features.own_model_map` classifies serving_features vs EB pace /
+  minutes / optional LGBM.
+- Production mono job2: unverified until merge + redeploy. Rollback:
+  set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
+  redeploy (cron variable changes need a real redeploy).
+
 
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
 

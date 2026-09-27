@@ -290,6 +290,11 @@ class Settings(RuntimeConfig):
     field_measured_ownership_enabled: bool = Field(
         default=True, alias="FIELD_MEASURED_OWNERSHIP_ENABLED"
     )
+    # Own-model win-draft serve ladder (#523 Option A). Default ``eb`` makes
+    # EBHierarchicalBaseline Tier-0 (own ML primary); minutes/heuristic are
+    # cold-start only. Set ``heads`` to restore the historical LightGBM
+    # quantile Tier-0 path without removing train code.
+    serve_primary: Literal["eb", "heads"] = Field(default="eb", alias="WNBA_SERVE_PRIMARY")
     # D87 (Phase 1, objective shaping). Explicit additive corrective terms on
     # top of the rank-based E[payout] objective, each in expected_payout units.
     # All default 0.0 so the optimizer is byte-identical to pre-D87 until armed

@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 974 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -142,7 +142,7 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/Dockerfile.production
 - nfl-oracle/Makefile -- Build/test/lint entrypoints
 - nfl-oracle/README.md -- nfl-oracle
-- nfl-oracle/STATUS.md -- Status
+- nfl-oracle/STATUS.md
 - nfl-oracle/docker-compose.yml
 - nfl-oracle/pyproject.toml -- Package/tool configuration
 - nfl-oracle/railway.toml -- Package/tool configuration
@@ -251,6 +251,7 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/features/live.py -- Map captured pre-lock evidence onto FeatureSpec names.
 - nfl-oracle/src/nfl_oracle/features/matchup.py -- Static NFL division membership for the ``is_divisional`` FeatureSpec.
 - nfl-oracle/src/nfl_oracle/features/opponent_defense.py -- Walk-forward Real-value-allowed priors for the opponent defense.
+- nfl-oracle/src/nfl_oracle/features/own_model_map.py -- Own-model feature consumption map for NFL (#523).
 - nfl-oracle/src/nfl_oracle/features/rows.py -- Build observation-only feature rows from walk-forward priors.
 - nfl-oracle/src/nfl_oracle/features/schema.py -- FeatureSpec v1: availability clocks + train/live flags.
 - nfl-oracle/src/nfl_oracle/features/stubs.py -- Offline placeholder values for any FeatureSpec still marked ``offline_stub``.
@@ -432,11 +433,13 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
+- nfl-oracle/tests/unit/test_kickoff_slot_context_523.py -- Kickoff slot + home_away context wiring (#523).
 - nfl-oracle/tests/unit/test_label_depth.py -- Max-season label-kind depth across the catalog (issue #189).
 - nfl-oracle/tests/unit/test_live_ok_context_features.py -- Canonical live_ok injury/weather context features stay wired (#418).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
 - nfl-oracle/tests/unit/test_multi_contest_day.py -- Multi-contest day selection for the NFL worker and NFLReader.collect.
 - nfl-oracle/tests/unit/test_optimizer_env_config.py -- Env-driven optimizer construction config (max-value / race mode) for #453.
+- nfl-oracle/tests/unit/test_own_model_feature_map_523.py -- Phase-1 (#523): own-model ridge consumes safe live_ok slate context.
 - nfl-oracle/tests/unit/test_picker_knobs.py -- Unit tests for boost-aware / position-calibration picker knobs (#280).
 - nfl-oracle/tests/unit/test_player_mean_and_coverage_matrix.py -- player_mean baseline + coverage matrix document helpers.
 - nfl-oracle/tests/unit/test_player_priors_scoring.py -- Player priors + shadow scoring scaffolds.
@@ -702,6 +705,8 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md -- Model Pick Postmortem — 2026-08-28 Slate
 - wnba-oracle/Makefile -- Build/test/lint entrypoints
 - wnba-oracle/README.md -- WNBA Oracle
+- wnba-oracle/STATUS.md -- Status
+- wnba-oracle/STATUS.md -- Status
 - wnba-oracle/STATUS.md -- Status
 - wnba-oracle/alembic.ini
 - wnba-oracle/pyproject.toml -- Package/tool configuration
@@ -971,6 +976,7 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/src/wnba_oracle/features/game_features.py -- Per-player-game targets + schedule features: the train/serve parity anchor.
 - wnba-oracle/src/wnba_oracle/features/game_script_minutes.py -- Game-script minutes redistribution (Tier 3).
 - wnba-oracle/src/wnba_oracle/features/injury_cascade.py -- Injury-cascade minutes redistribution.
+- wnba-oracle/src/wnba_oracle/features/own_model_map.py -- Own-model feature map for WNBA EB + serving_features (#523).
 - wnba-oracle/src/wnba_oracle/features/provenance.py -- Feature-pipeline provenance hash.
 - wnba-oracle/src/wnba_oracle/features/rolling.py -- Rolling-window features computed strictly before slate_date.
 - wnba-oracle/src/wnba_oracle/features/serving_features.py -- Build head feature rows for a slate at serve time (D69 / Phase 2b).
@@ -1179,6 +1185,7 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_ops_common.py -- Secret-safety tests for the portable production automation helpers.
 - wnba-oracle/tests/unit/test_optimizer_input_contract.py -- The optimizer's two player views form one ID-keyed model contract.
 - wnba-oracle/tests/unit/test_optimizer_team_cap.py -- max_per_team constraint in the optimizer.
+- wnba-oracle/tests/unit/test_own_model_eb_523.py -- WNBA own-model EB pace terms + feature map (#523 Option A companion).
 - wnba-oracle/tests/unit/test_ownership_capture.py -- D90/#38: job2's post-freeze projected-ownership recording.
 - wnba-oracle/tests/unit/test_payout_vectorized.py -- #13a: vectorized expected_payout / payouts_for_ranks must be numerically
 - wnba-oracle/tests/unit/test_per_player_frozen.py -- Lock the per_player JSON contract in the frozen lineup payload.
@@ -1209,6 +1216,7 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_schemas.py -- Pandera schema sanity checks. Validate that good frames pass and obvious
 - wnba-oracle/tests/unit/test_seasons_and_race_corpus.py -- Unit tests for seasons_common and build_race_corpus (offline, no DB).
 - wnba-oracle/tests/unit/test_secret_contract.py
+- wnba-oracle/tests/unit/test_serve_primary_tier.py -- #523 Option A: serve_primary selects EB vs LightGBM heads as Tier-0.
 - wnba-oracle/tests/unit/test_serving_schema.py -- Serve-time enrichment schema validator (features/serving_schema.py).
 - wnba-oracle/tests/unit/test_settings_pause.py -- picks_paused_on / picks_resume_date: the operator-directed pause window.
 - wnba-oracle/tests/unit/test_shadow.py -- Tests for scheduler.shadow. Pure metric compute + writer contract.
