@@ -7,7 +7,6 @@ Real Sports contract audit, corpus seed, and contest-range discovery are done; W
 baseline + prediction skeleton (`labels/`, `baselines/`) is started on
 synthetic labels only. Package wiring includes contest contract and audit
 gates (`contract/`), redacted ingest/provenance (`ingest/`), identity map
-<<<<<<< HEAD
 (`identity/`), and freeze-cycle job skeleton (`scheduler/`). No Real-corpus
 baseline fit, contest-law optimizer, hosted API, or contest entry exists
 yet. A lean Vite+React frontend scaffold lives at `frontend/` (#462).
@@ -15,14 +14,6 @@ Staging container shell (#482): root `Dockerfile` + `railway.toml` and
 `nhl-pipeline serve` / `nhl-pipeline worker` (health + stub routes; idle
 worker heartbeat). sports-oracle `nhl-staging` hosts `nhl-api` /
 `nhl-worker` / `nhl-frontend` as non-contest staging only.
-=======
-(`identity/`), freeze-cycle job skeleton (`scheduler/`), and a public NHL
-history loader for staging Postgres (`history_loader.py`). No Real-corpus
-baseline fit, contest-law optimizer, hosted API, or contest entry exists yet.
-A lean Vite+React frontend scaffold lives at `frontend/` (#462);
-Railway `nhl-frontend` under sports-oracle `nhl-staging` may host it once
-pointed at this path.
->>>>>>> 84ccf41b3 (docs(nhl-oracle): record staging history load (#453))
 
 ## Connection surfaces
 

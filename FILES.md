@@ -1,10 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-<<<<<<< HEAD
-Generated from `git ls-files`. 963 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
-=======
-Generated from `git ls-files`. 959 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
->>>>>>> 84ccf41b3 (docs(nhl-oracle): record staging history load (#453))
+Generated from `git ls-files`. 965 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
