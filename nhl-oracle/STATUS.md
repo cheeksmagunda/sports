@@ -1,7 +1,29 @@
 # Status
 
-Last verified: 2026-09-27 (#501 hard zero-boost gate; continues #453/#325;
-#482 nhl-staging Docker live smoke)
+Last verified: 2026-09-27 CT (#535 HV train/backtest wiring; continues #453/#526;
+#501 zero-boost gate; #482 nhl-staging Docker live smoke)
+
+## Highest Total Value train + backtest path (#535 / #453 / #526)  -  2026-09-27
+
+- **Train/backtest target:** Real Sports Highest value / Total Value board
+  (`draftStats.sectionName=highestBoostedValuePlayers`). Never winning drafts.
+  Executable path: `nhl_oracle.labels.hv` → `ValueLabel` / `oracle_core.high_tv`
+  board; walk-forward prefers HV-tagged rows (`baselines.walk_forward`).
+- **Contest algebra:** `nhl_oracle.contest` scores ordered five-card picks as
+  `value * (slot_multiplier + effective_card_boost)` with slots
+  `(2.0, 1.8, 1.6, 1.4, 1.2)`. Effective boost stays 0 under `boost_gate`.
+- **T-40 freeze:** `scheduler.t40` + `run_freeze_cycle(ensure_t40_coherent=...)`
+  open at `lock_at - 40m` under per-contest lock; fail closed when the
+  five-player pick is incoherent with the contract. **Serving path still
+  unverified live** (skeleton only; no hosted freeze publish).
+- **Own-model map:** `features.own_model_map` routes pre-slate history features
+  into priors / future ridge-valuelaw (explicitly **no LightGBM primary**).
+- **RS contest HV ingest gap (verified in-tree):** Week 2 audit seeds redacted
+  contest `/stats` under `data/raw/corpus_nhl` (gitignored); there is **no**
+  durable multi-contest HV train corpus yet. `report_hv_corpus_gap` reports
+  that honestly. Closing the gap is #526 corpus work, not invented labels.
+- Unit proof: `tests/test_hv_train_target.py`. Observation only;
+  `contest_entry=False`.
 
 ## Hard zero-boost gate through all-teams-played gap (#501 / #453)  -  2026-09-27
 
@@ -55,37 +77,6 @@ Last verified: 2026-09-27 (#501 hard zero-boost gate; continues #453/#325;
 - sports-oracle `nhl-staging` hosts `nhl-api`, `nhl-worker`, `nhl-frontend`,
   Postgres, Redis. Live WNBA/NFL traffic remains on prior projects through
   Sunday windows (#453) except as separately authorized.
-
-## Public NHL history nightly (workflow on branch, issue #453)
-
-`.github/workflows/nhl-history-nightly.yml` runs daily at 05:00 UTC and on
-`workflow_dispatch`. It reloads prior + current NHL seasons into staging
-Postgres via `nhl-history-load` (public NHL API only; no Real Sports).
-
-**Secret gate:** requires repo secret `NHL_HISTORY_DATABASE_URL` (public TCP
-URL for `sports-oracle` / `nhl-staging` Postgres). Until that secret is set,
-scheduled runs fail closed with `not_configured`. Optional
-`PG_SSL_ROOT_CERT` is used when present. No new Real Sports credential.
-
-## Public NHL history staging load (#453)  -  2026-09-27
-
-- `sports-oracle` / `nhl-staging` Postgres now holds NHL public-history tables
-  `nhl_history_games`, `nhl_history_player_games`, and
-  `nhl_history_season_coverage`, loaded from the public NHL API with a
-  browser-style User-Agent via `nhl-history-load`.
-- Verified row counts in staging Postgres:
-  - `nhl_history_games`: **5599**
-  - `nhl_history_player_games`: **223901**
-  - `nhl_history_season_coverage`: **4**
-- Verified season coverage in staging:
-  - 2021-22: games **1401/1401**, player rows **56020**, status `complete`
-  - 2022-23: games **1400/1400**, player rows **55980**, status `complete`
-  - 2023-24: games **1400/1400**, player rows **55988**, status `complete`
-  - 2024-25: games **1398/1398**, player rows **55913**, status `complete`
-- Scope note: this is official/public NHL game history only. It is useful for
-  NHL-owned chronology, schedule, and stat features, but it is **not** the
-  Real Sports value-label corpus and does not change the `contest_entry: False`
-  posture.
 
 ## Sunday readiness honesty (#453)  -  2026-09-27
 

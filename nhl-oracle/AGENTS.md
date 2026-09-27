@@ -13,6 +13,19 @@ and operational gates. Do not import domain code from `wnba_oracle`,
 Shared work belongs in `oracle-core` only when the interface is provider-neutral
 and proven by at least two sports with the same stable contract.
 
+**Models stay in this app.** Do not move NHL model, feature, or scoring code
+into `oracle-core` or another sport package. **Frontend is separately owned**
+(`frontend/`); backend PRs must not change frontend source, dependencies,
+styling, components, tests, or build configuration.
+
+**Train / backtest target:** Real Sports Highest Total Value boards
+(`highestBoostedValuePlayers` via `labels.hv` / `TRAINING_LABEL_SECTION`).
+Five-player ordered pick + T-40 freeze (`contest/`, `scheduler.t40`). Own-model
+path is priors / ridge-valuelaw (`features.own_model_map`); no LightGBM
+primary. When durable RS contest HV ingest is missing, use
+`report_hv_corpus_gap` — do not invent labels. Early-season boost stays none
+until every franchise has 1 GP (`contract.boost_gate`).
+
 ## Exact local commands
 
 From the monorepo root:

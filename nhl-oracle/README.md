@@ -60,11 +60,6 @@ make test
 make lint
 make typecheck
 make history-load   # uses NHL_DATABASE_URL / DATABASE_URL
-
-Nightly refresh: `.github/workflows/nhl-history-nightly.yml` (05:00 UTC +
-`workflow_dispatch`) reloads prior + current seasons into staging
-Postgres via the public NHL API. Requires Actions secret
-`NHL_HISTORY_DATABASE_URL` (no Real Sports). See `STATUS.md`.
 ```
 
 From the repository root:
@@ -88,6 +83,18 @@ For Railway staging, use the Codespace tunnel flow in `../ENTRY_POINTS.md`
 rather than printing or copying connection strings locally.
 
 ## Roadmap
+
+Training and backtest product target: each slate's Real Sports **Highest
+value / Total Value** board (`highestBoostedValuePlayers`). Objective is a
+**5-player** ordered contest pick under slot multipliers
+`(2.0, 1.8, 1.6, 1.4, 1.2)`, graded and fit on HV boards — never winning
+drafts. Pre-slate features map through `features.own_model_map` into the
+priors / future ridge-valuelaw path (**no LightGBM primary**). T-40 freeze
+policy: `scheduler.t40` (`lock_at - 40m`, per-contest lock). **Corpus gap:**
+durable multi-contest HV ingest is not landed yet; `labels.hv.report_hv_corpus_gap`
+documents it (#526). Models stay in this app; `frontend/` is separately
+owned — backend PRs must not edit it. Verified milestone progress lives in
+`STATUS.md`.
 
 The approved plan from the current scaffold to a verified, autonomous
 recommendation product (planned under #135, 2026-09-10; moved here from the
