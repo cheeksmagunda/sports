@@ -1,6 +1,61 @@
 # Status
 
-Last verified: 2026-09-27T02:00:00Z
+Last verified: 2026-09-27T03:04:00Z (dual-fire / data-plane / hist gate #453/#454)
+
+## Dual-fire + data-plane gate re-verify (#453 / #454)  -  2026-09-27T03:04Z
+
+Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`
++ `railway api` GraphQL `cronSchedule`. No secrets printed. No credential
+minting. **No cron mutation required** (already safe).
+
+### Cron matrix (verified live)
+
+| Service | Project / env | `cronSchedule` | Dual-fire role |
+|---------|---------------|----------------|----------------|
+| `cron-job1` | live `wnba-oracle` / `production` (`ab83f44c`) | **null** | disarmed |
+| `cron-job1-late` | live | **null** | disarmed |
+| `cron-job2` | live | **null** | disarmed (no double job2) |
+| `cron-dayclose` | live | **null** | disarmed |
+| `wnba-cron-job1` | mono `sports-oracle` / `wnba-production` (`cca6b03f`) | `0 13 * * *` | armed |
+| `wnba-cron-job1-late` | mono | `*/30 16-23 * * *` | armed |
+| `wnba-cron-job2` | mono | `*/5 14-23,0-3 * * *` | armed (sole job2) |
+| `wnba-cron-dayclose` | mono | `0 6 * * *` | armed |
+
+### DATA_PLANE_MATCH / hist gate
+
+- Postgres: mono `DATABASE_URL` and live `DATABASE_PUBLIC_URL` share
+  host `acela.proxy.rlwy.net:51730`, db `wnba_oracle`, user `oracle`, same
+  password sha8; URL sha differs only by `sslmode` (`require` on mono vs
+  `verify-ca` on live public). Live internal `DATABASE_URL` sha8=`0cffc88e`
+  (hostname form only).
+- Redis: mono public `altaria.proxy.rlwy.net:13969` password sha matches live
+  internal `REDIS_URL` sha8=`b0421c4c` (same credential, public proxy form).
+- Watchdog hist: LIVE `api-production-7033` and MONO
+  `wnba-api-wnba-production` `/watchdog/today` **identical**
+  (`history_json_sha` both `3269e3c383ee`, slate `2026-09-26`, status `ok`,
+  `job1_last_status=success`). **HIST_MATCH=True**.
+- Tip-day context (#454): `first_tip_utc=2026-09-27T18:00:00Z`,
+  `freeze_target_utc=2026-09-27T17:20:00Z`; now ~03:04Z is tip Eastern date
+  so `starters_expected` applies for today's job1 (~13:00Z). Prior
+  `rotowire_empty` rows remain in history advisories only.
+
+### Risk verdict
+
+**WNBA job2 dual-fire: CLEAR.** Live crons null; only mono job2 armed; shared
+live data plane; hist match confirmed. No Railway cron change taken.
+
+## Training target: Highest value board (#453)  -  2026-09-27
+
+Locked: train / optimize on Real Sports **Highest value**
+(`draftStats.sectionName=highestBoostedValuePlayers`) for every slate —
+Aubrey / Shrader / Jaquez-style lists down the board. **Do not train on
+prior users' winning drafts** (`contest_leaderboards` / `leaderboard_lineup`);
+those are a reference bar to beat, not fit targets. Popularity sections are
+also excluded from the EB label corpus (`db.reads.read_label_corpus`).
+Verified live DB: 228 HV slates, 4403 HV rows; 2026-09-22 top matches
+operator screenshot (G. Jaquez 17.34, D. Miller 15.90, …). Serving:
+`OPTIMIZER_OBJECTIVE_MODE=total_draft_value` + `PAYOUT_REGIME=top_1`.
+NHL first week is different (zero boost until every franchise has 1 GP).
 
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
 
@@ -50,12 +105,51 @@ printed.
   Postgres/Redis (not `*.railway.internal`). Design on #457.
 
 
-## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
+## Win-draft knobs on mono (verified) (#505 / #453)  -  2026-09-27T03:10Z
 
-- `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
-- `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
-- Data plane: public Postgres `acela.proxy.rlwy.net:51730` with `sslmode=require` (not verify-ca — missing `root.crt` in container); Redis `altaria.proxy.rlwy.net:13969`.
-- Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO.
+Re-read via Codespace `scripts/codespace-railway-env` against
+`sports-oracle` / `wnba-production` + `nfl-production`. No secret values printed.
+
+### Regime matrix (serving)
+
+| Service | Env | Regime / construction |
+|---------|-----|----------------------|
+| `wnba-cron-job2` | `wnba-production` | `PAYOUT_REGIME=top_1` + `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` + fade `0.001` + live ownership |
+| `wnba-api` | `wnba-production` | `PAYOUT_REGIME=top_1` + `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` + live ownership |
+| `wnba-cron-job1` / `job1-late` / `dayclose` | `wnba-production` | N/A (no payout optimize) |
+| `nfl-oracle-worker` | `nfl-production` | `NFL_OPTIMIZER_PROFILE=max_value` (was unset → diversified cash) |
+| `nfl-api` | `nfl-production` | `NFL_OPTIMIZER_PROFILE=max_value` (parity) |
+| frontends | * | N/A |
+
+Rollback: WNBA `PAYOUT_REGIME=top_20` + `OPTIMIZER_OBJECTIVE_MODE=payout`; NFL
+`NFL_OPTIMIZER_PROFILE=diversified`.
+
+Code fail-safes (#505): Settings/ModelPolicy/models.yaml default
+`payout_regime=top_1`; `EXPECTED_PROD_CONFIG` tracks `top_1` + TDV; freeze
+slot order under `top_1` uses p90 not median; NFL
+`optimizer_config_from_env` defaults to `max_value`.
+
+| Knob | `wnba-cron-job2` | `wnba-api` | Notes |
+|------|------------------|------------|-------|
+| `PAYOUT_REGIME` | `top_1` | `top_1` | was `top_20` |
+| `LIVE_OWNERSHIP_CAPTURE_ENABLED` | `true` | `true` | Codespace+Mac re-verified 2026-09-27T03:03Z |
+| `OPTIMIZER_OBJECTIVE_MODE` | `total_draft_value` | `total_draft_value` | verified 2026-09-27T03:05Z |
+| `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE` | `0.001` | **ABSENT** | pairs with TDV on job2; capture feeds fade |
+
+- Capture path: `job2` → `live_ownership.capture_live_ownership_safe` →
+  `measured_drafts_override` → `FieldPlayerSpec.measured_drafts` →
+  `field.project_ownership` → `max_value_ownership_fade`. Under TDV, job2
+  skips contrarian sampler fade and floor-tilt so ownership preference is
+  only that fade term. NFL has no `LIVE_OWNERSHIP_CAPTURE_ENABLED` (N/A;
+  uses `NFL_OPTIMIZER_PROFILE` / optional `FieldObservation`).
+
+- Public health re-check 02:55Z: mono API `/health` ok; frontend HTTP 200;
+  `/watchdog/today` `status=ok`, live `events=[]`, slate `2026-09-26`.
+- Data plane: public Postgres `acela.proxy.rlwy.net:51730` with
+  `sslmode=require` (not verify-ca — missing `root.crt` in container);
+  Redis `altaria.proxy.rlwy.net:13969`.
+- Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO
+  (verified at cutover ~02:08Z).
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
@@ -105,13 +199,15 @@ were verified on Railway project **`wnba-oracle`**. Serving is now mono.
   dayclose `degraded` and job1/job1late `failed`. Older entries below that
   describe `ops-guard` or incident issues record past behavior only.
 
-## Optional total_draft_value optimizer objective (#433)  -  2026-09-26
+## Optional total_draft_value optimizer objective (#433 / #497 / #453)
 
-- `OptimizeConfig.objective_mode` defaults to `"payout"` (production unchanged).
+- Code default remains `"payout"`; unit tests in
+  `tests/unit/test_total_draft_value_objective.py`.
 - `"total_draft_value"` selects by E[committed-order lineup score] and skips
-  payout/leverage/ceiling/duplication additives. Offline / lab only until a
-  walk-forward TV capture number justifies a serving flip.
-- Unit tests in `tests/unit/test_total_draft_value_objective.py`.
+  payout/leverage/ceiling/duplication additives; optional ownership fade via
+  `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE`.
+- **Serving (mono):** `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on
+  `wnba-cron-job2` + `wnba-api`; fade `0.001` on job2. Verified 03:05Z.
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.

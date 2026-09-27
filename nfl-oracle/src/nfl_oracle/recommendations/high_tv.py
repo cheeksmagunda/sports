@@ -102,21 +102,37 @@ def tv_board_coverage_from_contests(
 
 
 def high_tv_board_from_draft_stats(parsed: ParsedContest, *, top_n: int = 5) -> HighTvBoard | None:
-    """NFL: reconstruct Highest-value / best-possible from contest draft_stats.
+    """NFL: Highest-value board from contest draft_stats for training.
 
-    Corpus C stores top-20 entries + draft_stats, not a separate Highest-value
-    UI board. Ranking ignores draft_count so chalk popularity cannot enter.
+    Prefer ``highestBoostedValuePlayers`` (Real Sports Daily Draft Stats
+    Highest value list: Aubrey / Shrader / …). Never use winning-draft
+    entries or popularity chalk sections as the value map. Ranking ignores
+    draft_count so appearance volume cannot enter.
     """
 
-    values = {
-        row.player_id: float(row.value) for row in parsed.draft_stats if row.value is not None
-    }
+    hv_rows = [
+        row
+        for row in parsed.draft_stats
+        if row.section == "highestBoostedValuePlayers" and row.value is not None
+    ]
+    if hv_rows:
+        values = {row.player_id: float(row.value) for row in hv_rows}
+        boosts = [float(row.card_boost) for row in hv_rows]
+        source = "nfl_highestBoostedValuePlayers"
+        has_tv = True
+    else:
+        # Ladder fallback (pre-boost / missing HV section): any draft_stats
+        # values as raw highest Real score. Still never uses entry lineups.
+        values = {
+            row.player_id: float(row.value) for row in parsed.draft_stats if row.value is not None
+        }
+        boosts = [float(row.card_boost) for row in parsed.draft_stats]
+        source = "nfl_draft_stats_reconstructed"
+        has_tv = False
+
     hindsight = counterfactual_best(parsed)
-    boosts = [float(row.card_boost) for row in parsed.draft_stats]
-    # TV board exists when the contest exposes draft-context multipliers or a
-    # reconstructable best-possible set. Zero-boost eras still use value ranks
-    # as raw highest Real score (ladder fallback).
-    has_tv = bool(hindsight is not None) or any(b > 0 for b in boosts)
+    if not has_tv:
+        has_tv = bool(hindsight is not None) or any(b > 0 for b in boosts)
     return build_high_tv_board(
         contest_id=parsed.contest.contest_id,
         values=values,
@@ -124,7 +140,7 @@ def high_tv_board_from_draft_stats(parsed: ParsedContest, *, top_n: int = 5) -> 
         top_n=top_n,
         complete_pool=False if hindsight is None else hindsight.complete_pool,
         has_total_value_board=has_tv,
-        source="nfl_draft_stats_reconstructed",
+        source=source,
     )
 
 

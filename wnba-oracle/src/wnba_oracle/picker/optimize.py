@@ -7,8 +7,10 @@ Stage 2: enumerate C(N, 5) lineups and score each by the configured
   value] via ``objective_mode="total_draft_value"``, #433).
   Pick argmax. For N=30, C(30,5)=142506. Budget ~30s per slate.
 
-Slot assignment is by rearrangement inequality: highest real_score median
+Slot assignment is by rearrangement inequality: highest real_score summary
 gets the highest slot multiplier (handled in sample.lineup_score_samples).
+Under PAYOUT_REGIME=top_1 (or ceiling_tilt_slots), that summary is p90 —
+never the median finish key, which is a cash/double-up construction (#453).
 
 Output is a frozen Lineup with the 5 player_ids in slot order, the
 predicted EV, the predicted lineup-score percentile distribution, and
@@ -74,6 +76,28 @@ DEFAULT_SLOT_MULTIPLIERS = np.array([2.0, 1.8, 1.6, 1.4, 1.2])
 MAX_SLOT_MULT = float(DEFAULT_SLOT_MULTIPLIERS.max())
 
 _PlayerSpecT = TypeVar("_PlayerSpecT", PlayerSamplingSpec, FieldPlayerSpec)
+
+# Sample quantile used for committed / freeze slot order under tournament
+# (top_1) or explicit ceiling-tilt construction. Cash regimes keep median/mean.
+_CEILING_SLOT_QUANTILE = 0.9
+
+
+def _use_ceiling_slot_rank(cfg: OptimizeConfig, curve: PayoutCurve | None = None) -> bool:
+    """True when slot order must prefer ceiling over median finish.
+
+    PAYOUT_REGIME=top_1 is a draft-win objective: ranking slots by median
+    (cash construction) is a bug even if OPTIMIZER_CEILING_TILT_SLOTS is off.
+    """
+    if cfg.ceiling_tilt_slots:
+        return True
+    return curve is not None and curve.regime == "top_1"
+
+
+def _committed_rank_quantile(
+    cfg: OptimizeConfig, curve: PayoutCurve | None = None
+) -> float | None:
+    """Quantile for committed-order ranking, or None to keep mean (cash path)."""
+    return _CEILING_SLOT_QUANTILE if _use_ceiling_slot_rank(cfg, curve) else None
 
 
 def _exceeds_team_cap(combo: tuple[int, ...], teams: list[str], max_per_team: int) -> bool:
@@ -426,6 +450,7 @@ def _scan_lineups(
     ceiling_on = (not tdv_mode) and cfg.ceiling_weight > 0.0
     duplication_penalty_on = (not tdv_mode) and cfg.duplication_weight > 0.0
     committed_order = tdv_mode or cfg.committed_order_objective
+    committed_q = _committed_rank_quantile(cfg, inputs.curve)
 
     for combo, eligible_unrestricted, eligible_balance_pool in _candidate_pool_combinations(
         inputs.unrestricted_indices,
@@ -462,6 +487,7 @@ def _scan_lineups(
             list(combo),
             inputs.slot_multipliers,
             committed_order=committed_order,
+            committed_rank_quantile=committed_q if committed_order else None,
         )
         if tdv_mode:
             # E[committed-order TV]: maximise slate draft value, not payout.
@@ -766,6 +792,7 @@ def _simulate_field_scores(
     slot_multipliers: np.ndarray,
     cfg: OptimizeConfig,
     stack_context: _StackContext,
+    curve: PayoutCurve,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     ownership = project_ownership(pool.field)
     teams = [spec.team or "" for spec in pool.sampling]
@@ -794,6 +821,7 @@ def _simulate_field_scores(
     )
     field_scores = np.zeros((cfg.n_field_lineups, cfg.n_samples))
     committed = cfg.objective_mode == "total_draft_value" or cfg.committed_order_objective
+    committed_q = _committed_rank_quantile(cfg, curve) if committed else None
     for row in range(cfg.n_field_lineups):
         field_scores[row] = lineup_score_samples(
             real_score_samples,
@@ -801,6 +829,7 @@ def _simulate_field_scores(
             list(field_lineups[row]),
             slot_multipliers,
             committed_order=committed,
+            committed_rank_quantile=committed_q,
         )
     return ownership, field_lineups, field_scores
 
@@ -1004,6 +1033,7 @@ def _assemble_recommendation(
     n_games: int,
     stack_context: _StackContext,
     constraints: _ConstraintState,
+    curve: PayoutCurve,
 ) -> LineupRecommendation:
     selected, stacking_decision = _select_contextual_candidate(
         result,
@@ -1035,12 +1065,19 @@ def _assemble_recommendation(
     best_indices = selected.indices
     best_samples = selected.samples
 
-    if cfg.ceiling_tilt_slots:
-        sort_key = np.quantile(real_score_samples[:, list(best_indices)], 0.9, axis=0)
-        sort_method = "p90 (ceiling-tilted)"
+    # Median/p50 slot order is cash / double-up construction. Under top_1
+    # (or explicit ceiling_tilt_slots) rank by p90 so the freeze commits
+    # ceiling into the highest multiplier (#505 / #453).
+    if _use_ceiling_slot_rank(cfg, curve):
+        sort_key = np.quantile(
+            real_score_samples[:, list(best_indices)],
+            _CEILING_SLOT_QUANTILE,
+            axis=0,
+        )
+        sort_method = "p90 (ceiling / top_1)"
     else:
         sort_key = np.median(real_score_samples[:, list(best_indices)], axis=0)
-        sort_method = "p50 (rearrangement)"
+        sort_method = "p50 (cash / median)"
     order = np.argsort(sort_key, kind="stable")[::-1]
     ordered_player_ids = tuple(pool.player_ids[best_indices[index]] for index in order)
     p10, p50, p90 = np.quantile(best_samples, [0.1, 0.5, 0.9])
@@ -1105,6 +1142,7 @@ def optimize_lineup(
         slot_multipliers,
         cfg,
         stack_context,
+        curve,
     )
     constraints = _prepare_constraints(pool, cfg, n_games, max_per_team)
     field_lineup_counter = (
@@ -1156,4 +1194,5 @@ def optimize_lineup(
         n_games,
         stack_context,
         constraints,
+        curve,
     )
