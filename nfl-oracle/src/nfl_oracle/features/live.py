@@ -87,8 +87,6 @@ REQUIRED_SLATE_CONTEXT_FEATURES: Final[tuple[str, ...]] = (
     *KICKOFF_SLOT_FEATURE_NAMES,
 )
 
-MATCHUP_PACE_CONTEXT_FEATURE_NAMES: Final[tuple[str, ...]] = REQUIRED_SLATE_CONTEXT_FEATURES
-
 REQUIRED_LIVE_OK_CONTEXT_FEATURES: Final[tuple[str, ...]] = tuple(
     sorted(
         {f"injury_{name}" for name in INJURY_CATEGORIES}

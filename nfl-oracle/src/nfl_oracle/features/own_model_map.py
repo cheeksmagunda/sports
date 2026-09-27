@@ -6,9 +6,8 @@ stack (recommendations ridge context + FeatureDrivenValueModel), not LightGBM.
 Statuses:
 - ``ridge_core``: numeric slot in ``FeatureDrivenValueModel.MODEL_FEATURE_NAMES``
 - ``context_required``: always present in ``RatingModel.context_feature_names``
-  (missing values use the ``__missing`` flag via ``_context_vector``)
-- ``context_emitted``: built by ``recommendations.context`` and enters the
-  ridge when observed (also force-included when listed as context_required)
+  (missing values use the ``__missing`` flag via ``_context_vector``); includes
+  the string ``kickoff_slot`` whose one-hots are force-included
 - ``identity_encode``: categorical / calendar identity kept out of free-float
   ridge slots; position is one-hot in FeatureDrivenValueModel; strings are
   not safe as raw floats
@@ -25,7 +24,6 @@ from nfl_oracle.features.schema import live_ok_feature_names
 OwnModelStatus = Literal[
     "ridge_core",
     "context_required",
-    "context_emitted",
     "identity_encode",
     "leakage_blocked",
 ]
@@ -43,23 +41,8 @@ IDENTITY_ENCODE_FEATURES: frozenset[str] = frozenset(
     }
 )
 
-CONTEXT_EMITTED_FEATURES: frozenset[str] = frozenset(
-    {
-        "is_divisional",
-        "home_away",
-        "is_home",
-        "days_rest",
-        "team_pace_prior",
-        "opponent_pace_prior",
-        "opp_def_value_allowed_prior",
-        "opponent_adjusted_prior",
-        "kickoff_slot_early",
-        "kickoff_slot_late",
-        "kickoff_slot_snf",
-        "kickoff_slot_mnf",
-        "kickoff_slot_other",
-    }
-)
+# String kickoff bucket; one-hots live in REQUIRED_LIVE_OK_CONTEXT_FEATURES.
+CONTEXT_SLOT_FEATURES: frozenset[str] = frozenset({"kickoff_slot"})
 
 LEAKAGE_BLOCKED_FEATURES: frozenset[str] = frozenset(
     {
@@ -83,15 +66,11 @@ def classify_feature(name: str) -> OwnModelStatus:
         return "leakage_blocked"
     if name in ridge_core_feature_names():
         return "ridge_core"
-    if name in REQUIRED_LIVE_OK_CONTEXT_FEATURES:
+    if name in REQUIRED_LIVE_OK_CONTEXT_FEATURES or name in CONTEXT_SLOT_FEATURES:
         return "context_required"
-    if name in CONTEXT_EMITTED_FEATURES:
-        return "context_emitted"
     if name in IDENTITY_ENCODE_FEATURES:
         return "identity_encode"
-    if name == "kickoff_slot":
-        return "context_required"
-    return "identity_encode"
+    raise ValueError(f"unclassified live_ok / label feature: {name!r}")
 
 
 def own_model_gap_matrix() -> list[dict[str, str]]:
@@ -115,7 +94,7 @@ def own_model_gap_matrix() -> list[dict[str, str]]:
 def _surface(status: OwnModelStatus) -> str:
     if status == "ridge_core":
         return "FeatureDrivenValueModel"
-    if status in {"context_required", "context_emitted"}:
+    if status == "context_required":
         return "recommendations.model ridge context"
     if status == "identity_encode":
         return "identity_or_one_hot_elsewhere"

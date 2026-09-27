@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from nfl_oracle.baselines.value_model import (
     CONTEXT_FEATURE_NAMES,
     MODEL_FEATURE_NAMES,
@@ -158,6 +160,11 @@ def test_own_model_gap_matrix_covers_live_ok() -> None:
     assert rows["team_pace_prior"]["status"] == "context_required"
     assert rows["same_slate_final_value"]["status"] == "leakage_blocked"
     assert classify_feature("kickoff_slot") == "context_required"
+
+
+def test_classify_feature_rejects_unknown() -> None:
+    with pytest.raises(ValueError, match="unclassified"):
+        classify_feature("__not_a_real_feature__")
 
 
 def test_sparse_observed_still_unions_required() -> None:

@@ -36,19 +36,6 @@ log = get_logger("oracle.features.serving")
 
 FeatureLookupKey = tuple[str, str, str] | int
 
-# Slate enrichment keys that belong in the own-model design matrix
-# (``_BASE_FEATURES`` / EB serve path). Previously top-level only.
-SLATE_ENRICHMENT_HEAD_KEYS: tuple[str, ...] = (
-    "card_boost",
-    "primary_ranking",
-    "vegas_total",
-    "vegas_spread",
-    "is_home",
-    "is_starter",
-    "starter_slot",
-    "is_confirmed_starter",
-)
-
 
 def fuse_slate_enrichment_into_head_features(
     head: Mapping[str, Any] | None,
