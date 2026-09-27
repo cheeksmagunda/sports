@@ -117,25 +117,24 @@ health above are from the live Online worker. Rollback: unset
 note here.
 
 
-## Corpus G mono volume hydrate verify (2026-09-27T04:08Z, #535 / #512)
+## Corpus G mono volume hydrate verify (2026-09-27T05:18Z, #535 / #512)
 
 Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
 `scripts/codespace-railway-env` against `sports-oracle` / `nfl-production`
-`nfl-oracle-worker` (non-destructive; no credential mint).
+`nfl-oracle-worker`. Non-destructive. No credential minting.
 
 | Fact | Value |
 |------|-------|
-| Volume mount | `/app/nfl-oracle/data` (oracle-writable) |
-| Volume size | **2322247 bytes (~2.3 MB)** |
-| `raw/corpus_g` files | **0** (directory present after `--refresh-matrix-only`) |
-| `catalog/coverage_matrix.json` | written (seasons 2002-2025 `status=unknown`, no game ids ingested yet) |
-| Dense Corpus G | still on staging (~1.8 GB); mono densify / copy **not** started this session |
-| Deployed CLI | image still lacks `--report-gaps` / `--repair-players` (pre-#512 help surface); matrix refresh only |
-| Entrypoint image | Auto-deploy of squash `a476ae6` **FAILED** build: deny-first `.dockerignore` omitted `!nfl-oracle/docker-entrypoint.sh` (allowlisted in this PR). Live SUCCESS tip remains pre-entrypoint until worker redeploy. |
+| Volume mount | `/app/nfl-oracle/data` (attached) |
+| Volume `du -sh` | **507M** |
+| Game dirs | **668** (2024: 334, 2025: 334) |
+| Files under `raw/corpus_g` | **3352** |
+| Endpoint files | stats=**668**, feed=**668**, players=**6** |
+| `--report-gaps` | 2024: games=334 complete=1 missing_players=333; 2025: games=334 complete=5 missing_players=329 |
+| Live worker tip | deploy `02a1c12a` SUCCESS commit `c7c2af4` (ancestor of `a476ae6`); `ENTRYPOINT` present; CLI has `--report-gaps` / `--repair-players` |
+| `.dockerignore` | `!nfl-oracle/docker-entrypoint.sh` allowlisted (lands via #551/#564) |
+| `--repair-players` | **blocked**: sealed RS session `sha256[:8]=c4a729e2` returns `PlatformAuthRequired` 401 on `/games/{id}/sport/nfl/players` (no credential mint) |
 
-Rollback for volume content: leave staging volume untouched as copy source.
-Hydrate / densify proceeds via root `railway ssh` even before entrypoint image;
-`--repair-players` needs this allowlist + worker redeploy.
 
 ## Total Value HV leaderboard corpus scaffold (#526)  -  2026-09-27
 
