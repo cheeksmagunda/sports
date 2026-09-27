@@ -23,6 +23,8 @@ from ollama_hv_watcher.gate import (
     load_manifest_or_empty,
 )
 from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.live import LiveDataRequiredError
+from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
     DEFAULT_HOST,
     DEFAULT_WATCHER_PIDFILE,
@@ -52,7 +54,7 @@ class WatcherConfig:
     learn: bool = True
     dry_run: bool = False
     ensure_serve: bool = True
-    include_fixtures: bool = True
+    include_fixtures: bool = False
     pidfile: Path = DEFAULT_WATCHER_PIDFILE
 
 
@@ -60,14 +62,13 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def resolve_plan(cfg: WatcherConfig) -> DayWatchPlan | None:
-    try:
-        return discover_day_plan(
-            windows_json=cfg.windows_json,
-            include_fixtures=cfg.include_fixtures,
-        )
-    except FileNotFoundError:
-        return None
+def resolve_plan(cfg: WatcherConfig) -> DayWatchPlan:
+    """Load LIVE slate windows or raise ``LiveDataRequiredError`` loudly."""
+
+    return discover_day_plan(
+        windows_json=cfg.windows_json,
+        include_fixtures=cfg.include_fixtures,
+    )
 
 
 def status_snapshot(
@@ -75,7 +76,13 @@ def status_snapshot(
 ) -> dict[str, Any]:
     now = now or utc_now()
     health = health_check(cfg.host)
-    plan = resolve_plan(cfg)
+    plan: DayWatchPlan | None
+    plan_error: str | None = None
+    try:
+        plan = resolve_plan(cfg)
+    except LiveDataRequiredError as exc:
+        plan = None
+        plan_error = str(exc)
     manifest = load_manifest_or_empty(cfg.coverage_manifest)
     gate: dict[str, Any]
     try:
@@ -87,6 +94,8 @@ def status_snapshot(
         "now": now.isoformat().replace("+00:00", "Z"),
         "ollama": health,
         "gate": gate,
+        "live_only": not cfg.include_fixtures,
+        "five_player_lineup_size": FIVE_PLAYER_LINEUP_SIZE,
         "data_root": str(cfg.data_root),
         "pidfile": str(cfg.pidfile),
         "watcher_pid": read_pidfile(cfg.pidfile),
@@ -94,6 +103,7 @@ def status_snapshot(
             (pid := read_pidfile(cfg.pidfile)) is not None and pid_is_alive(pid)
         ),
         "plan": None if plan is None else plan.to_dict(),
+        "plan_error": plan_error,
     }
     if plan is not None:
         payload["should_run"] = plan.should_run(now)
@@ -116,16 +126,22 @@ def _learn_once(cfg: WatcherConfig, plan: DayWatchPlan) -> list[str]:
         if path in seen:
             continue
         seen.add(path)
-        summary = load_board_summary(path)
-        out = run_learn(
-            summary,
-            data_root=cfg.data_root,
-            manifest=manifest,
-            host=cfg.host,
-            model=cfg.model,
-            dry_run=cfg.dry_run,
-        )
-        written.append(str(out))
+        try:
+            summary = load_board_summary(path)
+            out = run_learn(
+                summary,
+                data_root=cfg.data_root,
+                manifest=manifest,
+                host=cfg.host,
+                model=cfg.model,
+                dry_run=cfg.dry_run,
+            )
+            written.append(str(out))
+        except ValueError as exc:
+            # Fail closed on short boards (<5 players) without killing the day.
+            err_path = cfg.data_root / "watcher_errors.log"
+            with err_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"board={path} error={exc}\n")
     return written
 
 
@@ -136,7 +152,11 @@ def run_watch_loop(
     sleep_fn: SleepFn = time.sleep,
     max_iterations: int | None = None,
 ) -> dict[str, Any]:
-    """Poll until past latest slate close (or max_iterations for tests)."""
+    """Poll until past latest slate close (or max_iterations for tests).
+
+    Requires LIVE windows JSON (or explicit fixtures). Missing calendars raise
+    ``LiveDataRequiredError`` immediately — no placeholder wait loop.
+    """
 
     cfg.data_root.mkdir(parents=True, exist_ok=True)
     write_pidfile(cfg.pidfile, os.getpid())
@@ -153,9 +173,7 @@ def run_watch_loop(
             now = now_fn()
             plan = resolve_plan(cfg)
             last_plan = plan
-            if plan is None:
-                sleep_fn(cfg.poll_seconds)
-            elif now < plan.arm_at:
+            if now < plan.arm_at:
                 sleep_fn(
                     min(cfg.poll_seconds, max(0.0, (plan.arm_at - now).total_seconds()))
                 )

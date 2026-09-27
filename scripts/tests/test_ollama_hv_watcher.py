@@ -25,6 +25,11 @@ from ollama_hv_watcher.learn import (
     build_learn_prompt,
     write_learning_tick,
 )
+from ollama_hv_watcher.live import LiveDataRequiredError
+from ollama_hv_watcher.pick import (
+    FIVE_PLAYER_LINEUP_SIZE,
+    five_player_lineup,
+)
 from ollama_hv_watcher.windows import (
     DayWatchPlan,
     SlateWindow,
@@ -139,23 +144,83 @@ def test_training_forbidden_until_unlock_or_coverage() -> None:
     assert operator_unlock_enabled({}) is False
 
 
+def _five_players() -> list[dict[str, object]]:
+    return [
+        {"player_id": i, "name": f"P{i}", "value": float(60 - i), "team": "T"}
+        for i in range(1, 7)
+    ]
+
+
 def test_board_summary_ranks_by_value() -> None:
     summary = summarize_board_payload(
         {
             "sport": "nfl",
             "slate_key": "x",
             "section": "highestBoostedValuePlayers",
+            "players": _five_players(),
+        }
+    )
+    assert summary.player_count == 6
+    assert summary.top_players[0]["name"] == "P1"
+    prompt = build_learn_prompt(summary)
+    assert "Highest-value" in prompt or "HV" in prompt
+    assert "exactly 5" in prompt or "exactly five" in prompt.lower()
+    assert "P1" in prompt
+    assert "DAILY CONTEST CARD" in prompt
+
+
+def test_discover_live_only_refuses_fixture_default() -> None:
+    with pytest.raises(LiveDataRequiredError, match="LIVE_DATA_REQUIRED"):
+        discover_day_plan(include_fixtures=False, environ={})
+
+
+def test_discover_fixtures_opt_in_only() -> None:
+    plan = discover_day_plan(include_fixtures=True, environ={})
+    sports = {s.sport for s in plan.slates}
+    assert "nfl" in sports
+
+
+def test_board_refuses_missing_value_placeholder() -> None:
+    with pytest.raises(LiveDataRequiredError, match="value\\|max_value"):
+        summarize_board_payload(
+            {
+                "sport": "nfl",
+                "slate_key": "x",
+                "section": "highestBoostedValuePlayers",
+                "players": [{"player_id": 1, "name": "A"}],
+            }
+        )
+
+
+def test_five_player_lineup_every_day() -> None:
+    summary = summarize_board_payload(
+        {
+            "sport": "nfl",
+            "slate_key": "sun",
+            "section": "highestBoostedValuePlayers",
+            "players": _five_players(),
+        }
+    )
+    card = five_player_lineup(summary)
+    assert len(card) == FIVE_PLAYER_LINEUP_SIZE == 5
+    assert [row["slot"] for row in card] == [1, 2, 3, 4, 5]
+    assert [row["name"] for row in card] == ["P1", "P2", "P3", "P4", "P5"]
+
+
+def test_five_player_lineup_fails_closed_when_short() -> None:
+    summary = summarize_board_payload(
+        {
+            "sport": "wnba",
+            "slate_key": "short",
+            "section": "highestBoostedValuePlayers",
             "players": [
-                {"player_id": 2, "name": "B", "value": 10.0},
-                {"player_id": 1, "name": "A", "value": 30.0},
+                {"player_id": 1, "name": "A", "value": 3.0},
+                {"player_id": 2, "name": "B", "value": 2.0},
             ],
         }
     )
-    assert summary.player_count == 2
-    assert summary.top_players[0]["name"] == "A"
-    prompt = build_learn_prompt(summary)
-    assert "Highest-value" in prompt or "HV" in prompt
-    assert "A" in prompt
+    with pytest.raises(ValueError, match="need_five_players_every_day"):
+        five_player_lineup(summary)
 
 
 def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
@@ -163,7 +228,8 @@ def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
         {
             "sport": "wnba",
             "slate_key": "2026-09-27",
-            "players": [{"player_id": 1, "name": "P", "value": 1.0}],
+            "section": "highestBoostedValuePlayers",
+            "players": _five_players(),
         }
     )
     out = write_learning_tick(
@@ -178,4 +244,6 @@ def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["dry_run"] is True
     assert payload["notes"] == "dry notes"
+    assert payload["lineup_size"] == 5
+    assert len(payload["five_player_lineup"]) == 5
     assert "wnba" in str(out)

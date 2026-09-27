@@ -12,6 +12,11 @@ from realsports_corpus.coverage_manifest import CoverageManifest
 from ollama_hv_watcher.boards import BoardSummary
 from ollama_hv_watcher.client import DEFAULT_HOST, DEFAULT_MODEL, generate
 from ollama_hv_watcher.gate import ensure_ollama_training_allowed
+from ollama_hv_watcher.pick import (
+    FIVE_PLAYER_LINEUP_SIZE,
+    five_player_lineup,
+    lineup_prompt_block,
+)
 
 
 def utc_now_iso() -> str:
@@ -29,16 +34,29 @@ def artifact_dir(
     return Path(data_root) / safe_sport / safe_slate
 
 
-def build_learn_prompt(summary: BoardSummary) -> str:
+def build_learn_prompt(
+    summary: BoardSummary,
+    *,
+    lineup: tuple[dict[str, Any], ...] | None = None,
+) -> str:
+    card = lineup if lineup is not None else five_player_lineup(summary)
     return (
-        "You are a sports analytics self-learning helper for Highest-value "
-        "(HV) and Total Value (TDV) daily fantasy boards.\n"
-        "Given the board summary below, write concise structured notes:\n"
-        "1) top_1 / max_value signal players\n"
-        "2) stacking or correlation guesses (teams)\n"
-        "3) one calibration question for the next slate\n"
-        "Keep under 250 words. No secrets, no credentials, no URLs with tokens.\n\n"
-        f"{summary.prompt_block()}\n"
+        "You are a decisive sports analytics controller for Highest-value "
+        "(HV) and Total Value (TDV) daily fantasy contests.\n"
+        f"HARD RULE: every slate day locks exactly "
+        f"{FIVE_PLAYER_LINEUP_SIZE} distinct players in slot order "
+        f"1..{FIVE_PLAYER_LINEUP_SIZE}. Never propose fewer. Never propose "
+        "more. Never reorder after freeze.\n"
+        "Given the board + proposed five-player card below, write concise "
+        "structured notes:\n"
+        "1) confirm or replace the five-player card (still exactly five)\n"
+        "2) top_1 / max_value signal and why slot 1 is that player\n"
+        "3) stacking or correlation guesses (teams) inside the five\n"
+        "4) one calibration question for the next slate\n"
+        "Keep under 250 words. No secrets, no credentials, no URLs with "
+        "tokens.\n\n"
+        f"{summary.prompt_block()}\n\n"
+        f"{lineup_prompt_block(card)}\n"
     )
 
 
@@ -50,6 +68,7 @@ def write_learning_tick(
     model: str,
     gate_reason: str,
     dry_run: bool = False,
+    lineup: tuple[dict[str, Any], ...] | None = None,
 ) -> Path:
     sport = summary.sport or "unknown"
     slate_id = summary.slate_key or "unknown"
@@ -57,11 +76,14 @@ def write_learning_tick(
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = utc_now_iso().replace(":", "").replace("-", "")
     out_path = out_dir / f"tick_{stamp}.json"
+    card = lineup if lineup is not None else five_player_lineup(summary)
     payload: dict[str, Any] = {
         "written_at": utc_now_iso(),
         "gate_reason": gate_reason,
         "model": model,
         "dry_run": dry_run,
+        "lineup_size": FIVE_PLAYER_LINEUP_SIZE,
+        "five_player_lineup": list(card),
         "board": summary.to_dict(),
         "notes": notes,
     }
@@ -81,7 +103,8 @@ def run_learn(
     dry_run: bool = False,
     environ: dict[str, str] | None = None,
 ) -> Path:
-    prompt = build_learn_prompt(summary)
+    card = five_player_lineup(summary)
+    prompt = build_learn_prompt(summary, lineup=card)
     if dry_run:
         notes = (
             "[dry_run] prompt prepared; Ollama generate skipped.\n"
@@ -94,6 +117,7 @@ def run_learn(
             model=model,
             gate_reason="dry_run",
             dry_run=True,
+            lineup=card,
         )
     reason = ensure_ollama_training_allowed(manifest, environ=environ)
     notes = generate(prompt, host=host, model=model)
@@ -104,4 +128,5 @@ def run_learn(
         model=model,
         gate_reason=reason,
         dry_run=False,
+        lineup=card,
     )
