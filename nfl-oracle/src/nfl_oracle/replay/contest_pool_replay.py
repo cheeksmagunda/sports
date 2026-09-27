@@ -429,6 +429,15 @@ def _mean(values: Sequence[float]) -> float | None:
     return mean(values) if values else None
 
 
+def _merge_excluded(*dicts: Mapping[str, int]) -> dict[str, int]:
+    """Sum exclusion counts by reason across the shared and per-profile dicts."""
+    merged: dict[str, int] = defaultdict(int)
+    for source in dicts:
+        for reason, count in source.items():
+            merged[reason] += count
+    return dict(merged)
+
+
 def summarize_regime(results: Sequence[ContestPoolResult]) -> RegimeSummary:
     captures = [r.capture_ratio for r in results]
     winners = [r.winner_capture_ratio for r in results if r.winner_capture_ratio is not None]
@@ -509,7 +518,15 @@ def replay_contest_pools_knob_sweep(
     cfg = optimizer_config or OptimizerConfig(simulations=100)
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)
+    # Shared across every profile: pool-building and per-fold fit exclusions
+    # happen once, before the picker knobs are even considered, so they apply
+    # identically to every profile's result. Per-profile exclusions (raised
+    # inside ``_run_contest``, e.g. ``unsupported_lineup_size``) can differ by
+    # picker setting and must not leak into a profile that never hit them.
     excluded: dict[str, int] = defaultdict(int)
+    excluded_by_profile: dict[str, dict[str, int]] = {
+        knobs.profile: defaultdict(int) for knobs in knobs_list
+    }
     pools: list[ContestPool] = []
     for contest in contests:
         if not contest.draft_stats:
@@ -553,7 +570,7 @@ def replay_contest_pools_knob_sweep(
                     excluded=per_excluded,
                 )
                 for reason, count in per_excluded.items():
-                    excluded[reason] += count
+                    excluded_by_profile[knobs.profile][reason] += count
                 if result is not None:
                     results_by_profile[knobs.profile].append(result)
                     if progress is not None:
@@ -562,5 +579,6 @@ def replay_contest_pools_knob_sweep(
                             f"capture={result.capture_ratio:.3f}"
                         )
     return {
-        profile: (tuple(results), dict(excluded)) for profile, results in results_by_profile.items()
+        profile: (tuple(results), _merge_excluded(excluded, excluded_by_profile[profile]))
+        for profile, results in results_by_profile.items()
     }

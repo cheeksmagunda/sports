@@ -69,8 +69,11 @@ SEASON_STATUS_KNOWN = "known"
 SEASON_STATUS_UNKNOWN = "unknown"
 SEASON_STATUS_BLOCKED = "blocked"
 
-# Seasons we track in the matrix even before game ids are discovered.
-TRACKED_SEASONS: tuple[int, ...] = tuple(range(2002, 2026))
+# Seasons we track in the matrix even before game ids are discovered. The
+# league's first Real Sports-covered season is fixed; the current end is not,
+# so this stays open-ended through the running UTC year (#338) rather than a
+# hardcoded upper bound that goes stale every season.
+TRACKED_SEASONS: tuple[int, ...] = tuple(range(2002, datetime.now(UTC).year + 1))
 
 
 @dataclass
