@@ -28,8 +28,8 @@ Code on branch (not yet production-verified on mono):
   `WNBA_SERVE_PRIMARY=heads` (rollback without removing train code).
 - `models.yaml` documents EB weight 1.0 / LGBM 0.0 (serve never applied
   the old 70/30). Train/grade labels remain Highest-value boards (#505).
-- RS field matrix: `features.rs_field_map`; corpus scaffold under
-  `scripts/rs_corpus/` (#526).
+- RS field matrix: `features.rs_field_map`; key-dump scaffold
+  `scripts/rs_corpus/` (durable HV corpus: #526 / PR #532).
 - Production mono job2: unverified until merge + redeploy. Rollback:
   set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
   redeploy (cron variable changes need a real redeploy).
