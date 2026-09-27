@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 952 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 963 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -491,10 +491,12 @@ Generated from `git ls-files`. 952 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/.gitignore
 - nhl-oracle/AGENTS.md -- NHL Oracle agent instructions
 - nhl-oracle/CLAUDE.md -- NHL Oracle agent instructions
+- nhl-oracle/Dockerfile
 - nhl-oracle/Makefile -- Build/test/lint entrypoints
 - nhl-oracle/README.md -- nhl-oracle
 - nhl-oracle/STATUS.md -- Status
 - nhl-oracle/pyproject.toml -- Package/tool configuration
+- nhl-oracle/railway.toml -- Package/tool configuration
 
 ## nhl-oracle/data/audit/
 - nhl-oracle/data/audit/.gitkeep
@@ -589,6 +591,11 @@ Generated from `git ls-files`. 952 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/src/nhl_oracle/scheduler/__init__.py -- NHL freeze-cycle job skeleton (no live provider, no contest entry).
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
 
+## nhl-oracle/src/nhl_oracle/service/
+- nhl-oracle/src/nhl_oracle/service/__init__.py -- Minimal NHL staging HTTP service and pipeline CLI.
+- nhl-oracle/src/nhl_oracle/service/app.py -- Read-only NHL staging API scaffold.
+- nhl-oracle/src/nhl_oracle/service/cli.py -- CLI entrypoints for NHL staging API serve and idle worker roles.
+
 ## nhl-oracle/tests/
 - nhl-oracle/tests/test_audit_fixtures.py
 - nhl-oracle/tests/test_baselines_walk_forward.py -- Week-3 acceptance: chronological baseline + prediction skeleton.
@@ -603,6 +610,7 @@ Generated from `git ls-files`. 952 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/tests/test_provenance.py
 - nhl-oracle/tests/test_realsports_auth_bootstrap.py
 - nhl-oracle/tests/test_redact.py
+- nhl-oracle/tests/test_service_scaffold.py -- Staging HTTP service and Docker/Railway scaffold contracts.
 
 ## nhl-oracle/tests/fixtures/realsports/
 - nhl-oracle/tests/fixtures/realsports/contest_draftinfo.json -- (test fixture data)
