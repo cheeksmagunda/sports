@@ -235,6 +235,40 @@ make -C nfl-oracle picker-knob-sweep CONTEXT_SNAPSHOT=/path/to/context.json \
   OUT=/tmp/picker_knob_sweep.json
 ```
 
+### Max-value / race construction mode (issue #453)
+
+The production optimizer maximizes total draft value (`value * (slot + boost)`)
+and re-ranks feasible lineups by a contest utility that adds a right-tail term
+(`upside_weight * (p90 - E)`) and a field-beat leverage term
+(`field_weight * field_win_rate`). `optimizer_config_from_env` exposes that
+construction to the worker so it can chase maximum attainable value without a
+code change. Defaults reproduce production exactly, so an unset worker freezes
+the same five cards as before, and the default diversity floor (three teams, two
+games) can otherwise hold the frozen five off the single highest attainable-value
+set.
+
+| env var | default | effect |
+|---------|---------|--------|
+| `NFL_OPTIMIZER_PROFILE` | `diversified` | `max_value` drops the diversity floor to 1 team / 1 game so the highest projected total-value five is committed outright |
+| `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS` | 3 | explicit 1..5 override, wins over the profile |
+| `NFL_OPTIMIZER_MIN_DISTINCT_GAMES` | 2 | explicit 1..5 override, wins over the profile |
+| `NFL_OPTIMIZER_UPSIDE_WEIGHT` | 0.15 | 0..2 weight on the right-tail (p90) term |
+| `NFL_OPTIMIZER_FIELD_WEIGHT` | 0.10 | 0..2 weight on the field-beat leverage term |
+
+Invalid values fail closed (raise) so a mis-set Railway var never silently
+changes which cards freeze. The frozen `Recommendation` carries
+`construction_profile` for audit. Measure any candidate construction against the
+same Corpus C denominator before flipping:
+
+```bash
+make -C nfl-oracle contest-pool-replay CONTEXT_SNAPSHOT=/path/to/context.json \
+  BACKTEST_ARGS="--optimizer-profile max_value --out /tmp/max_value_replay.json"
+```
+
+`--optimizer-profile` / `--min-distinct-teams` / `--min-distinct-games` on the
+replay CLI mirror the env knobs so a race can compare `diversified` vs
+`max_value` on the same folds.
+
 Production defaults stay identity. Measured Railway flips use
 `NFL_PICKER_BOOST_RANK_BLEND` / `NFL_PICKER_PROFILE` (see STATUS.md, Refs #280).
 Replay CLIs accept optional `--fit-*` knobs so a race can vary the shared

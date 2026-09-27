@@ -101,18 +101,26 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
       optimizer commits the highest projected total-value five outright.
     - ``NFL_OPTIMIZER_MIN_DISTINCT_TEAMS`` / ``NFL_OPTIMIZER_MIN_DISTINCT_GAMES``:
       explicit integer overrides (1..5) that win over the profile preset.
+    - ``NFL_OPTIMIZER_UPSIDE_WEIGHT`` / ``NFL_OPTIMIZER_FIELD_WEIGHT``: floats
+      (0..2) that tune the contest-utility re-rank (right-tail p90 lift and
+      field-beat leverage). Unset keeps the production defaults.
     """
 
     env = environ if environ is not None else os.environ
+    defaults = OptimizerConfig()
     profile = (env.get("NFL_OPTIMIZER_PROFILE") or "diversified").strip() or "diversified"
     if profile not in OPTIMIZER_PROFILE_PRESETS:
         raise ValueError(f"NFL_OPTIMIZER_PROFILE_invalid:{profile}")
     teams, games = OPTIMIZER_PROFILE_PRESETS[profile]
     teams = _env_diversity_int(env, "NFL_OPTIMIZER_MIN_DISTINCT_TEAMS", teams)
     games = _env_diversity_int(env, "NFL_OPTIMIZER_MIN_DISTINCT_GAMES", games)
+    upside = _env_weight_float(env, "NFL_OPTIMIZER_UPSIDE_WEIGHT", defaults.upside_weight)
+    field = _env_weight_float(env, "NFL_OPTIMIZER_FIELD_WEIGHT", defaults.field_weight)
     return OptimizerConfig(
         min_distinct_teams=teams,
         min_distinct_games=games,
+        upside_weight=upside,
+        field_weight=field,
         profile=profile,
     )
 
@@ -126,6 +134,19 @@ def _env_diversity_int(env: Mapping[str, str], key: str, default: int) -> int:
     except ValueError as error:
         raise ValueError(f"{key}_invalid") from error
     if not 1 <= value <= 5:
+        raise ValueError(f"{key}_out_of_range")
+    return value
+
+
+def _env_weight_float(env: Mapping[str, str], key: str, default: float) -> float:
+    raw = (env.get(key) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as error:
+        raise ValueError(f"{key}_invalid") from error
+    if not 0.0 <= value <= 2.0:
         raise ValueError(f"{key}_out_of_range")
     return value
 

@@ -1,5 +1,35 @@
 # Status
 
+## Max-value / race construction knobs (#453, 2026-09-26)
+
+Env-driven optimizer construction so the worker can chase maximum attainable
+total draft value without a code change. `optimizer_config_from_env`
+(`nfl_oracle.recommendations.optimizer`) is wired into `_policy()` alongside the
+existing `picker_knobs_from_env`. Defaults reproduce production exactly, so this
+is a default-off capability, not a serving-path change.
+
+- Env knobs (all default to current production values):
+  `NFL_OPTIMIZER_PROFILE` (`diversified` default | `max_value`),
+  `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS` (3), `NFL_OPTIMIZER_MIN_DISTINCT_GAMES` (2),
+  `NFL_OPTIMIZER_UPSIDE_WEIGHT` (0.15), `NFL_OPTIMIZER_FIELD_WEIGHT` (0.10).
+  Invalid values fail closed (raise). `max_value` drops the diversity floor to
+  1/1 so the single highest projected total-value five is committed.
+- The frozen `Recommendation` records `construction_profile` for audit.
+- Also fixed a broken import on the replay CLI (`_OPTIMIZER_PROFILE_PRESETS` ->
+  public `OPTIMIZER_PROFILE_PRESETS`) introduced by a concurrent merge, and
+  recorded the optimizer config on the replay report payload.
+- Context: the production optimizer already maximizes `value * (slot + boost)`
+  and re-ranks by a contest utility with a right-tail (`upside_weight * (p90-E)`)
+  and field-beat (`field_weight`) term. The gap this closes is env-tunability of
+  those weights plus the diversity floor that can hold the frozen five off the
+  max-attainable set. Measure with `contest-pool-replay --optimizer-profile
+  max_value` before any flip.
+- **No serving knob flipped this change.** Production stays `boost_0.75`
+  (`NFL_PICKER_BOOST_RANK_BLEND=0.75`, `NFL_PICKER_PROFILE=boost_0.75`) on mono
+  `sports-oracle` / `nfl-production` and Real Sports `sha256[:8]=c4a729e2` (both
+  re-verified live 2026-09-27 ~02:32Z; `NFL_OPTIMIZER_*` unset in Railway), so
+  the live Sunday construction is unchanged.
+
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
 Operator-ordered live cutover from `nfl-oracle-staging` /

@@ -126,6 +126,8 @@ def _alternate_setting_value(name: str, value: object) -> object:
         return "b" * 64
     if name == "payout_regime":
         return "top_1" if value != "top_1" else "top_20"
+    if name == "optimizer_objective_mode":
+        return "total_draft_value" if value != "total_draft_value" else "payout"
     if isinstance(value, int):
         return value + 1
     if isinstance(value, float):

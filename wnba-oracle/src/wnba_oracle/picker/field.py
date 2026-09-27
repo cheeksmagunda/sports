@@ -80,7 +80,8 @@ def _estimated_ownership_unnormalized(
     Returns an UNNORMALIZED weight per spec.
     """
     model_raw = np.array(
-        [s.pred_real_score * (1.0 + s.card_boost) for s in specs], dtype=float,
+        [s.pred_real_score * (1.0 + s.card_boost) for s in specs],
+        dtype=float,
     )
     have_pop = any(s.popularity_score is not None for s in specs)
     if have_pop and popularity_blend > 0.0:
@@ -93,7 +94,8 @@ def _estimated_ownership_unnormalized(
         p_max = pop.max()
         p_norm = pop / p_max if p_max > 0.0 else np.zeros_like(pop)
         has_score = np.array(
-            [s.popularity_score is not None for s in specs], dtype=bool,
+            [s.popularity_score is not None for s in specs],
+            dtype=bool,
         )
         alpha = float(popularity_blend)
         blended = np.where(
@@ -135,7 +137,9 @@ def project_ownership(
         return np.array([])
 
     estimated = _estimated_ownership_unnormalized(
-        specs, softmax_temperature, popularity_blend,
+        specs,
+        softmax_temperature,
+        popularity_blend,
     )
 
     measured = np.array(

@@ -225,9 +225,7 @@ def test_tdv_ownership_fade_prefers_low_ownership_among_equal_tv() -> None:
     )
     low_owned = {205, 206, 207, 208, 209}
     # The faded version should include at least as many low-owned players.
-    assert len(set(with_fade.player_ids) & low_owned) >= len(
-        set(no_fade.player_ids) & low_owned
-    )
+    assert len(set(with_fade.player_ids) & low_owned) >= len(set(no_fade.player_ids) & low_owned)
 
 
 def test_tdv_settings_wiring() -> None:
