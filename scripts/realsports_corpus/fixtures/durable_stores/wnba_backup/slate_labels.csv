@@ -1,0 +1,4 @@
+contest_id,slate_date,section,platform_player_id,display_name,team_key,card_boost,drafts,real_score,ingested_at
+100,2025-07-01,highestBoostedValuePlayers,11,A. Wilson,LV,0.2,50,42.5,2025-07-02T00:00:00Z
+100,2025-07-01,popularPlayers,11,A. Wilson,LV,0.2,50,,2025-07-02T00:00:00Z
+100,2025-07-01,highestBoostedValuePlayers,22,B. Stewart,NY,0.0,40,40.0,2025-07-02T00:00:00Z

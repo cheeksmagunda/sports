@@ -553,3 +553,23 @@ Playwright against production) uses the **same Codespace** as Railway CLI
 work: one home for devops and slate ops. Mac is for waking Codespace and
 write-path (`gh`), not for Railway or Real Sports as the primary host.
 
+## Offline Real Sports contest corpus (separate repo)
+
+Full contest-history payloads (every sport, every slate that still exists)
+live in the private repo
+[`cheeksmagunda/sports-realsports-corpus`](https://github.com/cheeksmagunda/sports-realsports-corpus),
+not in this monorepo checkout. Layout, nightly append rules, coverage
+manifest, and consumption (Actions sparse download / Release packs / Railway
+volume hydrate — never a Mac terabyte clone) are documented in
+`scripts/realsports_corpus/README.md` and tracked by issue #526. The monorepo
+workflow `.github/workflows/realsports-corpus-append.yml` defaults to fixture
+proof only; live multi-year scrapes stay operator-gated.
+
+**Operator secret:** set repository secret `CORPUS_REPO_TOKEN` on
+`cheeksmagunda/sports` to a PAT / fine-grained token with `contents: write` on
+the corpus sibling. `GITHUB_TOKEN` cannot push to a sibling repo. Agents must
+not mint this token. Auth for scrapes remains the portfolio
+`REALSPORTS_STORAGE_STATE_B64GZ` contract above — never mint a session for
+corpus work. **Ollama is forbidden** until `coverage_manifest.json` reports
+complete historical capture.
+
