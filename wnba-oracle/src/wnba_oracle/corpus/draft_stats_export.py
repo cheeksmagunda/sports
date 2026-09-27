@@ -70,19 +70,33 @@ def family_slate_dir(corpus_root: Path, family: str, slate_date: str) -> Path:
 def _as_float(value: object) -> float | None:
     if value is None:
         return None
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _as_int(value: object) -> int | None:
     if value is None:
         return None
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _atomic_write_bytes(path: Path, payload: bytes) -> None:
@@ -106,9 +120,7 @@ def _atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
 
 
 def _atomic_write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    lines = [
-        json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows
-    ]
+    lines = [json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows]
     payload = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
     _atomic_write_bytes(path, payload)
 
