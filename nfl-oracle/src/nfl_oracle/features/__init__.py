@@ -1,9 +1,12 @@
 """Feature schema scaffolding for nfl-oracle."""
 
 from nfl_oracle.features.live import (
+    REQUIRED_LIVE_OK_CONTEXT_FEATURES,
+    REQUIRED_SLATE_CONTEXT_FEATURES,
     injury_category,
     injury_features,
     injury_indicator_features,
+    kickoff_slot_features,
     weather_features,
 )
 from nfl_oracle.features.matchup import (
@@ -30,6 +33,8 @@ from nfl_oracle.features.stubs import offline_stub_feature_row
 
 __all__ = [
     "NFL_DIVISIONS",
+    "REQUIRED_LIVE_OK_CONTEXT_FEATURES",
+    "REQUIRED_SLATE_CONTEXT_FEATURES",
     "FeatureSpec",
     "RealValueHistoryIndex",
     "build_prior_rows_for_players",
@@ -41,6 +46,7 @@ __all__ = [
     "injury_features",
     "injury_indicator_features",
     "is_divisional_matchup",
+    "kickoff_slot_features",
     "live_ok_feature_names",
     "observations_from_history",
     "offline_stub_feature_names",

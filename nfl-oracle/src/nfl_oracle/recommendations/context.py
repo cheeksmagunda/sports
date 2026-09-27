@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 from nfl_oracle.features.live import (
     injury_category,
     injury_indicator_features,
+    kickoff_slot_features,
     weather_availability_flag,
 )
 from nfl_oracle.features.matchup import is_divisional_matchup
@@ -436,6 +437,7 @@ class HistoricalContext:
                 prior_games.append(prior)
         if prior_games:
             result["days_rest"] = (utc(kickoff).date() - max(prior_games).date()).days
+        result.update(kickoff_slot_features(kickoff))
         return result
 
 
@@ -515,6 +517,13 @@ def enrich_historical_rows(
                     excluded["depth_rank_conflicting_packages"] = (
                         excluded.get("depth_rank_conflicting_packages", 0) + 1
                     )
+            home_flag = getattr(row, "is_home", None)
+            if home_flag is None:
+                home_flag = event.get("is_home")
+            if home_flag is not None:
+                home_value = float(bool(home_flag))
+                values["is_home"] = home_value
+                values["home_away"] = home_value
             enriched.append(
                 HistoricalContextRow(
                     player_id=player_id,
@@ -614,7 +623,10 @@ def build_context(
             opponent_team_id=opponent_team_id,
             position=player.position,
         )
-        vector["is_home"] = float(player.team_id == game.home_team_id)
+        # FeatureSpec ``home_away`` plus legacy ``is_home`` (1=home, 0=away).
+        is_home = float(player.team_id == game.home_team_id)
+        vector["is_home"] = is_home
+        vector["home_away"] = is_home
         # Real cards carry injuryStatus; the availability flag records whether
         # the field was observed, not whether the category is recognized.
         vector.update(injury_indicator_features(player.injury_status))
