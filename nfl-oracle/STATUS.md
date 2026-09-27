@@ -77,6 +77,46 @@ not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
 knobs: Max-value / race construction and mono serve sections below. Existing
 valuelaw + feature ridge only; no new model stacks (#523).
 
+## Max-value / race construction knobs (#453 / #502 / #505, 2026-09-27)
+
+Env-driven optimizer construction so the worker can chase maximum attainable
+total draft value without a code change. `optimizer_config_from_env`
+(`nfl_oracle.recommendations.optimizer`) is wired into `_policy()` alongside the
+existing `picker_knobs_from_env`. Merged as PR #493 (`0af75e913123` on `main`).
+
+- Env knobs: `NFL_OPTIMIZER_PROFILE` (**`max_value` default** | `diversified`),
+  `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS`, `NFL_OPTIMIZER_MIN_DISTINCT_GAMES`,
+  `NFL_OPTIMIZER_UPSIDE_WEIGHT` (0.15), `NFL_OPTIMIZER_FIELD_WEIGHT` (0.10).
+  Invalid values fail closed (raise). `max_value` drops the diversity floor to
+  1/1 so the single highest projected total-value five is committed.
+- The frozen `Recommendation` records `construction_profile` for audit.
+- Replay CLI uses public `OPTIMIZER_PROFILE_PRESETS` (fixed in #506).
+- **#505 serving default:** code default is `max_value` when unset so a wiped
+  env cannot fall back to diversified cash construction. Rollback:
+  `NFL_OPTIMIZER_PROFILE=diversified`. Picker stays `boost_0.75` /
+  `NFL_PICKER_BOOST_RANK_BLEND=0.75` unless separately flipped.
+
+### Live serve flip (verified 2026-09-27 ~03:53Z UTC, #502)
+
+Mono `sports-oracle` / `nfl-production` (`766868da-…`), Codespace
+`fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`. No secret
+values printed. Merge: PR #493 → `main` `0af75e913123`.
+
+| Surface | Verified knobs / evidence |
+|---------|---------------------------|
+| `nfl-oracle-worker` Railway vars | `NFL_OPTIMIZER_PROFILE=max_value`, `NFL_PICKER_BOOST_RANK_BLEND=0.75`, `NFL_PICKER_PROFILE=boost_0.75`, `NFL_RECOMMENDATIONS_ENABLED=1` |
+| `nfl-oracle-worker` process env (`railway run`) | same four knobs present (`max_value` / `0.75` / `boost_0.75` / `1`) |
+| `nfl-api` Railway vars | `NFL_OPTIMIZER_PROFILE=max_value`, `NFL_PICKER_BOOST_RANK_BLEND=0.75`, `NFL_PICKER_PROFILE=boost_0.75` |
+| Public health | `https://nfl-api-nfl-production.up.railway.app/health` → `status=ok` `recommendation_database=ok` |
+| Volume | `nfl-oracle-worker-volume` attached to `nfl-oracle-worker` at `/app/nfl-oracle/data` (0.0 / 4.9 GB after cutover reattach) |
+| Real Sports | worker sealed copy `sha256[:8]=c4a729e2` (unchanged) |
+
+Worker/API were rolling new deploys (QUEUED) at verify time; process env and
+health above are from the live Online worker. Rollback: unset
+`NFL_OPTIMIZER_PROFILE` (or set `diversified`); redeploy prior deployment;
+note here.
+
+
 ## Corpus G mono volume hydrate verify (2026-09-27T04:08Z, #535 / #512)
 
 Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
@@ -175,26 +215,6 @@ repair, (2) 2002-2023 densification, (3) copy/sync onto mono volume.
 3. **Seed / densify 2002-2023 onto mono volume** — mono volume attached and
    worker SUCCESS, but still empty; GHA raw artifacts remain ephemeral.
    Dense copy/seed is post-merge ops, not this code PR.
-
-## Max-value / race construction knobs (#453 / #505, 2026-09-27)
-
-Env-driven optimizer construction so the worker can chase maximum attainable
-total draft value without a code change. `optimizer_config_from_env`
-(`nfl_oracle.recommendations.optimizer`) is wired into `_policy()` alongside the
-existing `picker_knobs_from_env`.
-
-- Env knobs: `NFL_OPTIMIZER_PROFILE` (**`max_value` default** | `diversified`),
-  `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS`, `NFL_OPTIMIZER_MIN_DISTINCT_GAMES`,
-  `NFL_OPTIMIZER_UPSIDE_WEIGHT` (0.15), `NFL_OPTIMIZER_FIELD_WEIGHT` (0.10).
-  Invalid values fail closed (raise). `max_value` drops the diversity floor to
-  1/1 so the single highest projected total-value five is committed.
-- The frozen `Recommendation` records `construction_profile` for audit.
-- Replay CLI uses public `OPTIMIZER_PROFILE_PRESETS` (fixed in #506).
-- **#505 serving default:** code default is `max_value` when unset so a wiped
-  env cannot fall back to diversified cash construction. Rollback:
-  `NFL_OPTIMIZER_PROFILE=diversified`. Picker stays `boost_0.75` /
-  `NFL_PICKER_BOOST_RANK_BLEND=0.75` unless separately flipped.
-
 
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
