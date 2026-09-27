@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from wnba_oracle.ingest.minutes_backfill import refresh_game_logs
 
-SEASONS = ["2024", "2025", "2026"]
+SEASONS = ["2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026"]
 
 
 def main() -> None:

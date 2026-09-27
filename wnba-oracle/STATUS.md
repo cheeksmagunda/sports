@@ -1,5 +1,9 @@
 # Status
 
+## Season defaults + HV label corpus (#453 / #527)
+
+`scripts/backfill_minutes.py` and `scripts/seasons_common.py` default to **2017-2026**. `read_label_corpus` grades against Highest value boards without a date cap (full history).
+
 Last verified: 2026-09-27T03:03:43Z
 
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
