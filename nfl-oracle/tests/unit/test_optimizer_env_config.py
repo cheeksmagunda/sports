@@ -18,14 +18,17 @@ from nfl_oracle.recommendations.optimizer import (
 
 
 def test_empty_env_reproduces_production_defaults() -> None:
+    """Wiped env must land on win-draft max_value, not diversified cash (#505)."""
     cfg = optimizer_config_from_env({})
-    default = OptimizerConfig()
-    assert cfg.profile == "diversified"
-    assert cfg.min_distinct_teams == default.min_distinct_teams == 3
-    assert cfg.min_distinct_games == default.min_distinct_games == 2
-    assert cfg.upside_weight == default.upside_weight
-    assert cfg.field_weight == default.field_weight
+    bare = OptimizerConfig()  # constructor stays diversified for explicit callers
+    assert cfg.profile == "max_value"
+    assert cfg.min_distinct_teams == 1
+    assert cfg.min_distinct_games == 1
+    assert cfg.upside_weight == bare.upside_weight
+    assert cfg.field_weight == bare.field_weight
     assert cfg.objective == "total_value"
+    assert bare.profile == "diversified"
+    assert bare.min_distinct_teams == 3
 
 
 def test_max_value_profile_drops_diversity_floor_to_one() -> None:
@@ -81,14 +84,14 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
     from tests.unit.test_recommendation_model_optimizer import BASE, projections, slate
 
     target = slate(one_team=True, one_game=True)
-    diversified = optimize(
+    empty_env = optimize(
         target,
         projections(target),
         decision_at=BASE + timedelta(days=8),
         scoring_policy=ScoringPolicy(),
         config=optimizer_config_from_env({}),
     )
-    assert diversified.construction_profile == "diversified"
+    assert empty_env.construction_profile == "max_value"
 
     max_value = optimize(
         target,
