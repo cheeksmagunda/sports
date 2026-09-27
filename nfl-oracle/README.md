@@ -3,6 +3,10 @@
 Real Sports NFL research application. Current track: Corpus G (historical
 games/box/play archive with Real `value` labels) and honest coverage audits.
 
+Portfolio product goal: root `../README.md` (Product goal). Current NFL serve
+knobs and training-target detail are in `STATUS.md` and must be reverified
+before production work.
+
 Current scope includes read-only ingest, redacted persistence, the gated
 recommendation and freeze/grade pipeline, and Railway-hosted operations.
 Contest submission and live contest entry remain hard-forbidden by policy.

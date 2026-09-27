@@ -30,6 +30,17 @@ is a default-off capability, not a serving-path change.
   re-verified live 2026-09-27 ~02:32Z; `NFL_OPTIMIZER_*` unset in Railway), so
   the live Sunday construction is unchanged.
 
+## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
+
+Locked: train / optimize toward Real Sports **Highest value / Total Value Daily
+Leaderboard** (`highestBoostedValuePlayers`) for every slate — Amihere /
+Copper / Aubrey-style boards (NFL draftStats HIGH TOTAL VALUE / Highest-value
+lists). **Do not train on prior users' winning drafts** as the fit target;
+those remain a reference bar. Cash, diversified, and median construction are
+not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
+knobs: Max-value / race construction knobs above (`NFL_OPTIMIZER_PROFILE` and
+related). Existing valuelaw + feature ridge only; no new model stacks (#523).
+
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
 Operator-ordered live cutover from `nfl-oracle-staging` /

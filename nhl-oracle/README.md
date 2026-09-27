@@ -2,6 +2,9 @@
 
 NHL Oracle application scaffold.
 
+Portfolio product goal: root `../README.md` (Product goal). Current NHL serve
+knobs and readiness facts are in `STATUS.md`.
+
 Current scope (see `STATUS.md` for verified facts): Week 2 live read-only
 Real Sports contract audit, corpus seed, and contest-range discovery are done; Week 3 chronological
 baseline + prediction skeleton (`labels/`, `baselines/`) is started on

@@ -1,6 +1,33 @@
 # Status
 
-Last verified: 2026-09-27T02:00:00Z
+Last verified: 2026-09-27T03:25:00Z (mono TDV knobs + health; #453 / #523)
+
+## Training target: Highest value board (#453 / #505 / #523)  -  2026-09-27
+
+Locked: train / optimize on Real Sports **Highest value / Total Value Daily
+Leaderboard** (`draftStats.sectionName=highestBoostedValuePlayers`) for every
+slate. **Do not train on prior users' winning drafts**
+(`contest_leaderboards` / `leaderboard_lineup`); those are a reference bar to
+beat, not fit targets. Popularity sections are excluded from the EB label
+corpus. Backtests grade each slate against that slate's Highest value
+players, not winning drafts. Approx Value = `real_score * (2 + card_boost)`.
+Portfolio goal: root `../README.md` (Product goal). Own-model surface:
+EBHierarchicalBaseline (+ future stdlib ridge); **no LightGBM** (#523).
+HV train/backtest code path: open PR #522 (not yet on `main`).
+
+## Mono serve knobs re-verify (#505 / #453)  -  2026-09-27T03:25Z
+
+Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`
+against `sports-oracle` / `wnba-production`. Names only; no secrets printed.
+
+| Service | `PAYOUT_REGIME` | `OPTIMIZER_OBJECTIVE_MODE` | fade |
+|---------|-----------------|----------------------------|------|
+| `wnba-cron-job2` | `top_1` | `total_draft_value` | `0.001` |
+| `wnba-api` | `top_1` | `total_draft_value` | `0.001` |
+
+- Public health `https://wnba-api-wnba-production.up.railway.app/health` →
+  `{"status":"ok","version":"0.1.0"}` (re-checked 03:25Z).
+- Rollback: `PAYOUT_REGIME=top_20` + `OPTIMIZER_OBJECTIVE_MODE=payout`.
 
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
 
@@ -52,10 +79,10 @@ printed.
 
 ## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
 
-- `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
-- `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
-- Data plane: public Postgres `acela.proxy.rlwy.net:51730` with `sslmode=require` (not verify-ca — missing `root.crt` in container); Redis `altaria.proxy.rlwy.net:13969`.
-- Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO.
+Superseded detail: see **Mono serve knobs re-verify** above (03:25Z). Earlier
+cutover note: `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on job2 + api; public
+Postgres `acela.proxy.rlwy.net:51730` (`sslmode=require`); Redis
+`altaria.proxy.rlwy.net:13969`; live old crons nulled; mono crons armed.
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
