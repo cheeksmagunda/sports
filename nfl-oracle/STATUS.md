@@ -131,7 +131,7 @@ Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
 | Game dirs | **668** (2024: 334, 2025: 334) |
 | Endpoint files | stats=**668**, feed=**668**, players=**668** |
 | `--report-gaps` (verified 2026-09-27 ~06:26Z UTC) | 2024: games=334 complete=334 **missing_players=0**; 2025: games=334 complete=334 **missing_players=0** (also missing_stats=0, missing_feed=0) |
-| `--repair-players` | **complete** for 2024/2025 on mono volume (334/334 each). Mid-run HTTP 401s were stale derived `storage_state` on the volume (cleared/rematerialized from the sealed env copy); not missing auth. |
+| `--repair-players` | **complete** for 2024/2025 on mono volume (334/334 each). Mid-run HTTP 401s were stale derived `storage_state` on the volume (cleared/rematerialized from the sealed env copy `sha256[:8]=c4a729e2`); not missing auth. |
 | `.dockerignore` | `!nfl-oracle/docker-entrypoint.sh` allowlisted (lands via #551/#564) |
 
 
