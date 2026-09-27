@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from nhl_oracle.contract.boost_gate import (
-    NHL_EXPECTED_TEAM_COUNT,
     BOOST_MULTIPLIER_GATED,
+    NHL_EXPECTED_TEAM_COUNT,
     effective_boost_multiplier,
     evaluate_boost_eligibility,
     force_none_while_gated,
@@ -19,7 +21,6 @@ from nhl_oracle.contract.schema import (
     NhlCandidate,
     NhlContestContract,
 )
-from datetime import UTC, datetime
 
 
 def _full_coverage(*, zero_team: str | None = None) -> dict[str, int]:

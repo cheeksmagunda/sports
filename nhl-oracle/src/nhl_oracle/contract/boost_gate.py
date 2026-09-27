@@ -9,8 +9,8 @@ or incomplete team-GP coverage keeps the boost multiplier at 0.0.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Mapping, Sequence
 
 from nhl_oracle.contract.schema import BoostRegime
 

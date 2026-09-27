@@ -6,8 +6,9 @@ unknown (or None) rather than being guessed from NFL/WNBA defaults.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from nhl_oracle.contract.schema import (
     BoostRegime,

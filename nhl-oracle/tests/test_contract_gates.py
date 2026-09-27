@@ -18,8 +18,7 @@ DECISION_AT = datetime(2026, 10, 1, 0, 0, tzinfo=UTC)
 
 def _all_teams_played() -> tuple[TeamGamesPlayed, ...]:
     return tuple(
-        TeamGamesPlayed(team_id=f"T{i:02d}", games_played=1)
-        for i in range(NHL_EXPECTED_TEAM_COUNT)
+        TeamGamesPlayed(team_id=f"T{i:02d}", games_played=1) for i in range(NHL_EXPECTED_TEAM_COUNT)
     )
 
 
