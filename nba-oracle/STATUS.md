@@ -1,5 +1,17 @@
 # Status
 
+## History corpus gap (#453 / #489)  -  2026-09-27
+
+- Public `nba-history-load` (data.nba.com) writes `nba_history_*` into
+  `sports-oracle` / `nba-staging` Postgres over public TCP.
+- **Partial load verified:** games ~2086, player rows ~70912, then blocked by
+  data.nba.com HTTP 403 (Akamai) under high concurrency.
+- **Empty / incomplete DB blocker:** full complete-season coverage for
+  2021-22..2024-25 is **not** claimed. Re-run with `--concurrency 4` after
+  cool-down. Do not treat health-scaffold Online as history-ready.
+- No Real Sports credential on NBA services. No contest entry.
+
+
 Last verified: 2026-09-27 (public history partial load + TCP proxy verified)
 `scripts/codespace-railway-env`, issue #504 / PR #489)
 
