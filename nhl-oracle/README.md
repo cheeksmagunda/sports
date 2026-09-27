@@ -2,13 +2,14 @@
 
 NHL Oracle application scaffold.
 
-Current scope is a pre-provider-access scaffold exercised only against
-synthetic fixtures: package wiring, boundary-safe layout, verification
-targets, a candidate contest contract and audit gates (`contract/`), a
-redacted payload provenance store (`ingest/`), an identity map and collision
-reconciler (`identity/`), and a freeze-cycle job skeleton (`scheduler/`). No
-live NHL provider, model, optimizer, hosted API, frontend, or deployment
-exists yet; see `STATUS.md` for current detail.
+Current scope (see `STATUS.md` for verified facts): Week 2 live read-only
+Real Sports contract audit and corpus seed are done; Week 3 chronological
+baseline + prediction skeleton (`labels/`, `baselines/`) is started on
+synthetic labels only. Package wiring includes contest contract and audit
+gates (`contract/`), redacted ingest/provenance (`ingest/`), identity map
+(`identity/`), and freeze-cycle job skeleton (`scheduler/`). No Real-corpus
+baseline fit, contest-law optimizer, hosted API, frontend, Railway
+deployment, or contest entry exists yet.
 
 ## Connection surfaces
 
@@ -79,7 +80,9 @@ contest 1901 draftStats may show flat `multiplierBonus` from a later window.
    ice time, even-strength and power-play role, shot volume, opponent, rest,
    scratches, starting-goalie evidence. Chronological evaluation with actual
    pre-decision availability; report uncertainty, cold starts, and input
-   gaps. Added complexity needs out-of-sample evidence.
+   gaps. Added complexity needs out-of-sample evidence. Week 3 skeleton
+   started (#456): NHL-owned priors + season walk-forward
+   (`observation_only`); next is fit on seeded Real value corpus.
 4. **Optimization under the verified contest law.** Compare candidate
    selection and committed slot assignment against exhaustive small
    fixtures. Replay frozen decisions against finalized outcomes, with
