@@ -1,10 +1,19 @@
 # Status
 
-Last verified: 2026-09-27T03:45:00Z (overnight #535 HV+#523 merge; serve knob unverified)
+Last verified: 2026-09-27T03:55:00Z (overnight #535; serve knob not flipped)
 
 ## Serve Tier-0 -> EB primary + vegas/boost (#523 / #535)  -  2026-09-27
 
-Code on branch (not yet production-verified on mono):
+Code on `main` via #531; HV train/backtest on overnight branch (this PR).
+**Production `WNBA_SERVE_PRIMARY` not flipped** (2026-09-27T03:52Z): slate
+`2026-09-26` still `lineup_frozen=false` with freeze_readiness advisory
+(`rotowire_empty`, `config_drift`); job2 0-3 UTC window still open. Code
+default remains `eb` after #531 merge; mono env unset (inherits image
+default on next redeploy). Hold redeploy/env flip until freeze window clear.
+Rollback when flipped: set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` /
+`wnba-api` and redeploy.
+
+Code shape (verified in tree, not production-verified on mono):
 
 - Serve ladder default is `WNBA_SERVE_PRIMARY=eb`: Tier-0 uses
   `EBHierarchicalBaseline` with optional `team_pace` / `opp_pace` /
@@ -17,9 +26,6 @@ Code on branch (not yet production-verified on mono):
   the old 70/30). Train/grade labels: Highest-value boards (#505) /
   `highestBoostedValuePlayers`.
 - RS field matrix: `features.rs_field_map` (durable HV corpus: #526).
-- Production mono job2: unverified until merge + redeploy. Rollback:
-  set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
-  redeploy (cron variable changes need a real redeploy).
 
 ## Script seasons restore (#453 / #516 / #527)  -  2026-09-27
 
