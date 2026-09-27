@@ -72,7 +72,7 @@ def build_empty_manifest(*, updated_at: str | None = None) -> CoverageManifest:
             "Append-only coverage matrix for Real Sports history ingest. "
             "Soft-merge unions only; never delete keys from scheduled appends."
         ),
-        "status_enum": ["present", "partial", "absent", "unknown"],
+        "status_enum": ["present", "partial", "absent", "unknown", "stub"],
         "kinds": list(REQUIRED_VARIABLE_FAMILIES),
         "historical_capture_complete": False,
         "ollama_codespace_helper": {
