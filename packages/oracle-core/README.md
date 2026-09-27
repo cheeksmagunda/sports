@@ -28,9 +28,10 @@ The public package includes:
   SportsTeam, SportsOrganization, SportsEvent, Place, OrganizationRole,
   identifier/PropertyValue, sameAs, Observation, QuantitativeValue, ItemList,
   plus optional PROV-O attribution; high-TV boards in `oracle_core.high_tv`;
-  durable HV leaderboard corpus layout in `oracle_core.hv_board_corpus`
-  (`hv_boards/{sport}/{year}/slate_*.json` for a separate GitHub corpus
-  repo; issue #526).
+  Real Sports history corpus layout in `oracle_core.realsports_corpus`
+  (`{sport}/{season}/{slate_or_game_id}/{artifact}.json` + coverage
+  manifest) and HV board helpers in `oracle_core.hv_board_corpus`
+  (sibling repo `sports-realsports-corpus`; issue #526).
 
 Applications retain ownership of their settings extensions, database schema,
 migrations, routes, jobs, schedules, provider adapters, and domain behavior.

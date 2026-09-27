@@ -112,8 +112,17 @@ change.
   `wnba-oracle/scripts/export_hv_board.py` + `scripts/corpus/` exporters +
   workflow `hv-leaderboard-corpus.yml` (needs `CORPUS_REPO_TOKEN`;
   fail-closed without Real Sports auth). See `scripts/corpus/README.md`.
-- One-slate proof scrape: see issue #526 / linked PR (sha verify only;
-  never mint credentials). Labels remain Highest-value boards for train/grade.
+- Durable-store proof (zero Real calls, Mac worktree): exported 3 WNBA HV
+  slates from `origin/backups` `slate_labels.csv` (4403 HV rows / 228
+  slates in backup; proof wrote 2026-09-22/23/24 contests 2187/2192/2194,
+  20 players each) and NFL fixture Corpus G →
+  `nfl/fixture/game_19457/{game_stats,matchups,feed}.json`.
+- Live WNBA HV append: Codespace auth present
+  `REALSPORTS_STORAGE_STATE_B64GZ` sha256[:8]=`c4a729e2` (value never
+  printed). Proof run recorded on linked PR / issue comment.
+- Label remains Highest-value / Total Value Daily Leaderboard for
+  train/grade; FeatureSpec/#523 field map in
+  `scripts/corpus/feature_field_map.md`.
 
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
 

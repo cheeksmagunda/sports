@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cheeksmagunda/sports/scripts/corpus/schema/coverage_manifest.schema.json",
+  "title": "Real Sports corpus coverage manifest",
+  "description": "Coverage + checksums for cheeksmagunda/sports-realsports-corpus (issue #526). Primary label is Total Value leaderboard (highestBoostedValuePlayers).",
+  "type": "object",
+  "required": ["schema_version", "updated_at", "expected_artifacts", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "expected_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "hv_board",
+          "draft_stats",
+          "pool_card",
+          "game_stats",
+          "matchups",
+          "feed"
+        ]
+      }
+    },
+    "entry_count": { "type": "integer", "minimum": 0 },
+    "entries": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["sport", "season", "slate_or_game_id", "artifacts"],
+        "properties": {
+          "sport": { "type": "string", "enum": ["wnba", "nfl", "nba", "nhl"] },
+          "season": { "type": "string", "pattern": "^[0-9]{4}$" },
+          "slate_or_game_id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "default": "total_value_leaderboard" },
+          "notes": { "type": "string" },
+          "artifacts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["path", "sha256", "bytes", "source"],
+              "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "bytes": { "type": "integer", "minimum": 0 },
+                "source": { "type": "string" },
+                "scraped_at": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "missing_artifacts"],
+        "properties": {
+          "key": { "type": "string" },
+          "sport": { "type": "string" },
+          "season": { "type": "string" },
+          "slate_or_game_id": { "type": "string" },
+          "missing_artifacts": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

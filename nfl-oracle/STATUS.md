@@ -105,6 +105,14 @@ staging→mono copy.
   `oracle_core.hv_board_corpus` layout from a finalized `/stats` JSON
   (live NFL scrape not wired in this scaffold; fail-closed without
   `--stats-json`). Workflow shares `hv-leaderboard-corpus.yml`.
+- Durable-store exporter (zero Real calls):
+  `scripts/corpus/export_nfl_from_corpus_g.py` appends
+  `game_stats` / `matchups` / `feed` under
+  `nfl/{season}/game_{id}/`. Proof from fixtures wrote
+  `nfl/fixture/game_19457/*`. FeatureSpec matchup descriptions point at
+  #526 corpus + #523 own-model wiring (`scripts/corpus/feature_field_map.md`).
+  Railway worker volume currently has no `data/raw/corpus_g` tree (observations
+  only); fixture/export path remains the offline proof.
 
 ## Corpus G nightly + gap/repair reconcile (2026-09-27, #453 / #503)
 
