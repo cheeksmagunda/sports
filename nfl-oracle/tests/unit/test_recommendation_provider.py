@@ -1,4 +1,5 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -193,6 +194,49 @@ async def test_collect_declares_boost_regime_via_boost_observation(tmp_path):
     assert by_id[1] == 0.0
     assert by_id[2] == 1.4  # snapped, no float noise
     assert by_id[3] == 3.0
+
+
+@pytest.mark.asyncio
+async def test_collect_unifies_clocks_so_long_sweep_cannot_stale_player(tmp_path, monkeypatch):
+    """Full-pool search sleeps per name; per-hit stamps would age past 900s (#590)."""
+    monkeypatch.setattr("nfl_oracle.recommendations.provider.asyncio.sleep", AsyncMock())
+    state = {"t": datetime(2026, 9, 17, 12, tzinfo=UTC)}
+
+    def advancing_clock() -> datetime:
+        now = state["t"]
+        # Each clock read advances 8 minutes so a multi-request collect would
+        # otherwise leave early rating hits older than input_max_age (900s).
+        state["t"] = now + timedelta(minutes=8)
+        return now
+
+    client = NFLReader(
+        httpx.AsyncClient(transport=httpx.MockTransport(_boost_handler)),
+        RequestHeaders(
+            real_request_token="test",
+            real_version="test",
+            real_device_type="web",
+            real_device_uuid="test",
+            real_device_id="test",
+            real_device_name="test",
+            real_auth_info=None,
+            user_agent="test",
+            captured_at=0,
+        ),
+        ObservationStore(tmp_path),
+        clock=advancing_clock,
+    )
+    slate = await client.collect(DAY, contest_id=3001)
+
+    assert slate.candidates
+    assert all(c.clock.captured_at == slate.captured_at for c in slate.candidates)
+    assert all(c.clock.source_available_at == slate.captured_at for c in slate.candidates)
+    # Decision one second after the unified epoch must not raise stale_player.
+    decision = slate.captured_at + timedelta(seconds=1)
+    for player in slate.candidates:
+        age = (decision - player.clock.captured_at).total_seconds()
+        assert age < 900
+    # Without epoch unify the earliest observed stamp would already be hours old.
+    assert (decision - datetime(2026, 9, 17, 12, tzinfo=UTC)).total_seconds() > 900
 
 
 @pytest.mark.asyncio

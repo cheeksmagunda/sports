@@ -69,6 +69,34 @@ def test_worker_once_still_fails_when_poll_and_failure_audit_fail(
     sleep.assert_not_awaited()
 
 
+def test_worker_records_retryable_freeze_gates_as_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path,
+) -> None:
+    """stale_player / future_forecast must not sticky-error the slate (#590)."""
+    monkeypatch.setenv("NFL_RECOMMENDATIONS_ENABLED", "1")
+    monkeypatch.setattr(cli, "_project_root", lambda: tmp_path)
+    store = Mock()
+    monkeypatch.setattr(cli, "_engine", Mock())
+    monkeypatch.setattr(cli, "RecommendationStore", Mock(return_value=store))
+    monkeypatch.setattr(cli, "RecommendationPipeline", Mock())
+    monkeypatch.setattr(cli, "_worker_once", AsyncMock(side_effect=ValueError("stale_player")))
+    sleep = AsyncMock()
+    monkeypatch.setattr(cli.asyncio, "sleep", sleep)
+
+    assert asyncio.run(cli._run_worker(True, 30, date(2026, 9, 27))) == 0
+
+    output = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert output["status"] == "waiting"
+    assert output["reason"] == "stale_player"
+    assert output["retryable"] is True
+    kwargs = store.record_run.call_args.kwargs
+    assert kwargs["status"] == "waiting"
+    assert kwargs["detail_code"] == "stale_player"
+    sleep.assert_not_awaited()
+
+
 def test_run_worker_passes_explicit_refreeze_override_to_poll(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

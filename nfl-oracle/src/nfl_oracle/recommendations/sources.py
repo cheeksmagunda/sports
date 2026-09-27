@@ -553,8 +553,11 @@ def forecast_features(
         if not start <= utc(kickoff) < end:
             continue
         generated = row.get("forecast_generated_at")
+        # NWS generatedAt can skew seconds ahead of the worker clock. Skipping
+        # weather for that period keeps the freeze alive; raising aborted the
+        # 2026-09-27 early window (#590).
         if generated and utc(datetime.fromisoformat(str(generated))) > utc(decision_at):
-            raise ValueError("future_forecast")
+            return {}
         features: dict[str, float] = {}
         temp = row.get("temperature")
         if isinstance(temp, (int, float)) and row.get("temperatureUnit") in {"F", "C"}:
