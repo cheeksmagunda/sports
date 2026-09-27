@@ -1,0 +1,286 @@
+/* NHL Oracle frontend — dark ice aesthetic.
+ * Hex literals stay in this file; components use the semantic tokens.
+ */
+
+:root {
+  color-scheme: dark light;
+
+  --ice-950: #050a10;
+  --ice-900: #071018;
+  --ice-850: #0c1824;
+  --ice-800: #122232;
+  --ice-700: #1a3348;
+  --ice-500: #3d5f78;
+  --ice-300: #6b8499;
+  --ice-200: #9bb0c2;
+  --ice-100: #c4d4e0;
+  --ice-50: #e8eef4;
+  --ice-0: #f5f8fb;
+
+  --frost-700: #0a6b8a;
+  --frost-500: #1a8fb3;
+  --frost-300: #7ec8e3;
+  --frost-200: #a8dced;
+
+  --signal-warn: #c9a227;
+
+  --bg-canvas: light-dark(var(--ice-50), var(--ice-900));
+  --bg-surface: light-dark(var(--ice-0), var(--ice-850));
+  --bg-elevated: light-dark(#ffffff, var(--ice-800));
+  --border-subtle: light-dark(var(--ice-100), var(--ice-800));
+  --border-default: light-dark(var(--ice-200), var(--ice-700));
+  --text-primary: light-dark(var(--ice-950), var(--ice-50));
+  --text-secondary: light-dark(var(--ice-700), var(--ice-200));
+  --text-muted: light-dark(var(--ice-500), var(--ice-300));
+  --accent: light-dark(var(--frost-700), var(--frost-300));
+  --accent-soft: light-dark(var(--frost-200), var(--frost-700));
+  --on-accent: #ffffff;
+
+  --font-display: "Oswald", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --radius: 0;
+  --max-width: 42rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in srgb, var(--frost-700) 28%, transparent), transparent),
+    linear-gradient(180deg, var(--bg-canvas), color-mix(in srgb, var(--bg-canvas) 88%, var(--ice-800)));
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 3000;
+  padding: var(--space-2) var(--space-3);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.skip-link:focus {
+  left: var(--space-3);
+  top: var(--space-3);
+}
+
+.app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brand__mark {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  border: 2px solid var(--accent);
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.brand__name {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.topbar__nav {
+  display: flex;
+  gap: var(--space-4);
+  margin-left: auto;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.topbar__nav a {
+  color: var(--text-muted);
+  padding-bottom: 2px;
+  border-bottom: 1px solid transparent;
+}
+
+.topbar__nav a:hover,
+.topbar__nav a.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+.topbar__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.main {
+  width: min(100%, calc(var(--max-width) + 2 * var(--space-5)));
+  margin: 0 auto;
+  padding: var(--space-7) var(--space-5);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.footer__version {
+  font-family: var(--font-mono);
+}
+
+.hero__kicker,
+.panel__kicker {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hero__title,
+.panel__title {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 8vw, 3.6rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.05;
+}
+
+.hero__lede,
+.panel__body {
+  margin: 0 0 var(--space-5);
+  color: var(--text-secondary);
+  max-width: 36rem;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 var(--space-4);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn--ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.panel {
+  padding: var(--space-5) 0;
+}
+
+.panel__meta {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+}
+
+.panel__status {
+  margin-top: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.panel__status--warn {
+  color: var(--signal-warn);
+}
+
+.panel__code {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  overflow: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
