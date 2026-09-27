@@ -104,9 +104,11 @@ MODEL_POLICY_SETTING_FIELDS = frozenset(
         "optimizer_leverage_weight",
         "optimizer_max_per_team",
         "optimizer_max_single_boost",
+        "optimizer_max_value_ownership_fade",
         "optimizer_mixture_variance_enabled",
         "optimizer_n_field_lineups",
         "optimizer_n_samples",
+        "optimizer_objective_mode",
         "optimizer_top_n_filter",
         "payout_regime",
         "picker_boost_tail_lift",
@@ -266,6 +268,8 @@ def build_optimize_config(settings: Settings) -> OptimizeConfig:
         field_same_team_boost=settings.field_same_team_boost,
         duplication_aware_payout=settings.optimizer_duplication_aware_payout,
         committed_order_objective=settings.optimizer_committed_order_objective,
+        objective_mode=settings.optimizer_objective_mode,
+        max_value_ownership_fade=settings.optimizer_max_value_ownership_fade,
     )
 
 
@@ -432,7 +436,6 @@ def _build_specs(
         label_names=label_names,
         K=K,
         volatility=volatility,
-        popularity_scores=popularity_scores,
     )
 
     attach_archetypes(
@@ -693,6 +696,8 @@ def _freeze_recommendation(
         "field_same_team_boost": cfg.field_same_team_boost,
         "duplication_aware_payout": cfg.duplication_aware_payout,
         "committed_order_objective": cfg.committed_order_objective,
+        "objective_mode": cfg.objective_mode,
+        "max_value_ownership_fade": cfg.max_value_ownership_fade,
         "field_measured_ownership_enabled": policy.field_measured_ownership_enabled,
         "mixture_variance_enabled": policy.mixture_variance_enabled,
         "never_skip": cfg.never_skip,

@@ -331,11 +331,17 @@ class OptimizeConfig:
     # `scripts/lab.py variant --set committed_order_objective=True --last 0`
     committed_order_objective: bool = False
     # #433 total draft value: select by E[committed-order lineup score]
-    # (slot+boost)×realized instead of E[payout]. Default "payout" keeps
+    # (slot+boost)*realized instead of E[payout]. Default "payout" keeps
     # production byte-identical. When "total_draft_value", committed-order
     # scoring is forced and payout/leverage/ceiling/duplication additives
     # are skipped so the scan maximises slate TV, not contest placement.
     objective_mode: Literal["payout", "total_draft_value"] = "payout"
+    # #453 ownership-fade tiebreaker for total_draft_value mode. Applied as
+    # objective += weight * mean(-log(ownership_i)) over the 5 picks. A small
+    # positive weight prefers low-ownership names when combos are close in
+    # expected total value; 0.001 is a negligible tiebreaker, 0.01+ gives a
+    # stronger low-ownership preference. Only active in total_draft_value mode.
+    max_value_ownership_fade: float = 0.001
 
 
 @dataclass
@@ -460,6 +466,12 @@ def _scan_lineups(
         if tdv_mode:
             # E[committed-order TV]: maximise slate draft value, not payout.
             objective = float(np.mean(own_samples))
+            # Ownership-fade tiebreaker: among combos with similar expected
+            # total value, prefer low-ownership names so we harvest the
+            # underdrafted right tail the field leaves on the table (#453).
+            if cfg.max_value_ownership_fade > 0.0:
+                leverage = float(-inputs.keep_log_own[list(combo)].mean())
+                objective += cfg.max_value_ownership_fade * leverage
         else:
             objective = expected_payout(
                 own_samples,
