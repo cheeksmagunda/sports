@@ -1,14 +1,14 @@
 # Status
 
-Last verified: 2026-09-27 (health-scaffold + nba-staging pause)
+Last verified: 2026-09-27T02:55Z (repo + prior Railway disconnect evidence)
 
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+## Railway mono-project shell (verified non-serving) (#457 / #453)
 
-- Verified stub scaffold on `sports-oracle` / `nba-staging`: `nba-api`,
-  `nba-worker`, `nba-frontend`, Postgres. Non-serving stubs; app has no
-  Dockerfile yet. Design + runbook on #457.
-- Live traffic for other sports remains on old projects through Sunday
-  2026-09-27 (#453); NBA has no live Railway serving.
+- Scaffold on `sports-oracle` / `nba-staging`: `nba-api`, `nba-worker`,
+  `nba-frontend`, Postgres. Non-serving. Design + runbook on #457.
+- `nba-oracle/Dockerfile` + `railway.toml` are on `main` (merged #486).
+- WNBA + NFL Sunday path is on mono production envs (#453/#457); NBA still
+  has **no** live contest serving.
 
 This file records application state only.
 
@@ -20,19 +20,24 @@ This file records application state only.
 - Wired for root checks: test, lint, typecheck, build, boundary, and app contract
 - CI: root `make test-nba` runs in `backend-ci.yml` alongside WNBA/NFL/NHL import smoke
 - Calendar / TRACKED seasons: not started (NBA.com lists 2026-10-20 regular-season open; not recorded in-app)
-- Not started: provider ingest, schemas, modeling, scheduling, contest logic
+- Multi-year history ingest scaffolding: open PR #489 (CONFLICTING as of
+  2026-09-27T02:54Z). Not merged; no live DB load claimed.
+- Not started: provider ingest on Railway, schemas beyond health, modeling,
+  scheduling, contest logic
 
 ## Railway mono (`sports-oracle` / `nba-staging`, env `7ac1e6f8-…`)
 
-Verified 2026-09-27 via Codespace `fluffy-zebra-g4gqq746477q2jg` /
-`scripts/codespace-railway-env`. Non-serving scaffold only (#457 / #453).
+Last Railway disconnect evidence: 2026-09-27 via Codespace
+`fluffy-zebra-g4gqq746477q2jg` / `scripts/codespace-railway-env` (pre-#486
+Railpack pause). **Reconnect / SUCCESS deploy after #486: unverified** this
+pass.
 
 | Service | Source | Last deploy | Notes |
 | --- | --- | --- | --- |
-| `nba-api` | **disconnected** | FAILED (Railpack, pre-Dockerfile) | Pause: GitHub source disconnected to stop Railpack loops. Reconnect after this Dockerfile lands on `main`, then `--from-source` redeploy. |
+| `nba-api` | **disconnected** (last verified) | FAILED (Railpack, pre-Dockerfile) | Reconnect to `cheeksmagunda/sports@main` + `--from-source` still required; post-#486 deploy status unverified. |
 | `nba-worker` | **disconnected** | FAILED | No worker role yet; leave disconnected. |
 | `nba-frontend` | **disconnected** | FAILED | No frontend package yet; leave disconnected. |
-| `Postgres-6eeu` | n/a | SUCCESS / Online | Empty DB; unused by health scaffold. |
+| `Postgres-6eeu` | n/a | SUCCESS / Online (last verified) | Empty DB; unused by health scaffold. |
 
 No public domain claimed. No contest features. No Real Sports credential on NBA services.
 

@@ -1,5 +1,16 @@
 # Status
 
+Last verified: 2026-09-27T02:58Z (public mono health/slate + volume list)
+
+## Corpus G nightly gap (#453)  -  2026-09-27T02:55Z
+
+- `.github/workflows/nfl-corpus-g-nightly.yml` is **absent on `main`**
+  (`gh` workflow lookup 404). No scheduled Corpus G nightly run yet.
+- Durable catalog / volume persistence for Corpus G therefore remains a
+  residual: worker volume must stay attached and writable (see volume note
+  under cutover). Unverified: whether a draft nightly workflow exists only
+  on an unmerged branch.
+
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
 Operator-ordered live cutover from `nfl-oracle-staging` /
@@ -39,9 +50,25 @@ credential minting. No secret values printed.
   real custom DNS later). Legacy remains until cron/domain cut finishes.
 - Empty mono worker volume (`nfl-oracle-worker-volume`, mount
   `/app/nfl-oracle/data`) caused `PermissionError` (root-owned volume
-  under image `USER oracle`). **Detached** so worker could boot; volume
-  retained in project for later chown/reattach. Old project worker+volume
-  left running for rollback.
+  under image `USER oracle`) at cutover. Initially **detached** so worker
+  could boot; volume retained in project. Old project worker+volume left
+  running for rollback.
+
+### Volume attach re-check (2026-09-27T02:55Z)
+
+Verified via Codespace Railway CLI `railway volume list` on
+`sports-oracle` / `nfl-production` (no secret values):
+
+- `nfl-oracle-worker-volume` mount `/app/nfl-oracle/data` is **attached**
+  to service `nfl-oracle-worker` again.
+- Worker env `RAILWAY_VOLUME_MOUNT_PATH=/app/nfl-oracle/data` **set**.
+- Mono API `/health` ok + `/slate/2026-09-27` `waiting` /
+  `waiting_offline_pregate` with `cutoff_at=2026-09-27T17:00:00Z` (re-check
+  02:58Z). Legacy `nfl-oracle-production.up.railway.app/health` still HTTP
+  200.
+- **Unverified:** whether volume ownership was chown'd from root to
+  `oracle` (write path). Treat PermissionError risk as open until a
+  successful volume write is observed in worker logs.
 
 ### Rollback
 

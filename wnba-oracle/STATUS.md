@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-27T02:00:00Z
+Last verified: 2026-09-27T02:55:00Z (Codespace Railway CLI + public health)
 
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
 
@@ -50,12 +50,25 @@ printed.
   Postgres/Redis (not `*.railway.internal`). Design on #457.
 
 
-## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
+## Win-draft knobs on mono (verified) (#453)  -  2026-09-27T02:55Z
 
-- `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
-- `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
-- Data plane: public Postgres `acela.proxy.rlwy.net:51730` with `sslmode=require` (not verify-ca — missing `root.crt` in container); Redis `altaria.proxy.rlwy.net:13969`.
-- Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO.
+Re-read via Codespace `scripts/codespace-railway-env` against
+`sports-oracle` / `wnba-production`. No secret values printed.
+
+| Knob | `wnba-cron-job2` | `wnba-api` | Notes |
+|------|------------------|------------|-------|
+| `PAYOUT_REGIME` | `top_1` | `top_1` | was `top_20`; rollback: restore `top_20` |
+| `LIVE_OWNERSHIP_CAPTURE_ENABLED` | `true` | `true` | — |
+| `OPTIMIZER_OBJECTIVE_MODE` | `total_draft_value` | **ABSENT** | code+merge #497; serving flip on job2 only |
+| `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE` | `0.001` | **ABSENT** | pairs with TDV mode on job2 |
+
+- Public health re-check 02:55Z: mono API `/health` ok; frontend HTTP 200;
+  `/watchdog/today` `status=ok`, live `events=[]`, slate `2026-09-26`.
+- Data plane: public Postgres `acela.proxy.rlwy.net:51730` with
+  `sslmode=require` (not verify-ca — missing `root.crt` in container);
+  Redis `altaria.proxy.rlwy.net:13969`.
+- Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO
+  (verified at cutover ~02:08Z).
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
@@ -105,13 +118,16 @@ were verified on Railway project **`wnba-oracle`**. Serving is now mono.
   dayclose `degraded` and job1/job1late `failed`. Older entries below that
   describe `ops-guard` or incident issues record past behavior only.
 
-## Optional total_draft_value optimizer objective (#433)  -  2026-09-26
+## Optional total_draft_value optimizer objective (#433 / #497 / #453)
 
-- `OptimizeConfig.objective_mode` defaults to `"payout"` (production unchanged).
+- Code default remains `"payout"`; unit tests in
+  `tests/unit/test_total_draft_value_objective.py`.
 - `"total_draft_value"` selects by E[committed-order lineup score] and skips
-  payout/leverage/ceiling/duplication additives. Offline / lab only until a
-  walk-forward TV capture number justifies a serving flip.
-- Unit tests in `tests/unit/test_total_draft_value_objective.py`.
+  payout/leverage/ceiling/duplication additives; optional ownership fade via
+  `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE`.
+- **Serving (mono job2):** `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` and
+  fade `0.001` verified live on `wnba-cron-job2` 2026-09-27T02:55Z after
+  #497. `wnba-api` does not set those two knobs (read path only).
 
 This file records live operational state only. Values marked unverified were
 not exposed by the read-only checks available during this audit.

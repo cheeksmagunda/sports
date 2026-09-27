@@ -1,19 +1,24 @@
 # Status
 
-Last verified: 2026-09-27 (#482 Docker/Railway staging scaffold; continues #453/#457)
+Last verified: 2026-09-27T02:58Z (public staging health; continues #453/#457)
 
 ## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
 - Verified scaffold on `sports-oracle` / `nhl-staging`: `nhl-api`,
-  `nhl-worker`, `nhl-frontend`, Postgres. **Non-serving** for NHL; no
-  public NHL API/frontend domain claimed yet. Design + runbook on #457.
-- Sibling mono public URLs already answering (other sports, #457/#453):
+  `nhl-worker`, `nhl-frontend`, Postgres. **Not contest-serving**; no
+  freeze/publish lifecycle. Design + runbook on #457.
+- Public staging smoke re-check 2026-09-27T02:58Z:
+  - `https://nhl-api-nhl-staging.up.railway.app/health` → HTTP **200**
+  - `https://nhl-frontend-nhl-staging.up.railway.app/` → HTTP **200**
+- Sibling mono serving URLs (other sports, #457/#453 cutover):
   - WNBA API `https://wnba-api-wnba-production.up.railway.app`
   - WNBA frontend `https://wnba-frontend-wnba-production.up.railway.app`
   - NFL API `https://nfl-api-nfl-production.up.railway.app`
 - Legacy NFL `nfl-oracle-production.up.railway.app` still HTTP 200 until
   domain/cron cut completes; data-plane must use the public TCP proxy URL,
   not private Railway hostnames.
+- Nightly public-history sync schedule on `nhl-worker`: **unverified**
+  (no Actions workflow observed on `main` for NHL history nightly).
 
 This file records application state only.
 
@@ -110,7 +115,8 @@ This file records application state only.
   from these paths after merge (verify deploy IDs live).
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
   optimizer, production NHL serving / contest entry. Any future
-  picker/backtest must assume zero boosts until every NHL team has played
+  picker/backtest must assume zero boosts until every NHL franchise has
+  >=1 GP (`contract.boost_gate`); that early-season gap is the edge.
 
 ## Boundaries
 
@@ -145,6 +151,10 @@ Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
     cards without boost fields. Operator rule: until every NHL team has had
     a game, there are no card boosts; do not design picker logic around
     boosts. #325 corrects #299/#308 `flat`.
+    The early-season gap between games starting (when boost fields may tempt
+    the field) and every franchise completing one game is the edge: keep
+    `boost_regime=none` and exploit mispricing; `contract.boost_gate` enforces
+    this in code until all 32 franchises have >=1 GP.
   - score_value_label: `value` (contest draftStats)
   - goalie_eligible: `True` (position `G` on live player cards)
   - slot_multipliers: `(2.0, 1.8, 1.6, 1.4, 1.2)`
