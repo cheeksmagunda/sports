@@ -55,6 +55,7 @@ def materialize_specs(
     label_names: dict[int, str],
     K: float,
     volatility: dict[int, float],
+    popularity_scores: dict[int, float] | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict[str, Any]]]:
     """Preserve the former ``settings=`` materialization API."""
     return _materialize_specs(
@@ -65,6 +66,7 @@ def materialize_specs(
         label_names=label_names,
         K=K,
         volatility=volatility,
+        popularity_scores=popularity_scores,
     )
 
 

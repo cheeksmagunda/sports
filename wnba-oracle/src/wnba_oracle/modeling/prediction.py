@@ -657,6 +657,11 @@ def materialize_specs(
             else None
         )
         pre_contrarian = float(preds.pred_real_scores.get(pid, pred))
+        pop = (
+            float(popularity_scores[pid])
+            if popularity_scores and pid in popularity_scores
+            else None
+        )
         fields.append(
             FieldPlayerSpec(
                 player_id=pid,
@@ -667,6 +672,7 @@ def materialize_specs(
                     pre_contrarian=pre_contrarian,
                     boost_tail_rank=preds.rank_pred_by_pid.get(pid),
                 ),
+                popularity_score=pop,
             )
         )
         enrichment_name = str(r.get("name", "") or "").strip()
