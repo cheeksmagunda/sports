@@ -1,41 +1,30 @@
 # Status
 
-Last verified: 2026-09-27 (#482 Docker/Railway staging scaffold; continues #453/#457)
+Last verified: 2026-09-27 CT (#482 nhl-staging Docker live smoke)
 
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+## Railway nhl-staging live smoke (#482)  -  2026-09-27
 
-- Verified scaffold on `sports-oracle` / `nhl-staging`: `nhl-api`,
-  `nhl-worker`, `nhl-frontend`, Postgres. **Non-serving** for NHL; no
-  public NHL API/frontend domain claimed yet. Design + runbook on #457.
-- Sibling mono public URLs already answering (other sports, #457/#453):
-  - WNBA API `https://wnba-api-wnba-production.up.railway.app`
-  - WNBA frontend `https://wnba-frontend-wnba-production.up.railway.app`
-  - NFL API `https://nfl-api-nfl-production.up.railway.app`
-- Legacy NFL `nfl-oracle-production.up.railway.app` still HTTP 200 until
-  domain/cron cut completes; data-plane must use the public TCP proxy URL,
-  not private Railway hostnames.
+- Source: `nhl-oracle/Dockerfile` + `railway.toml`; root `.dockerignore`
+  allowlists `nhl-oracle` paths (PR #494). `dockerfilePath` set on
+  `nhl-api` / `nhl-worker` (`nhl-oracle/Dockerfile`) and `nhl-frontend`
+  (`Dockerfile` + `rootDirectory=nhl-oracle/frontend`).
+- Verified live (staging only, no contest claims):
+  - `GET https://nhl-api-nhl-staging.up.railway.app/health` →
+    `status=ok`, `observation_only=true`, `contest_entry=false`
+  - `nhl-frontend` HTTPS 200 at
+    `https://nhl-frontend-nhl-staging.up.railway.app/`
+  - Deploy commit `cf532a93` (dockerignore fix on top of #487 scaffold).
+    Deploy IDs (verified SUCCESS): api `27b8fed2…`, worker `f2431eed…`,
+    frontend `e5aa846c…`.
+- Worker role: idle observation-only heartbeat (`nhl-pipeline worker`).
+  No Real Sports provider loop; no migrate-on-startup; no secrets in image.
+- Design/runbook context: #457. **No contest entry. Staging only.**
 
-This file records application state only.
+## Railway mono-project shell (#457)  -  2026-09-27
 
-## Public NHL history staging load (#453)  -  2026-09-27
-
-- `sports-oracle` / `nhl-staging` Postgres now holds NHL public-history tables
-  `nhl_history_games`, `nhl_history_player_games`, and
-  `nhl_history_season_coverage`, loaded from the public NHL API with a
-  browser-style User-Agent via `nhl-history-load`.
-- Verified row counts in staging Postgres:
-  - `nhl_history_games`: **5599**
-  - `nhl_history_player_games`: **223901**
-  - `nhl_history_season_coverage`: **4**
-- Verified season coverage in staging:
-  - 2021-22: games **1401/1401**, player rows **56020**, status `complete`
-  - 2022-23: games **1400/1400**, player rows **55980**, status `complete`
-  - 2023-24: games **1400/1400**, player rows **55988**, status `complete`
-  - 2024-25: games **1398/1398**, player rows **55913**, status `complete`
-- Scope note: this is official/public NHL game history only. It is useful for
-  NHL-owned chronology, schedule, and stat features, but it is **not** the
-  Real Sports value-label corpus and does not change the `contest_entry: False`
-  posture.
+- sports-oracle `nhl-staging` hosts `nhl-api`, `nhl-worker`, `nhl-frontend`,
+  Postgres, Redis. Live WNBA/NFL traffic remains on prior projects through
+  Sunday windows (#453) except as separately authorized.
 
 ## Sunday readiness honesty (#453)  -  2026-09-27
 
