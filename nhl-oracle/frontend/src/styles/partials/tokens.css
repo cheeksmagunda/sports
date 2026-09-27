@@ -1,0 +1,100 @@
+/* Primitive ice ramp + semantic tokens. Hex literals stay here. */
+
+:root {
+  color-scheme: light dark;
+
+  --ice-950: #071018;
+  --ice-900: #0c1c28;
+  --ice-800: #132836;
+  --ice-700: #1a3a4a;
+  --ice-500: #1a6b7c;
+  --ice-400: #3d8fa8;
+  --ice-300: #7ec8d8;
+  --ice-200: #b5dde8;
+  --ice-100: #c5e8f0;
+  --ice-50:  #eef4f7;
+
+  --frost-900: #1a2430;
+  --frost-700: #3a4a58;
+  --frost-500: #5a6b75;
+  --frost-300: #8a9aa5;
+  --frost-100: #d6e0e6;
+  --frost-0:   #ffffff;
+
+  --rink-600: #9a3b3b;
+  --rink-400: #c45c5c;
+
+  --bg-canvas:   light-dark(var(--ice-50),  var(--ice-950));
+  --bg-surface:  light-dark(var(--frost-0), var(--ice-900));
+  --bg-elevated: light-dark(var(--frost-0), var(--ice-800));
+  --bg-inset:    light-dark(var(--frost-100), var(--ice-700));
+
+  --border-subtle:  light-dark(var(--frost-100), var(--ice-800));
+  --border-default: light-dark(#c8d4dc, var(--ice-700));
+  --border-strong:  light-dark(var(--frost-300), var(--frost-500));
+
+  --text-primary:   light-dark(var(--ice-950), var(--ice-50));
+  --text-secondary: light-dark(var(--frost-700), var(--frost-100));
+  --text-muted:     light-dark(var(--frost-500), var(--frost-300));
+  --text-inverse:   light-dark(var(--ice-50),  var(--ice-950));
+
+  --primary:       light-dark(var(--ice-500), var(--ice-300));
+  --primary-hover: light-dark(var(--ice-700), var(--ice-200));
+  --primary-text:  light-dark(var(--ice-500), var(--ice-300));
+  --on-primary:    light-dark(#ffffff, var(--ice-950));
+
+  --accent:      light-dark(var(--ice-400), var(--ice-200));
+  --accent-text: light-dark(var(--ice-700), var(--ice-100));
+
+  --good: light-dark(oklch(0.46 0.12 152), oklch(0.78 0.14 152));
+  --warn: light-dark(oklch(0.55 0.16 70),  oklch(0.78 0.16 70));
+  --bad:  light-dark(oklch(0.5  0.18 25),  oklch(0.7  0.2  25));
+
+  --focus-ring: light-dark(var(--ice-500), var(--ice-300));
+
+  --shadow-sm: light-dark(
+    0 1px 2px rgba(7,16,24,0.06),
+    0 1px 0 rgba(255,255,255,0.02) inset
+  );
+  --shadow-md: light-dark(
+    0 1px 2px rgba(7,16,24,0.04), 0 4px 12px rgba(7,16,24,0.08),
+    0 0 0 1px rgba(255,255,255,0.03) inset
+  );
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-2: 200ms;
+  --dur-3: 340ms;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: clamp(28px, 3vw, 36px);
+  --space-7: clamp(36px, 5vw, 56px);
+
+  --font-body:    'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Hanken Grotesk', ui-sans-serif, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  --fs-meta: clamp(10px, 0.7vw + 8px, 12px);
+  --fs-body: clamp(14px, 0.4vw + 13px, 16px);
+  --fs-h2:   clamp(24px, 1.6vw + 18px, 36px);
+  --fs-h1:   clamp(36px, 4vw + 16px, 64px);
+
+  --tracking-loose: 0.18em;
+  --tracking-wide:  0.08em;
+  --tracking-tight: -0.01em;
+  --line-h-body: 1.55;
+
+  --icon-lg: 32px;
+  --icon-xl: 48px;
+}
+
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark']  { color-scheme: dark;  }

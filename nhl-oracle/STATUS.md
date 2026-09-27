@@ -48,8 +48,11 @@ This file records application state only.
   `observation_only: True`, `contest_entry: False`, boost regime `none`).
   Synthetic-label unit tests lock the acceptance contract. Not yet fitted on
   seeded Real corpus; no picker/optimizer.
+- Frontend scaffold: `nhl-oracle/frontend` Vite+React+TS shell (#462). Read-only
+  UI only; expects future `GET /health`, `/slate/{date}`, `/lineup/{date}`. No
+  Railway `nhl-frontend` service provisioned yet.
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
-  optimizer, hosted API, frontend, deployment / Railway. Any future
+  optimizer, hosted API, deployment / Railway. Any future
   picker/backtest must assume zero boosts until every NHL team has played
 
 ## Boundaries

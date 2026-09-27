@@ -1,0 +1,32 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html {
+  background: var(--bg-canvas);
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--line-h-body);
+  color: var(--text-primary);
+  background:
+    radial-gradient(
+      120% 80% at 50% -10%,
+      color-mix(in oklab, var(--ice-300) 18%, transparent),
+      transparent 55%
+    ),
+    var(--bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  transition: background-color var(--dur-3) ease, color var(--dur-3) ease;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+button { font: inherit; color: inherit; }
+::selection { background: var(--primary); color: var(--on-primary); }
+a { color: var(--primary-text); }

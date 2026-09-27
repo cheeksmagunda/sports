@@ -7,9 +7,11 @@ Real Sports contract audit and corpus seed are done; Week 3 chronological
 baseline + prediction skeleton (`labels/`, `baselines/`) is started on
 synthetic labels only. Package wiring includes contest contract and audit
 gates (`contract/`), redacted ingest/provenance (`ingest/`), identity map
-(`identity/`), and freeze-cycle job skeleton (`scheduler/`). No Real-corpus
-baseline fit, contest-law optimizer, hosted API, frontend, Railway
-deployment, or contest entry exists yet.
+(`identity/`), freeze-cycle job skeleton (`scheduler/`), and a lean
+Vite+React frontend shell (`frontend/`, #462). No Real-corpus baseline fit,
+contest-law optimizer, hosted API, Railway deployment, or contest entry
+exists yet. Local frontend: `cd frontend && npm ci && npm run dev`
+(see `frontend/README.md`).
 
 ## Connection surfaces
 
@@ -93,7 +95,8 @@ contest 1901 draftStats may show flat `multiplierBonus` from a later window.
    append-only freeze; read-only API and mobile frontend; postgame
    reconciliation. One active writer, durable private runtime inputs,
    bounded retries, recoverable checkpoints, prior artifacts retained for
-   rollback.
+   rollback. Frontend shell scaffold landed (#462); API and
+   `nhl-frontend` Railway service remain future work.
 6. **Verified autonomous delivery** on a natural NHL slate. A healthy service
    is not sufficient: source freshness, active model, committed freeze, API
    payload, and actual five-card mobile rendering must all be verified.
