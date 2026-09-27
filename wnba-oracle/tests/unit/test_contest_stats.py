@@ -10,6 +10,7 @@ import pytest
 from wnba_oracle.ingest import contest_stats
 from wnba_oracle.ingest.contest_stats import (
     ContestLabel,
+    ContestNotFinalized,
     ContestRetryExhausted,
     ContestUnavailable,
     _parse_drafts,
@@ -101,6 +102,50 @@ def test_fetch_contest_stats_empty_display_name_falls_back() -> None:
     assert len(out) == 1
     assert out[0].platform_player_id == 4322873
     assert out[0].display_name == "Frieda Buhner"
+
+
+def _stats_payload(is_finalized: object) -> dict[str, object]:
+    contest: dict[str, object] = {"id": 2192, "day": "2026-09-23", "sport": "wnba"}
+    if is_finalized is not None:
+        contest["isFinalized"] = is_finalized
+    return {
+        "contest": contest,
+        "draftStats": [
+            {
+                "sectionName": "popularPlayers",
+                "players": [
+                    {
+                        "player": {"id": 701, "displayName": "A. Reese"},
+                        "team": {"key": "atl"},
+                        "multiplierBonus": 0.2,
+                        "value": "4.10",
+                        "displayStats": [{"label": "Drafts", "value": "900"}],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize("is_finalized", [False, None])
+def test_require_finalized_rejects_unfinalized_or_absent(is_finalized: object) -> None:
+    """Issue #243: the historical walk must never persist pre-game labels.
+    isFinalized false or absent is both treated as not finalized."""
+    payload = _stats_payload(is_finalized)
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, json=payload))
+    with httpx.Client(transport=transport) as client:
+        with pytest.raises(ContestNotFinalized):
+            fetch_contest_stats(2192, _stub_headers(), client, require_finalized=True)
+        # Default (discovery / live collection) still accepts a live contest.
+        assert len(fetch_contest_stats(2192, _stub_headers(), client)) == 1
+
+
+def test_require_finalized_accepts_finalized_contest() -> None:
+    payload = _stats_payload(True)
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, json=payload))
+    with httpx.Client(transport=transport) as client:
+        out = fetch_contest_stats(2192, _stub_headers(), client, require_finalized=True)
+    assert [label.slate_date for label in out] == ["2026-09-23"]
 
 
 def test_fetch_contest_stats_429_exhaustion_is_not_unavailable() -> None:

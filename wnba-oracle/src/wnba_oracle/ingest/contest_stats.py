@@ -71,6 +71,18 @@ class ContestRetryExhausted(RuntimeError):
     """A required contest request exhausted its bounded retry budget."""
 
 
+class ContestNotFinalized(RuntimeError):
+    """A WNBA contest whose payload does not carry `isFinalized: true`.
+
+    Raised only when the caller passes `require_finalized=True` (the
+    historical/day-close walk). Its labels are pre-game or in-progress
+    values, so the caller skips the contest rather than persisting them; the
+    next night's overlapping walk re-reads it once it is final (issue #243).
+    Deliberately not a `ContestUnavailable` subclass: contest discovery and
+    live collection must keep accepting a live, unfinalized contest.
+    """
+
+
 @dataclass(frozen=True)
 class ContestLabel:
     """One per-slate per-player training label."""
@@ -142,8 +154,13 @@ def fetch_contest_stats(
     client: httpx.Client,
     *,
     refresh_headers: Callable[[], RequestHeaders] | None = None,
+    require_finalized: bool = False,
 ) -> list[ContestLabel]:
     """Synchronous fetch + parse. Returns per-player labels for the contest.
+
+    With `require_finalized=True`, a WNBA contest whose payload does not
+    carry `contest.isFinalized is True` (false or absent) raises
+    `ContestNotFinalized` instead of returning pre-game labels.
 
     On 401, if a `refresh_headers` callback is supplied, call it once,
     re-build the header dict, and retry. Subsequent 401 raises
@@ -195,6 +212,10 @@ def fetch_contest_stats(
     if contest.get("sport") != "wnba":
         raise ContestUnavailable(
             f"contest {contest_id} sport={contest.get('sport')} (expected wnba)"
+        )
+    if require_finalized and contest.get("isFinalized") is not True:
+        raise ContestNotFinalized(
+            f"contest {contest_id} isFinalized={contest.get('isFinalized')!r} (expected True)"
         )
     slate_date = str(contest.get("day", ""))
     sections = body.get("draftStats") or []

@@ -63,6 +63,36 @@ def test_all_required_and_optional_steps_complete_successfully() -> None:
     }
 
 
+def test_historical_walk_includes_the_discovered_contest() -> None:
+    """Issue #243: at the 06:00 UTC dispatch the discovered (newest validated
+    WNBA) contest IS yesterday's contest. The walk must start at it, not one
+    below it, or yesterday's labels/leaderboard are never ingested on its own
+    night and placement_capture degrades every run.
+    """
+    patches = _success_steps()
+    patches[2] = patch.object(job_dayclose, "run_historical_backfill", return_value=0)
+    with (
+        patches[0],
+        patches[1],
+        patches[2] as backfill,
+        patches[3],
+        patches[4],
+        patches[5],
+        patches[6],
+        patches[7],
+        patches[8],
+    ):
+        result = job_dayclose.run()
+
+    assert result.status is JobStatus.SUCCESS
+    backfill.assert_called_once()
+    kwargs = backfill.call_args.kwargs
+    assert kwargs["start_id"] == 2100
+    assert kwargs["stop_id"] == 2100 - job_dayclose.DEFAULT_WALK_WINDOW
+    assert kwargs["with_leaderboards"] is True
+    assert result.details["substeps"]["historical_backfill"]["start_id"] == 2100
+
+
 def test_required_game_log_failure_fails_dayclose() -> None:
     patches = _success_steps()
     patches[7] = patch.object(
