@@ -17,6 +17,7 @@ on:
       - "scripts/realsports_corpus/**"
       - "scripts/tests/test_realsports_corpus_manifest.py"
       - "scripts/tests/test_realsports_corpus_layout.py"
+      - "scripts/tests/test_realsports_corpus_coverage_status.py"
       - ".github/workflows/realsports-corpus-append.yml"
   push:
     branches: [main]
@@ -24,6 +25,7 @@ on:
       - "scripts/realsports_corpus/**"
       - "scripts/tests/test_realsports_corpus_manifest.py"
       - "scripts/tests/test_realsports_corpus_layout.py"
+      - "scripts/tests/test_realsports_corpus_coverage_status.py"
       - ".github/workflows/realsports-corpus-append.yml"
   schedule:
     # Offset from wnba corpus-backup (06:43) and nfl-corpus-backup (11:30).
@@ -78,7 +80,14 @@ jobs:
           uv run --frozen --package oracle-core --extra dev
           python -m pytest
           scripts/tests/test_realsports_corpus_manifest.py
-          scripts/tests/test_realsports_corpus_layout.py -q
+          scripts/tests/test_realsports_corpus_layout.py
+          scripts/tests/test_realsports_corpus_coverage_status.py -q
+
+      - name: Offline coverage_manifest dry-run (no Ollama)
+        run: >
+          uv run --frozen --package oracle-core
+          python scripts/realsports_corpus/generate_coverage_status.py
+          --out-dir ${{ runner.temp }}/rs-corpus-offline-status
 
       - name: Stage fixture into temp corpus layout
         env:

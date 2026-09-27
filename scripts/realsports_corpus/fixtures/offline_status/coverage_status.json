@@ -1,0 +1,112 @@
+{
+  "family_status_rollup": {
+    "nba": {
+      "averages": "stub",
+      "combined_stats": "stub",
+      "draft_stats_all_sections": "stub",
+      "feeds": "stub",
+      "lineups": "stub",
+      "matchups": "stub",
+      "players": "stub",
+      "recorded_states": "stub",
+      "slate_rosters": "stub",
+      "team_weights": "stub",
+      "total_value_leaderboards": "stub"
+    },
+    "nfl": {
+      "averages": "stub",
+      "combined_stats": "present",
+      "draft_stats_all_sections": "present",
+      "feeds": "present",
+      "lineups": "present",
+      "matchups": "present",
+      "players": "present",
+      "recorded_states": "present",
+      "slate_rosters": "present",
+      "team_weights": "partial",
+      "total_value_leaderboards": "present"
+    },
+    "nhl": {
+      "averages": "stub",
+      "combined_stats": "stub",
+      "draft_stats_all_sections": "stub",
+      "feeds": "stub",
+      "lineups": "stub",
+      "matchups": "stub",
+      "players": "stub",
+      "recorded_states": "stub",
+      "slate_rosters": "stub",
+      "team_weights": "stub",
+      "total_value_leaderboards": "stub"
+    },
+    "wnba": {
+      "averages": "stub",
+      "combined_stats": "present",
+      "draft_stats_all_sections": "stub",
+      "feeds": "stub",
+      "lineups": "present",
+      "matchups": "stub",
+      "players": "present",
+      "recorded_states": "stub",
+      "slate_rosters": "stub",
+      "team_weights": "stub",
+      "total_value_leaderboards": "present"
+    }
+  },
+  "fixture_present_family_cells": 13,
+  "fixture_total_family_cells": 44,
+  "handoff_matrix": [
+    {
+      "nba": "MISSING ingest (fail-closed stub #532)",
+      "nfl": "COMPLETE Corpus C offline export (#534); MISSING volume\u2192sibling append",
+      "nhl": "PARTIAL HV train path (#542); MISSING RS contest corpus export",
+      "surface": "HV boards (total_value_leaderboards)",
+      "wnba": "COMPLETE export path (#532/#539); MISSING sibling publish (needs CORPUS_REPO_TOKEN)"
+    },
+    {
+      "nba": "MISSING",
+      "nfl": "COMPLETE on Railway volume (~3k files); MISSING kind-first sibling publish",
+      "nhl": "PARTIAL official NHL history; MISSING RS boxes in sibling",
+      "surface": "Corpus G (game boxes / players / feed)",
+      "wnba": "MISSING RS Corpus-G-style store (game_logs partial elsewhere)"
+    },
+    {
+      "nba": "MISSING",
+      "nfl": "COMPLETE offline HV+draftStats+matchups export (#534); MISSING sibling hydrate",
+      "nhl": "MISSING",
+      "surface": "Corpus C (contest archive)",
+      "wnba": "n/a (Postgres slate_labels / contest_leaderboards)"
+    },
+    {
+      "nba": "COMPLETE fail-closed append stub (#537); MISSING ingest",
+      "nfl": "COMPLETE Corpus G + #537 append; MISSING sibling soft-merge",
+      "nhl": "COMPLETE append stub (#537); MISSING RS matchup history in sibling",
+      "surface": "Matchups / game-stats append",
+      "wnba": "COMPLETE script path (#537); MISSING full-history sibling fill"
+    },
+    {
+      "nba": "MISSING",
+      "nfl": "COMPLETE via Corpus C export (#534); MISSING sibling publish",
+      "nhl": "MISSING durable (audit-only historically)",
+      "surface": "draftStats all sections",
+      "wnba": "COMPLETE dump CLI (#538) + Postgres export (#539); MISSING sibling publish"
+    }
+  ],
+  "historical_capture_complete": false,
+  "issue": 526,
+  "mode": "offline_fixture_dry_run",
+  "ollama": false,
+  "ollama_codespace_helper_allowed": false,
+  "ollama_gate": "FORBIDDEN",
+  "operator_unlock_checklist": [
+    "Do NOT install or wire Ollama until historical_capture_complete is true.",
+    "Provision CORPUS_REPO_TOKEN (contents:write on cheeksmagunda/sports-realsports-corpus); agents must not mint.",
+    "Confirm REALSPORTS_STORAGE_STATE_B64GZ is injected into Codespace process env (sha256[:8] only).",
+    "Publish WNBA Postgres export (#539) + NFL Corpus C/G exports (#534/#537) into sibling via realsports-corpus-append workflow_dispatch confirm_append=true.",
+    "Fill NBA RS ingest (today fail-closed) and NHL RS contest/HV durable export beyond official history.",
+    "Soft-merge coverage_manifest.json until every sport\u00d7family is present with artifact_count>=1.",
+    "Re-read sibling coverage_manifest.json; only then set/allow Ollama Codespace helper."
+  ],
+  "schema_version": 1,
+  "sibling_corpus_live_note": "As of dry-run generation: sibling repo holds kind dirs + empty coverage_manifest (all unknown) plus one synthetic NFL HV proof slate under total_value_leaderboards/nfl/2026/slate_2026-01-01/. historical_capture_complete remains false."
+}

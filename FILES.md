@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1085 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1090 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -791,6 +791,7 @@ Generated from `git ls-files`. 1085 tracked files. Regenerate with `scripts/gene
 - scripts/realsports_corpus/__init__.py -- Portfolio Real Sports contest corpus layout and export stubs (#526).
 - scripts/realsports_corpus/coverage_manifest.py -- coverage_manifest schema and Ollama Codespace helper gate (#526).
 - scripts/realsports_corpus/export_stubs.py -- Offline-safe export stubs from existing durable stores into corpus layout.
+- scripts/realsports_corpus/generate_coverage_status.py -- Offline coverage_manifest dry-run from durable-store fixtures (#526).
 - scripts/realsports_corpus/layout.py -- Explicit on-disk layout for Real Sports corpus kinds (#526).
 - scripts/realsports_corpus/stage_append.py -- Stage an append into the Real Sports corpus checkout.
 
@@ -808,6 +809,11 @@ Generated from `git ls-files`. 1085 tracked files. Regenerate with `scripts/gene
 - scripts/realsports_corpus/fixtures/durable_stores/wnba_backup/contest_leaderboards.csv -- (data file)
 - scripts/realsports_corpus/fixtures/durable_stores/wnba_backup/slate_labels.csv -- (data file)
 
+## scripts/realsports_corpus/fixtures/offline_status/
+- scripts/realsports_corpus/fixtures/offline_status/coverage_manifest.json -- (test fixture data)
+- scripts/realsports_corpus/fixtures/offline_status/coverage_status.json -- (test fixture data)
+- scripts/realsports_corpus/fixtures/offline_status/coverage_status.md -- coverage_manifest offline status (#526)
+
 ## scripts/realsports_corpus/fixtures/proof_slate/
 - scripts/realsports_corpus/fixtures/proof_slate/payload.json -- (test fixture data)
 
@@ -824,6 +830,7 @@ Generated from `git ls-files`. 1085 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_check_issue_link.py
 - scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
+- scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).
 - scripts/tests/test_realsports_corpus_layout.py -- Real Sports corpus layout and durable-store export stubs (#526).
 - scripts/tests/test_realsports_corpus_manifest.py -- Offline unit checks for Real Sports corpus staging and coverage (#526).
 

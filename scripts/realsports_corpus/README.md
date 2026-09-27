@@ -82,6 +82,30 @@ corpus repo root README).
 | `coverage_manifest.py` | Manifest schema + Ollama forbid gate |
 | `stage_append.py` | Actions-side copy + soft-merge coverage |
 | `export_stubs.py` | Offline export from WNBA DB / NFL Corpus G+C |
+| `generate_coverage_status.py` | Offline fixture dry-run + Ollama unlock handoff |
+
+Offline status (no Ollama, no Real Sports)::
+
+```sh
+PYTHONPATH=scripts python scripts/realsports_corpus/generate_coverage_status.py \
+  --write-fixture-snapshot
+```
+
+Snapshot lands under `fixtures/offline_status/` for PR handoff.
+
+## COMPLETE vs MISSING (after #532 / #533 / #534 / #537 / #538 / #539)
+
+| Surface | COMPLETE | MISSING (blocks Ollama) |
+|---|---|---|
+| HV boards | WNBA export path + NFL Corpus C HV export; NBA/NHL fail-closed stubs | Sibling publish (`CORPUS_REPO_TOKEN`); NBA ingest; NHL RS contest HV durable |
+| Corpus G | NFL volume hydrate (~3k files on worker) | Kind-first sibling soft-merge; WNBA/NBA/NHL RS boxes |
+| Corpus C | NFL offline HV + draftStats + matchups export | Volume → sibling append |
+| Matchups | Per-sport `#537` append scripts | Full-history sibling fill |
+| draftStats | WNBA all-sections dump + Postgres export; NFL Corpus C | Sibling publish; NBA/NHL durable |
+
+Live sibling `coverage_manifest.json` still has `historical_capture_complete: false`
+(all families `unknown` except one synthetic NFL HV proof slate). **Ollama remains
+FORBIDDEN.**
 
 ## Export stubs (existing durable stores)
 
