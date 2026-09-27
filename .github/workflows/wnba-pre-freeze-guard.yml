@@ -27,7 +27,6 @@ permissions:
   contents: read
 
 env:
-  OPS_LABEL: ops-guard
   WNBA_API_BASE: https://api-production-7033.up.railway.app
   WNBA_RAILWAY_PROJECT_ID: ab83f44c-0bbc-4a58-931c-37d9fbfda73a
   WNBA_RAILWAY_ENVIRONMENT_ID: d57a759e-e189-439b-a612-bd220ef59c39
@@ -41,7 +40,6 @@ jobs:
   guard:
     permissions:
       contents: read
-      issues: write
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -86,22 +84,12 @@ jobs:
             printf '# WNBA pre-freeze operations\n\n- ALERT: the production guard did not produce a report.\n' > "$RUNNER_TEMP/pre-freeze-report.md"
           fi
 
-      - name: Escalate an unhealthy guard
-        if: always() && (steps.guard.outcome != 'success' || steps.guard.outputs.status == 'alert')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh label create "$OPS_LABEL" --color B60205 --description "WNBA pre-freeze operations" 2>/dev/null || true
-          number=$(gh issue list --label "$OPS_LABEL" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$number" ]; then
-            gh issue comment "$number" --body-file "$RUNNER_TEMP/pre-freeze-report.md"
-          else
-            gh issue create \
-              --label "$OPS_LABEL" \
-              --title "WNBA pre-freeze operations" \
-              --body-file "$RUNNER_TEMP/pre-freeze-report.md"
-          fi
-
-      - name: Fail an unhealthy guard after escalation
-        if: always() && (steps.guard.outcome != 'success' || steps.guard.outputs.status == 'alert')
-        run: exit 1
+      # The run itself is the signal (issue #442): the report goes to this
+      # run's job summary, and an unhealthy guard fails the run.
+      - uses: ./.github/actions/dayclose-ledger
+        if: always()
+        with:
+          results_title: "WNBA pre-freeze operations"
+          report_path: ${{ runner.temp }}/pre-freeze-report.md
+          should_escalate: >-
+            ${{ (steps.guard.outcome != 'success' || steps.guard.outputs.status == 'alert') && 'true' || 'false' }}

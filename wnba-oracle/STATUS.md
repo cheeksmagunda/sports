@@ -2,6 +2,24 @@
 
 Last verified: 2026-09-26T03:50:00Z
 
+## Scheduled WNBA checks report through their Actions runs, not issues (#442)  -  2026-09-26
+
+- Per the issue rule in root `AGENTS.md` (Documentation and state),
+  `watchdog-monitor.yml`, `wnba-dayclose-verify.yml`, and
+  `wnba-pre-freeze-guard.yml` no longer open, comment on, label, or close
+  issues, and none holds `issues: write`. Each posts its report to the run's
+  job summary through `.github/actions/dayclose-ledger` and fails the run
+  under the same conditions that previously escalated.
+- `watchdog-monitor.yml` reports a probe crash under the `WNBA watchdog probe
+  failure` heading and a completed probe under `WNBA Oracle watchdog`; both
+  fail the run when warranted, and the heartbeat forwarding is unchanged.
+  `wnba-pre-freeze-guard.yml` now writes a job summary on healthy runs too.
+- The `ops-guard`, `ops-guard-probe`, and `ops-results` labels have no
+  writer. #441 (`WNBA Oracle watchdog alert`, filed by `watchdog-monitor` at
+  2026-09-26T19:58Z) was the last issue this channel filed; it reported
+  dayclose `degraded` and job1/job1late `failed`. Older entries below that
+  describe `ops-guard` or incident issues record past behavior only.
+
 ## Optional total_draft_value optimizer objective (#433)  -  2026-09-26
 
 - `OptimizeConfig.objective_mode` defaults to `"payout"` (production unchanged).

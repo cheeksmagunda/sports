@@ -1,5 +1,20 @@
 # Status
 
+## Scheduled NFL jobs report through their Actions runs, not issues (2026-09-26, issue #442)
+
+Per the issue rule in root `AGENTS.md` (Documentation and state),
+`nfl-dayclose.yml`, `nfl-weekclose.yml`, and `nfl-t40-watchdog.yml` no longer
+open, comment on, label, or close issues, and none holds `issues: write`.
+Each posts its report to the run's job summary through
+`.github/actions/dayclose-ledger` and fails the run under the same conditions
+that previously escalated. `nfl-t40-watchdog.yml` now also writes a job
+summary on healthy runs. `nfl-weekclose.yml` no longer opens the
+`NFL week <season>-W<week> punch list` tracking issue: findings stay in the
+job summary, and a non-empty punch list adds a warning annotation without
+failing the run. The `nfl-ops-guard` and `nfl-ops-results` labels have no
+writer. Older entries below that describe `nfl-ops-guard`, incident, or
+tracking issues record past behavior only.
+
 ## NFL race corpus persist (2026-09-26, Refs #338)
 
 Day-close now writes per-day labels + leaderboard parquet under

@@ -251,10 +251,12 @@ CONNECTORS: Final[tuple[ConnectorSpec, ...]] = (
             "ci",
             "scheduled_checks",
             "public_corpus_backup",
-            "operations_issues",
+            "operations_run_status",
             "manual_backfill",
         ),
-        failure_semantics=("ci_or_deployment_delayed_public_backup_stale_or_issue_escalation_lost"),
+        failure_semantics=(
+            "ci_or_deployment_delayed_public_backup_stale_or_scheduled_check_run_signal_lost"
+        ),
     ),
     ConnectorSpec(
         connector_id="railway",

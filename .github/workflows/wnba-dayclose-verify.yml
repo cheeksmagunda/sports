@@ -22,7 +22,6 @@ permissions:
   contents: read
 
 env:
-  GUARD_LABEL: ops-guard
   WNBA_API_BASE: https://api-production-7033.up.railway.app
 
 concurrency:
@@ -33,7 +32,6 @@ jobs:
   verify:
     permissions:
       contents: read
-      issues: write
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -74,8 +72,6 @@ jobs:
         if: always()
         with:
           results_title: "WNBA results ledger"
-          guard_label: ${{ env.GUARD_LABEL }}
-          guard_title: "WNBA production operations"
           report_path: ${{ runner.temp }}/dayclose-report.md
           should_escalate: >-
             ${{ (steps.verify.outcome != 'success' || steps.verify.outputs.status == 'alert') && 'true' || 'false' }}

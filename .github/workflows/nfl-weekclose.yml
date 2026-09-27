@@ -5,8 +5,9 @@ name: nfl-weekclose
 # 1h buffer, then runs. On the final-slate day, day-close skips (supersede),
 # so this workflow grades the final slate day via the existing dayclose path,
 # then runs the audit-only weekclose punch-list producer (issue #165) and
-# folds its findings into the same digest posted below, then opens or
-# updates one tracking issue when the punch list is non-empty.
+# folds its findings into the same digest posted to this run's job summary
+# below. A non-empty punch list adds a warning annotation to the run; it
+# never opens an issue (issue #442).
 
 on:
   schedule:
@@ -27,10 +28,6 @@ on:
 permissions:
   contents: read
 
-env:
-  RESULTS_LABEL: nfl-ops-results
-  GUARD_LABEL: nfl-ops-guard
-
 concurrency:
   group: nfl-weekclose
   cancel-in-progress: false
@@ -39,7 +36,6 @@ jobs:
   weekclose:
     permissions:
       contents: read
-      issues: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -172,80 +168,39 @@ jobs:
               cat "$RUNNER_TEMP/weekclose-punchlist.json"
               echo '```'
               echo
-              echo "Tracking issue: opened or updated by the following step when punch_list is non-empty (idempotent by title)."
+              echo "Whistle-time proxy: nflverse scores/result + kickoff+3h+1h floor"
+              echo "(exact whistle time is not in the public schedule feed)."
+              echo
+              echo "Findings stay in this job summary; no issue is opened (issue #442)."
               echo "Findings are inputs to the issue/PR flow and do not change models on their own."
             else
               echo "ALERT: week punch list producer did not run or produced no output."
             fi
           } > "$RUNNER_TEMP/weekclose-report.md"
 
-
-      - name: Open or update week punch-list tracking issue
-        id: tracking_issue
+      # Reporting only: a non-empty punch list is an audit finding, not a job
+      # failure, so it annotates the run with a warning and leaves the pass or
+      # fail decision to the ledger step below, unchanged.
+      - name: Annotate punch-list findings on the run
         if: always() && steps.gate.outputs.should_run == 'true'
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
+          SEASON: ${{ steps.gate.outputs.season }}
+          WEEK: ${{ steps.gate.outputs.week }}
         run: |
-          set -euo pipefail
           PUNCH="$RUNNER_TEMP/weekclose-punchlist.json"
-          REPORT="$RUNNER_TEMP/weekclose-report.md"
           if [ ! -s "$PUNCH" ]; then
-            echo "ALERT: no punch list JSON; skipping tracking issue"
-            echo "tracking_issue=skipped_no_punchlist" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "ALERT: jq missing; cannot parse punch list for tracking issue"
-            echo "tracking_issue=skipped_no_jq" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           COUNT=$(jq '.punch_list | length' "$PUNCH" 2>/dev/null || echo 0)
           RESOLVED=$(jq -r '.resolved // false' "$PUNCH" 2>/dev/null || echo false)
-          SEASON="${{ steps.gate.outputs.season }}"
-          WEEK="${{ steps.gate.outputs.week }}"
-          TITLE="NFL week ${SEASON}-W${WEEK} punch list"
-          if [ "$RESOLVED" != "true" ] || [ "$COUNT" = "0" ]; then
-            echo "punch list empty or unresolved; skipping tracking issue create"
-            echo "tracking_issue=skipped_empty" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Idempotent: reuse an open issue with the same title when present.
-          EXISTING=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title --jq ".[] | select(.title==\"$TITLE\") | .number" | head -n 1)
-          BODY_FILE="$RUNNER_TEMP/weekclose-tracking-body.md"
-          {
-            echo "## NFL week ${SEASON}-W${WEEK} punch list"
-            echo
-            echo "Auto-opened by nfl-weekclose (Refs #165). Findings are inputs to the"
-            echo "issue/PR flow; this job never trains, retrains, or changes models."
-            echo
-            echo "Whistle-time proxy: nflverse scores/result + kickoff+3h+1h floor"
-            echo "(exact whistle time is not in the public schedule feed)."
-            echo
-            if [ -s "$REPORT" ]; then
-              cat "$REPORT"
-            else
-              echo '```json'
-              cat "$PUNCH"
-              echo '```'
-            fi
-          } > "$BODY_FILE"
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body-file "$BODY_FILE"
-            echo "tracking_issue=commented:$EXISTING" >> "$GITHUB_OUTPUT"
-            echo "Updated existing tracking issue #$EXISTING"
-          else
-            URL=$(gh issue create --title "$TITLE" --body-file "$BODY_FILE")
-            echo "tracking_issue=created:$URL" >> "$GITHUB_OUTPUT"
-            echo "Opened tracking issue: $URL"
+          if [ "$RESOLVED" = "true" ] && [ "$COUNT" != "0" ]; then
+            echo "::warning title=NFL week punch list::${COUNT} finding(s) for ${SEASON}-W${WEEK}; see the job summary."
           fi
 
       - uses: ./.github/actions/dayclose-ledger
         if: always() && steps.gate.outputs.should_run == 'true'
         with:
-          results_label: ${{ env.RESULTS_LABEL }}
           results_title: "NFL results ledger"
-          guard_label: ${{ env.GUARD_LABEL }}
-          guard_title: "NFL production operations"
           report_path: ${{ runner.temp }}/weekclose-report.md
           should_escalate: ${{ (steps.weekclose.outcome != 'success' || steps.punchlist.outcome != 'success') && 'true' || 'false' }}

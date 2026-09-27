@@ -123,7 +123,7 @@ def test_catalog_covers_control_plane_roles_without_values() -> None:
     realsports = catalog["realsports"]
 
     assert github.credential_env_vars == ("GH_TOKEN",)
-    assert {"public_corpus_backup", "operations_issues"} <= set(github.roles)
+    assert {"public_corpus_backup", "operations_run_status"} <= set(github.roles)
     assert {"runtime_configuration", "runtime_secrets", "bounded_repair"} <= set(railway.roles)
     assert {
         "WNBA_RAILWAY_PROJECT_ID",

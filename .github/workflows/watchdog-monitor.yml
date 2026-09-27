@@ -9,7 +9,6 @@ permissions:
   contents: read
 
 env:
-  WATCHDOG_TITLE: WNBA Oracle watchdog alert
   WNBA_API_BASE: https://api-production-7033.up.railway.app
   WNBA_FRONTEND_URL: https://frontend-production-a739.up.railway.app
   WATCHDOG_HEARTBEAT_URL: ${{ secrets.WATCHDOG_HEARTBEAT_URL }}
@@ -22,7 +21,6 @@ jobs:
   check:
     permissions:
       contents: read
-      issues: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -60,9 +58,11 @@ jobs:
             } > "$RUNNER_TEMP/watchdog-report.md"
           fi
 
-      # Tracked separately from a real production alert below: a probe crash
-      # is a monitor-health problem, not evidence WNBA production is down,
-      # and must not block resolving (or fabricate) a real alert either way.
+      # The run itself is the signal (issue #442): the report goes to this
+      # run's job summary and the run fails when escalation is warranted. A
+      # probe crash is reported under its own heading, separate from a real
+      # production alert: a crash is a monitor-health problem, not evidence
+      # WNBA production is down.
       #
       # Deliberately keyed on `steps.probe.outputs.status` being empty, not
       # on `steps.probe.outcome`: the script's own exit code is 1 for BOTH a
@@ -71,19 +71,15 @@ jobs:
       # GITHUB_OUTPUT write only happens once `main()` runs to completion, so
       # an empty `status` output is the actual "did not finish" signal.
       - uses: ./.github/actions/dayclose-ledger
-        if: always()
+        if: always() && steps.probe.outputs.status == ''
         with:
-          results_title: "WNBA watchdog probe log"
-          guard_label: ops-guard-probe
-          guard_title: "WNBA watchdog probe failure"
+          results_title: "WNBA watchdog probe failure"
           report_path: ${{ runner.temp }}/watchdog-report.md
-          should_escalate: ${{ steps.probe.outputs.status == '' && 'true' || 'false' }}
+          should_escalate: "true"
 
       - uses: ./.github/actions/dayclose-ledger
         if: always() && steps.probe.outputs.status != ''
         with:
-          results_title: "WNBA Oracle watchdog alert log"
-          guard_label: ops-guard
-          guard_title: ${{ env.WATCHDOG_TITLE }}
+          results_title: "WNBA Oracle watchdog"
           report_path: ${{ runner.temp }}/watchdog-report.md
           should_escalate: ${{ steps.probe.outputs.status == 'alert' && 'true' || 'false' }}
