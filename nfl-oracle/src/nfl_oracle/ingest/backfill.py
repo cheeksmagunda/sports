@@ -538,9 +538,7 @@ async def repair_missing_players(
     repaired: list[dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=60.0) as client:
         for index, (season, game_id) in enumerate(pairs):
-            players = await fetch_game_players(
-                client, game_id, headers, refresh_headers=refresh
-            )
+            players = await fetch_game_players(client, game_id, headers, refresh_headers=refresh)
             coverage = summarize_payloads(stats=None, players=players, feed=None)
             stored = store.persist_endpoint(
                 game_id=game_id,
@@ -648,17 +646,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.repair_players:
         store = CorpusGStore()
-        pairs = games_missing_players(
-            store, season=args.season, explicit=args.game_id
-        )
+        pairs = games_missing_players(store, season=args.season, explicit=args.game_id)
         if not pairs:
             print("repair_players: nothing to repair")
             return 0
         print(f"repair_players: candidates={len(pairs)}")
         try:
-            repaired = repair_missing_players_sync(
-                store=store, pairs=pairs, delay_s=args.delay_s
-            )
+            repaired = repair_missing_players_sync(store=store, pairs=pairs, delay_s=args.delay_s)
         except (StorageStateMissing, StorageStateStale) as exc:
             if args.season is not None:
                 mark_season_blocked(store, args.season, f"auth blocked: {exc}")
