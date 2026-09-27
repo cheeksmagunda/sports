@@ -2,6 +2,15 @@
 
 ## History corpus gap (#453 / #489)  -  2026-09-27
 
+## Total Value HV leaderboard corpus (#526)  -  2026-09-27
+
+- No Real Sports contest / `draftStats` / HV ingest yet.
+- Stub only: `nba-oracle/scripts/export_hv_board.py` exits 78 (fail-closed).
+- Portfolio layout contract: `oracle_core.hv_board_corpus` + workflow
+  `hv-leaderboard-corpus.yml` (separate corpus repo).
+
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+
 - Public `nba-history-load` (data.nba.com) writes `nba_history_*` into
   `sports-oracle` / `nba-staging` Postgres over public TCP.
 - **Partial load verified:** games ~2086, player rows ~70912, then blocked by

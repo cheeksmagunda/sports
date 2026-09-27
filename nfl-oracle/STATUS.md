@@ -96,6 +96,16 @@ Rollback for volume content: leave staging volume untouched as copy source.
 Next densify needs #512 image redeploy on worker + RS-session backfill or
 staging→mono copy.
 
+## Total Value HV leaderboard corpus scaffold (#526)  -  2026-09-27
+
+- Corpus G remains game boxes (`playerBoxScores[].value`), not slate HV boards.
+- Contest HV section: `contests/parse.parse_draft_stats` + dayclose
+  `player_draft_stats`; export scaffold
+  `nfl-oracle/scripts/export_hv_board.py` writes
+  `oracle_core.hv_board_corpus` layout from a finalized `/stats` JSON
+  (live NFL scrape not wired in this scaffold; fail-closed without
+  `--stats-json`). Workflow shares `hv-leaderboard-corpus.yml`.
+
 ## Corpus G nightly + gap/repair reconcile (2026-09-27, #453 / #503)
 
 Reconciled into PR #512 (absorbs overlapping PR #515). Verified from

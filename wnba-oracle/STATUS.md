@@ -99,6 +99,22 @@ has 1 GP).
 the corpus; script-only alignment after #497 drift. No credential or schedule
 change.
 
+## Total Value HV leaderboard corpus scaffold (#526)  -  2026-09-27
+
+- Existing ingest: `ingest/contest_stats.py` → Postgres `slate_labels`
+  (`section=highestBoostedValuePlayers`); nightly Postgres CSV backup still
+  on orphan `backups` branch via `corpus-backup.yml`.
+- New durable path (separate corpus repo
+  `cheeksmagunda/sports-realsports-corpus`, not monorepo bloat):
+  `oracle_core.realsports_corpus` layout
+  (`{sport}/{season}/{slate_or_game_id}/{artifact}.json` +
+  `coverage/manifest.json`) + `oracle_core.hv_board_corpus` +
+  `wnba-oracle/scripts/export_hv_board.py` + `scripts/corpus/` exporters +
+  workflow `hv-leaderboard-corpus.yml` (needs `CORPUS_REPO_TOKEN`;
+  fail-closed without Real Sports auth). See `scripts/corpus/README.md`.
+- One-slate proof scrape: see issue #526 / linked PR (sha verify only;
+  never mint credentials). Labels remain Highest-value boards for train/grade.
+
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
 
 Read-only verify via Codespace `fluffy-zebra-g4gqq746477q2jg` +

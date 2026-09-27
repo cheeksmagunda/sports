@@ -74,6 +74,14 @@ from oracle_core.high_tv import (
     select_label_kind,
     summarize_archive_season_depth,
 )
+from oracle_core.hv_board_corpus import (
+    HV_SECTION,
+    HvBoardDocument,
+    HvBoardPlayer,
+    append_hv_board,
+    build_hv_board,
+    write_hv_board,
+)
 from oracle_core.http import (
     AsyncHttpTransport,
     HttpRequestError,
@@ -231,6 +239,11 @@ __all__ = [
     "HighPotentialLabel",
     "HighPotentialLabelKind",
     "HighTvBoard",
+    "HV_SECTION",
+    "HvBoardDocument",
+    "HvBoardPlayer",
+    "append_hv_board",
+    "build_hv_board",
     "build_high_potential_labels",
     "build_high_tv_board",
     "game_is_fit_eligible",
@@ -240,6 +253,7 @@ __all__ = [
     "rank_player_ids_by_value",
     "sample_weights_for_labeled_rows",
     "summarize_archive_season_depth",
+    "write_hv_board",
     "PROV_NS",
     "SCHEMA_CONTEXT",
     "SCHEMA_ORG",

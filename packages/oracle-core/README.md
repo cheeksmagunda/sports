@@ -27,7 +27,10 @@ The public package includes:
 - schema.org / JSON-LD entity helpers (`oracle_core.schemaorg`) for Person,
   SportsTeam, SportsOrganization, SportsEvent, Place, OrganizationRole,
   identifier/PropertyValue, sameAs, Observation, QuantitativeValue, ItemList,
-  plus optional PROV-O attribution; high-TV boards in `oracle_core.high_tv`.
+  plus optional PROV-O attribution; high-TV boards in `oracle_core.high_tv`;
+  durable HV leaderboard corpus layout in `oracle_core.hv_board_corpus`
+  (`hv_boards/{sport}/{year}/slate_*.json` for a separate GitHub corpus
+  repo; issue #526).
 
 Applications retain ownership of their settings extensions, database schema,
 migrations, routes, jobs, schedules, provider adapters, and domain behavior.
