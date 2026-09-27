@@ -49,6 +49,14 @@ printed.
   callers switch. Data-plane must use the **public TCP proxy** form of
   Postgres/Redis (not `*.railway.internal`). Design on #457.
 
+
+## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
+
+- `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
+- `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
+- Data plane: public Postgres `acela.proxy.rlwy.net:51730` with `sslmode=require` (not verify-ca — missing `root.crt` in container); Redis `altaria.proxy.rlwy.net:13969`.
+- Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO.
+
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
 Historical note: prior to the sports-oracle cutover above, tip-day deploys
