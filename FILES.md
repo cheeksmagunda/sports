@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 922 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 947 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -497,6 +497,43 @@ Generated from `git ls-files`. 922 tracked files. Regenerate with `scripts/gener
 
 ## nhl-oracle/data/raw/
 - nhl-oracle/data/raw/.gitkeep
+
+## nhl-oracle/frontend/
+- nhl-oracle/frontend/.dockerignore
+- nhl-oracle/frontend/.gitignore
+- nhl-oracle/frontend/Dockerfile
+- nhl-oracle/frontend/build-serve-config.mjs
+- nhl-oracle/frontend/eslint.config.mjs
+- nhl-oracle/frontend/index.html -- Static frontend page
+- nhl-oracle/frontend/package-lock.json
+- nhl-oracle/frontend/package.json
+- nhl-oracle/frontend/railway.toml -- Package/tool configuration
+- nhl-oracle/frontend/serve.template.json
+- nhl-oracle/frontend/tsconfig.json
+- nhl-oracle/frontend/vite.config.ts
+- nhl-oracle/frontend/vitest.config.ts
+
+## nhl-oracle/frontend/src/
+- nhl-oracle/frontend/src/App.tsx
+- nhl-oracle/frontend/src/main.tsx
+- nhl-oracle/frontend/src/vite-env.d.ts
+
+## nhl-oracle/frontend/src/components/
+- nhl-oracle/frontend/src/components/Shell.tsx
+
+## nhl-oracle/frontend/src/lib/
+- nhl-oracle/frontend/src/lib/api.test.ts
+- nhl-oracle/frontend/src/lib/api.ts
+- nhl-oracle/frontend/src/lib/http.test.ts
+- nhl-oracle/frontend/src/lib/http.ts
+
+## nhl-oracle/frontend/src/pages/
+- nhl-oracle/frontend/src/pages/HealthPage.tsx
+- nhl-oracle/frontend/src/pages/HomePage.tsx
+- nhl-oracle/frontend/src/pages/SlatePage.tsx
+
+## nhl-oracle/frontend/src/styles/
+- nhl-oracle/frontend/src/styles/main.css
 
 ## nhl-oracle/scripts/
 - nhl-oracle/scripts/live_contract_audit.py -- CLI wrapper for nhl_oracle.ingest.audit (read-only).
