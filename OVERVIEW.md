@@ -44,9 +44,11 @@ entity contracts; see `schemaorg.py`.
 
 ## wnba-oracle: production, most mature app
 
-The only app with a live production deployment (Railway: api, two cron
-workers, dayclose, backfill-enrichment, frontend, redis, postgres). Has a
-real frontend build (`frontend/`, Vite + React).
+Live serve is on Railway mono project `sports-oracle` / `wnba-production`
+(api, job1/job1-late/job2/dayclose crons, frontend). Product objective is
+Highest value board capture (see root `README.md` Product goal); live knobs
+in `STATUS.md`. Own-model surface: EB hierarchical baseline (+ ridge path);
+no LightGBM (#523). Has a real frontend build (`frontend/`, Vite + React).
 
 `src/wnba_oracle/` subpackages (file counts):
 
@@ -61,11 +63,13 @@ real frontend build (`frontend/`, Vite + React).
 | `audit/`, `schemas/` | 2 each | Audit trail; schema definitions |
 | `monitoring/` | 1 | Monitoring hooks |
 
-## nfl-oracle: actively developed, pre-production-proven
+## nfl-oracle: live mono serve, Corpus G still hydrating
 
-No live production traffic verified yet as of this doc; day-close/backup
-infra recently went live. Frontend is a single static `index.html` (no
-build pipeline). `src/nfl_oracle/` subpackages (file counts):
+Live API + worker on Railway mono `sports-oracle` / `nfl-production`
+(Highest value / `max_value` construction; see `STATUS.md`). Frontend is a
+single static `index.html` (no build pipeline). Own-model surface: valuelaw
++ feature ridge; no LightGBM (#523). `src/nfl_oracle/` subpackages (file
+counts):
 
 | Subpackage | Files | Purpose |
 |---|---|---|
@@ -84,19 +88,19 @@ Also: `scripts/` (14 files, CLIs/ops scripts), `frontend/` (3 files, static
 page), `config/`, `data/` (catalogs, gitignored raw payloads), `artifacts/`
 (checked-in sample reports).
 
-## nba-oracle: scaffold only
+## nba-oracle: health scaffold on nba-staging
 
-`src/nba_oracle/__init__.py` and nothing else. Wired into root test/lint/
-typecheck/build/boundary checks; no provider, model, or scheduling code
-exists yet.
+Health-only FastAPI (`GET /health`) plus Dockerfile / `railway.toml` on
+`main`. Staging services under `sports-oracle` / `nba-staging`; Postgres
+empty; no contest path. History loader tracked on open PR #489. Product
+goal pointer: root `README.md`; live facts: `STATUS.md`.
 
-## nhl-oracle: early scaffold, pre-provider
+## nhl-oracle: staging shell + Week 3 prediction skeleton
 
-`src/nhl_oracle/` subpackages: `contract/` (3, candidate contest-format
-shape + audit checklist), `identity/` (3), `ingest/` (2, corpus store +
-provenance), `scheduler/` (2, freeze-cycle step ordering). All exercised
-only against synthetic fixtures; no live provider contacted, no credential
-created.
+Live read-only Real Sports contract audit and corpus seed done; Week 3
+`labels/` + `baselines/` started (observation-only). Railway `nhl-staging`
+hosts api/worker/frontend health shell. Pre-boost (`none`) until every team
+has played. No contest entry. Product goal pointer: root `README.md`.
 
 ## Root-level files
 

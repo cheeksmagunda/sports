@@ -118,11 +118,14 @@ contest 1901 draftStats may show flat `multiplierBonus` from a later window.
    gaps. Added complexity needs out-of-sample evidence. Week 3 skeleton
    started (#456): NHL-owned priors + season walk-forward
    (`observation_only`); next is fit on seeded Real value corpus.
-4. **Optimization under the verified contest law.** Compare candidate
+4. **Optimization under the verified contest law.** Select five players that
+   maximize Highest value / Total Value Daily Leaderboard capture (root
+   `../README.md` Product goal), not cash/median finish. Compare candidate
    selection and committed slot assignment against exhaustive small
-   fixtures. Replay frozen decisions against finalized outcomes, with
-   explicit uncertainty/censoring for incomplete contest archives. No payout
-   probabilities from synthetic fields.
+   fixtures. Replay frozen decisions against finalized Highest value boards,
+   with explicit uncertainty/censoring for incomplete contest archives. No
+   payout probabilities from synthetic fields. Keep zero-boost until every
+   NHL team has played (#325 / #517).
 5. **Hosted lifecycle.** Retained validated model before freeze; pregame
    pool/context refresh; prediction and optimization; lock recheck;
    append-only freeze; read-only API and mobile frontend; postgame

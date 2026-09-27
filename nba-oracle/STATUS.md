@@ -1,16 +1,31 @@
 # Status
 
-Last verified: 2026-09-27 (health-scaffold + nba-staging pause)
+Last verified: 2026-09-27T03:25:00Z (nba-staging health + service matrix; #453 / #523)
 
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+## Product goal lock (#453 / #523)
 
-- Verified stub scaffold on `sports-oracle` / `nba-staging`: `nba-api`,
-  `nba-worker`, `nba-frontend`, Postgres. Non-serving stubs; app has no
-  Dockerfile yet. Design + runbook on #457.
-- Live traffic for other sports remains on old projects through Sunday
-  2026-09-27 (#453); NBA has no live Railway serving.
+Portfolio goal: root `../README.md` (Product goal) - 5 players / day maximizing
+Real Sports Highest value boards. NBA has no contest serve path yet; when
+modeling starts, own-model surface is valuelaw/ridge/EB-shaped (no LightGBM;
+#523). History ingest open on PR #489 (diverged from `main`; check mergeable
+at land time).
 
-This file records application state only.
+## Railway mono (`sports-oracle` / `nba-staging`)  -  2026-09-27T03:25Z
+
+Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` /
+`scripts/codespace-railway-env`. Non-serving scaffold only. No contest
+features. No Real Sports credential on NBA services.
+
+| Service | Status | Notes |
+| --- | --- | --- |
+| `nba-api` | Online | Public `https://nba-api-nba-staging.up.railway.app/health` → `{"status":"ok","version":"0.1.0"}` |
+| `nba-worker` | Failed | No worker role yet |
+| `nba-frontend` | Failed | No frontend package yet |
+| `Postgres-6eeu` | Online | Volume ~0.1 / 4.9 GB; **empty app schema** (unused by health scaffold) |
+
+Earlier 2026-09-27 pause left services disconnected after Railpack failures;
+Dockerfile + `railway.toml` are on `main` (#486). Health domain present and
+responding at verify time.
 
 ## Application state
 
@@ -20,21 +35,8 @@ This file records application state only.
 - Wired for root checks: test, lint, typecheck, build, boundary, and app contract
 - CI: root `make test-nba` runs in `backend-ci.yml` alongside WNBA/NFL/NHL import smoke
 - Calendar / TRACKED seasons: not started (NBA.com lists 2026-10-20 regular-season open; not recorded in-app)
-- Not started: provider ingest, schemas, modeling, scheduling, contest logic
-
-## Railway mono (`sports-oracle` / `nba-staging`, env `7ac1e6f8-…`)
-
-Verified 2026-09-27 via Codespace `fluffy-zebra-g4gqq746477q2jg` /
-`scripts/codespace-railway-env`. Non-serving scaffold only (#457 / #453).
-
-| Service | Source | Last deploy | Notes |
-| --- | --- | --- | --- |
-| `nba-api` | **disconnected** | FAILED (Railpack, pre-Dockerfile) | Pause: GitHub source disconnected to stop Railpack loops. Reconnect after this Dockerfile lands on `main`, then `--from-source` redeploy. |
-| `nba-worker` | **disconnected** | FAILED | No worker role yet; leave disconnected. |
-| `nba-frontend` | **disconnected** | FAILED | No frontend package yet; leave disconnected. |
-| `Postgres-6eeu` | n/a | SUCCESS / Online | Empty DB; unused by health scaffold. |
-
-No public domain claimed. No contest features. No Real Sports credential on NBA services.
+- Not started: provider ingest on `main`, schemas, modeling, scheduling, contest logic
+- Open: multi-year public history loader + calendar honesty on PR #489
 
 ## Boundaries
 

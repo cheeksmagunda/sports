@@ -2,18 +2,20 @@
 
 Last verified: 2026-09-27T03:25:00Z (mono TDV knobs + health; #453 / #523)
 
-## Training target: Highest value board (#453 / #505 / #523)  -  2026-09-27
+## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
 
 Locked: train / optimize on Real Sports **Highest value / Total Value Daily
 Leaderboard** (`draftStats.sectionName=highestBoostedValuePlayers`) for every
-slate. **Do not train on prior users' winning drafts**
+slate — Amihere / Copper / Aubrey-style boards down the list.
+**Do not train on prior users' winning drafts**
 (`contest_leaderboards` / `leaderboard_lineup`); those are a reference bar to
 beat, not fit targets. Popularity sections are excluded from the EB label
 corpus. Backtests grade each slate against that slate's Highest value
 players, not winning drafts. Approx Value = `real_score * (2 + card_boost)`.
 Portfolio goal: root `../README.md` (Product goal). Own-model surface:
 EBHierarchicalBaseline (+ future stdlib ridge); **no LightGBM** (#523).
-HV train/backtest code path: open PR #522 (not yet on `main`).
+HV train/backtest code path: open PR #522 (not yet on `main`). Serve knobs:
+Mono serve knobs re-verify below.
 
 ## Mono serve knobs re-verify (#505 / #453)  -  2026-09-27T03:25Z
 

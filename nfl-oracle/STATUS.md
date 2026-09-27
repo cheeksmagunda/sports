@@ -1,45 +1,47 @@
 # Status
 
-## Max-value / race construction knobs (#453, 2026-09-26)
+Last verified: 2026-09-27T03:25:00Z (mono max_value + volume + health; #453 / #523)
 
-Env-driven optimizer construction so the worker can chase maximum attainable
-total draft value without a code change. `optimizer_config_from_env`
-(`nfl_oracle.recommendations.optimizer`) is wired into `_policy()` alongside the
-existing `picker_knobs_from_env`. Defaults reproduce production exactly, so this
-is a default-off capability, not a serving-path change.
-
-- Env knobs (all default to current production values):
-  `NFL_OPTIMIZER_PROFILE` (`diversified` default | `max_value`),
-  `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS` (3), `NFL_OPTIMIZER_MIN_DISTINCT_GAMES` (2),
-  `NFL_OPTIMIZER_UPSIDE_WEIGHT` (0.15), `NFL_OPTIMIZER_FIELD_WEIGHT` (0.10).
-  Invalid values fail closed (raise). `max_value` drops the diversity floor to
-  1/1 so the single highest projected total-value five is committed.
-- The frozen `Recommendation` records `construction_profile` for audit.
-- Also fixed a broken import on the replay CLI (`_OPTIMIZER_PROFILE_PRESETS` ->
-  public `OPTIMIZER_PROFILE_PRESETS`) introduced by a concurrent merge, and
-  recorded the optimizer config on the replay report payload.
-- Context: the production optimizer already maximizes `value * (slot + boost)`
-  and re-ranks by a contest utility with a right-tail (`upside_weight * (p90-E)`)
-  and field-beat (`field_weight`) term. The gap this closes is env-tunability of
-  those weights plus the diversity floor that can hold the frozen five off the
-  max-attainable set. Measure with `contest-pool-replay --optimizer-profile
-  max_value` before any flip.
-- **No serving knob flipped this change.** Production stays `boost_0.75`
-  (`NFL_PICKER_BOOST_RANK_BLEND=0.75`, `NFL_PICKER_PROFILE=boost_0.75`) on mono
-  `sports-oracle` / `nfl-production` and Real Sports `sha256[:8]=c4a729e2` (both
-  re-verified live 2026-09-27 ~02:32Z; `NFL_OPTIMIZER_*` unset in Railway), so
-  the live Sunday construction is unchanged.
-
-## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
+## Training target: Highest value board (#453 / #505 / #523)  -  2026-09-27
 
 Locked: train / optimize toward Real Sports **Highest value / Total Value Daily
-Leaderboard** (`highestBoostedValuePlayers`) for every slate — Amihere /
-Copper / Aubrey-style boards (NFL draftStats HIGH TOTAL VALUE / Highest-value
-lists). **Do not train on prior users' winning drafts** as the fit target;
+Leaderboard** (`highestBoostedValuePlayers` / HIGH TOTAL VALUE boards) for every
+slate. **Do not train on prior users' winning drafts** as the fit target;
 those remain a reference bar. Cash, diversified, and median construction are
-not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
-knobs: Max-value / race construction knobs above (`NFL_OPTIMIZER_PROFILE` and
-related). Existing valuelaw + feature ridge only; no new model stacks (#523).
+not the objective. Portfolio goal: root `../README.md` (Product goal).
+Own-model surface: `nfl_oracle.valuelaw` + feature ridge; **no LightGBM**
+(#523). Serving construction: `NFL_OPTIMIZER_PROFILE=max_value` (see below).
+
+## Mono serve re-verify (#493 / #453)  -  2026-09-27T03:25Z
+
+Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`
+against `sports-oracle` / `nfl-production`. Names only; no secrets printed.
+
+| Fact | Verified |
+|------|----------|
+| `nfl-oracle-worker` `NFL_OPTIMIZER_PROFILE` | `max_value` (Railway vars) |
+| `NFL_PICKER_PROFILE` | `boost_0.75` |
+| Worker volume | `nfl-oracle-worker-volume` attached at `/app/nfl-oracle/data` (0.0 / 4.9 GB; Corpus G hydrate still required) |
+| Public API health | `https://nfl-api-nfl-production.up.railway.app/health` → `status=ok`, `recommendation_database=ok` |
+| max_value code | #493 **merged** 2026-09-27 (`0af75e9`) |
+| Corpus G nightly | Workflow **absent on `main`**. Open #512 (MERGEABLE) + #515 (CONFLICTING with #512). Prefer #512. |
+
+Rollback: `NFL_OPTIMIZER_PROFILE=diversified`. Dual-fire residual: live
+`nfl-oracle-staging` worker may still run until scaled down (see cutover).
+
+## Max-value / race construction knobs (#453 / #493)
+
+Env-driven optimizer construction via `optimizer_config_from_env`
+(`nfl_oracle.recommendations.optimizer`). Code default when unset remains
+`diversified` (3 teams / 2 games); live mono sets `max_value` explicitly
+(1/1 diversity floor) so the highest projected total-value five commits.
+
+- Env knobs: `NFL_OPTIMIZER_PROFILE` (`diversified` | `max_value`),
+  `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS`, `NFL_OPTIMIZER_MIN_DISTINCT_GAMES`,
+  `NFL_OPTIMIZER_UPSIDE_WEIGHT`, `NFL_OPTIMIZER_FIELD_WEIGHT`. Invalid values
+  fail closed. Frozen `Recommendation` records `construction_profile`.
+- Measure with `contest-pool-replay --optimizer-profile max_value` before
+  flipping other knobs.
 
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 

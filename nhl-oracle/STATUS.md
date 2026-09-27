@@ -1,6 +1,16 @@
 # Status
 
-Last verified: 2026-09-27 CT (#482 nhl-staging Docker live smoke)
+Last verified: 2026-09-27T03:25:00Z (staging health re-check; #453 / #523)
+
+## Product goal + zero-boost lock (#453 / #523 / #517)  -  2026-09-27
+
+Portfolio goal: root `../README.md` (Product goal) - 5 players maximizing
+Real Sports Highest value boards. NHL remains **pre-boost** (`boost_regime=none`)
+until every franchise has played; do not design picker logic around card
+boosts before that gate. Hard zero-boost gate: open PR #517. Public NHL
+history nightly workflow: open PR #513. Own-model surface when fitting:
+priors / walk-forward (valuelaw/ridge/EB-shaped); **no LightGBM** (#523).
+**No contest entry.**
 
 ## Railway nhl-staging live smoke (#482)  -  2026-09-27
 
@@ -8,7 +18,7 @@ Last verified: 2026-09-27 CT (#482 nhl-staging Docker live smoke)
   allowlists `nhl-oracle` paths (PR #494). `dockerfilePath` set on
   `nhl-api` / `nhl-worker` (`nhl-oracle/Dockerfile`) and `nhl-frontend`
   (`Dockerfile` + `rootDirectory=nhl-oracle/frontend`).
-- Verified live (staging only, no contest claims):
+- Verified live (staging only, no contest claims); re-checked 03:25Z:
   - `GET https://nhl-api-nhl-staging.up.railway.app/health` →
     `status=ok`, `observation_only=true`, `contest_entry=false`
   - `nhl-frontend` HTTPS 200 at
