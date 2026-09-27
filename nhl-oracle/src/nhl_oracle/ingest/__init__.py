@@ -1,1 +1,1 @@
-"""NHL ingest: Real Sports client, redaction, and corpus provenance."""
+"""NHL ingest: Real Sports client, redaction, discovery, and corpus provenance."""

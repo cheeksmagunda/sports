@@ -505,6 +505,40 @@ async def fetch_game_feed(
 
 CONTEST_PARAMS: dict[str, Any] = {"contestType": "sport", "source": "home"}
 
+# Required on every contest route request, not just /entries: without
+# contestType/source the server can return an unrelated stale record for the
+# same numeric id (observed live 2026-09-12). See also fetch_contest_route.
+CONTEST_ROUTES: tuple[str, ...] = ("meta", "draftinfo", "entries", "stats", "payoutinfo")
+
+
+def contest_url(contest_id: int, route: str) -> str:
+    base = f"{BASE}/games/playerratingcontest/{contest_id}"
+    return base if route == "meta" else f"{base}/{route}"
+
+
+async def fetch_contest_route(
+    client: httpx.AsyncClient,
+    contest_id: int,
+    route: str,
+    headers: RequestHeaders,
+    *,
+    refresh_headers: Callable[[], Awaitable[RequestHeaders]] | None = None,
+) -> dict[str, Any]:
+    """Fetch one contest sub-route (meta/draftinfo/entries/stats/payoutinfo)."""
+
+    wire = http_headers(headers)
+    response = await real_sports_get(
+        client,
+        contest_url(contest_id, route),
+        headers=wire,
+        params=CONTEST_PARAMS,
+        refresh_headers=refresh_headers,
+    )
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise TypeError(f"contest {contest_id} route {route} payload must be an object")
+    return payload
+
 
 async def fetch_home_next(
     client: httpx.AsyncClient,

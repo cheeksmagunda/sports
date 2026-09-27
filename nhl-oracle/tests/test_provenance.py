@@ -69,3 +69,18 @@ def test_persist_endpoint_rewrites_on_changed_content(tmp_path: Path) -> None:
     assert first.wrote is True
     assert second.wrote is True
     assert first.provenance.content_sha256 != second.provenance.content_sha256
+
+
+def test_persist_endpoint_strips_identity_keys(tmp_path: Path) -> None:
+    store = NhlCorpusStore(tmp_path)
+    artifact = store.persist_endpoint(
+        game_id=4,
+        season=2026,
+        endpoint="contest",
+        payload={"contest_id": 9, "userId": "secret", "ok": True},
+        source_url="https://example.invalid/contest",
+        captured_at="2026-10-01T00:00:00Z",
+    )
+    body = json.loads(artifact.path.read_text(encoding="utf-8"))
+    assert body == {"contest_id": 9, "ok": True}
+    assert "userId" not in body
