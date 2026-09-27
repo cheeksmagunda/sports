@@ -2,6 +2,19 @@
 
 Last verified: 2026-09-27T03:50:00Z
 
+## EB serve after #531 (2026-09-27T04:08Z, #535)
+
+Pre-freeze at verify time (slate `2026-09-26` freeze target
+`2026-09-27T17:20:00Z`). Code default `WNBA_SERVE_PRIMARY=eb` landed in
+`6288eab` (#531). Live `wnba-api` / `wnba-cron-job2` process env:
+`WNBA_SERVE_PRIMARY` **unset** (code default applies after image with #531
+is serving). `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value`
+verified present.
+
+Rollback: set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
+redeploy (cron variable changes need a real redeploy). No env flip required
+to keep EB primary while unset.
+
 ## Next-slate readiness (#453)  -  2026-09-27 ~03:40Z
 
 | Check | Result |
