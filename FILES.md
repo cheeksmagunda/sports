@@ -251,6 +251,7 @@ Generated from `git ls-files`. 968 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/src/nfl_oracle/features/live.py -- Map captured pre-lock evidence onto FeatureSpec names.
 - nfl-oracle/src/nfl_oracle/features/matchup.py -- Static NFL division membership for the ``is_divisional`` FeatureSpec.
 - nfl-oracle/src/nfl_oracle/features/opponent_defense.py -- Walk-forward Real-value-allowed priors for the opponent defense.
+- nfl-oracle/src/nfl_oracle/features/own_model_map.py -- Own-model feature consumption map for NFL (#523).
 - nfl-oracle/src/nfl_oracle/features/rows.py -- Build observation-only feature rows from walk-forward priors.
 - nfl-oracle/src/nfl_oracle/features/schema.py -- FeatureSpec v1: availability clocks + train/live flags.
 - nfl-oracle/src/nfl_oracle/features/stubs.py -- Offline placeholder values for any FeatureSpec still marked ``offline_stub``.
@@ -437,6 +438,7 @@ Generated from `git ls-files`. 968 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
 - nfl-oracle/tests/unit/test_multi_contest_day.py -- Multi-contest day selection for the NFL worker and NFLReader.collect.
 - nfl-oracle/tests/unit/test_optimizer_env_config.py -- Env-driven optimizer construction config (max-value / race mode) for #453.
+- nfl-oracle/tests/unit/test_own_model_feature_map_523.py -- Phase-1 (#523): own-model ridge consumes safe live_ok slate context.
 - nfl-oracle/tests/unit/test_picker_knobs.py -- Unit tests for boost-aware / position-calibration picker knobs (#280).
 - nfl-oracle/tests/unit/test_player_mean_and_coverage_matrix.py -- player_mean baseline + coverage matrix document helpers.
 - nfl-oracle/tests/unit/test_player_priors_scoring.py -- Player priors + shadow scoring scaffolds.

@@ -72,9 +72,7 @@ LEAKAGE_BLOCKED_FEATURES: frozenset[str] = frozenset(
 
 def ridge_core_feature_names() -> frozenset[str]:
     return frozenset(
-        name
-        for name in MODEL_FEATURE_NAMES
-        if name != "intercept" and not name.startswith("pos_")
+        name for name in MODEL_FEATURE_NAMES if name != "intercept" and not name.startswith("pos_")
     )
 
 
