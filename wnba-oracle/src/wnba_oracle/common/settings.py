@@ -361,13 +361,15 @@ class Settings(RuntimeConfig):
     optimizer_committed_order_objective: bool = Field(
         default=False, alias="OPTIMIZER_COMMITTED_ORDER_OBJECTIVE"
     )
-    # #433/#453 total-draft-value objective mode. "payout" (default) keeps
-    # the E[payout(rank)] objective. "total_draft_value" selects by
-    # E[committed-order lineup score], maximising raw points over contest
-    # placement. Low-ownership fade tiebreaker weight (#453) gives a mild
-    # preference for underdrafted names when combos are close in expected TV.
+    # #433/#453/#505/#584 total-draft-value objective mode. Serving default is
+    # ``total_draft_value`` (E[committed-order lineup score] / Highest Value)
+    # so a wiped cron env cannot silently fall back to cash E[payout(rank)].
+    # Rollback: ``OPTIMIZER_OBJECTIVE_MODE=payout``. Low-ownership fade
+    # tiebreaker weight (#453) prefers underdrafted names when combos are
+    # close in expected TV. Bare ``OptimizeConfig()`` may still default to
+    # ``payout`` for library/tests; job2 always compiles from Settings.
     optimizer_objective_mode: Literal["payout", "total_draft_value"] = Field(
-        default="payout", alias="OPTIMIZER_OBJECTIVE_MODE"
+        default="total_draft_value", alias="OPTIMIZER_OBJECTIVE_MODE"
     )
     optimizer_max_value_ownership_fade: float = Field(
         default=0.001, alias="OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE"
@@ -499,11 +501,13 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     # revert requires scripts/build_model_research_benchmark.py after the
     # prior-slate ownership guard. See issue #289 and follow-up E1.
     "optimizer_leverage_weight": 0.28,
-    # #505 / #453: mono serves total_draft_value; keep EXPECTED in sync so
-    # config_drift warns on wipe/reset. Rollback: OPTIMIZER_OBJECTIVE_MODE=payout.
+    # #505 / #453 / #584: mono serves total_draft_value + EB Tier-0; keep
+    # EXPECTED in sync so config_drift warns on wipe/reset. Rollback:
+    # OPTIMIZER_OBJECTIVE_MODE=payout, WNBA_SERVE_PRIMARY=heads.
     "optimizer_objective_mode": "total_draft_value",
     "optimizer_max_value_ownership_fade": 0.001,
     "payout_regime": "top_1",
+    "serve_primary": "eb",
 }
 
 

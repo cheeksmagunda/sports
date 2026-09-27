@@ -235,6 +235,8 @@ def test_enrichment_row_preserves_provider_signal_shape() -> None:
         multiplier_bonus=1.5,
         game_start_utc="2026-06-08T23:00:00Z",
         game_id="4512",
+        overall_rank=7.0,
+        injury_body_part="Knee",
     )
     context = job1._EnrichmentContext(
         team_to_opp={"LVA": "NYL"},
@@ -267,6 +269,8 @@ def test_enrichment_row_preserves_provider_signal_shape() -> None:
     # #523: enrichment always fused into head_features (even without rolling).
     assert features["head_features"]["card_boost"] == 1.5
     assert features["head_features"]["vegas_total"] == 164.5
+    assert features["head_features"]["overall_rank"] == 7.0
+    assert features["head_features"]["injury_body_part_available"] == 1.0
     assert features["head_features"]["vegas_spread"] == -4.0
     assert features["head_features"]["is_home"] == 1.0
     assert stats.props_matched == 1

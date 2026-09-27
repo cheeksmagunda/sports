@@ -210,9 +210,10 @@ class Recommendation(Record):
     boost_regime: Literal["zero_boost", "provider_boosts_present"]
     boost_nonzero_count: int
     boost_max: Finite
-    # Which construction the frozen five came from ("diversified" production
-    # default or "max_value" race mode). Recorded so a consumer of the frozen
-    # lineup can see whether a diversity floor was requested at all.
+    # Which construction the frozen five came from. Serving default is
+    # ``max_value`` via ``optimizer_config_from_env`` (#505); ``diversified``
+    # remains the bare ``OptimizerConfig()`` / missing-field fallback for
+    # older freeze payloads. Always set from ``cfg.profile`` in ``optimize``.
     construction_profile: str = "diversified"
     assumptions: tuple[str, ...]
     contest_entry: Literal[False] = False

@@ -43,6 +43,23 @@ PYTHONPATH=scripts python -m ollama_hv_watcher --once --allow-fixtures --dry-run
 ```
 
 Default model: `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`.
+Each learn tick also refreshes `latest_tick.json` in the same slate directory
+(stable pointer for tooling / env-gated NFL picker tilt).
+
+## NFL picker tilt (default off)
+
+Live freeze authority stays Corpus G → ridge → `max_value` → freeze →
+frontend. Ollama is a Codespace satellite unless an operator mounts a tick
+onto the worker and arms:
+
+```sh
+NFL_OLLAMA_TICK_TILT_WEIGHT=0.15   # 0 = identity (production default)
+NFL_OLLAMA_TICK_TILT_PATH=/path/to/data/ollama_hv/nfl/<slate>/latest_tick.json
+```
+
+Weight 0 never opens the file. Positive weight fail-closes if the path is
+missing or the tick lacks an exact five-player card. Do not arm on a live
+freeze window without an explicit operator decision.
 
 ## Training-data inventory
 

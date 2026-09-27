@@ -255,6 +255,11 @@ def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
     assert payload["lineup_size"] == 5
     assert len(payload["five_player_lineup"]) == 5
     assert "wnba" in str(out)
+    latest = out.parent / "latest_tick.json"
+    assert latest.is_file()
+    latest_payload = json.loads(latest.read_text(encoding="utf-8"))
+    assert latest_payload["tick_path"] == out.name
+    assert latest_payload["five_player_lineup"] == payload["five_player_lineup"]
 
 
 def test_training_data_manifest_lists_hv_sources() -> None:

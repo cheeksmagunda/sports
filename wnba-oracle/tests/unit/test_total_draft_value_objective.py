@@ -249,11 +249,21 @@ def test_tdv_settings_wiring() -> None:
 
 
 def test_expected_prod_config_matches_live_tdv_flip() -> None:
-    """Watchdog config_drift must expect the live mono TDV flip (#453)."""
+    """Watchdog config_drift must expect the live mono TDV flip (#453 / #584)."""
     from wnba_oracle.common.settings import EXPECTED_PROD_CONFIG
 
     assert EXPECTED_PROD_CONFIG["optimizer_objective_mode"] == "total_draft_value"
     assert EXPECTED_PROD_CONFIG["optimizer_max_value_ownership_fade"] == 0.001
+    assert EXPECTED_PROD_CONFIG["payout_regime"] == "top_1"
+    assert EXPECTED_PROD_CONFIG["serve_primary"] == "eb"
+
+
+def test_settings_default_objective_is_tdv_when_unset(monkeypatch) -> None:
+    """Wipe-safe serve default: missing OPTIMIZER_OBJECTIVE_MODE → TDV (#584)."""
+    from wnba_oracle.common.settings import Settings
+
+    monkeypatch.delenv("OPTIMIZER_OBJECTIVE_MODE", raising=False)
+    assert Settings().optimizer_objective_mode == "total_draft_value"
 
 
 def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:

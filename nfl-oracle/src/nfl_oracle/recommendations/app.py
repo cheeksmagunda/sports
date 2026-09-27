@@ -28,6 +28,28 @@ class DatabaseHealth:
         return HealthCheck()
 
 
+def resolve_frontend_dir(explicit: Path | None = None) -> Path:
+    """Prefer an explicit path, then env, packaged wheel assets, then checkout.
+
+    Hatch force-includes ``frontend/`` beside this module in production wheels.
+    Editable checkouts keep assets at ``nfl-oracle/frontend``; without this
+    fallback ``app_from_env()`` 503s on ``/`` after a local serve.
+    """
+    if explicit is not None:
+        return explicit
+    env = os.environ.get("NFL_FRONTEND_DIR", "").strip()
+    if env:
+        return Path(env)
+    packaged = Path(__file__).parent / "frontend"
+    if (packaged / "index.html").is_file():
+        return packaged
+    # .../src/nfl_oracle/recommendations/app.py -> nfl-oracle/frontend
+    checkout = Path(__file__).resolve().parents[3] / "frontend"
+    if (checkout / "index.html").is_file():
+        return checkout
+    return packaged
+
+
 def create_app(
     store: RecommendationStore,
     *,
@@ -40,7 +62,7 @@ def create_app(
     )
     # Root's default metadata route is replaced by the explicitly packaged page.
     app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != "/"]
-    assets = frontend_dir or Path(__file__).parent / "frontend"
+    assets = resolve_frontend_dir(frontend_dir)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next: Any) -> Response:

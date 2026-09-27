@@ -118,6 +118,25 @@ def parse_contest(
     )
 
 
+def _standings_last_ten_wins(comparison: Any, *, side: str) -> float | None:
+    """Read ``lastTenWins`` from ``gameTeamComparison.{home,away}TeamStandings``.
+
+    Live day ``games[]`` rarely nest this block; ``/stats`` does when the
+    provider has populated standings. Missing or non-dict comparison yields
+    None so context can leave ``last_ten_wins`` unset rather than inventing 0.
+    """
+    if not isinstance(comparison, dict):
+        return None
+    key = "homeTeamStandings" if side == "home" else "awayTeamStandings"
+    standings = comparison.get(key)
+    if not isinstance(standings, dict):
+        return None
+    value = standings.get("lastTenWins")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
 def parse_game(raw: dict[str, Any]) -> Game:
     if raw.get("sport") != "nfl":
         raise ProviderError("game_sport_mismatch")
@@ -127,6 +146,14 @@ def parse_game(raw: dict[str, Any]) -> Game:
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
         return float(value)
+
+    comparison = raw.get("gameTeamComparison")
+    home_l10 = _standings_last_ten_wins(comparison, side="home")
+    if home_l10 is None:
+        home_l10 = _opt_float("homeLastTenWins")
+    away_l10 = _standings_last_ten_wins(comparison, side="away")
+    if away_l10 is None:
+        away_l10 = _opt_float("awayLastTenWins")
 
     return Game(
         game_id=raw["id"],
@@ -139,6 +166,8 @@ def parse_game(raw: dict[str, Any]) -> Game:
         status=raw["status"],
         home_moneyline=_opt_float("homeMoneyline"),
         away_moneyline=_opt_float("awayMoneyline"),
+        home_last_ten_wins=home_l10,
+        away_last_ten_wins=away_l10,
     )
 
 
@@ -160,6 +189,40 @@ class NFLReader:
         self.requests = 0
         self.max_requests = max_requests
         self.last_captured_at = self.clock()
+
+    async def _enrich_games_with_standings(self, games: tuple[Game, ...]) -> tuple[Game, ...]:
+        """Attach lastTenWins from each game's /stats when the provider has them."""
+        enriched: list[Game] = []
+        for index, game in enumerate(games):
+            if game.home_last_ten_wins is not None and game.away_last_ten_wins is not None:
+                enriched.append(game)
+                continue
+            try:
+                stats = await self.get(f"/games/{game.game_id}/sport/nfl/stats")
+            except ProviderError:
+                enriched.append(game)
+                continue
+            comparison = stats.get("gameTeamComparison")
+            home = _standings_last_ten_wins(comparison, side="home")
+            away = _standings_last_ten_wins(comparison, side="away")
+            if home is None and away is None:
+                enriched.append(game)
+            else:
+                enriched.append(
+                    game.model_copy(
+                        update={
+                            "home_last_ten_wins": (
+                                home if home is not None else game.home_last_ten_wins
+                            ),
+                            "away_last_ten_wins": (
+                                away if away is not None else game.away_last_ten_wins
+                            ),
+                        }
+                    )
+                )
+            if index + 1 < len(games):
+                await asyncio.sleep(0.15)
+        return tuple(enriched)
 
     async def get(self, path: str, **params: Any) -> dict[str, Any]:
         allowed = (
@@ -264,6 +327,9 @@ class NFLReader:
         games = tuple(game for game in all_games if game.kickoff_at > now)
         if not games:
             raise ProviderError("no_draftable_games")
+        # day content rarely carries standings; /stats gameTeamComparison does
+        # when populated (#523 last_ten_wins). Best-effort; false/empty is fine.
+        games = await self._enrich_games_with_standings(games)
         roster: dict[int, tuple[dict[str, Any], Game]] = {}
         for game in games:
             payload = await self.get(f"/games/{game.game_id}/sport/nfl/players")

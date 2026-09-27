@@ -83,6 +83,16 @@ def _boost_handler(request: httpx.Request) -> httpx.Response:
                 }
             },
         )
+    if path == f"/games/{GAME_ID}/sport/nfl/stats":
+        return httpx.Response(
+            200,
+            json={
+                "gameTeamComparison": {
+                    "homeTeamStandings": {"lastTenWins": 6},
+                    "awayTeamStandings": {"lastTenWins": 4},
+                }
+            },
+        )
     if path == f"/games/{GAME_ID}/sport/nfl/players":
         return httpx.Response(200, json={"players": [_roster_player(p) for p in (1, 2, 3)]})
     if path == "/players/sport/nfl/search":
@@ -187,6 +197,8 @@ async def test_collect_declares_boost_regime_via_boost_observation(tmp_path):
     slate = await client.collect(DAY, contest_id=3001)
 
     assert slate.boost_regime == "provider_boosts_present"
+    assert slate.games[0].home_last_ten_wins == 6.0
+    assert slate.games[0].away_last_ten_wins == 4.0
     assert slate.boost_nonzero_count == 2
     assert slate.boost_max == 3.0
     by_id = {c.player_id: c.card_boost for c in slate.candidates}
@@ -239,3 +251,19 @@ def test_observation_store_distinguishes_different_content(tmp_path) -> None:
     assert first != second
     files = list(tmp_path.rglob("*.json"))
     assert len(files) == 2
+
+def test_parse_game_reads_nested_last_ten_wins() -> None:
+    from nfl_oracle.recommendations.provider import parse_game
+
+    game = parse_game(
+        {
+            **_game(),
+            "gameTeamComparison": {
+                "homeTeamStandings": {"lastTenWins": 7},
+                "awayTeamStandings": {"lastTenWins": 2},
+            },
+        }
+    )
+    assert game.home_last_ten_wins == 7.0
+    assert game.away_last_ten_wins == 2.0
+

@@ -352,11 +352,12 @@ class OptimizeConfig:
     # the corpus grows:
     # `scripts/lab.py variant --set committed_order_objective=True --last 0`
     committed_order_objective: bool = False
-    # #433 total draft value: select by E[committed-order lineup score]
-    # (slot+boost)*realized instead of E[payout]. Default "payout" keeps
-    # production byte-identical. When "total_draft_value", committed-order
-    # scoring is forced and payout/leverage/ceiling/duplication additives
-    # are skipped so the scan maximises slate TV, not contest placement.
+    # #433/#505/#584 total draft value: select by E[committed-order lineup
+    # score] (slot+boost)*realized instead of E[payout]. Library default
+    # stays ``payout`` for unit-test byte-identity; production Settings /
+    # job2 default is ``total_draft_value`` (wipe-safe). When TDV,
+    # committed-order scoring is forced and payout/leverage/ceiling/
+    # duplication additives are skipped so the scan maximises slate TV.
     objective_mode: Literal["payout", "total_draft_value"] = "payout"
     # #453 ownership-fade tiebreaker for total_draft_value mode. Applied as
     # objective += weight * mean(-log(ownership_i)) over the 5 picks. A small
