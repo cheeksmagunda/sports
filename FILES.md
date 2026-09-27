@@ -1212,7 +1212,7 @@ Generated from `git ls-files`. 1020 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_game_script_wired.py -- Game-script (blowout) minutes redistribution wired into job2._build_specs.
 - wnba-oracle/tests/unit/test_game_stack.py -- Hard anti-stacking policy in the optimizer.
 - wnba-oracle/tests/unit/test_head_tier0.py -- D69 / Phase 2b: the D63 trained-head Tier-0 path in job2._build_specs.
-- wnba-oracle/tests/unit/test_highest_value_backtest.py
+- wnba-oracle/tests/unit/test_highest_value_backtest.py -- Backtest reference is Highest value boards, never winning drafts.
 - wnba-oracle/tests/unit/test_identity_coverage.py
 - wnba-oracle/tests/unit/test_identity_migrations.py
 - wnba-oracle/tests/unit/test_identity_resolver.py -- Unit tests for the identity resolver. No network: uses the static catalog.
