@@ -41,18 +41,21 @@ printed.
   still returned HTTP 200. Retry port pin when rate limit clears if needed.
 - Old `wnba-oracle` api/frontend still online as cold standby (crons disarmed).
 
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+## Mono URL / data-plane note (#457 / #453)
 
-- Earlier scaffold note superseded by the serving cutover section above.
-- Design + runbook remain on #457.
+- Canonical mono URLs are in the cutover table above.
+- Legacy `wnba-oracle-production.up.railway.app` → HTTP 404; old
+  `api-production-7033` / `frontend-production-a739` may remain until
+  callers switch. Data-plane must use the **public TCP proxy** form of
+  Postgres/Redis (not `*.railway.internal`). Design on #457.
 
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
-- Verified scaffold on `sports-oracle` / `wnba-production`: `wnba-api`,
-  cron services, `wnba-frontend`, Postgres (+ Redis). Non-serving; no
-  domains or secret cutover. Design + runbook on #457.
-- Live WNBA traffic remains on Railway project `wnba-oracle` /
-  `production` through Sunday 2026-09-27 (#453).
+## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
+
+- `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
+- `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
+- Data plane: public Postgres `acela.proxy.rlwy.net:51730` with `sslmode=require` (not verify-ca — missing `root.crt` in container); Redis `altaria.proxy.rlwy.net:13969`.
+- Live old crons nulled; mono crons armed. Watchdog hist match LIVE=MONO.
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 

@@ -459,6 +459,8 @@ evidence on #457 / #453):
 NHL / NBA staging shells may gain `*.up.railway.app` domains later; they are not
 serving paths until the owning app `STATUS.md` says so.
 
+Legacy hostnames on old projects may still answer until cron/domain cut completes; prefer the mono public URLs above and keep data-plane on the public TCP proxy (see next subsection).
+
 ### Cross-project data plane (required)
 
 `*.railway.internal` hostnames resolve **only inside the same Railway project**.
