@@ -30,7 +30,7 @@
       "sport": "nfl",
       "kind": "corpus_g",
       "default_absolute_root": "/app/nfl-oracle/data/raw/corpus_g",
-      "notes": "Game boxes playerBoxScores.value — not slate HV boards; 2024/2025 players repair complete (668)"
+      "notes": "Game boxes playerBoxScores.value, not slate HV boards. Repair/coverage state: nfl-oracle/STATUS.md"
     },
     {
       "id": "sibling_realsports_corpus_tv",
@@ -44,8 +44,10 @@
       "id": "wnba_realsports_export_shards",
       "sport": "wnba",
       "kind": "hv_boards",
-      "default_relative_root": "wnba-oracle/data/export/realsports_corpus",
-      "notes": "WNBA export shards include total_value_leaderboard.json"
+      "notes": "Layout sport=wnba/season=YYYY/slate=DATE/total_value_leaderboard.json; default root is cwd-relative",
+      "env_root": "REALSPORTS_CORPUS_ROOT",
+      "default_relative_root": "corpus",
+      "writer": "wnba-oracle/scripts/export_realsports_corpus.py --corpus-root"
     },
     {
       "id": "ollama_watcher_artifacts",

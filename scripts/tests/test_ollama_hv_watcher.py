@@ -12,7 +12,11 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
-from ollama_hv_watcher.boards import summarize_board_payload
+from ollama_hv_watcher.boards import (
+    BOARD_FILENAMES,
+    discover_board_paths,
+    summarize_board_payload,
+)
 from ollama_hv_watcher.discover import (
     discover_day_plan,
     load_fixture_calendars,
@@ -261,3 +265,64 @@ def test_training_data_manifest_lists_hv_sources() -> None:
     assert "sibling_realsports_corpus_tv" in ids
     assert manifest["gate"]["unlock_env"] == "SPORTS_OLLAMA_UNLOCK"
     assert manifest["calendars"]["windows_env"] == "SPORTS_OLLAMA_WINDOWS_JSON"
+
+
+def test_training_manifest_globs_match_board_discovery(tmp_path: Path) -> None:
+    manifest = load_training_data_manifest()
+    globbed = {g.removeprefix("**/") for g in manifest["board_filename_globs"]}
+    assert globbed == set(BOARD_FILENAMES)
+    for index, name in enumerate(BOARD_FILENAMES):
+        target = tmp_path / f"slate_{index}" / name
+        target.parent.mkdir()
+        target.write_text("{}", encoding="utf-8")
+    found = {p.name for p in discover_board_paths(tmp_path)}
+    assert found == set(BOARD_FILENAMES)
+
+
+def test_source_ids_default_path_is_unique() -> None:
+    ids = source_ids()
+    assert ids
+    assert len(ids) == len(set(ids))
+
+
+_VALID_MANIFEST = {
+    "schema_version": 1,
+    "issue": 574,
+    "objective": "highest_value_tdv_max_value",
+    "sources": [{"id": "a"}],
+    "calendars": {},
+    "gate": {},
+}
+
+
+@pytest.mark.parametrize(
+    ("patch", "error", "match"),
+    [
+        ("root_list", TypeError, "must_be_object"),
+        ({"gate": None}, ValueError, "missing_keys"),
+        ({"schema_version": 0}, ValueError, "schema_version_invalid"),
+        ({"schema_version": "1"}, ValueError, "schema_version_invalid"),
+        ({"schema_version": True}, ValueError, "schema_version_invalid"),
+        ({"issue": 575}, ValueError, "issue_must_be_574"),
+        ({"issue": "574"}, ValueError, "issue_must_be_574"),
+        ({"sources": []}, ValueError, "sources_required"),
+        ({"sources": {"id": "a"}}, ValueError, "sources_required"),
+        ({"sources": [{"kind": "x"}]}, ValueError, "source_requires_id"),
+        ({"sources": [{"id": ""}]}, ValueError, "source_requires_id"),
+        ({"sources": [{"id": "a"}, {"id": "a"}]}, ValueError, "duplicate_source_id"),
+    ],
+)
+def test_training_manifest_rejects_malformed(
+    tmp_path: Path, patch: object, error: type[Exception], match: str
+) -> None:
+    if patch == "root_list":
+        payload: object = [_VALID_MANIFEST]
+    else:
+        assert isinstance(patch, dict)
+        payload = {**_VALID_MANIFEST, **patch}
+        if patch.get("gate", 0) is None:
+            del payload["gate"]
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(error, match=match):
+        load_training_data_manifest(path)

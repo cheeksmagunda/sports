@@ -165,14 +165,22 @@ def load_board_summary(path: Path, *, top_n: int = 15) -> BoardSummary:
     return summarize_board_payload(raw, path=str(path), top_n=top_n)
 
 
+# Single source for board filenames; training_data_manifest.json globs match.
+BOARD_FILENAMES = (
+    "hv_board.json",
+    "total_value_leaderboard.json",
+    "highestBoostedValuePlayers.json",
+)
+
+
 def discover_board_paths(root: Path) -> list[Path]:
-    """Find hv_board.json / total_value_leaderboard.json under a root."""
+    """Find HV/TDV board files (``BOARD_FILENAMES``) under a root."""
 
     root = Path(root)
     if not root.is_dir():
         return []
     found: list[Path] = []
-    for name in ("hv_board.json", "total_value_leaderboard.json"):
+    for name in BOARD_FILENAMES:
         found.extend(sorted(root.rglob(name)))
     seen: set[Path] = set()
     out: list[Path] = []

@@ -30,16 +30,23 @@ def load_training_data_manifest(
     missing = [key for key in REQUIRED_TOP_KEYS if key not in raw]
     if missing:
         raise ValueError(f"training_data_manifest_missing_keys:{missing}")
-    if int(raw["schema_version"]) < 1:
+    version = raw["schema_version"]
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
         raise ValueError("training_data_manifest_schema_version_invalid")
-    if int(raw["issue"]) != 574:
+    issue = raw["issue"]
+    if isinstance(issue, bool) or not isinstance(issue, int) or issue != 574:
         raise ValueError("training_data_manifest_issue_must_be_574")
     sources = raw["sources"]
     if not isinstance(sources, list) or not sources:
         raise ValueError("training_data_manifest_sources_required")
+    seen: set[str] = set()
     for row in sources:
-        if not isinstance(row, dict) or "id" not in row:
+        if not isinstance(row, dict) or not row.get("id"):
             raise ValueError("training_data_manifest_source_requires_id")
+        source_id = str(row["id"])
+        if source_id in seen:
+            raise ValueError(f"training_data_manifest_duplicate_source_id:{source_id}")
+        seen.add(source_id)
     return raw
 
 
