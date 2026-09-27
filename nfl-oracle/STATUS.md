@@ -125,6 +125,26 @@ repair, (2) 2002-2023 densification, (3) copy/sync onto mono volume.
    worker SUCCESS, but still empty; GHA raw artifacts remain ephemeral.
    Dense copy/seed is post-merge ops, not this code PR.
 
+## Max-value / race construction knobs (#453 / #505, 2026-09-27)
+
+Env-driven optimizer construction so the worker can chase maximum attainable
+total draft value without a code change. `optimizer_config_from_env`
+(`nfl_oracle.recommendations.optimizer`) is wired into `_policy()` alongside the
+existing `picker_knobs_from_env`.
+
+- Env knobs: `NFL_OPTIMIZER_PROFILE` (**`max_value` default** | `diversified`),
+  `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS`, `NFL_OPTIMIZER_MIN_DISTINCT_GAMES`,
+  `NFL_OPTIMIZER_UPSIDE_WEIGHT` (0.15), `NFL_OPTIMIZER_FIELD_WEIGHT` (0.10).
+  Invalid values fail closed (raise). `max_value` drops the diversity floor to
+  1/1 so the single highest projected total-value five is committed.
+- The frozen `Recommendation` records `construction_profile` for audit.
+- Replay CLI uses public `OPTIMIZER_PROFILE_PRESETS` (fixed in #506).
+- **#505 serving default:** code default is `max_value` when unset so a wiped
+  env cannot fall back to diversified cash construction. Rollback:
+  `NFL_OPTIMIZER_PROFILE=diversified`. Picker stays `boost_0.75` /
+  `NFL_PICKER_BOOST_RANK_BLEND=0.75` unless separately flipped.
+
+
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
 Operator-ordered live cutover from `nfl-oracle-staging` /

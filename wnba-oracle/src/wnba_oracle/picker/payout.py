@@ -2,13 +2,15 @@
 
 Real Sports' contest stats endpoint surfaces `info.rankDisplayInfos`
 post-tip with the percentile-to-payout schedule. Pregame, the schedule is
-null and we default to the top_20 regime per Part 1.2.
+null and serving defaults to the top_1 (draft-win) regime (#505 / #453).
+Offline / historical paths may still load an archived schedule or pass
+top_20 / top_50 explicitly.
 
 Payout regimes (Part 1.2):
 - top_50  : linear above the cash line. Minimum variance subject to mean
-            above the line.
-- top_20  : convex above the line. Mild contrarianism.
-- top_1   : sharply convex. Variance is asset.
+            above the line (cash / double-up).
+- top_20  : convex above the line. Mild contrarianism (cash-leaning GPP).
+- top_1   : sharply convex. Variance is asset (tournament / win the draft).
 
 The PayoutCurve class converts a percentile rank (0.0 = winner, 1.0 = last)
 to a payout multiplier. EV of a lineup against a field is then:
@@ -39,8 +41,8 @@ class PayoutCurve:
     """
 
     percentile_to_payout: dict[float, float] = field(default_factory=dict)
-    regime: str = "top_20"
-    cash_line_percentile: float = 0.5
+    regime: str = "top_1"
+    cash_line_percentile: float = 0.05
 
     def payout_for_rank(self, rank: int, field_size: int) -> float:
         if field_size <= 0:
