@@ -2,6 +2,15 @@
 
 Last verified: 2026-09-27T05:31:49Z
 
+## Ollama influence hook (#574) — PR pending merge window
+
+Default-OFF closed loop (code on `feat/574-ollama-influence`):
+`NFL_OLLAMA_INFLUENCE` / `WNBA_OLLAMA_INFLUENCE` + `*_OLLAMA_ADVICE_PATH`
+tilt picker scores from Codespace `advice.json` before optimize. Stale/
+absent advice is identity. **Merge ≤14:20Z UTC** (2h before NFL 16:20Z);
+do not merge inside the freeze buffer. Annotate-only helper (#582) stays
+post-freeze and does not move the five.
+
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
 | Check | Result |

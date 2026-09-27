@@ -36,7 +36,7 @@ from ollama_hv_watcher.gate import (
     load_manifest_or_empty,
     operator_unlock_enabled,
 )
-from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.learn import run_advice, run_learn
 from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
@@ -235,6 +235,63 @@ def cmd_learn(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_advice(args: argparse.Namespace) -> int:
+    """Write pre-freeze advice.json for optional app influence (#574)."""
+
+    manifest = load_manifest_or_empty(Path(args.manifest) if args.manifest else None)
+    board_root = Path(args.board_root)
+    paths = discover_board_paths(board_root)
+    if args.board:
+        paths = [Path(args.board)]
+    if not paths:
+        _print_json({"error": "no_hv_boards_found", "board_root": str(board_root)})
+        return 1
+
+    dry_run = not args.execute
+    written: list[str] = []
+    blocked: str | None = None
+    for path in paths:
+        summary = load_board_summary(path)
+        try:
+            out = run_advice(
+                summary,
+                data_root=Path(args.data_root),
+                manifest=manifest,
+                host=args.host,
+                model=args.model,
+                dry_run=dry_run,
+            )
+            written.append(str(out))
+        except OllamaForbiddenError as exc:
+            blocked = str(exc)
+            break
+        except (LiveDataRequiredError, ValueError) as exc:
+            _print_json({"error": str(exc), "board": str(path)})
+            return 4
+
+    payload: dict[str, object] = {
+        "mode": "advice",
+        "dry_run": dry_run,
+        "written": written,
+        "boards_seen": [str(p) for p in paths],
+        "hint": (
+            "Copy advice.json to the worker volume path pointed at by "
+            "NFL_OLLAMA_ADVICE_PATH / WNBA_OLLAMA_ADVICE_PATH, then set "
+            "NFL_OLLAMA_INFLUENCE=1 / WNBA_OLLAMA_INFLUENCE=1 (default OFF)."
+        ),
+    }
+    if blocked:
+        payload["blocked"] = blocked
+        payload["hint"] = (
+            f"Set {UNLOCK_ENV}=1 for Codespace helper override, or wait for "
+            "coverage_manifest.historical_capture_complete (#526)."
+        )
+        _print_json(payload)
+        return 3
+    _print_json(payload)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ollama_hv_watcher",
@@ -244,6 +301,11 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--status", action="store_true", help="Health + gate + window")
     mode.add_argument("--once", action="store_true", help="Single watch tick then exit")
     mode.add_argument("--daemon", action="store_true", help="Watch until latest close")
+    mode.add_argument(
+        "--advice",
+        action="store_true",
+        help="Write pre-freeze advice.json tilts for optional app influence",
+    )
     parser.add_argument("--data-root", default=str(DEFAULT_DATA_ROOT))
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--manifest", default="", help="Path to coverage_manifest.json")
@@ -262,7 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--execute",
         action="store_true",
-        help="With learn path: call Ollama generate (requires unlock)",
+        help="With learn/advice path: call Ollama generate (requires unlock)",
     )
     parser.add_argument(
         "--learn",
@@ -283,6 +345,8 @@ def main(argv: list[str] | None = None) -> int:
         args.board = None
     if args.status:
         return cmd_status(args)
+    if getattr(args, "advice", False):
+        return cmd_advice(args)
     if args.once:
         args.once = True
         if args.learn and args.board:
@@ -294,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.daemon:
         args.once = False
         return cmd_watch(args)
-    parser.error("one of --status / --once / --daemon is required")
+    parser.error("one of --status / --once / --daemon / --advice is required")
     return 2
 
 

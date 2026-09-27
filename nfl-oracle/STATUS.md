@@ -1,3 +1,13 @@
+## Ollama influence hook (#574) — PR pending merge window
+
+Default-OFF closed loop (code on `feat/574-ollama-influence`):
+`NFL_OLLAMA_INFLUENCE` + `NFL_OLLAMA_ADVICE_PATH` (or `_URL`) tilts
+projections after picker knobs, before optimize. Stale/absent advice is
+identity. **Merge ≤14:20Z UTC** (2h before NFL T-40 16:20Z); same Railway
+change may set influence=1 + advice path so one redeploy settles. Do not
+merge inside the freeze buffer. Annotate-only helper (#582) stays
+post-freeze and does not move the five.
+
 ## Own-model feature map phase 1 (#523, 2026-09-26)
 
 ## Corpus C HV / Total Value export scaffold (#526, 2026-09-27)

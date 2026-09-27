@@ -22,6 +22,10 @@ from nfl_oracle.recommendations.model import (
     RatingModel,
     predict,
 )
+from nfl_oracle.recommendations.ollama_influence import (
+    apply_ollama_influence,
+    load_tilt_map,
+)
 from nfl_oracle.recommendations.optimizer import (
     FieldObservation,
     OptimizerConfig,
@@ -233,6 +237,12 @@ class RecommendationPipeline:
             slate,
             knobs=self.policy.picker,
             position_bias=bundle.model.position_residual_bias,
+        )
+        # Optional Codespace Ollama slate-shape advice (#574). Default OFF;
+        # stale/absent advice is identity. Does not replace the five-card size.
+        projections = apply_ollama_influence(
+            projections,
+            tilts=load_tilt_map(slate_id=slate.contest.day.isoformat(), sport="nfl"),
         )
         lineup = optimize(
             slate,

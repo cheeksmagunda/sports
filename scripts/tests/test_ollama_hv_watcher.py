@@ -175,6 +175,42 @@ def test_board_summary_ranks_by_value() -> None:
     assert "exactly 5" in prompt or "exactly five" in prompt.lower()
     assert "P1" in prompt
     assert "DAILY CONTEST CARD" in prompt
+    assert "chalk_vs_multiplier" in prompt
+    assert "2.0x" in prompt or "slot1=2.0x" in prompt
+    assert "max_value" in prompt
+    assert "total_draft_value" in prompt or "TDV" in prompt
+
+
+def test_learning_tick_encodes_chalk_vs_multiplier(tmp_path: Path) -> None:
+    summary = summarize_board_payload(
+        {
+            "sport": "nfl",
+            "slate_key": "2026-09-27",
+            "section": "highestBoostedValuePlayers",
+            "players": _five_players(),
+        }
+    )
+    out = write_learning_tick(
+        tmp_path,
+        summary,
+        notes="notes",
+        model="llama3.1:8b",
+        gate_reason="operator_unlock",
+        dry_run=True,
+    )
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["slot_multipliers"] == [2.0, 1.8, 1.6, 1.4, 1.2]
+    assert "chalk_vs_multiplier" in payload["principle"]
+    assert payload["serve_shape"] == {
+        "nfl": "max_value",
+        "wnba": "total_draft_value",
+    }
+    assert payload["five_player_lineup"][0]["slot_multiplier"] == 2.0
+    latest = out.parent / "latest_tick.json"
+    assert latest.is_file()
+    assert json.loads(latest.read_text(encoding="utf-8"))["principle"] == payload[
+        "principle"
+    ]
 
 
 def test_discover_live_only_refuses_fixture_default() -> None:

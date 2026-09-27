@@ -59,6 +59,10 @@ from wnba_oracle.modeling.scoring import (
 )
 from wnba_oracle.picker.field import FieldPlayerSpec
 from wnba_oracle.picker.game_script import GameScriptConfig
+from wnba_oracle.picker.ollama_influence import (
+    apply_ollama_influence,
+    load_tilt_map,
+)
 from wnba_oracle.picker.optimize import (
     DEFAULT_SLOT_MULTIPLIERS,
     LineupRecommendation,
@@ -428,6 +432,13 @@ def _build_specs(
         adjusted = apply_contrarian_adjustment(
             preds.pred_real_scores, popularity_scores, contrarian_cfg
         )
+
+    # Optional Codespace Ollama slate-shape advice (#574). Default OFF;
+    # stale/absent advice is identity. Applied after EB/contrarian scores.
+    adjusted = apply_ollama_influence(
+        adjusted,
+        tilts=load_tilt_map(slate_id=slate_date, sport="wnba"),
+    )
 
     # Per-player sampling sigma from volatility (D52/D55). A flat sigma priced
     # every player the same; ceiling plays (high game-to-game variance) should

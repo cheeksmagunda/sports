@@ -43,12 +43,19 @@ class BoardSummary:
             ),
             "Top players (highest value / max_value / top_1 style ranks):",
         ]
+        lines.append(
+            "drafts= chalk proxy (higher = more owned); value = HV/TDV / max_value."
+        )
         for i, row in enumerate(self.top_players[:top_n], start=1):
             name = row["name"] if row.get("name") else row["player_id"]
             value = row.get("value")
             real = row.get("real_score")
             team = row.get("team") or ""
-            lines.append(f"  {i}. {name} team={team} value={value} real_score={real}")
+            drafts = row.get("drafts")
+            lines.append(
+                f"  {i}. {name} team={team} value={value} "
+                f"real_score={real} drafts={drafts}"
+            )
         return "\n".join(lines)
 
 
