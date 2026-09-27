@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 980 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 985 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -472,6 +472,7 @@ Generated from `git ls-files`. 980 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_research_client_smoke.py -- Offline research_client_smoke script.
 - nfl-oracle/tests/unit/test_research_path_extras.py -- Extra research/service/strategy scaffolding tests.
 - nfl-oracle/tests/unit/test_ridge_wired_features_212.py -- Issue #212: activate ridge when context is wired; offline pick attribution.
+- nfl-oracle/tests/unit/test_rs_corpus_dump_526.py -- Corpus key-dump scaffold (#526).
 - nfl-oracle/tests/unit/test_rs_field_map_523.py -- RS field matrix + corpus key dump scaffold (#523 / #526).
 - nfl-oracle/tests/unit/test_schedule_bootstrap.py -- Tests for schedule bootstrap into an empty worker data volume.
 - nfl-oracle/tests/unit/test_schedule_census_and_aliases.py -- Identity alias reconciliation + schedule helper smoke (offline).
@@ -689,6 +690,12 @@ Generated from `git ls-files`. 980 tracked files. Regenerate with `scripts/gener
 - scripts/sync-railway-session-to-codespace
 - scripts/with-secrets
 - scripts/write-path-check
+
+## scripts/rs_corpus/
+- scripts/rs_corpus/README.md -- Real Sports separate corpus plan (#526)
+- scripts/rs_corpus/dump_exposed_keys.py -- Walk a JSON payload and emit every key path (corpus dump scaffold, #526).
+- scripts/rs_corpus/manifest.schema.json
+- scripts/rs_corpus/rs-corpus-append.yml.example
 
 ## scripts/tests/
 - scripts/tests/test_backend_ci_workflow.py

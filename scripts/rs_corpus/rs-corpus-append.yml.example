@@ -1,0 +1,18 @@
+# Example nightly append for the separate realsports-corpus repo (#526).
+# Copy into that repo's .github/workflows/. Do not enable against sports.git
+# without pointing uploads at the external corpus remote.
+name: RS corpus append (scaffold)
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * *"
+jobs:
+  append:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: |
+          echo "Idempotent append of HV boards + game stats goes here."
+          echo "Auth: Codespace/Actions REALSPORTS_STORAGE_STATE_B64GZ only."
+          echo "Never mint credentials. Labels: highestBoostedValuePlayers."
