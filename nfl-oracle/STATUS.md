@@ -117,23 +117,22 @@ health above are from the live Online worker. Rollback: unset
 note here.
 
 
-## Corpus G mono volume hydrate verify (2026-09-27T05:18Z, #535 / #512)
+## Corpus G mono volume hydrate + players repair (2026-09-27, #535 / #512 / #574)
 
 Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
 `scripts/codespace-railway-env` against `sports-oracle` / `nfl-production`
-`nfl-oracle-worker`. Non-destructive. No credential minting.
+`nfl-oracle-worker`. Non-destructive. No credential minting. Auth hardwired
+(`REALSPORTS_STORAGE_STATE_B64GZ` `sha256[:8]=c4a729e2` present on worker).
 
 | Fact | Value |
 |------|-------|
 | Volume mount | `/app/nfl-oracle/data` (attached) |
-| Volume `du -sh` | **507M** |
+| Volume `du -sh` | **626M** (was 507M pre-repair) |
 | Game dirs | **668** (2024: 334, 2025: 334) |
-| Files under `raw/corpus_g` | **3352** |
-| Endpoint files | stats=**668**, feed=**668**, players=**6** |
-| `--report-gaps` | 2024: games=334 complete=1 missing_players=333; 2025: games=334 complete=5 missing_players=329 |
-| Live worker tip | deploy `02a1c12a` SUCCESS commit `c7c2af4` (ancestor of `a476ae6`); `ENTRYPOINT` present; CLI has `--report-gaps` / `--repair-players` |
+| Endpoint files | stats=**668**, feed=**668**, players=**668** |
+| `--report-gaps` (verified 2026-09-27 ~06:26Z UTC) | 2024: games=334 complete=334 **missing_players=0**; 2025: games=334 complete=334 **missing_players=0** (also missing_stats=0, missing_feed=0) |
+| `--repair-players` | **complete** for 2024/2025 on mono volume (334/334 each). Mid-run HTTP 401s were stale derived `storage_state` on the volume (cleared/rematerialized from the sealed env copy); not missing auth. |
 | `.dockerignore` | `!nfl-oracle/docker-entrypoint.sh` allowlisted (lands via #551/#564) |
-| `--repair-players` | **players.json repair incomplete on mono volume** (`--report-gaps`: 2024 missing_players=333, 2025=329). Worker session `sha256[:8]=c4a729e2` is **present** (Codespaces / GHA / Railway copies match). Do not frame this as auth-missing or operator refresh; diagnose volume repair / sport path / linked Railway env if a `/players` call returns 401 while the hash is present. |
 
 
 ## Total Value HV leaderboard corpus scaffold (#526)  -  2026-09-27
