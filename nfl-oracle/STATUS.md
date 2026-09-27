@@ -40,12 +40,17 @@ repair, (2) 2002-2023 densification, (3) copy/sync onto mono volume.
 
 ### Next actions (executed or blocked)
 
-1. **Land nightly + repair CLI** — executed in PR for #503.
-2. **Repair 2024 players on staging volume** — attempted via worker SSH using
-   existing sealed session only; see PR / issue comments for live result.
-3. **Seed / densify 2002-2023 onto mono volume** — blocked until staging
-   corpus is complete and a volume copy path runs (mono volume empty;
-   GHA cannot persist training payloads).
+1. **Land nightly + repair CLI** — executed in PR #515 for #503.
+2. **Repair 2024 players on staging volume** — probe **executed** on staging
+   worker with existing sealed session only (no mint): game `18669` wrote
+   `players.json` (172 players, 189120 bytes). Remaining 333 of 334 still
+   missing; full season: after merge, `nfl-corpus-g-backfill --repair-players
+   --season 2024` on the volume-mounted worker.
+3. **Seed / densify 2002-2023 onto mono volume** — **blocked** (mono volume
+   empty; GHA ephemeral). Also observed mono `nfl-api` public URL HTTP 404
+   and mono worker briefly `Crashed · Building` on `alpine:3.20` during this
+   session — verify/restore separately from the Corpus G code PR. Legacy
+   `nfl-oracle-production.up.railway.app/health` still `ok`.
 
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
