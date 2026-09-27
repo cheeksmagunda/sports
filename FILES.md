@@ -789,7 +789,7 @@ Generated from `git ls-files`. 1109 tracked files. Regenerate with `scripts/gene
 - scripts/corpus/schema/coverage_manifest.schema.json
 
 ## scripts/ollama_hv_watcher/
-- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV self-learning slate watcher (#574)
+- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV self-learning slate watcher
 - scripts/ollama_hv_watcher/__init__.py -- Codespace Ollama HV/TDV self-learning slate watcher (#574).
 - scripts/ollama_hv_watcher/__main__.py -- python -m ollama_hv_watcher → CLI (#574).
 - scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).

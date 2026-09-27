@@ -120,11 +120,8 @@ def run_learn(
     prompt = build_learn_prompt(summary)
     if dry_run:
         notes = (
-            "[dry_run] prompt prepared; Ollama generate skipped.
-"
-            f"gate=deferred_until_execute
-
-{prompt}"
+            "[dry_run] prompt prepared; Ollama generate skipped.\n"
+            f"gate=deferred_until_execute\n\n{prompt}"
         )
         return write_learning_tick(
             data_root,
