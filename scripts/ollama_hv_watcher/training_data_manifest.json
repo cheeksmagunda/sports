@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "issue": 574,
+  "objective": "highest_value_tdv_max_value",
+  "objective_notes": "Train / note on Real Sports Highest value / Total Value / max_value boards. Do not fit primarily on prior users winning drafts.",
+  "board_filename_globs": [
+    "**/hv_board.json",
+    "**/total_value_leaderboard.json",
+    "**/highestBoostedValuePlayers.json"
+  ],
+  "sources": [
+    {
+      "id": "nfl_corpus_c_hv_export",
+      "sport": "nfl",
+      "kind": "hv_boards",
+      "env_root": "NFL_HV_EXPORT_ROOT",
+      "default_relative_root": "nfl-oracle/data/export/hv_boards",
+      "notes": "Offline Corpus C export via nfl-corpus-c-hv-export; per contest total_value_leaderboard.json"
+    },
+    {
+      "id": "nfl_corpus_c_raw",
+      "sport": "nfl",
+      "kind": "corpus_c",
+      "env_root": "NFL_CORPUS_C_ROOT",
+      "default_relative_root": "nfl-oracle/data/raw/corpus_c",
+      "notes": "draftStats.highestBoostedValuePlayers when present on volume"
+    },
+    {
+      "id": "nfl_corpus_g_volume",
+      "sport": "nfl",
+      "kind": "corpus_g",
+      "default_absolute_root": "/app/nfl-oracle/data/raw/corpus_g",
+      "notes": "Game boxes playerBoxScores.value — not slate HV boards; 2024/2025 players repair complete (668)"
+    },
+    {
+      "id": "sibling_realsports_corpus_tv",
+      "sport": "*",
+      "kind": "total_value_leaderboards",
+      "repo": "cheeksmagunda/sports-realsports-corpus",
+      "relative_kind_root": "total_value_leaderboards",
+      "notes": "Sparse hydrate only; coverage_manifest.json gates Ollama unless SPORTS_OLLAMA_UNLOCK=1"
+    },
+    {
+      "id": "wnba_realsports_export_shards",
+      "sport": "wnba",
+      "kind": "hv_boards",
+      "default_relative_root": "wnba-oracle/data/export/realsports_corpus",
+      "notes": "WNBA export shards include total_value_leaderboard.json"
+    },
+    {
+      "id": "ollama_watcher_artifacts",
+      "sport": "*",
+      "kind": "learn_ticks",
+      "default_relative_root": "data/ollama_hv",
+      "notes": "gitignored learn ticks written by ollama_hv_watcher"
+    },
+    {
+      "id": "fixture_sample_board",
+      "sport": "nfl",
+      "kind": "fixture",
+      "default_relative_root": "scripts/ollama_hv_watcher/fixtures",
+      "notes": "Offline dry-run only"
+    }
+  ],
+  "calendars": {
+    "fixture_stub": "scripts/ollama_hv_watcher/fixtures/calendars/sample_day.json",
+    "windows_env": "SPORTS_OLLAMA_WINDOWS_JSON",
+    "adapters_readme": "scripts/ollama_hv_watcher/adapters/README.md",
+    "live_status": "pending_feat_574_live_calendars"
+  },
+  "gate": {
+    "unlock_env": "SPORTS_OLLAMA_UNLOCK",
+    "coverage_manifest_field": "historical_capture_complete",
+    "coverage_docs": "scripts/realsports_corpus/README.md"
+  }
+}
