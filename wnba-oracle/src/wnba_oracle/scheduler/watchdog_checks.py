@@ -17,6 +17,7 @@ from sqlalchemy import text
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.common.paths import resolve_project_root
 from wnba_oracle.db.engine import get_engine
+from wnba_oracle.ingest.rotowire import starters_expected
 from wnba_oracle.scheduler.watchdog import (
     SEVERITY_CRITICAL,
     SEVERITY_ERROR,
@@ -236,10 +237,6 @@ def _slate_freeze_deadline(slate_date: str, settings: object) -> dt.datetime | N
         return None
 
 
-# RotoWire posts expected lineups ~24-30h before tip. Before that window,
-# an empty is_starter column is normal for multi-day contests that open
-# early (e.g. Fri open / Sun tip), not a scrape/join failure (#319).
-ROTOWIRE_LINEUP_LEAD = dt.timedelta(hours=30)
 # enrichment_stale is meant to catch a silent job1 miss near freeze, not
 # page while the tip is still days away on the same open slate_date.
 ENRICHMENT_STALE_HORIZON = dt.timedelta(hours=6)
@@ -270,7 +267,7 @@ def _rotowire_starters_expected(slate_date: str, now_utc: dt.datetime) -> bool:
     tip = _slate_lock_time(slate_date)
     if tip is None:
         return True
-    return now_utc >= (tip - ROTOWIRE_LINEUP_LEAD)
+    return starters_expected(tip, now_utc)
 
 
 def _check_freeze(slate_date: str, *, now_utc: dt.datetime | None = None) -> list[WatchdogEvent]:
@@ -415,7 +412,7 @@ def _check_feature_content(
     drops the game-script tilt; zero RotoWire starters means lineups never
     parsed/joined (the confirmed-starter signal is dark).
 
-    ``rotowire_empty`` only fires once starters are expected (~30h before tip).
+    ``rotowire_empty`` only fires once starters are expected (tip day, ~30h lead).
     Earlier empties are normal when a contest opens before RotoWire posts
     lineups (#319)."""
     now_utc = now_utc or dt.datetime.now(dt.UTC)

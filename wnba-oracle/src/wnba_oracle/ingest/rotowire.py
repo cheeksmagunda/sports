@@ -17,6 +17,7 @@ boxes carry class 'is-nba' (not 'is-wnba'). Verified by live curl.
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,6 +25,7 @@ import httpx
 from bs4 import BeautifulSoup
 from oracle_core.http import HttpxSyncTransport, RetryPolicy, request_with_retry
 
+from wnba_oracle.common.clock import SLATE_TIME_ZONE
 from wnba_oracle.common.logging import get_logger
 from wnba_oracle.ingest.cache import cache_get, cache_put
 
@@ -79,6 +81,26 @@ _PAYWALL_MARKERS = (
     "schedule is reserved for rotowire subscribers",
     "tomorrow's schedule is reserved for rotowire subscribers",
 )
+
+
+# RotoWire posts expected lineups ~24-30h before tip, but its free lineups page
+# lists only today's games on the Eastern calendar; tomorrow's page is
+# subscriber-gated (see _PAYWALL_MARKERS). An empty page is therefore only a
+# scrape failure when the first tip is inside the lead window AND on today's
+# Eastern date. Without the date check, a morning run the day before a
+# next-day early tip fails closed on a page that cannot carry those games
+# yet (#441: 13:09Z 9/26 run vs 18:00Z 9/27 tip, 28.8h out).
+ROTOWIRE_LINEUP_LEAD = dt.timedelta(hours=30)
+
+
+def starters_expected(tip_utc: dt.datetime, now_utc: dt.datetime) -> bool:
+    """True when RotoWire's free page should already list this slate's starters."""
+    if tip_utc.tzinfo is None:
+        tip_utc = tip_utc.replace(tzinfo=dt.UTC)
+    if now_utc < tip_utc - ROTOWIRE_LINEUP_LEAD:
+        return False
+    tip_day = tip_utc.astimezone(SLATE_TIME_ZONE).date()
+    return now_utc.astimezone(SLATE_TIME_ZONE).date() >= tip_day
 
 
 def empty_lineups_reason(html: str) -> str:

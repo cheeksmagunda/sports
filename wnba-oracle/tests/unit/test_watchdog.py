@@ -703,9 +703,27 @@ def test_rotowire_empty_warns_inside_lineup_window() -> None:
         patch.object(watchdog_checks, "_slate_lock_time", return_value=tip),
     ):
         events = watchdog._check_feature_content(
-            "2026-09-25", now_utc=dt.datetime(2026, 9, 26, 12, 0, tzinfo=dt.UTC)
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 27, 12, 0, tzinfo=dt.UTC)
         )
     assert {e.trigger for e in events} == {"rotowire_empty"}
+
+
+def test_rotowire_empty_quiet_day_before_next_day_tip() -> None:
+    """#441: 29h before a next-day tip is inside the lead but not tip day.
+
+    RotoWire's free page lists only today's Eastern games, so zero starters
+    the day before is expected, not a scrape/join failure.
+    """
+    eng = _engine_with_feature_counts(124, 80, 0)
+    tip = dt.datetime(2026, 9, 27, 17, 0, tzinfo=dt.UTC)
+    with (
+        patch.object(watchdog_checks, "get_engine", return_value=eng),
+        patch.object(watchdog_checks, "_slate_lock_time", return_value=tip),
+    ):
+        events = watchdog._check_feature_content(
+            "2026-09-25", now_utc=dt.datetime(2026, 9, 26, 12, 0, tzinfo=dt.UTC)
+        )
+    assert {e.trigger for e in events} == set()
 
 
 def test_watchdog_today_uses_live_eval_not_history() -> None:
