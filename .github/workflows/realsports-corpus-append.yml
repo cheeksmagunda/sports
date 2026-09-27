@@ -1,0 +1,198 @@
+name: realsports-corpus-append
+
+# Append redacted Real Sports history payloads into the sibling corpus repo
+# cheeksmagunda/sports-realsports-corpus (issues #526 / #453).
+#
+# Required operator secret for publish:
+#   CORPUS_REPO_TOKEN — classic PAT or fine-grained token with
+#   contents: write on cheeksmagunda/sports-realsports-corpus.
+#   Agents must not mint this token.
+#
+# Default CI job is offline fixture proof (no Real Sports, no publish).
+# Live multi-year scrapes stay operator-gated and are not wired here yet.
+
+on:
+  pull_request:
+    paths:
+      - "scripts/realsports_corpus/**"
+      - "scripts/tests/test_realsports_corpus_manifest.py"
+      - "scripts/tests/test_realsports_corpus_layout.py"
+      - ".github/workflows/realsports-corpus-append.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/realsports_corpus/**"
+      - "scripts/tests/test_realsports_corpus_manifest.py"
+      - "scripts/tests/test_realsports_corpus_layout.py"
+      - ".github/workflows/realsports-corpus-append.yml"
+  schedule:
+    # Offset from wnba corpus-backup (06:43) and nfl-corpus-backup (11:30).
+    - cron: "15 12 * * *"
+  workflow_dispatch:
+    inputs:
+      confirm_append:
+        description: Confirm this run may commit to sports-realsports-corpus
+        required: true
+        type: boolean
+        default: false
+      mode:
+        description: fixture_proof (stage+push) or dry_run (validate only)
+        required: true
+        type: choice
+        options:
+          - fixture_proof
+          - dry_run
+        default: fixture_proof
+      corpus_repo:
+        description: Owner/name of the corpus repository
+        required: false
+        type: string
+        default: cheeksmagunda/sports-realsports-corpus
+      corpus_ref:
+        description: Branch to append onto
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: realsports-corpus-append
+  cancel-in-progress: false
+
+jobs:
+  offline-proof:
+    if: github.event_name != 'workflow_dispatch' || inputs.confirm_append != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Unit tests for corpus helpers
+        run: >
+          uv run --frozen --package oracle-core --extra dev
+          python -m pytest
+          scripts/tests/test_realsports_corpus_manifest.py
+          scripts/tests/test_realsports_corpus_layout.py -q
+
+      - name: Stage fixture into temp corpus layout
+        env:
+          CORPUS_ROOT: ${{ runner.temp }}/corpus-proof
+        run: |
+          mkdir -p "$CORPUS_ROOT"
+          uv run --frozen --package oracle-core python -c "
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from realsports_corpus.coverage_manifest import build_empty_manifest
+          from realsports_corpus.layout import ensure_kind_roots
+          from realsports_corpus.stage_append import _stage_append
+          root = Path('$CORPUS_ROOT')
+          ensure_kind_roots(root)
+          (root / 'coverage_manifest.json').write_text(
+              json.dumps(build_empty_manifest().to_dict(), indent=2) + '\n',
+              encoding='utf-8',
+          )
+          _stage_append(
+              root,
+              Path('scripts/realsports_corpus/fixtures/proof_slate'),
+              sport='nfl',
+              year='2026',
+              slate_date='2026-01-01',
+              kind='total_value_leaderboards',
+              label='proof_slate',
+          )
+          print('offline fixture proof ok')
+          "
+
+  publish-append:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_append == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require CORPUS_REPO_TOKEN
+        env:
+          CORPUS_REPO_TOKEN: ${{ secrets.CORPUS_REPO_TOKEN }}
+        run: |
+          if [ -z "$CORPUS_REPO_TOKEN" ]; then
+            {
+              echo "## realsports-corpus-append: not_configured"
+              echo
+              echo "\`CORPUS_REPO_TOKEN\` repository secret is unset."
+              echo "Provision a PAT/fine-grained token with \`contents: write\`"
+              echo "on \`${{ inputs.corpus_repo }}\` (operator only; agents must not mint)."
+              echo
+              echo "Refs #526 #453."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::not_configured: CORPUS_REPO_TOKEN secret is unset (refs #526)"
+            exit 1
+          fi
+
+      - name: Checkout corpus repository
+        env:
+          CORPUS_REPO_TOKEN: ${{ secrets.CORPUS_REPO_TOKEN }}
+          CORPUS_REPO: ${{ inputs.corpus_repo }}
+          CORPUS_REF: ${{ inputs.corpus_ref }}
+        run: |
+          umask 077
+          git config --global user.name "sports-realsports-corpus-bot"
+          git config --global user.email "noreply@github.com"
+          git clone --depth 1 --branch "$CORPUS_REF" \
+            "https://x-access-token:${CORPUS_REPO_TOKEN}@github.com/${CORPUS_REPO}.git" \
+            "$RUNNER_TEMP/corpus"
+
+      - name: Stage fixture proof append
+        if: inputs.mode == 'fixture_proof'
+        env:
+          CORPUS_ROOT: ${{ runner.temp }}/corpus
+          FIXTURE: ${{ github.workspace }}/scripts/realsports_corpus/fixtures/proof_slate
+        run: |
+          python3 scripts/realsports_corpus/stage_append.py \
+            --corpus-root "$CORPUS_ROOT" \
+            --ensure-roots \
+            --source "$FIXTURE" \
+            --sport nfl \
+            --year 2026 \
+            --slate-date 2026-01-01 \
+            --kind total_value_leaderboards \
+            --label proof_slate
+
+      - name: Dry-run validate layout only
+        if: inputs.mode == 'dry_run'
+        env:
+          CORPUS_ROOT: ${{ runner.temp }}/corpus
+        run: |
+          python3 scripts/realsports_corpus/stage_append.py \
+            --corpus-root "$CORPUS_ROOT" \
+            --validate-only
+
+      - name: Commit and push append
+        if: inputs.mode == 'fixture_proof'
+        env:
+          CORPUS_ROOT: ${{ runner.temp }}/corpus
+          CORPUS_REPO: ${{ inputs.corpus_repo }}
+          CORPUS_REF: ${{ inputs.corpus_ref }}
+        working-directory: ${{ runner.temp }}/corpus
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no corpus changes; skipping commit"
+            exit 0
+          fi
+          git commit -m "append: fixture proof $(date -u +%Y-%m-%dT%H:%MZ) (refs sports#526)"
+          git push origin "HEAD:${CORPUS_REF}"
+          {
+            echo "## realsports-corpus-append: pushed"
+            echo
+            echo "Appended fixture proof to \`${CORPUS_REPO}@${CORPUS_REF}\`."
+            echo "Refs #526 #453."
+          } | tee -a "$GITHUB_STEP_SUMMARY"

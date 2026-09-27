@@ -250,6 +250,19 @@ be reused for another sport's differently-provisioned instance (confirmed
 live when NFL's own day-close first ran verified TLS - see
 `nfl-oracle/STATUS.md`, issue #149).
 
+The durable **full contest-history corpus** (every sport / every slate still
+served by Real Sports) is tracked separately in
+[`cheeksmagunda/sports-realsports-corpus`](https://github.com/cheeksmagunda/sports-realsports-corpus)
+so the monorepo checkout stays lean. See `scripts/realsports_corpus/README.md`
+and issue #526. Layout kinds include `players/`, `team_weights/`, `lineups/`,
+`slate_rosters/`, `averages/`, `combined_stats/`, `recorded_states/`,
+`total_value_leaderboards/`, and `matchups/` (plus draft-stats / feeds).
+**Ollama Codespace helper is FORBIDDEN** until root `coverage_manifest.json`
+shows `historical_capture_complete: true`. Existing `backups`-branch CSV
+snapshots (WNBA `slate_labels` / `contest_leaderboards`, NFL dayclose tables)
+remain the small Postgres export path; the separate corpus holds raw contest
+payloads and the coverage manifest models use to detect gaps.
+
 ## Local backend authentication
 
 Normal commands run directly. They use exported environment values, deployment

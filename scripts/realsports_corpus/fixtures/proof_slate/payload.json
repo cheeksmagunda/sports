@@ -1,0 +1,18 @@
+{
+  "schema_note": "Synthetic redacted fixture for Actions layout proof only. Not live Real Sports data.",
+  "sport": "nfl",
+  "slate_date": "2026-01-01",
+  "section": "highestBoostedValuePlayers",
+  "rows": [
+    {
+      "player_id": "fixture-1",
+      "name": "Fixture Player",
+      "team": "FIX",
+      "real_score": 10.0,
+      "card_boost": 1.0,
+      "slot": "FLEX",
+      "drafts": 1,
+      "value": 10.0
+    }
+  ]
+}
