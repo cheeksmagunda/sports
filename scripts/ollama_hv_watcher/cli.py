@@ -29,13 +29,13 @@ from ollama_hv_watcher.boards import (
     discover_board_paths,
     load_board_summary,
 )
+from ollama_hv_watcher.client import DEFAULT_MODEL
 from ollama_hv_watcher.discover import discover_day_plan
 from ollama_hv_watcher.gate import (
     UNLOCK_ENV,
     load_manifest_or_empty,
     operator_unlock_enabled,
 )
-from ollama_hv_watcher.client import DEFAULT_MODEL
 from ollama_hv_watcher.learn import run_learn
 from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
