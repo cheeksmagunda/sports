@@ -14,27 +14,30 @@ from sqlalchemy import text
 
 from wnba_oracle.db.engine import get_engine
 
+# Real Sports Daily Draft Stats "Highest value" board. Training + backtest
+# targets this section only (#453 / #505). Never train or grade on
+# contest_leaderboards / winning drafts or popularity chalk sections.
+TRAINING_LABEL_SECTION = "highestBoostedValuePlayers"
+
 
 def read_label_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
-    """Contest-label corpus: one row per player-slate from ``slate_labels``.
+    """Highest-value contest-label corpus for EB / calibration training.
 
-    Each row is a Real Sports contest entry with the realized ``real_score``
-    target the player earned on that slate. ~4.5k rows, grows by ~30 per day.
-
-    Used by the EB baseline and the real_score blend / CQR calibration; NOT
-    by the LightGBM heads. The heads train on ``build_gamelog_corpus``
-    (per-player-game feature+target rows over ``wnba_game_logs``, ~13k rows).
-    Replaces the legacy ``training_corpus.parquet`` archive.
+    One row per player-slate from ``slate_labels`` where
+    ``section = highestBoostedValuePlayers``. No artificial date/year
+    cutoff — full slate_labels history. Winning-draft
+    ``leaderboard_lineup`` rows and popularity sections are excluded.
     """
     eng = engine or get_engine()
     q = text(
         "SELECT slate_date, platform_player_id AS player_id, display_name, "
         "team_key AS team, card_boost, real_score, 'F' AS position "
         "FROM slate_labels WHERE real_score IS NOT NULL "
+        "AND section = :section "
         "ORDER BY slate_date, platform_player_id"
     )
     with eng.connect() as conn:
-        rows = conn.execute(q).fetchall()
+        rows = conn.execute(q, {"section": TRAINING_LABEL_SECTION}).fetchall()
     if not rows:
         return pl.DataFrame(
             schema={

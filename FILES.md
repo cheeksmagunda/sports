@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 968 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 971 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 968 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -1228,6 +1230,7 @@ Generated from `git ls-files`. 968 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_streak_quality.py -- Hot-streak quality assessment.
 - wnba-oracle/tests/unit/test_total_draft_value_objective.py -- Optional total_draft_value optimizer objective (#433).
 - wnba-oracle/tests/unit/test_train_cli.py
+- wnba-oracle/tests/unit/test_train_label_highest_value_only.py -- read_label_corpus trains on Highest value section only (#453 / #505).
 - wnba-oracle/tests/unit/test_upcoming_games_pool.py -- D109: scope the optimizer pool to games that have not tipped yet.
 - wnba-oracle/tests/unit/test_verify_durable_job.py -- Tests for bounded durable job verification.
 - wnba-oracle/tests/unit/test_watchdog.py -- Watchdog trigger logic  -  pure function tests against a mocked engine.
