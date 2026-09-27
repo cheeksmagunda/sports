@@ -42,7 +42,6 @@ def build_learn_prompt(summary: BoardSummary) -> str:
     )
 
 
-
 def write_learning_tick(
     data_root: Path,
     summary: BoardSummary,
