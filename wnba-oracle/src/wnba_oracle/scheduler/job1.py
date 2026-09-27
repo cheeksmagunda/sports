@@ -369,8 +369,8 @@ def _build_enrichment_rows(
             is_starter=int(is_starter),
             starter_slot=int(starter_slot),
             rotowire_confirmed=int(confirmed),
-            overall_rank=player.overall_rank,
-            injury_body_part=player.injury_body_part,
+            overall_rank=getattr(player, "overall_rank", None),
+            injury_body_part=getattr(player, "injury_body_part", None),
             team_moneyline=(
                 float(vegas["team_moneyline"]) if vegas.get("moneyline_available") else None
             ),

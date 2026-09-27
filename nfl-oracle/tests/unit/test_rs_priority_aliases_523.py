@@ -61,9 +61,7 @@ def test_same_slate_box_and_draft_stats_blocked() -> None:
         "prior_minutes": 28.0,
     }
     assert (
-        extract_draft_stats_row(
-            {"baseBoostedValue": 9.5, "score": 40, "rank": 2}, mode="live_ok"
-        )
+        extract_draft_stats_row({"baseBoostedValue": 9.5, "score": 40, "rank": 2}, mode="live_ok")
         == {}
     )
     prior_ds = extract_draft_stats_row(
