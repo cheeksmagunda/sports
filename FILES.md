@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 984 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 998 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 984 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -128,7 +130,23 @@ Generated from `git ls-files`. 984 tracked files. Regenerate with `scripts/gener
 - nba-oracle/src/nba_oracle/api/__init__.py -- NBA Oracle HTTP surface (health scaffold only).
 - nba-oracle/src/nba_oracle/api/app.py -- Health-only FastAPI app for Railway mono `nba-api` scaffold.
 
+## nba-oracle/src/nba_oracle/calendar/
+- nba-oracle/src/nba_oracle/calendar/__init__.py -- Calendar helpers for NBA season labeling.
+- nba-oracle/src/nba_oracle/calendar/season.py -- NBA season labeling helpers (domain-owned; not a provider adapter).
+
+## nba-oracle/src/nba_oracle/data/
+- nba-oracle/src/nba_oracle/data/__init__.py -- NBA data-layer scaffolding: coverage vocabulary and paths.
+- nba-oracle/src/nba_oracle/data/coverage.py -- Coverage matrix row schema (STATUS vocabulary).
+- nba-oracle/src/nba_oracle/data/coverage_matrix.py -- Build an honest multi-year coverage matrix before any Real Sports load.
+- nba-oracle/src/nba_oracle/data/paths.py -- NBA-owned data path helpers (local / volume roots).
+
+## nba-oracle/src/nba_oracle/ingest/
+- nba-oracle/src/nba_oracle/ingest/__init__.py -- NBA Real Sports ingest surfaces (Corpus G gate first).
+- nba-oracle/src/nba_oracle/ingest/auth.py -- Presence-only Real Sports auth checks for NBA ingest (never print values).
+- nba-oracle/src/nba_oracle/ingest/backfill.py -- Observation-only NBA Corpus G backfill gate.
+
 ## nba-oracle/tests/
+- nba-oracle/tests/test_calendar_and_ingest_gate.py
 - nba-oracle/tests/test_health_api.py
 - nba-oracle/tests/test_import.py
 
