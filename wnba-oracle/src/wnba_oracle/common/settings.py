@@ -359,7 +359,9 @@ class Settings(RuntimeConfig):
     # E[committed-order lineup score], maximising raw points over contest
     # placement. Low-ownership fade tiebreaker weight (#453) gives a mild
     # preference for underdrafted names when combos are close in expected TV.
-    optimizer_objective_mode: str = Field(default="payout", alias="OPTIMIZER_OBJECTIVE_MODE")
+    optimizer_objective_mode: Literal["payout", "total_draft_value"] = Field(
+        default="payout", alias="OPTIMIZER_OBJECTIVE_MODE"
+    )
     optimizer_max_value_ownership_fade: float = Field(
         default=0.001, alias="OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE"
     )
