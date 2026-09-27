@@ -19,17 +19,13 @@ from nfl_oracle.recommendations.optimizer import (
 
 def test_empty_env_reproduces_production_defaults() -> None:
     cfg = optimizer_config_from_env({})
-    bare = OptimizerConfig()
+    default = OptimizerConfig()
+    # #505 / #453: unset env serves max_value (win-draft), not diversified.
     assert cfg.profile == "max_value"
     assert cfg.min_distinct_teams == 1
     assert cfg.min_distinct_games == 1
-    assert OPTIMIZER_PROFILE_PRESETS["max_value"] == (1, 1)
-    # Bare dataclass default remains diversified for in-process callers.
-    assert bare.profile == "diversified"
-    assert bare.min_distinct_teams == 3
-    assert bare.min_distinct_games == 2
-    assert cfg.upside_weight == bare.upside_weight
-    assert cfg.field_weight == bare.field_weight
+    assert cfg.upside_weight == default.upside_weight
+    assert cfg.field_weight == default.field_weight
     assert cfg.objective == "total_value"
 
 
@@ -86,6 +82,15 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
     from tests.unit.test_recommendation_model_optimizer import BASE, projections, slate
 
     target = slate(one_team=True, one_game=True)
+    empty_env = optimize(
+        target,
+        projections(target),
+        decision_at=BASE + timedelta(days=8),
+        scoring_policy=ScoringPolicy(),
+        config=optimizer_config_from_env({}),
+    )
+    assert empty_env.construction_profile == "max_value"
+
     diversified = optimize(
         target,
         projections(target),
@@ -100,7 +105,7 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
         projections(target),
         decision_at=BASE + timedelta(days=8),
         scoring_policy=ScoringPolicy(),
-        config=optimizer_config_from_env({}),
+        config=optimizer_config_from_env({"NFL_OPTIMIZER_PROFILE": "max_value"}),
     )
     assert max_value.construction_profile == "max_value"
     assert max_value.requested_distinct_teams == 1

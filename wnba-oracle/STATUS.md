@@ -99,6 +99,35 @@ has 1 GP).
 the corpus; script-only alignment after #497 drift. No credential or schedule
 change.
 
+## Total Value HV leaderboard corpus scaffold (#526)  -  2026-09-27
+
+- Existing ingest: `ingest/contest_stats.py` → Postgres `slate_labels`
+  (`section=highestBoostedValuePlayers`); nightly Postgres CSV backup still
+  on orphan `backups` branch via `corpus-backup.yml`.
+- New durable path (separate corpus repo
+  `cheeksmagunda/sports-realsports-corpus`, not monorepo bloat):
+  `oracle_core.realsports_corpus` layout
+  (`{sport}/{season}/{slate_or_game_id}/{artifact}.json` +
+  `coverage/manifest.json`) + `oracle_core.hv_board_corpus` +
+  `wnba-oracle/scripts/export_hv_board.py` + `scripts/corpus/` exporters +
+  workflow `hv-leaderboard-corpus.yml` (needs `CORPUS_REPO_TOKEN`;
+  fail-closed without Real Sports auth). See `scripts/corpus/README.md`.
+- Durable-store proof (zero Real calls, Mac worktree): exported 3 WNBA HV
+  slates from `origin/backups` `slate_labels.csv` (4403 HV rows / 228
+  slates in backup; proof wrote 2026-09-22/23/24 contests 2187/2192/2194,
+  20 players each) and NFL fixture Corpus G →
+  `nfl/fixture/game_19457/{game_stats,matchups,feed}.json`.
+- Live WNBA HV append (Codespace `fluffy-zebra`, 2026-09-27): auth
+  `REALSPORTS_STORAGE_STATE_B64GZ` sha256[:8]=`c4a729e2` (value never
+  printed). Discovered contest `2205` → finalized **2194** slate
+  **2026-09-24**; wrote staging
+  `wnba/2026/slate_2026-09-24_2194/hv_board.json` with **20** HV players
+  (top: A. Wilson LVA value≈6.97). Corpus-repo push not run (needs
+  `CORPUS_REPO_TOKEN` + sibling hydrate).
+- Label remains Highest-value / Total Value Daily Leaderboard for
+  train/grade; FeatureSpec/#523 field map in
+  `scripts/corpus/feature_field_map.md`.
+
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
 
 Read-only verify via Codespace `fluffy-zebra-g4gqq746477q2jg` +

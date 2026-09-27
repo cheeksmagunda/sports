@@ -84,7 +84,11 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             train_ok=True,
             live_ok=True,
             availability_rule="known_from_public_schedule_or_slate_meta",
-            description="Player team home/away vs opponent from schedule.",
+            description=(
+                "Player team home/away vs opponent from schedule. "
+                "Corpus join: sports-realsports-corpus matchups.json (#526); "
+                "own-model status context_emitted (#523)."
+            ),
             group="matchup",
         ),
         FeatureSpec(
@@ -93,7 +97,11 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             train_ok=True,
             live_ok=True,
             availability_rule="known_from_public_schedule_or_slate_meta",
-            description="Opponent team abbreviation from offline schedule.",
+            description=(
+                "Opponent team abbreviation from offline schedule. "
+                "Corpus join: matchups/game_stats under #526; "
+                "own-model identity_encode / context (#523)."
+            ),
             group="matchup",
         ),
         FeatureSpec(
@@ -209,7 +217,9 @@ def feature_registry() -> tuple[FeatureSpec, ...]:
             description=(
                 "Walk-forward mean Real value allowed by the opponent defense "
                 "(position split when it has support), built from finalized "
-                "Corpus G box rows keyed by opponent_team_id (#189)."
+                "Corpus G box rows keyed by opponent_team_id (#189). "
+                "Durable export path: corpus game_stats/matchups (#526) into "
+                "ridge context (#523)."
             ),
             group="matchup",
         ),

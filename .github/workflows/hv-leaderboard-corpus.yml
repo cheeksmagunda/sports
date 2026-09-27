@@ -1,0 +1,151 @@
+# Append Real Sports Highest-value / Total Value Daily Leaderboards into a
+# SEPARATE GitHub-tracked corpus repo (issue #526). Does not bloat `main`.
+#
+# Required secrets / vars (fail closed when absent):
+#   REALSPORTS_STORAGE_STATE_B64GZ  — read-only scrape (sha verify only)
+#   REALSPORTS_CORPUS_REPO          — default cheeksmagunda/sports-realsports-corpus
+#   CORPUS_REPO_TOKEN               — PAT/app token with contents:write on corpus repo
+#
+# Layout: oracle_core.realsports_corpus + hv_board_corpus
+#   {sport}/{season}/slate_{date}_{contest}/hv_board.json
+# Sibling scripts/realsports_corpus may also use kind-first paths; soft-merge later.
+
+name: hv-leaderboard-corpus
+
+on:
+  workflow_dispatch:
+    inputs:
+      sport:
+        description: Sport to scrape (wnba proof path first)
+        required: true
+        type: choice
+        options:
+          - wnba
+          - nfl
+          - nba
+          - nhl
+        default: wnba
+      contest_id:
+        description: Optional contest id (empty = WNBA proof latest finalized)
+        required: false
+        type: string
+        default: ""
+      confirm_append:
+        description: Confirm append/commit into REALSPORTS_CORPUS_REPO
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hv-leaderboard-corpus
+  cancel-in-progress: false
+
+jobs:
+  export:
+    if: inputs.confirm_append == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Fail closed without corpus destination
+        env:
+          REALSPORTS_CORPUS_REPO: ${{ vars.REALSPORTS_CORPUS_REPO || secrets.REALSPORTS_CORPUS_REPO || secrets.CORPUS_REPO || 'cheeksmagunda/sports-realsports-corpus' }}
+          CORPUS_REPO_TOKEN: ${{ secrets.CORPUS_REPO_TOKEN }}
+        run: |
+          if [ -z "${CORPUS_REPO_TOKEN:-}" ]; then
+            echo "FAIL_CLOSED: CORPUS_REPO_TOKEN required (separate corpus). Refs #526."
+            exit 78
+          fi
+          echo "corpus_repo=${REALSPORTS_CORPUS_REPO}"
+
+      - name: Fail closed without Real Sports auth (sha only)
+        env:
+          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.REALSPORTS_STORAGE_STATE_B64GZ }}
+        run: |
+          if [ -z "${REALSPORTS_STORAGE_STATE_B64GZ:-}" ]; then
+            echo "FAIL_CLOSED: REALSPORTS_STORAGE_STATE_B64GZ missing. No scrape. Refs #526."
+            exit 78
+          fi
+          python - <<'PY'
+          import hashlib, os
+          raw = os.environ["REALSPORTS_STORAGE_STATE_B64GZ"]
+          print("auth sha256[:8]=" + hashlib.sha256(raw.encode()).hexdigest()[:8])
+          PY
+
+      - name: Checkout corpus repo
+        env:
+          REALSPORTS_CORPUS_REPO: ${{ vars.REALSPORTS_CORPUS_REPO || secrets.REALSPORTS_CORPUS_REPO || secrets.CORPUS_REPO || 'cheeksmagunda/sports-realsports-corpus' }}
+          CORPUS_REPO_TOKEN: ${{ secrets.CORPUS_REPO_TOKEN }}
+        run: |
+          umask 077
+          git clone --depth 1 \
+            "https://x-access-token:${CORPUS_REPO_TOKEN}@github.com/${REALSPORTS_CORPUS_REPO}.git" \
+            "${RUNNER_TEMP}/sports-corpus"
+
+      - name: Seed storage state (WNBA)
+        if: inputs.sport == 'wnba'
+        env:
+          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.REALSPORTS_STORAGE_STATE_B64GZ }}
+        run: uv run --frozen --package wnba-oracle python wnba-oracle/scripts/seed_storage_state.py
+
+      - name: Export HV board
+        env:
+          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.REALSPORTS_STORAGE_STATE_B64GZ }}
+          CORPUS_ROOT: ${{ runner.temp }}/sports-corpus
+          SPORT: ${{ inputs.sport }}
+          CONTEST_ID: ${{ inputs.contest_id }}
+        run: |
+          set -euo pipefail
+          case "$SPORT" in
+            wnba)
+              if [ -n "${CONTEST_ID}" ]; then
+                uv run --frozen --package wnba-oracle \
+                  python wnba-oracle/scripts/export_hv_board.py \
+                  --corpus-root "$CORPUS_ROOT" --contest-id "$CONTEST_ID"
+              else
+                uv run --frozen --package wnba-oracle \
+                  python wnba-oracle/scripts/export_hv_board.py \
+                  --corpus-root "$CORPUS_ROOT" --proof-latest-finalized
+              fi
+              ;;
+            nfl)
+              uv run --frozen --package nfl-oracle \
+                python nfl-oracle/scripts/export_hv_board.py \
+                --corpus-root "$CORPUS_ROOT" --contest-id "${CONTEST_ID:-0}" \
+                --slate-date 1970-01-01 || exit $?
+              ;;
+            nba)
+              uv run --frozen --package nba-oracle python nba-oracle/scripts/export_hv_board.py
+              ;;
+            nhl)
+              uv run --frozen --package nhl-oracle python nhl-oracle/scripts/export_hv_board.py
+              ;;
+            *)
+              echo "unknown sport=$SPORT"; exit 2
+              ;;
+          esac
+
+      - name: Commit append to corpus repo
+        env:
+          CORPUS_REPO_TOKEN: ${{ secrets.CORPUS_REPO_TOKEN }}
+          CORPUS_ROOT: ${{ runner.temp }}/sports-corpus
+        run: |
+          set -euo pipefail
+          cd "$CORPUS_ROOT"
+          git config user.name "sports-hv-corpus-bot"
+          git config user.email "noreply@github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No HV board changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(hv): append Total Value leaderboard slate(s) (#526)"
+          git push origin HEAD

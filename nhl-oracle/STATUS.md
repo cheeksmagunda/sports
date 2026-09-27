@@ -25,6 +25,13 @@ Last verified: 2026-09-27 (#501 hard zero-boost gate; continues #453/#325;
   - Note: `standings/now` still reflects completed **20252026** (32 teams @ 82
     GP) and must not be used as 2026-27 coverage.
 
+## Total Value HV leaderboard corpus (#526)  -  2026-09-27
+
+- Contest `draftStats` used for contract/boost audit only; no durable HV
+  board corpus path yet.
+- Stub only: `nhl-oracle/scripts/export_hv_board.py` exits 78 (fail-closed).
+- Portfolio layout: `oracle_core.hv_board_corpus` + `hv-leaderboard-corpus.yml`.
+
 ## Railway nhl-staging live smoke (#482)  -  2026-09-27
 
 - Source: `nhl-oracle/Dockerfile` + `railway.toml`; root `.dockerignore`
