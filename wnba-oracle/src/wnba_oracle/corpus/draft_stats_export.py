@@ -106,9 +106,7 @@ def _atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
 
 
 def _atomic_write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    lines = [
-        json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows
-    ]
+    lines = [json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows]
     payload = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
     _atomic_write_bytes(path, payload)
 

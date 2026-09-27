@@ -69,8 +69,7 @@ DRAFT_STATS_SECTIONS: tuple[DraftStatsSection, ...] = (
         kind="provider_draft_stats",
         sports=("wnba", "nfl", "nba", "nhl"),
         description=(
-            "Highest value / Total Value Daily Leaderboard "
-            "(Real Sports Daily Draft Stats)."
+            "Highest value / Total Value Daily Leaderboard (Real Sports Daily Draft Stats)."
         ),
         train_label=True,
         wnba_store="slate_labels",
@@ -222,12 +221,10 @@ def catalog_document() -> dict[str, Any]:
                 "highestBoostedValuePlayers.json"
             ),
             "recorded_states_draft_stats": (
-                "recorded_states/{sport}/{year}/slate_{YYYY-MM-DD}/"
-                "draft_stats_all_sections.jsonl"
+                "recorded_states/{sport}/{year}/slate_{YYYY-MM-DD}/draft_stats_all_sections.jsonl"
             ),
             "recorded_states_lineups": (
-                "recorded_states/{sport}/{year}/slate_{YYYY-MM-DD}/"
-                "contest_leaderboards.json"
+                "recorded_states/{sport}/{year}/slate_{YYYY-MM-DD}/contest_leaderboards.json"
             ),
             "note": (
                 "contest_leaderboards lineups are observations "
