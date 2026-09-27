@@ -63,6 +63,25 @@ def test_eb_predict_one_no_eb_baseline() -> None:
     assert _eb_predict_one(art, 42, "F") is None
 
 
+def test_eb_predict_one_applies_pace_when_provided() -> None:
+    eb = EBHierarchicalBaseline(
+        cohort_means={"F": 2.5},
+        player_alpha={42: 1.5},
+        pace_beta=0.1,
+        league_pace=90.0,
+    )
+    art = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        eb_baseline=eb,
+        training_rows=1,
+    )
+    # 4.0 + 0.1 * (100 - 90) = 5.0
+    assert _eb_predict_one(art, 42, "F", team_pace=100.0) == pytest.approx(5.0)
+    # Without pace, intercept-only.
+    assert _eb_predict_one(art, 42, "F") == pytest.approx(4.0)
+
+
 def test_eb_predict_one_floored_at_half() -> None:
     """A deeply negative alpha shouldn't produce a near-zero prediction
     that would explode the log-scale sampling."""

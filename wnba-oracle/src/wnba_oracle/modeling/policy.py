@@ -61,6 +61,8 @@ class ModelPolicy:
     ceiling_sigma_blowout_boost: float = 0.0
     ceiling_sigma_low_history_boost: float = 0.0
     field_measured_ownership_enabled: bool = True
+    # Serve ladder Tier-0 (#523): ``eb`` (default) or legacy ``heads`` (LGBM).
+    serve_primary: Literal["eb", "heads"] = "eb"
 
     minutes: MinutesConfig = field(default_factory=MinutesConfig)
     availability: AvailabilityConfig = field(default_factory=AvailabilityConfig)
@@ -89,6 +91,8 @@ class ModelPolicy:
             raise ValueError("artifact_sha must be empty or a 64-character SHA-256")
         if self.payout_regime not in {"top_50", "top_20", "top_1"}:
             raise ValueError(f"unsupported payout_regime {self.payout_regime!r}")
+        if self.serve_primary not in {"eb", "heads"}:
+            raise ValueError(f"unsupported serve_primary {self.serve_primary!r}")
         if len(self.slot_multipliers) != 5 or any(value <= 0 for value in self.slot_multipliers):
             raise ValueError("slot_multipliers must contain five positive values")
         if tuple(sorted(self.slot_multipliers, reverse=True)) != self.slot_multipliers:
@@ -252,6 +256,15 @@ class ModelPolicy:
             raise ValueError(f"unsupported model policy schema_version {schema_version!r}")
         values = dict(payload)
         values.pop("schema_version", None)
+        # Pre-#523 freezes omitted serve_primary and used LightGBM Tier-0.
+        # Prefer_eb_baseline was a brief intermediate name on this branch.
+        if "prefer_eb_baseline" in values and "serve_primary" not in values:
+            prefer = bool(values.pop("prefer_eb_baseline"))
+            values["serve_primary"] = "eb" if prefer else "heads"
+        elif "serve_primary" not in values:
+            values["serve_primary"] = "heads"
+        else:
+            values.pop("prefer_eb_baseline", None)
         config_types = {
             "optimizer": OptimizeConfig,
             "contrarian": ContrarianConfig,

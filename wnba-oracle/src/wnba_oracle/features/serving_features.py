@@ -9,15 +9,18 @@ ingest.minutes_features uses to match Real Sports pool players to nba_api
 game logs.
 
 The dict written into features_json under `head_features` is consumed by
-job2._build_specs Tier-0 (predict_real_score) and ignored by the existing
-ladder, so this addition is pure: missing keys / failed rolling builds fall
-through to the current blended_real_score path with no behavioural change.
+job2 when ``WNBA_SERVE_PRIMARY=heads`` (LightGBM Tier-0) and by the EB path
+for pace terms. Job 1 also fuses slate enrichment (card_boost, vegas_*,
+is_home, starter flags) into that dict so those signals enter the design
+matrix rather than living only at the features_json top level (#523).
 """
 
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Mapping
 from datetime import date, datetime
+from typing import Any
 
 import polars as pl
 
@@ -32,6 +35,62 @@ from wnba_oracle.features.rolling import build_rolling_features
 log = get_logger("oracle.features.serving")
 
 FeatureLookupKey = tuple[str, str, str] | int
+
+# Slate enrichment keys that belong in the own-model design matrix
+# (``_BASE_FEATURES`` / EB serve path). Previously top-level only.
+SLATE_ENRICHMENT_HEAD_KEYS: tuple[str, ...] = (
+    "card_boost",
+    "primary_ranking",
+    "vegas_total",
+    "vegas_spread",
+    "is_home",
+    "is_starter",
+    "starter_slot",
+    "is_confirmed_starter",
+)
+
+
+def fuse_slate_enrichment_into_head_features(
+    head: Mapping[str, Any] | None,
+    *,
+    card_boost: float,
+    primary_ranking: float,
+    vegas_total: float,
+    vegas_spread: float,
+    is_home: float,
+    is_starter: int,
+    starter_slot: int,
+    rotowire_confirmed: int,
+) -> dict[str, float]:
+    """Merge live slate enrichment into a head_features row (#523).
+
+    Always returns a dict (creates one when rolling features missed) so
+    boost / Vegas / home / starter enter the model path even on cold-start
+    identity misses. ``is_confirmed_starter`` matches the train corpus name
+    in ``_BASE_FEATURES`` (confirmed starter, not merely expected).
+    """
+
+    out: dict[str, float] = {}
+    if isinstance(head, Mapping):
+        for key, value in head.items():
+            if value is None:
+                out[str(key)] = 0.0
+                continue
+            try:
+                out[str(key)] = float(value)
+            except (TypeError, ValueError):
+                out[str(key)] = 0.0
+    out["card_boost"] = float(card_boost)
+    out["primary_ranking"] = float(primary_ranking)
+    out["vegas_total"] = float(vegas_total)
+    out["vegas_spread"] = float(vegas_spread)
+    out["is_home"] = float(is_home)
+    out["is_starter"] = float(is_starter)
+    out["starter_slot"] = float(starter_slot)
+    out["is_confirmed_starter"] = float(
+        1.0 if int(rotowire_confirmed) and int(is_starter) else 0.0
+    )
+    return out
 
 
 def _norm(s: str | None) -> str:

@@ -139,6 +139,13 @@ def test_design_matrix_never_contains_raw_label() -> None:
     assert len(matrix) == 1
     assert 12345.0 not in matrix[0]
     assert matrix[0][0] == 1.0  # intercept
+    assert "player_prior_median" in MODEL_FEATURE_NAMES
+    assert model.n_features == len(matrix[0])
+
+
+def test_model_features_include_player_prior_median() -> None:
+    assert "player_prior_median" in MODEL_FEATURE_NAMES
+    assert MODEL_FEATURE_NAMES.index("player_prior_median") == 2
 
 
 def test_default_walk_forward_omits_feature_ridge() -> None:

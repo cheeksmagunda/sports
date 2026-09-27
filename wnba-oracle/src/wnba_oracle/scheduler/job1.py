@@ -30,6 +30,7 @@ from wnba_oracle.features.serving_features import (
     build_head_feature_lookup,
     build_opp_dvp_lookup,
     build_team_pace_lookup,
+    fuse_slate_enrichment_into_head_features,
 )
 from wnba_oracle.features.serving_features import lookup as head_feature_lookup
 from wnba_oracle.ingest.identity import build_resolver
@@ -347,7 +348,6 @@ def _build_enrichment_rows(
             head_feature["opp_dvp_guard"] = defensive_value
             head_feature["opp_dvp_forward"] = defensive_value
             head_feature["opp_dvp_center"] = defensive_value
-            features["head_features"] = head_feature
             stats.head_features_matched += 1
         elif resolved_player_id is not None:
             head_feature_misses.append(
@@ -355,6 +355,21 @@ def _build_enrichment_rows(
             )
         else:
             head_feature_misses.append(f"{player.display_name} ({player.team}) [unresolved]")
+
+        # #523: fuse boost / vegas / home / starter into head_features so they
+        # enter the own-model design matrix (EB pace path + optional LGBM heads),
+        # not only the features_json top level.
+        features["head_features"] = fuse_slate_enrichment_into_head_features(
+            head_feature,
+            card_boost=float(player.multiplier_bonus),
+            primary_ranking=float(player.primary_ranking or 0.0),
+            vegas_total=float(vegas.get("vegas_total", 0.0) or 0.0),
+            vegas_spread=float(vegas.get("vegas_spread", 0.0) or 0.0),
+            is_home=float(vegas.get("is_home", 0.0) or 0.0),
+            is_starter=int(is_starter),
+            starter_slot=int(starter_slot),
+            rotowire_confirmed=int(confirmed),
+        )
 
         normalized_name = player.display_name.lower().strip()
         for market in ("player_points", "player_rebounds", "player_assists"):

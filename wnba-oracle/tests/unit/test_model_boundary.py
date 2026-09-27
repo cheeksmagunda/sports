@@ -108,6 +108,7 @@ def test_model_policy_setting_inventory_covers_current_settings_surface() -> Non
             "payout_regime",
             "prop_signal_scale",
             "sampling_score_offset",
+            "serve_primary",
         }
     }
 
@@ -126,6 +127,8 @@ def _alternate_setting_value(name: str, value: object) -> object:
         return "b" * 64
     if name == "payout_regime":
         return "top_1" if value != "top_1" else "top_20"
+    if name == "serve_primary":
+        return "heads" if value != "heads" else "eb"
     if name == "optimizer_objective_mode":
         return "total_draft_value" if value != "total_draft_value" else "payout"
     if isinstance(value, int):

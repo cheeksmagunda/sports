@@ -108,9 +108,17 @@ class _FakeArtifact:
 
 
 def _common_patch(monkeypatch, art: _FakeArtifact | None) -> None:
+    from wnba_oracle.common.settings import Settings
+
     monkeypatch.setattr(job2, "_load_model_artifact", lambda *_a, **_k: art)
     monkeypatch.setattr(job2, "_load_measured_drafts", lambda *_a, **_k: {})
     monkeypatch.setattr(job2, "_load_slate_label_names", lambda *_a, **_k: {})
+    # These tests pin the legacy LightGBM Tier-0 path (#523 serve_primary=heads).
+    monkeypatch.setattr(
+        job2,
+        "get_settings",
+        lambda: Settings.model_construct(serve_primary="heads"),
+    )
 
 
 def test_tier0_fires_when_heads_and_features_present(monkeypatch) -> None:
