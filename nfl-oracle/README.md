@@ -145,6 +145,24 @@ Payloads are redacted (no `userId` / `user`) and stored under
 Coverage and resume cursors live under `data/catalog/` (gitignored except seed
 `season_game_ids.json`).
 
+Nightly refresh: `.github/workflows/nfl-corpus-g-nightly.yml` (04:30 UTC +
+`workflow_dispatch`) backfills seed games for the current and prior two
+seasons via `REALSPORTS_STORAGE_STATE_B64GZ`, then commits
+`coverage_matrix.json` to the `backups` branch as the durable freshness
+record. Raw GHA artifacts are ephemeral; dense training payloads live on the
+worker volume.
+
+Offline gap scan / players-only repair (issue #503):
+
+```sh
+uv run --package nfl-oracle nfl-corpus-g-backfill --report-gaps
+uv run --package nfl-oracle nfl-corpus-g-backfill --repair-players --season 2024
+```
+
+Optimizer objective is always `total_value` (max draft-value portfolio EV).
+Set `NFL_OPTIMIZER_PROFILE=max_value` to drop the diversity floor for race
+construction; default remains `diversified`.
+
 ## First-season proof
 
 ```sh

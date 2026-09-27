@@ -1,5 +1,52 @@
 # Status
 
+## Corpus G gap matrix + training-feed unblock (2026-09-27 ~03:00Z UTC, #503)
+
+Verified from Codespace `fluffy-zebra-g4gqq746477q2jg` via
+`scripts/codespace-railway-env`. Public DB proxy sha256[:8]=`7b8ce64c`
+unchanged. No Real Sports session minting.
+
+### Gap matrix (live volume evidence)
+
+| Surface | Season band | Games | Complete (stats+players+feed) | Notes |
+|---------|-------------|------:|------------------------------:|-------|
+| staging `nfl-oracle-worker` volume `9cb6374a` (~1850 MB) | 2002-2023 | 0 | 0 | empty; seed catalog only |
+| staging | 2024 | 334 | 0 | all missing `players.json` (stats+feed present) |
+| staging | 2025 | 334 | 5 | only seed games have players |
+| mono `nfl-production` `nfl-oracle-worker-volume` | all | 0 | 0 | **reattached**, oracle-writable, empty (0 MB) |
+
+Training rows in active model bundles (`training_rows=37692`) still reflect
+2024-2025 volume data from staging. Multi-year feed needs (1) 2024 players
+repair, (2) 2002-2023 densification, (3) copy/sync onto mono volume.
+
+### Pipeline / optimizer
+
+- **Nightly:** `.github/workflows/nfl-corpus-g-nightly.yml` at 04:30 UTC
+  (before `nfl-dayclose` 10:00 / `nfl-corpus-backup` 11:30). Commits
+  `coverage_matrix.json` to `backups`; raw GHA artifacts are ephemeral.
+- **Dayclose:** grades/freeze path; race corpus under
+  `data/race/dayclose/<season>/`. Does not densify historical Corpus G.
+- **Optimizer objective:** always `total_value`. Portfolio EV uses
+  `U = E + upside_weight*(p90-E) + field_weight*field_win_rate*max(|E|,1)`.
+  Race / max-draft construction: `NFL_OPTIMIZER_PROFILE=max_value`
+  (diversity floor 1/1). Defaults remain `diversified` (3 teams / 2 games).
+
+### Code unblocks landed in this issue
+
+- `nfl-corpus-g-backfill --report-gaps` offline completeness scan
+- `nfl-corpus-g-backfill --repair-players` players-only repair for games that
+  already have stats+feed (2024 gap)
+- History collector now persists `players.json` alongside feed+stats
+
+### Next actions (executed or blocked)
+
+1. **Land nightly + repair CLI** — executed in PR for #503.
+2. **Repair 2024 players on staging volume** — attempted via worker SSH using
+   existing sealed session only; see PR / issue comments for live result.
+3. **Seed / densify 2002-2023 onto mono volume** — blocked until staging
+   corpus is complete and a volume copy path runs (mono volume empty;
+   GHA cannot persist training payloads).
+
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
 Operator-ordered live cutover from `nfl-oracle-staging` /
@@ -37,11 +84,10 @@ credential minting. No secret values printed.
   **service** domain (not custom DNS). Claim as custom domain on mono
   `nfl-api` failed; consumers should migrate to the mono URL (or add
   real custom DNS later). Legacy remains until cron/domain cut finishes.
-- Empty mono worker volume (`nfl-oracle-worker-volume`, mount
-  `/app/nfl-oracle/data`) caused `PermissionError` (root-owned volume
-  under image `USER oracle`). **Detached** so worker could boot; volume
-  retained in project for later chown/reattach. Old project worker+volume
-  left running for rollback.
+- Mono worker volume (`nfl-oracle-worker-volume`, mount
+  `/app/nfl-oracle/data`): **reattached** as of 2026-09-27 ~02:56Z verify
+  (#503); oracle-writable, empty (0 MB). Staging volume still holds the
+  ~1.8 GB dense Corpus G for rollback / copy source.
 
 ### Rollback
 

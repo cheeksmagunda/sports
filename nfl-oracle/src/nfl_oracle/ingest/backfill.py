@@ -18,10 +18,16 @@ from oracle_core.artifacts import atomic_write_json
 from nfl_oracle.calendar.season import season_label_for_date
 from nfl_oracle.common.logging import configure_logging, get_logger
 from nfl_oracle.data.label_depth import LABEL_KIND_HIGH_TV, LABEL_KIND_RAW, game_label_kind
-from nfl_oracle.ingest.corpus_g import CorpusGStore, GameIngestResult, ingest_game
+from nfl_oracle.ingest.corpus_g import (
+    CorpusGStore,
+    GameIngestResult,
+    ingest_game,
+    summarize_payloads,
+)
 from nfl_oracle.ingest.realsports import (
     StorageStateMissing,
     StorageStateStale,
+    fetch_game_players,
     headers_or_capture,
 )
 
@@ -394,6 +400,180 @@ def backfill_season_sync(**kwargs: Any) -> list[GameIngestResult]:
     return asyncio.run(backfill_season(**kwargs))
 
 
+@dataclass(frozen=True)
+class SeasonGapRow:
+    """Offline completeness counts for one season under ``data/raw/corpus_g``."""
+
+    season: str
+    games: int
+    complete: int
+    missing_players: int
+    missing_stats: int
+    missing_feed: int
+
+    def to_dict(self) -> dict[str, int | str]:
+        return {
+            "season": self.season,
+            "games": self.games,
+            "complete": self.complete,
+            "missing_players": self.missing_players,
+            "missing_stats": self.missing_stats,
+            "missing_feed": self.missing_feed,
+        }
+
+
+def scan_corpus_gaps(
+    store: CorpusGStore,
+    *,
+    seasons: set[int] | None = None,
+) -> list[SeasonGapRow]:
+    """Scan on-disk Corpus G for incomplete game directories (no network).
+
+    A game is *complete* when ``stats.json``, ``players.json``, and ``feed.json``
+    are all present. Historical dense backfills that predate the players
+    endpoint leave ``missing_players`` high (notably 2024 on staging).
+    """
+
+    rows: list[SeasonGapRow] = []
+    if not store.raw_root.is_dir():
+        return rows
+    for season_dir in sorted(store.raw_root.iterdir(), key=lambda p: p.name):
+        if not season_dir.is_dir():
+            continue
+        if seasons is not None:
+            try:
+                if int(season_dir.name) not in seasons:
+                    continue
+            except ValueError:
+                continue
+        games = 0
+        complete = 0
+        missing_players = 0
+        missing_stats = 0
+        missing_feed = 0
+        for game_dir in season_dir.iterdir():
+            if not game_dir.is_dir() or not game_dir.name.isdigit():
+                continue
+            games += 1
+            has_stats = (game_dir / "stats.json").is_file()
+            has_players = (game_dir / "players.json").is_file()
+            has_feed = (game_dir / "feed.json").is_file()
+            if has_stats and has_players and has_feed:
+                complete += 1
+            if not has_stats:
+                missing_stats += 1
+            if not has_players:
+                missing_players += 1
+            if not has_feed:
+                missing_feed += 1
+        rows.append(
+            SeasonGapRow(
+                season=season_dir.name,
+                games=games,
+                complete=complete,
+                missing_players=missing_players,
+                missing_stats=missing_stats,
+                missing_feed=missing_feed,
+            )
+        )
+    return rows
+
+
+def games_missing_players(
+    store: CorpusGStore,
+    *,
+    season: int | None = None,
+    explicit: list[int] | None = None,
+) -> list[tuple[int, int]]:
+    """Return ``(season, game_id)`` pairs that have stats+feed but no players.json."""
+
+    wanted = {int(x) for x in explicit} if explicit else None
+    pairs: list[tuple[int, int]] = []
+    if not store.raw_root.is_dir():
+        return pairs
+    for season_dir in sorted(store.raw_root.iterdir(), key=lambda p: p.name):
+        if not season_dir.is_dir():
+            continue
+        try:
+            season_num = int(season_dir.name)
+        except ValueError:
+            continue
+        if season is not None and season_num != season:
+            continue
+        for game_dir in sorted(season_dir.iterdir(), key=lambda p: p.name):
+            if not game_dir.is_dir() or not game_dir.name.isdigit():
+                continue
+            game_id = int(game_dir.name)
+            if wanted is not None and game_id not in wanted:
+                continue
+            if (game_dir / "players.json").is_file():
+                continue
+            if not (game_dir / "stats.json").is_file():
+                continue
+            if not (game_dir / "feed.json").is_file():
+                continue
+            pairs.append((season_num, game_id))
+    return pairs
+
+
+async def repair_missing_players(
+    *,
+    store: CorpusGStore,
+    pairs: list[tuple[int, int]],
+    delay_s: float = DEFAULT_INTER_GAME_DELAY_S,
+) -> list[dict[str, Any]]:
+    """Fetch only ``/players`` for games that already have stats+feed.
+
+    Does not re-fetch stats/feed. Uses the existing Real Sports session
+    (env / volume); never mints a new login.
+    """
+
+    if not pairs:
+        return []
+    headers = await headers_or_capture()
+
+    async def refresh() -> Any:
+        return await headers_or_capture()
+
+    repaired: list[dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for index, (season, game_id) in enumerate(pairs):
+            players = await fetch_game_players(
+                client, game_id, headers, refresh_headers=refresh
+            )
+            coverage = summarize_payloads(stats=None, players=players, feed=None)
+            stored = store.persist_endpoint(
+                game_id=game_id,
+                season=season,
+                endpoint="players",
+                payload=players,
+                source_url=f"https://web.realapp.com/games/{game_id}/sport/nfl/players",
+            )
+            repaired.append(
+                {
+                    "season": season,
+                    "game_id": game_id,
+                    "player_count": coverage.n_players,
+                    "wrote": stored.wrote,
+                }
+            )
+            log.info(
+                "repaired_players",
+                season=season,
+                game_id=game_id,
+                players=coverage.n_players,
+                wrote=stored.wrote,
+            )
+            if index + 1 < len(pairs) and delay_s > 0:
+                await asyncio.sleep(delay_s)
+                headers = await headers_or_capture()
+    return repaired
+
+
+def repair_missing_players_sync(**kwargs: Any) -> list[dict[str, Any]]:
+    return asyncio.run(repair_missing_players(**kwargs))
+
+
 def main(argv: list[str] | None = None) -> int:
     configure_logging()
     parser = argparse.ArgumentParser(description="Resumable Corpus G season backfill")
@@ -406,6 +586,19 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Rewrite coverage_matrix.json season skeleton/statuses without network I/O",
     )
+    parser.add_argument(
+        "--report-gaps",
+        action="store_true",
+        help="Offline scan of data/raw/corpus_g completeness (no network)",
+    )
+    parser.add_argument(
+        "--repair-players",
+        action="store_true",
+        help=(
+            "Fetch only /players for on-disk games that have stats+feed but "
+            "lack players.json (repairs the 2024 dense-backfill gap)"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.refresh_matrix_only:
         store = CorpusGStore()
@@ -417,8 +610,73 @@ def main(argv: list[str] | None = None) -> int:
                 f"label_kind={block.get('label_kind')} note={block.get('value_note')}"
             )
         return 0
+    if args.report_gaps:
+        store = CorpusGStore()
+        seasons = {args.season} if args.season is not None else None
+        rows = scan_corpus_gaps(store, seasons=seasons)
+        if not rows:
+            print("gaps: no corpus_g seasons on disk")
+            # Emit tracked-season skeleton so operators still see 2002-current.
+            for season in tracked_seasons():
+                print(
+                    f"season={season} games=0 complete=0 "
+                    "missing_players=0 missing_stats=0 missing_feed=0"
+                )
+            return 0
+        on_disk = {row.season for row in rows}
+        for season in tracked_seasons():
+            key = str(season)
+            if key in on_disk:
+                continue
+            rows.append(
+                SeasonGapRow(
+                    season=key,
+                    games=0,
+                    complete=0,
+                    missing_players=0,
+                    missing_stats=0,
+                    missing_feed=0,
+                )
+            )
+        rows.sort(key=lambda r: int(r.season) if r.season.isdigit() else r.season)
+        for row in rows:
+            print(
+                f"season={row.season} games={row.games} complete={row.complete} "
+                f"missing_players={row.missing_players} "
+                f"missing_stats={row.missing_stats} missing_feed={row.missing_feed}"
+            )
+        return 0
+    if args.repair_players:
+        store = CorpusGStore()
+        pairs = games_missing_players(
+            store, season=args.season, explicit=args.game_id
+        )
+        if not pairs:
+            print("repair_players: nothing to repair")
+            return 0
+        print(f"repair_players: candidates={len(pairs)}")
+        try:
+            repaired = repair_missing_players_sync(
+                store=store, pairs=pairs, delay_s=args.delay_s
+            )
+        except (StorageStateMissing, StorageStateStale) as exc:
+            if args.season is not None:
+                mark_season_blocked(store, args.season, f"auth blocked: {exc}")
+            print(f"[BLOCK] {exc}", file=sys.stderr)
+            return 78
+        for item in repaired:
+            print(
+                f"game={item['game_id']} season={item['season']} "
+                f"players={item['player_count']} wrote={item['wrote']}"
+            )
+        print(f"repair_players: repaired={len(repaired)}")
+        return 0
     if args.season is None:
-        print("[BLOCK] --season is required unless --refresh-matrix-only", file=sys.stderr)
+        print(
+            "[BLOCK] --season is required unless --refresh-matrix-only / "
+            "--report-gaps / --repair-players",
+            file=sys.stderr,
+        )
         return 2
     game_ids = load_season_game_ids(args.season, explicit=args.game_id)
     if not game_ids:
