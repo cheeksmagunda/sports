@@ -1,0 +1,182 @@
+name: nfl-corpus-g-nightly
+
+on:
+  schedule:
+    # 04:30 UTC daily: off-peak, before nfl-dayclose (10:00 UTC) and
+    # nfl-corpus-backup (11:30 UTC). Seed-game proof for current and prior
+    # two seasons; uses REALSPORTS_STORAGE_STATE_B64GZ + Playwright.
+    #
+    # NOTE (issue #503): raw corpus-g JSON artifacts write to the GHA
+    # runner ephemeral filesystem and are discarded after each run. The
+    # coverage catalog (coverage_matrix.json) is committed to the backups
+    # branch as the durable freshness record. Full corpus persistence for
+    # the model-training feed requires the mono nfl-oracle-worker volume
+    # (mount /app/nfl-oracle/data). As of 2026-09-27 that volume is
+    # reattached and oracle-writable but empty; staging still holds the
+    # dense 2024/2025 corpus (2024 missing players.json).
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: >
+          Single season to backfill (integer, e.g. 2025).
+          Leave blank to auto-run current + prior two seasons.
+        required: false
+        type: string
+      no_resume:
+        description: "Re-fetch already-persisted games (bypass resume cursor)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nfl-corpus-g-nightly
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Require REALSPORTS_STORAGE_STATE_B64GZ
+        env:
+          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.REALSPORTS_STORAGE_STATE_B64GZ }}
+        run: |
+          if [ -z "$REALSPORTS_STORAGE_STATE_B64GZ" ]; then
+            {
+              echo "## NFL corpus-g nightly: not_configured"
+              echo ""
+              echo "\`REALSPORTS_STORAGE_STATE_B64GZ\` repo secret is unset."
+              echo "Set the secret to enable nightly corpus-g refresh."
+              echo ""
+              echo "Refs #453."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::not_configured: REALSPORTS_STORAGE_STATE_B64GZ secret is unset (refs #453)"
+            exit 1
+          fi
+
+      - name: Refresh coverage matrix skeleton (offline, 2002 to current)
+        run: |
+          uv run --frozen --package nfl-oracle nfl-corpus-g-backfill \
+            --refresh-matrix-only 2>&1 | tee "$RUNNER_TEMP/refresh-matrix.txt"
+
+      - name: Install Playwright Chromium
+        run: uv run --frozen --package nfl-oracle playwright install --with-deps chromium
+
+      - name: Resolve seasons to backfill
+        id: seasons
+        run: |
+          if [ -n "${{ inputs.season }}" ]; then
+            echo "list=${{ inputs.season }}" >> "$GITHUB_OUTPUT"
+          else
+            uv run --frozen --package nfl-oracle python3 - << 'EOF'
+          import os, sys
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from nfl_oracle.calendar.season import season_label_for_date
+          cur = season_label_for_date(datetime.now(ZoneInfo("America/New_York")).date())
+          seasons = [str(cur), str(cur - 1), str(cur - 2)]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"list={' '.join(seasons)}\n")
+          EOF
+          fi
+
+      - name: Backfill seed games (idempotent per season)
+        id: backfill
+        continue-on-error: true
+        env:
+          REALSPORTS_STORAGE_STATE_B64GZ: ${{ secrets.REALSPORTS_STORAGE_STATE_B64GZ }}
+        run: |
+          RESUME_FLAG=""
+          if [ "${{ inputs.no_resume }}" = "true" ]; then
+            RESUME_FLAG="--no-resume"
+          fi
+          EXIT=0
+          for SEASON in ${{ steps.seasons.outputs.list }}; do
+            echo "--- season=$SEASON ---"
+            uv run --frozen --package nfl-oracle nfl-corpus-g-backfill \
+              --season "$SEASON" $RESUME_FLAG 2>&1 \
+              | tee -a "$RUNNER_TEMP/backfill.txt" || EXIT=$?
+          done
+          exit $EXIT
+
+      - name: Save catalog files before branch switch
+        run: |
+          mkdir -p "$RUNNER_TEMP/catalog"
+          cp "nfl-oracle/data/catalog/coverage_matrix.json" \
+            "$RUNNER_TEMP/catalog/" 2>/dev/null || echo "coverage_matrix.json absent"
+          cp "nfl-oracle/data/catalog/backfill_cursor.json" \
+            "$RUNNER_TEMP/catalog/" 2>/dev/null || echo "backfill_cursor.json absent"
+
+      - name: Commit coverage catalog to backups branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          git config user.name "nfl-oracle-bot"
+          git config user.email "noreply@github.com"
+          if git ls-remote --exit-code --heads origin backups >/dev/null 2>&1; then
+            git fetch origin backups
+            git switch --force-create backups origin/backups
+          else
+            git switch --orphan backups
+            git rm -r --cached . || true
+          fi
+          mkdir -p nfl-oracle/data/catalog
+          [ -f "$RUNNER_TEMP/catalog/coverage_matrix.json" ] && \
+            cp "$RUNNER_TEMP/catalog/coverage_matrix.json" nfl-oracle/data/catalog/
+          [ -f "$RUNNER_TEMP/catalog/backfill_cursor.json" ] && \
+            cp "$RUNNER_TEMP/catalog/backfill_cursor.json" nfl-oracle/data/catalog/
+          git add -f nfl-oracle/data/catalog/coverage_matrix.json 2>/dev/null || true
+          git add -f nfl-oracle/data/catalog/backfill_cursor.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "no catalog changes; skipping commit"
+          else
+            git commit -m "corpus-g: coverage catalog $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin backups
+          fi
+          # The orphan backups branch has no .github/actions tree; return to the
+          # triggering ref before composite post-steps resolve that path.
+          git switch --detach "$GITHUB_SHA"
+
+      - name: Build job summary
+        if: always()
+        run: |
+          {
+            echo "# NFL corpus-g nightly ($(date -u +%Y-%m-%dT%H:%MZ))"
+            echo ""
+            echo "seasons: \`${{ steps.seasons.outputs.list }}\`"
+            echo ""
+            if [ -s "$RUNNER_TEMP/refresh-matrix.txt" ]; then
+              echo "## Coverage matrix refresh (offline)"
+              echo '```'
+              cat "$RUNNER_TEMP/refresh-matrix.txt"
+              echo '```'
+              echo ""
+            fi
+            if [ -s "$RUNNER_TEMP/backfill.txt" ]; then
+              echo "## Backfill"
+              echo '```'
+              cat "$RUNNER_TEMP/backfill.txt"
+              echo '```'
+              echo ""
+            fi
+            echo "> **Note (issue #503):** Raw corpus-g JSON artifacts wrote to the"
+            echo "> GHA runner ephemeral filesystem and are discarded on job completion."
+            echo "> Full model-training persistence requires the mono worker volume"
+            echo "> (\`nfl-oracle-worker-volume\` at \`/app/nfl-oracle/data\`) to hold"
+            echo "> dense Corpus G. Repair incomplete games with"
+            echo "> \`nfl-corpus-g-backfill --repair-players\`."
+          } >> "$GITHUB_STEP_SUMMARY"

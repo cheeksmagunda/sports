@@ -56,6 +56,7 @@ Generated from `git ls-files`. 984 tracked files. Regenerate with `scripts/gener
 - .github/workflows/issue-link-enforcement.yml -- GitHub Actions workflow
 - .github/workflows/model-research-benchmark.yml -- GitHub Actions workflow
 - .github/workflows/nfl-corpus-backup.yml -- GitHub Actions workflow
+- .github/workflows/nfl-corpus-g-nightly.yml -- GitHub Actions workflow
 - .github/workflows/nfl-dayclose.yml -- GitHub Actions workflow
 - .github/workflows/nfl-race.yml -- GitHub Actions workflow
 - .github/workflows/nfl-t40-watchdog.yml -- GitHub Actions workflow
@@ -145,6 +146,7 @@ Generated from `git ls-files`. 984 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/README.md -- nfl-oracle
 - nfl-oracle/STATUS.md
 - nfl-oracle/docker-compose.yml
+- nfl-oracle/docker-entrypoint.sh -- Shell script
 - nfl-oracle/pyproject.toml -- Package/tool configuration
 - nfl-oracle/railway.toml -- Package/tool configuration
 
@@ -412,7 +414,7 @@ Generated from `git ls-files`. 984 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_anti_chalk_high_tv.py -- Anti-chalk + high-potential label path pins for issue #185.
 - nfl-oracle/tests/unit/test_auth_check_live.py -- NFL parity for wnba-oracle's auth-check-live value-free contract.
 - nfl-oracle/tests/unit/test_auth_presence_check.py -- auth_presence_check must see volume-backed Real Sports session files.
-- nfl-oracle/tests/unit/test_backfill_cursor.py -- Tests for season backfill cursor resume.
+- nfl-oracle/tests/unit/test_backfill_cursor.py -- Tests for season backfill cursor resume and Corpus G gap helpers.
 - nfl-oracle/tests/unit/test_calendar_derived_defaults.py
 - nfl-oracle/tests/unit/test_capture_storage_state_paths.py -- capture_storage_state must write under volume-aware scraper_dir.
 - nfl-oracle/tests/unit/test_clocks.py -- Tests for train/live Corpus G clock helpers.
