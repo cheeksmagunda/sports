@@ -1,6 +1,50 @@
 # Status
 
-Last verified: 2026-09-27T01:43:00Z
+Last verified: 2026-09-27T02:00:00Z
+
+## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
+
+Operator-authorized Sunday-path cutover to Railway project **`sports-oracle`**
+(`cca6b03f-…`) / environment **`wnba-production`**. Codespace
+`fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`. No secrets
+printed.
+
+### Active serving plane
+
+| Resource | Verified fact |
+|----------|---------------|
+| Project / env | `sports-oracle` / `wnba-production` |
+| Source SHA | `70ea992` on `main` (tip-day `4c7c959` ancestor; newer than tip-day floor) |
+| API health | `https://wnba-api-wnba-production.up.railway.app/health` → `{"status":"ok","version":"0.1.0"}` |
+| Frontend | `https://wnba-frontend-wnba-production.up.railway.app/` → HTTP 200 |
+| Domains | Generated `*.up.railway.app` only (live had no custom domains to move). CLI domain move N/A. Old live URLs (`api-production-7033`, `frontend-production-a739`) remain on `wnba-oracle` until callers switch. |
+| Data plane | All `wnba-*` app services `DATABASE_URL` + `REDIS_URL` (and api `DATABASE_PUBLIC_URL`) hash-match **live** `wnba-oracle` / `api` values (`DB sha256[:8]=0cffc88e`, `REDIS sha256[:8]=b0421c4c`, `DBPUB sha256[:8]=42376805`). Mono Postgres stays empty for later migrate. |
+| Cron schedules (mono) | job1 `0 13 * * *`; job1-late `*/30 16-23 * * *`; job2 `*/5 14-23,0-3 * * *`; dayclose `0 6 * * *` (GraphQL `serviceInstanceUpdate`) |
+| Live old project crons | `wnba-oracle` / `production` cron-job1, job1-late, job2, dayclose schedules set to **null** (no dual-fire). Project **not** deleted. |
+| Frontend API URL | Mono `VITE_API_URL=https://wnba-api-wnba-production.up.railway.app` |
+
+### Rollback
+
+1. Re-arm live `wnba-oracle` cron schedules to the values above (GraphQL
+   `serviceInstanceUpdate` / CLI).
+2. Null mono `wnba-cron-*` schedules (or leave mono idle).
+3. Point any callers / bookmarks back to
+   `https://api-production-7033.up.railway.app` and
+   `https://frontend-production-a739.up.railway.app`.
+4. Live Postgres/Redis unchanged throughout; no data restore required for this
+   cutover shape.
+
+### Residual
+
+- Mono empty Postgres/Redis retained for a later true migrate (not tonight).
+- Railway domain `update --port 4173` for frontend hit CLI rate limit; frontend
+  still returned HTTP 200. Retry port pin when rate limit clears if needed.
+- Old `wnba-oracle` api/frontend still online as cold standby (crons disarmed).
+
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+
+- Earlier scaffold note superseded by the serving cutover section above.
+- Design + runbook remain on #457.
 
 ## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
@@ -12,8 +56,8 @@ Last verified: 2026-09-27T01:43:00Z
 
 ## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
-Live traffic remains on Railway project **`wnba-oracle`** (not
-`sports-oracle`) through Sunday.
+Historical note: prior to the sports-oracle cutover above, tip-day deploys
+were verified on Railway project **`wnba-oracle`**. Serving is now mono.
 
 - Merged #454 (`4c7c9598`) into `main` (replaces closed #445 after branch
   rename for issue-link enforcement). Follow-up #465 regenerated `FILES.md`.
