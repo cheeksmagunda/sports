@@ -305,10 +305,13 @@ def test_artifact_swap_produces_divergent_predictions(tmp_path: Path, monkeypatc
     monkeypatch.setenv("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
     for alias, value in module.benchmark.production_env_overrides().items():
         monkeypatch.setenv(alias, value)
+    # Pin legacy LightGBM Tier-0 after production overrides (#523).
+    monkeypatch.setenv("WNBA_SERVE_PRIMARY", "heads")
 
     from wnba_oracle.common.settings import get_settings
     from wnba_oracle.scheduler.job2 import build_model_policy
 
+    get_settings.cache_clear()
     policy = build_model_policy(get_settings())
 
     labels_csv, leaderboards_csv, game_identity_csv = _write_divergence_csv_fixtures(tmp_path)
