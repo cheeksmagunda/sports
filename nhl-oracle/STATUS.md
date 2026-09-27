@@ -1,8 +1,18 @@
 # Status
 
-Last verified: 2026-09-26 CT (Week 3 baseline skeleton #456 under #453)
+Last verified: 2026-09-27 (#453 Sunday readiness honesty)
 
 This file records application state only.
+
+## Sunday readiness honesty (#453)  -  2026-09-27
+
+- **Week 2 done** (contract/corpus/#325 boost=`none`).
+- **Week 3 started** as an observation-only baseline skeleton (#456 / PR #459):
+  `labels/` + `baselines/` with synthetic-label tests. **Not fitted on Real
+  corpus. Not serving. No Railway. No hosted API. No contest entry.**
+- Weeks 4–6 (optimizer / API / frontend / deployment): **not started**.
+- Open follow-on for contest discovery/calendar ops code: #455 (PR #471).
+- Do not treat NHL as Sunday live contest-ready.
 
 ## Application state
 

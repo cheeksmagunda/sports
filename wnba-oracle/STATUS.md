@@ -1,6 +1,34 @@
 # Status
 
-Last verified: 2026-09-26T03:50:00Z
+Last verified: 2026-09-27T01:43:00Z
+
+This file records live operational state only. Values marked unverified were
+not exposed by the read-only checks available during this audit.
+
+## Tip-day fix live on wnba-oracle (#454 / #441 under #453)  -  2026-09-27 ~01:43Z
+
+Codespace `fluffy-zebra-g4gqq746477q2jg`; Railway project **`wnba-oracle`**
+(`ab83f44c-…`) / `production`. **Not** `sports-oracle` (traffic stays on
+`wnba-oracle` through Sunday). Via `scripts/codespace-railway-env`. No
+secrets printed.
+
+- Squash-merged PR #454 → `main` commit `4c7c9598f18cddf669ddad3367633b84daff9df0`
+  at 2026-09-27T01:25:50Z (branch `fix/441-rotowire-empty-tip-day` deleted
+  with merge).
+- Live API deployment `b6980bde-bd22-40be-a3b7-c594a15619cc` on tip-day
+  commit `4c7c9598f18c`; `GET https://api-production-7033.up.railway.app/health`
+  → `{"status":"ok","version":"0.1.0"}`.
+- Crons on tip-day `4c7c9598f18c`: `cron-job1` `95353809-…`,
+  `cron-job1-late` `f3dfb782-…`, `cron-job2` `cc2a7a0a-…` (schedule armed;
+  last run completed). `cron-dayclose` active deploy
+  `cd69934d-1aa5-4068-ab39-d7e9526f96e9` on `1adb1250530a` (docs-only tip of
+  `main` after tip-day; tip-day fix is an ancestor).
+- `/watchdog/today` (slate `2026-09-26`): `status=ok`, live `events=[]`
+  (historical `rotowire_empty` remains under `history` only). Tip-window
+  fail-closed no longer sticky-warns non-tip calendar days after deploy.
+- `/watchdog/2026-09-27`: `status=critical` / `no_job1_pool` — **expected**
+  until Sunday ~13:00 UTC job1 sees tip-day RotoWire lineups
+  (tip `2026-09-27T17:00:00Z`).
 
 ## RotoWire-empty fail-closed only on tip day (#441)  -  2026-09-27
 
