@@ -601,16 +601,3 @@ PYTHONPATH=scripts python -m ollama_hv_watcher --once
 PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
 ```
 
-## Ollama HV/TDV slate watcher (#574)
-
-Codespace helper (not a serving path): install via
-`scripts/ollama_hv_watcher/install_codespace.sh`, model `llama3.2:3b`, serve on
-`:11434`. Watcher arms at earliest T-40 across sports and stays until latest
-slate close. Training is gated by `coverage_manifest` completeness or
-`SPORTS_OLLAMA_UNLOCK=1`. Artifacts under `data/ollama_hv/` (gitignored).
-
-```bash
-cd /workspaces/sports
-SPORTS_OLLAMA_UNLOCK=1 PYTHONPATH=scripts:packages/oracle-core/src \
-  python -m ollama_hv_watcher status
-```
