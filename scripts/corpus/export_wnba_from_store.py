@@ -26,7 +26,12 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from oracle_core.hv_board_corpus import HvBoardDocument, HvBoardPlayer, append_hv_board, build_hv_board
+from oracle_core.hv_board_corpus import (
+    HvBoardDocument,
+    HvBoardPlayer,
+    append_hv_board,
+    build_hv_board,
+)
 
 
 def _players_from_rows(rows: list[dict[str, str]]) -> list[HvBoardPlayer]:
@@ -72,11 +77,15 @@ def _group_postgres() -> dict[tuple[str, int], list[dict[str, str]]]:
     scripts_dir = Path(__file__).resolve().parents[2] / "wnba-oracle" / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
-    from corpus_backup_common import portable_postgres_url  # type: ignore[import-not-found]
+    from corpus_backup_common import (
+        portable_postgres_url,  # type: ignore[import-not-found]
+    )
 
     url = os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
     if not url:
-        raise RuntimeError("DATABASE_URL or DATABASE_PUBLIC_URL required without --labels-csv")
+        raise RuntimeError(
+            "DATABASE_URL or DATABASE_PUBLIC_URL required without --labels-csv"
+        )
     engine = create_engine(portable_postgres_url(url))
     q = text(
         "SELECT contest_id, slate_date, section, platform_player_id, display_name, "
@@ -100,7 +109,9 @@ def _group_postgres() -> dict[tuple[str, int], list[dict[str, str]]]:
                     "card_boost": ""
                     if mapping.get("card_boost") is None
                     else str(mapping["card_boost"]),
-                    "drafts": "" if mapping.get("drafts") is None else str(mapping["drafts"]),
+                    "drafts": ""
+                    if mapping.get("drafts") is None
+                    else str(mapping["drafts"]),
                     "real_score": ""
                     if mapping.get("real_score") is None
                     else str(mapping["real_score"]),
@@ -119,7 +130,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.labels_csv is not None:
         if not args.labels_csv.is_file():
-            print(f"export_wnba_from_store: missing csv {args.labels_csv}", file=sys.stderr)
+            print(
+                f"export_wnba_from_store: missing csv {args.labels_csv}",
+                file=sys.stderr,
+            )
             return 1
         groups = _group_csv(args.labels_csv)
         source = f"backups_csv:{args.labels_csv.name}"
@@ -127,12 +141,18 @@ def main(argv: list[str] | None = None) -> int:
         try:
             groups = _group_postgres()
         except Exception as exc:  # noqa: BLE001 — CLI surface
-            print(f"export_wnba_from_store: postgres failed ({type(exc).__name__})", file=sys.stderr)
+            print(
+                f"export_wnba_from_store: postgres failed ({type(exc).__name__})",
+                file=sys.stderr,
+            )
             return 1
         source = "postgres:slate_labels"
 
     if not groups:
-        print("export_wnba_from_store: no highestBoostedValuePlayers rows", file=sys.stderr)
+        print(
+            "export_wnba_from_store: no highestBoostedValuePlayers rows",
+            file=sys.stderr,
+        )
         return 1
 
     keys = sorted(groups.keys(), reverse=True)

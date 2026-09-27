@@ -38,7 +38,9 @@ def _load_json(path: Path) -> dict[str, Any] | None:
     return raw if isinstance(raw, dict) else None
 
 
-def _matchups_from_stats(stats: dict[str, Any], *, game_id: int, season: str) -> dict[str, Any]:
+def _matchups_from_stats(
+    stats: dict[str, Any], *, game_id: int, season: str
+) -> dict[str, Any]:
     """Minimal matchup extraction for FeatureSpec wiring (#523).
 
     Corpus G ``gameBoxScore`` / box rows supply home/away scores; schedule
@@ -46,12 +48,16 @@ def _matchups_from_stats(stats: dict[str, Any], *, game_id: int, season: str) ->
     the durable Real Sports side of that join.
     """
 
-    box = stats.get("gameBoxScore") if isinstance(stats.get("gameBoxScore"), dict) else {}
+    box = (
+        stats.get("gameBoxScore") if isinstance(stats.get("gameBoxScore"), dict) else {}
+    )
     players = list(stats.get("playerBoxScores") or [])
     n_value = sum(
         1
         for row in players
-        if isinstance(row, dict) and row.get("value") is not None and str(row.get("value")).strip()
+        if isinstance(row, dict)
+        and row.get("value") is not None
+        and str(row.get("value")).strip()
     )
     return {
         "schema_version": 1,
@@ -95,9 +101,7 @@ def _export_game(
     if stats is not None:
         # Strip obvious identity leaks if present; fixtures may include them.
         safe_stats = {
-            k: v
-            for k, v in stats.items()
-            if k not in {"token", "userId", "user"}
+            k: v for k, v in stats.items() if k not in {"token", "userId", "user"}
         }
         if isinstance(safe_stats.get("playerBoxScores"), list):
             cleaned = []
@@ -210,7 +214,9 @@ def main(argv: list[str] | None = None) -> int:
     wrote = 0
     for season_dir in season_dirs:
         season = season_dir.name
-        game_dirs = sorted(p for p in season_dir.iterdir() if p.is_dir() and p.name.isdigit())
+        game_dirs = sorted(
+            p for p in season_dir.iterdir() if p.is_dir() and p.name.isdigit()
+        )
         if args.game_id:
             game_dirs = [season_dir / str(args.game_id)]
         for game_dir in game_dirs:
