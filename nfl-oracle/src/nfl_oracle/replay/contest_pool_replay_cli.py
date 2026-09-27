@@ -18,7 +18,7 @@ from typing import Any
 from nfl_oracle.contests.parse import iter_contests
 from nfl_oracle.contests.store import ContestStore
 from nfl_oracle.recommendations.optimizer import (
-    _OPTIMIZER_PROFILE_PRESETS,
+    OPTIMIZER_PROFILE_PRESETS,
     OptimizerConfig,
 )
 from nfl_oracle.recommendations.picker_knobs import PickerKnobs
@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         position_calibration=args.position_calibration,
         profile=args.picker_profile,
     )
-    preset_teams, preset_games = _OPTIMIZER_PROFILE_PRESETS[args.optimizer_profile]
+    preset_teams, preset_games = OPTIMIZER_PROFILE_PRESETS[args.optimizer_profile]
     optimizer_config = OptimizerConfig(
         simulations=args.simulations,
         min_distinct_teams=(
