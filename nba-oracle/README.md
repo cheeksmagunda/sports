@@ -2,10 +2,10 @@
 
 NBA Oracle application scaffold.
 
-Current scope is infrastructure only: package wiring, boundary-safe layout, a
-health-only FastAPI process for Railway mono staging, and verification targets.
-Domain behavior (providers, schemas, models, contests, and operations) is
-intentionally not implemented yet.
+Current scope is pre-product: package wiring, boundary-safe layout, a
+health-only FastAPI process for Railway mono staging, NBA season/coverage
+helpers, and an auth-blocked Corpus G backfill gate. Domain contests,
+provider HTTP ingest, models, and serving strategies are not implemented.
 
 ## Connection surfaces
 
@@ -45,4 +45,17 @@ make test-app APP=nba-oracle
 make check-applications
 make check-boundaries
 docker build -f nba-oracle/Dockerfile -t nba-oracle .
+uv run --package nba-oracle nba-corpus-g-backfill --dry-run
 ```
+
+## Calendar and ingest gate
+
+- Season labels are NBA-owned (`season_label_for_date`): October tip opens a
+  new start-year label; January-June stay on the prior label.
+- `NEXT_REGULAR_SEASON_OPEN` is `2026-10-20` (NBA.com public calendar fact).
+- Tracked seasons for Corpus G planning: `2002` through the current Eastern
+  season label. Until Real Sports auth is present on an authorized surface,
+  every season is recorded as `blocked` in the coverage matrix.
+- `nba-corpus-g-backfill` writes that matrix and exits non-zero when
+  portfolio `REALSPORTS_*` material is absent. It does not mint credentials
+  and does not claim historical rows loaded.
