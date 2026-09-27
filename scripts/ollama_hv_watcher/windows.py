@@ -131,9 +131,7 @@ class SlateWindow:
         return cls(
             sport=str(require_live(payload["sport"], "sport")),
             slate_id=str(require_live(payload["slate_id"], "slate_id")),
-            freeze_or_kickoff_at=parse_iso_utc(
-                str(payload["freeze_or_kickoff_at"])
-            ),
+            freeze_or_kickoff_at=parse_iso_utc(str(payload["freeze_or_kickoff_at"])),
             close_at=parse_iso_utc(str(payload["close_at"])),
             lead_minutes=lead,
         )

@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1109 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1110 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -797,6 +797,7 @@ Generated from `git ls-files`. 1109 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/gate.py -- Ollama training gate: coverage_manifest complete OR operator unlock (#574).
 - scripts/ollama_hv_watcher/install_codespace.sh -- Shell script
 - scripts/ollama_hv_watcher/learn.py -- Write self-learning notes/ticks from HV board summaries via Ollama (#574).
+- scripts/ollama_hv_watcher/live.py -- Loud fail-closed errors when live slate/board fields are missing (#574).
 - scripts/ollama_hv_watcher/pick.py -- Five-player daily contest pick contract for Ollama HV/TDV (#574).
 - scripts/ollama_hv_watcher/serve.py -- systemd-less Ollama serve helpers: health curl, pidfile, nohup (#574).
 - scripts/ollama_hv_watcher/watcher.py -- Portfolio HV/TDV slate watcher loop (issue #574).

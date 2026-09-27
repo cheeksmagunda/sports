@@ -25,9 +25,7 @@ def five_player_lineup(
     Raises ``ValueError`` when the board cannot fill a full five-player card.
     """
     if size != FIVE_PLAYER_LINEUP_SIZE:
-        raise ValueError(
-            f"lineup_size_must_be_{FIVE_PLAYER_LINEUP_SIZE}_got_{size}"
-        )
+        raise ValueError(f"lineup_size_must_be_{FIVE_PLAYER_LINEUP_SIZE}_got_{size}")
     seen: set[str] = set()
     out: list[dict[str, Any]] = []
     for row in summary.top_players:

@@ -48,9 +48,7 @@ class BoardSummary:
             value = row.get("value")
             real = row.get("real_score")
             team = row.get("team") or ""
-            lines.append(
-                f"  {i}. {name} team={team} value={value} real_score={real}"
-            )
+            lines.append(f"  {i}. {name} team={team} value={value} real_score={real}")
         return "\n".join(lines)
 
 
@@ -70,7 +68,9 @@ def _normalize_player(row: dict[str, Any], *, index: int, path: str) -> dict[str
     ctx = f"board={path} player_index={index}"
     if not isinstance(row, dict):
         raise LiveDataRequiredError(f"players[{index}]", context=ctx)
-    player_id = row.get("player_id") if row.get("player_id") is not None else row.get("id")
+    player_id = (
+        row.get("player_id") if row.get("player_id") is not None else row.get("id")
+    )
     name = row.get("name") if row.get("name") is not None else row.get("player_name")
     if player_id in (None, "") and (name is None or str(name).strip() == ""):
         raise LiveDataRequiredError(
@@ -131,8 +131,7 @@ def summarize_board_payload(
         raise LiveDataRequiredError("players", context=f"board={path}; empty")
 
     normalized = [
-        _normalize_player(p, index=i, path=path)
-        for i, p in enumerate(players_raw)
+        _normalize_player(p, index=i, path=path) for i, p in enumerate(players_raw)
     ]
     normalized.sort(
         key=lambda p: (
