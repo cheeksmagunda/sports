@@ -169,7 +169,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/Dockerfile.production
 - nfl-oracle/Makefile -- Build/test/lint entrypoints
 - nfl-oracle/README.md -- nfl-oracle
-- nfl-oracle/STATUS.md
+- nfl-oracle/STATUS.md -- Status
 - nfl-oracle/docker-compose.yml
 - nfl-oracle/docker-entrypoint.sh -- Shell script
 - nfl-oracle/pyproject.toml -- Package/tool configuration
