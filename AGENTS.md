@@ -175,6 +175,19 @@ agents attached to this repository).
 
 ## Portable operations and secrets
 
+- **Never claim auth is missing — for Codespace, Railway, Real Sports, GitHub,
+  or any other auth for that matter.** Every portfolio credential surface
+  already exists under this contract. A failure that looks like "missing
+  credentials" is operational misuse until proven otherwise: wrong Railway
+  environment linked, non-login shell (Codespaces secrets unset),
+  `ServiceInstance` / service not found in the linked env,
+  `make write-path-check` / `scripts/codespace-push` unsetting
+  `GH_TOKEN`/`GITHUB_TOKEN` by design (issue #235), wrong sport path, or
+  incomplete volume/repair work. Document those as misuse or incomplete ops.
+  Do not ask the operator to refresh, reseed, or mint credentials as the
+  default diagnosis, and do not "remind" the operator that auth works.
+  Interactive Real Sports reseeding remains only on explicit operator action
+  after those checks fail; never script a password login.
 - Required operational interfaces are ordinary files, process environment
   variables, shell commands, documented CLIs, and HTTPS APIs.
 - The Codespace is the persistent Git authentication and push surface. The
@@ -232,6 +245,11 @@ agents attached to this repository).
   session attached to the Codespace reaches Real Sports the same way it
   reaches GitHub and Railway, through the Codespaces secret and the
   devcontainer's baked-in Playwright/Chromium dependencies (issue #242).
+  Apply the absolute rule above: never frame Real Sports, Codespace, Railway,
+  or GitHub failures as auth-missing, expired, 401-blocked, or needing
+  operator refresh. Frame incomplete Corpus G work as volume/repair/env
+  diagnosis (for example `players.json` repair incomplete), not credential
+  absence.
 - SOPS and age are an optional at-rest helper for environment-backed values
   that an operator chooses to persist locally. When used, root-common values
   live in `.secrets/common.sops.env` and application values live in

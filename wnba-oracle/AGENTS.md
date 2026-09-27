@@ -225,9 +225,13 @@ principles. WNBA-specific additions:
 - Diagnose with code, current API responses, database facts, Railway deployment
   state and logs, then `STATUS.md`. Do not infer health from a stale schedule or
   deployment record.
-- Real Sports 401 responses across authenticated endpoints indicate a stale or
-  invalid derived session. Escalate for interactive reseeding; do not attempt a
-  scripted password login.
+- Never claim Real Sports (or any portfolio) auth is missing. A 401 or
+  "not configured" probe is operational misuse until proven otherwise
+  (wrong env, non-login shell, sport path, volume/repair). Compare
+  `REALSPORTS_STORAGE_STATE_B64GZ` copies by `sha256[:8]` only. Escalate for
+  interactive reseeding only on explicit operator action after those checks
+  fail; never script a password login. See root `../AGENTS.md` Portable
+  operations absolute rule.
 - A cron redeploy re-arms its schedule but does not replay a missed run. Any
   catch-up action must be scoped, reversible, and followed by restoration and
   verification.

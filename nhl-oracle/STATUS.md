@@ -77,6 +77,16 @@ Last verified: 2026-09-27 CT (#535 HV train/backtest wiring; continues #453/#526
 - sports-oracle `nhl-staging` hosts `nhl-api`, `nhl-worker`, `nhl-frontend`,
   Postgres, Redis. Live WNBA/NFL traffic remains on prior projects through
   Sunday windows (#453) except as separately authorized.
+- NHL app `DATABASE_URL` for staging services lives on **`nhl-staging`**, not
+  `nfl-production`. A missing read against the NFL env is the wrong Railway
+  environment, not absent auth.
+- GitHub Actions repo secret `NHL_HISTORY_DATABASE_URL` is set to the existing
+  `sports-oracle` / `nhl-staging` Postgres public TCP URL (Postgres-zZPV;
+  host redacted `host_sha256[:8]=b1a88296`). No new credential minted.
+  Verified 2026-09-27: `gh secret list` shows the name, and
+  `nhl-history-nightly` run
+  https://github.com/cheeksmagunda/sports/actions/runs/36297938962
+  passed the `not_configured` gate (`conclusion=success`).
 
 ## Sunday readiness honesty (#453)  -  2026-09-27
 
