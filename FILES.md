@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1027 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,8 +17,6 @@ Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
-- FILES.md -- File manifest (generated, do not hand-edit)
-- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -664,6 +662,7 @@ Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
+- packages/oracle-core/src/oracle_core/draft_stats_catalog.py -- Daily Draft Stats / draftStats section inventory (issue #526).
 - packages/oracle-core/src/oracle_core/fitness.py -- Domain-free WIN/CLOSE fitness helpers for the portfolio backtest race.
 - packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
@@ -684,6 +683,7 @@ Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/tests/test_config.py
 - packages/oracle-core/tests/test_dayclose.py
 - packages/oracle-core/tests/test_dossier.py
+- packages/oracle-core/tests/test_draft_stats_catalog.py -- Tests for the portfolio draftStats section catalog (#526).
 - packages/oracle-core/tests/test_fitness.py
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
@@ -695,6 +695,9 @@ Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/tests/test_storage_cache.py
 - packages/oracle-core/tests/test_testing.py
 - packages/oracle-core/tests/test_timing.py
+
+## packages/oracle-core/tests/fixtures/
+- packages/oracle-core/tests/fixtures/daily_draft_stats_sections.json -- (test fixture data)
 
 ## scripts/
 - scripts/auth-check
@@ -938,6 +941,7 @@ Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/scripts/corpus_backup_common.py -- Integrity helpers shared by the corpus backup and restore entry points.
 - wnba-oracle/scripts/dayclose_verify.py -- Verify the WNBA day-close cron using public durable application evidence.
 - wnba-oracle/scripts/dev.sh -- Shell script
+- wnba-oracle/scripts/export_draft_stats_corpus.py -- Dump WNBA slate_labels (all sections) + contest_leaderboards into corpus layout.
 - wnba-oracle/scripts/export_game_identity.py -- Export validated (slate_date, team, opponent) identity from job1_enrichment.
 - wnba-oracle/scripts/export_game_logs.py -- Export the full ``wnba_game_logs`` corpus for offline tournament/benchmark use.
 - wnba-oracle/scripts/lab.py -- Offline model lab: the one entry point for evaluating a change.
@@ -1013,6 +1017,10 @@ Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/src/wnba_oracle/common/logging.py -- WNBA compatibility surface over oracle-core structured logging.
 - wnba-oracle/src/wnba_oracle/common/paths.py -- Project-owned runtime path discovery.
 - wnba-oracle/src/wnba_oracle/common/settings.py -- Pydantic-settings driven config. Single source of truth for env vars.
+
+## wnba-oracle/src/wnba_oracle/corpus/
+- wnba-oracle/src/wnba_oracle/corpus/__init__.py -- WNBA corpus export helpers for Real Sports history dumps (#526).
+- wnba-oracle/src/wnba_oracle/corpus/draft_stats_export.py -- Export WNBA slate_labels + contest_leaderboards into kind-first corpus layout.
 
 ## wnba-oracle/src/wnba_oracle/db/
 - wnba-oracle/src/wnba_oracle/db/__init__.py
@@ -1198,6 +1206,7 @@ Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_determinism_compare.py -- Content-based artifact comparison for the determinism gate.
 - wnba-oracle/tests/unit/test_dossier.py -- Unit and integration tests for dossier entry and gap computation.
 - wnba-oracle/tests/unit/test_dossier_api.py -- #35 phase 3 / #39: read-only dossier API surface.
+- wnba-oracle/tests/unit/test_draft_stats_export.py -- Tests for WNBA draftStats / recorded_states corpus export (#526).
 - wnba-oracle/tests/unit/test_eb_residual_targets.py -- EB residual target wiring (#350).
 - wnba-oracle/tests/unit/test_eval_racer.py -- Offline unit tests for wnba_oracle.eval.racer (#356).
 - wnba-oracle/tests/unit/test_feature_payload.py

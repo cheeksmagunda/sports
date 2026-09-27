@@ -1,5 +1,23 @@
 # Status
 
+Last verified: 2026-09-27T03:45:00Z
+
+## DraftStats / recorded_states corpus export (#526)  -  2026-09-27
+
+- Catalog: `oracle_core.draft_stats_catalog` lists every known Daily Draft
+  Stats `sectionName` (HV / popular / mostCommon3x / NFL `mostDrafted` /
+  synthetic `leaderboard_lineup` / test-only `mostValuablePlayers`) plus
+  player-row and lineup pick fields.
+- Export CLI: `scripts/export_draft_stats_corpus.py` dumps **all**
+  `slate_labels` sections into `recorded_states/wnba/{year}/slate_{date}/`,
+  HV also into
+  `total_value_leaderboards/.../highestBoostedValuePlayers.json`, and
+  `contest_leaderboards` lineup JSON into recorded_states as observation
+  only (never train labels). `--demo` offline; `--from-database` needs
+  `DATABASE_URL` (Codespace railway-env). No Ollama. No credential minting.
+- Live full-table export on mono: unverified until operator runs with
+  railway-env.
+
 Last verified: 2026-09-27T03:50:00Z
 
 ## EB serve after #531 (2026-09-27T04:08Z, #535)
