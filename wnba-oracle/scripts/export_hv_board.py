@@ -102,9 +102,7 @@ def _fetch_hv(
     slate_date = labels[0].slate_date
     players = _labels_to_players(labels)
     if not players:
-        raise ContestUnavailable(
-            f"contest {contest_id} has no highestBoostedValuePlayers rows"
-        )
+        raise ContestUnavailable(f"contest {contest_id} has no highestBoostedValuePlayers rows")
     return slate_date, players
 
 
