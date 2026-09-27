@@ -116,17 +116,26 @@ def high_tv_board_from_draft_stats(parsed: ParsedContest, *, top_n: int = 5) -> 
         if row.section == "highestBoostedValuePlayers" and row.value is not None
     ]
     if hv_rows:
-        values = {row.player_id: float(row.value) for row in hv_rows}
-        boosts = [float(row.card_boost) for row in hv_rows]
+        # Walrus keeps mypy narrowed: value is Finite | None on DraftStatRow
+        # and list-comprehension filters do not propagate into a second loop.
+        values = {
+            row.player_id: float(v) for row in hv_rows for v in (row.value,) if v is not None
+        }
+        boosts = [float(b) for row in hv_rows for b in (row.card_boost,) if b is not None]
         source = "nfl_highestBoostedValuePlayers"
         has_tv = True
     else:
         # Ladder fallback (pre-boost / missing HV section): any draft_stats
         # values as raw highest Real score. Still never uses entry lineups.
         values = {
-            row.player_id: float(row.value) for row in parsed.draft_stats if row.value is not None
+            row.player_id: float(v)
+            for row in parsed.draft_stats
+            for v in (row.value,)
+            if v is not None
         }
-        boosts = [float(row.card_boost) for row in parsed.draft_stats]
+        boosts = [
+            float(b) for row in parsed.draft_stats for b in (row.card_boost,) if b is not None
+        ]
         source = "nfl_draft_stats_reconstructed"
         has_tv = False
 
