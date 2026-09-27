@@ -44,6 +44,7 @@ from nfl_oracle.contests.parse import load_contest
 from nfl_oracle.contests.store import ContestStore
 from nfl_oracle.ingest.corpus_g import CorpusGStore, ingest_game
 from nfl_oracle.ingest.realsports import capture_live_headers, headers_or_capture
+from nfl_oracle.recommendations.dayclose_persist import persist_dayclose_parquet
 from nfl_oracle.recommendations.grading import grade_frozen_lineup
 from nfl_oracle.recommendations.history import load_history
 from nfl_oracle.recommendations.store import RecommendationStore
