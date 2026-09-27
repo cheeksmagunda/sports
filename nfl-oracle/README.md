@@ -3,9 +3,8 @@
 Real Sports NFL research application. Current track: Corpus G (historical
 games/box/play archive with Real `value` labels) and honest coverage audits.
 
-Portfolio product goal: root `../README.md` (Product goal). Current NFL serve
-knobs and training-target detail are in `STATUS.md` and must be reverified
-before production work.
+Portfolio product goal is owned in this app's **Roadmap** below and current
+serve/train knobs in `STATUS.md` (reverify before production work).
 
 Current scope includes read-only ingest, redacted persistence, the gated
 recommendation and freeze/grade pipeline, and Railway-hosted operations.
@@ -30,6 +29,17 @@ the Codespace or an operator-authorized one-session login only. Cloud projects
 must include the root snapshot bundle plus `nfl-oracle/AGENTS.md`,
 `nfl-oracle/README.md`, and `nfl-oracle/STATUS.md`, then verify against live
 `main` before material work.
+
+## Roadmap
+
+Training and backtest target (locked): each slate's Real Sports **Highest
+value / HIGH TOTAL VALUE** board (`highestBoostedValuePlayers`). Objective is
+a **5-player** NFL contest pick. Fit on pre-slate features; grade via
+`recommendations.high_tv` (prefers HV section). Never treat winning drafts as
+the fit target. Serving default: `NFL_OPTIMIZER_PROFILE=max_value` (see
+`STATUS.md`). Models stay in this app; `frontend/` is separately owned —
+backend PRs must not edit it. Corpus G / Corpus C and freeze milestones stay
+NFL-owned; progress in `STATUS.md`.
 
 ## Auth (headers_or_capture / storage_state)
 

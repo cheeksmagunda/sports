@@ -47,7 +47,8 @@ os.environ.setdefault(
     "WNBA_ORACLE_MODEL_ARTIFACT_SHA",
     "000f54fe08b47a20504d" + "0" * 44,  # prefix-match latest artifact; sidecar holds full
 )
-os.environ.setdefault("PAYOUT_REGIME", "top_20")
+os.environ.setdefault("PAYOUT_REGIME", "top_1")
+os.environ.setdefault("OPTIMIZER_OBJECTIVE_MODE", "total_draft_value")
 
 # Use the full SHA of the latest artifact (picker_2a2fe836).
 _SHA_FILE = Path(__file__).resolve().parents[1] / "models" / "picker_2a2fe836_1779943299.sha256"

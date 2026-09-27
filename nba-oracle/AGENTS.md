@@ -13,6 +13,15 @@ and operational gates. Do not import domain code from `wnba_oracle`,
 Shared work belongs in `oracle-core` only when the interface is provider-neutral
 and proven by at least two sports with the same stable contract.
 
+**Models stay in this app** when modeling lands. **Frontend is separately
+owned per sport**; backend PRs must not change frontend source, dependencies,
+styling, components, tests, or build configuration when a frontend exists.
+
+**Train / backtest target (when implemented):** Real Sports Highest Total
+Value boards (`highestBoostedValuePlayers`), five-player contest pick,
+pre-slate features to post-slate HV results — never winning drafts. Gap:
+no HV ingest or train/backtest path yet (`STATUS.md`).
+
 ## Exact local commands
 
 From the monorepo root:

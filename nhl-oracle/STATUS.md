@@ -25,6 +25,17 @@ Last verified: 2026-09-27 (#501 hard zero-boost gate; continues #453/#325;
   - Note: `standings/now` still reflects completed **20252026** (32 teams @ 82
     GP) and must not be used as 2026-27 coverage.
 
+## Training target: Highest Total Value (gap) (#453 / #523 / #526)
+
+Product target for when NHL train/backtest exists: each slate's Real Sports
+**Highest value / Total Value** board (`highestBoostedValuePlayers`), a
+**5-player** contest pick, pre-slate features to post-slate HV results —
+never winning drafts. **Gap (verified):** draftStats used for contract/boost
+audit only; no durable HV board corpus; no HV train/backtest entrypoint.
+Early-season boost regime may be none until every franchise has 1 GP (see
+Roadmap). Models stay in this app; frontend is separately owned (backend
+PRs must not touch `frontend/`). See `README.md` Roadmap / `AGENTS.md`.
+
 ## Railway nhl-staging live smoke (#482)  -  2026-09-27
 
 - Source: `nhl-oracle/Dockerfile` + `railway.toml`; root `.dockerignore`

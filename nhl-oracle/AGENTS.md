@@ -13,6 +13,18 @@ and operational gates. Do not import domain code from `wnba_oracle`,
 Shared work belongs in `oracle-core` only when the interface is provider-neutral
 and proven by at least two sports with the same stable contract.
 
+**Models stay in this app.** Do not move NHL model, feature, or scoring code
+into `oracle-core` or another sport package. **Frontend is separately owned
+per sport** (`frontend/`); backend PRs must not change frontend source,
+dependencies, styling, components, tests, or build configuration.
+
+**Train / backtest target (when implemented):** Real Sports Highest Total
+Value boards (`highestBoostedValuePlayers`), five-player contest pick,
+pre-slate features to post-slate HV results — never winning drafts. Gap:
+draftStats used for contract/boost audit only; no HV train/backtest path yet
+(`STATUS.md`). Early-season boost regime may be none until every franchise
+has 1 GP.
+
 ## Exact local commands
 
 From the monorepo root:

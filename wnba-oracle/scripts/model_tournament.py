@@ -387,7 +387,8 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    os.environ.setdefault("PAYOUT_REGIME", "top_20")
+    os.environ.setdefault("PAYOUT_REGIME", "top_1")
+    os.environ.setdefault("OPTIMIZER_OBJECTIVE_MODE", "total_draft_value")
     os.environ.setdefault("OPTIMIZER_MAX_PER_TEAM", "2")
     os.environ.setdefault("FIELD_MEASURED_OWNERSHIP_ENABLED", "true")
     for alias, value in benchmark.production_env_overrides().items():

@@ -257,7 +257,11 @@ def test_expected_prod_config_matches_live_tdv_flip() -> None:
 
 
 def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:
-    """Under TDV, sampler mu must not be faded by contrarian (#453)."""
+    """Under TDV, sampler mu must not be faded by contrarian (#453).
+
+    Live ownership capture feeds measured drafts into the fade tiebreaker;
+    contrarian must not also reshape sampler means under TDV.
+    """
     from wnba_oracle.modeling.policy import ModelPolicy
     from wnba_oracle.modeling.prediction import PlayerPredictions
     from wnba_oracle.picker.optimize import OptimizeConfig

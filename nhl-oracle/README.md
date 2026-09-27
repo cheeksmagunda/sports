@@ -2,8 +2,8 @@
 
 NHL Oracle application scaffold.
 
-Portfolio product goal: root `../README.md` (Product goal). Current NHL serve
-knobs and readiness facts are in `STATUS.md`.
+Portfolio product goal is owned in this app's **Roadmap** below and current
+serve/readiness facts in `STATUS.md`.
 
 Current scope (see `STATUS.md` for verified facts): Week 2 live read-only
 Real Sports contract audit, corpus seed, and contest-range discovery are done; Week 3 chronological
@@ -88,6 +88,14 @@ For Railway staging, use the Codespace tunnel flow in `../ENTRY_POINTS.md`
 rather than printing or copying connection strings locally.
 
 ## Roadmap
+
+Training and backtest product target: each slate's Real Sports **Highest
+value / Total Value** board (`highestBoostedValuePlayers`). Objective is a
+**5-player** NHL contest pick. Pre-slate features to post-slate HV results;
+never winning drafts. **Current gap:** no durable HV board corpus or HV
+train/backtest entrypoint (draftStats used for contract/boost audit only).
+Models stay in this app; `frontend/` is separately owned — backend PRs must
+not edit it. Verified milestone progress lives in `STATUS.md`.
 
 The approved plan from the current scaffold to a verified, autonomous
 recommendation product (planned under #135, 2026-09-10; moved here from the

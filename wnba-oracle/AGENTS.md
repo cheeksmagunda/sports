@@ -17,9 +17,18 @@ provider adapters, provider payloads, database schemas, migrations, job names,
 schedules, pause rules, freeze rules, API routers, and recovery procedures.
 Only provider-neutral technical primitives belong in `oracle-core`.
 
-Do not change frontend source, dependencies, styling, components, tests, or
-build configuration during backend work. If another contributor is working on
-the frontend, import their final commit mechanically and verify tree identity.
+**Models stay in this app.** Do not move WNBA model, feature, or scoring code
+into `oracle-core` or another sport package. **Frontend is separately owned
+per sport** (`frontend/`); backend PRs must not change frontend source,
+dependencies, styling, components, tests, or build configuration. If another
+contributor is working on the frontend, import their final commit mechanically
+and verify tree identity.
+
+**Train / backtest target:** Real Sports Highest Total Value boards
+(`highestBoostedValuePlayers` via `TRAINING_LABEL_SECTION` /
+`eval.highest_value`). Objective is a five-player contest pick. Pre-slate
+features to post-slate HV results; never winning drafts. Defaults:
+`PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value`.
 
 ## Exact local commands
 

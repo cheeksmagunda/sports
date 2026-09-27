@@ -15,6 +15,17 @@ scoring, payout curve, provider adapters, and operational gates. Do not import
 `wnba_oracle` domain packages (`picker`, `features`, `modeling`, `predict`, or
 WNBA schemas). Shared work belongs in `oracle-core` only when provider-neutral.
 
+**Models stay in this app.** Do not move NFL model, feature, or scoring code
+into `oracle-core` or another sport package. **Frontend is separately owned
+per sport** (`frontend/`); backend PRs must not change frontend source,
+dependencies, styling, components, tests, or build configuration.
+
+**Train / backtest target:** Real Sports Highest Total Value boards
+(`highestBoostedValuePlayers` via `recommendations.high_tv`). Objective is a
+five-player contest pick. Pre-slate features to post-slate HV results; never
+winning drafts as the fit target. Serving default:
+`NFL_OPTIMIZER_PROFILE=max_value` (rollback: `diversified`).
+
 ## Production container boundary
 
 `Dockerfile.production` and `railway.toml` are NFL-owned deployment source.

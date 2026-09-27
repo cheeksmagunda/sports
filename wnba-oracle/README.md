@@ -5,9 +5,8 @@ available pool and pre-tip signals, builds WNBA-owned features, predicts player
 distributions, optimizes a five-player lineup, freezes the result, and serves
 read-only slate and lineup data.
 
-Portfolio product goal: root `../README.md` (Product goal). Current WNBA serve
-knobs and training-target detail are in `STATUS.md` and must be reverified
-before production work.
+Portfolio product goal is owned in this app's **Roadmap** below and current
+serve/train knobs in `STATUS.md` (reverify before production work).
 
 ## Connection surfaces
 
@@ -305,6 +304,17 @@ frontend/                   Separately owned Vite React application
 
 Read `AGENTS.md` for exact commands, invariants, verification, provider rules,
 and production recovery requirements.
+
+## Roadmap
+
+Training and backtest target (locked): each slate's Real Sports **Highest
+value / Total Value** board (`highestBoostedValuePlayers`). Objective is a
+**5-player** WNBA contest pick. Fit on pre-slate features; grade against
+post-slate HV results. Never train or grade on winning drafts. Serving path
+defaults: `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value`
+(see `STATUS.md` for live knobs). Models and scoring stay in this app;
+`frontend/` is separately owned — backend PRs must not edit it. Milestone
+progress and verified HV corpus counts live in `STATUS.md`.
 
 ## Acceptance commands
 

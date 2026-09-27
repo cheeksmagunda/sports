@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1016 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1022 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 1016 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -923,7 +925,7 @@ Generated from `git ls-files`. 1016 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/scripts/backfill_player_slate_ownership.py -- Backfill player_slate_ownership.actual_* from existing slate_labels.drafts.
 - wnba-oracle/scripts/backtest_counterfactual.py -- Counterfactual backtest: attribute the picker's leaderboard gap to its
 - wnba-oracle/scripts/backtest_optimizer.py -- Run the picker on the 2026-05-25 slate using its actual realized
-- wnba-oracle/scripts/backtest_pipeline.py -- Out-of-sample backtest of the full picker pipeline on the 16 2026
+- wnba-oracle/scripts/backtest_pipeline.py -- Out-of-sample backtest graded on each slate's Highest value board (#505).
 - wnba-oracle/scripts/backtest_walkforward.py -- Walk-forward backtest: HONEST prediction-quality measurement (no leakage).
 - wnba-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable WNBA corpus.
 - wnba-oracle/scripts/build_model_research_benchmark.py -- Model research benchmark: walk-forward variant sweep over stored slates.
@@ -1022,6 +1024,7 @@ Generated from `git ls-files`. 1016 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/src/wnba_oracle/eval/conformal.py -- Mondrian Conformalized Quantile Regression (CQR).
 - wnba-oracle/src/wnba_oracle/eval/contest_score.py -- Canonical realized contest scoring for offline evaluation.
 - wnba-oracle/src/wnba_oracle/eval/cv.py -- Walk-forward purged + embargoed cross-validation.
+- wnba-oracle/src/wnba_oracle/eval/highest_value.py -- Highest-value board as the backtest / race reference (#453 / #505).
 - wnba-oracle/src/wnba_oracle/eval/identity_coverage.py -- Identity-aware prediction-to-outcome joins with explicit coverage reporting.
 - wnba-oracle/src/wnba_oracle/eval/metrics.py -- Calibration-first metrics: CRPS, reliability, ECE, quantile loss.
 - wnba-oracle/src/wnba_oracle/eval/multiple_comparisons.py -- Multiple-comparisons guard for the rotation gate (#MC, D63).
@@ -1211,6 +1214,7 @@ Generated from `git ls-files`. 1016 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_game_script_wired.py -- Game-script (blowout) minutes redistribution wired into job2._build_specs.
 - wnba-oracle/tests/unit/test_game_stack.py -- Hard anti-stacking policy in the optimizer.
 - wnba-oracle/tests/unit/test_head_tier0.py -- D69 / Phase 2b: the D63 trained-head Tier-0 path in job2._build_specs.
+- wnba-oracle/tests/unit/test_highest_value_backtest.py -- Backtest reference is Highest value boards, never winning drafts.
 - wnba-oracle/tests/unit/test_identity_coverage.py
 - wnba-oracle/tests/unit/test_identity_migrations.py
 - wnba-oracle/tests/unit/test_identity_resolver.py -- Unit tests for the identity resolver. No network: uses the static catalog.
@@ -1292,8 +1296,10 @@ Generated from `git ls-files`. 1016 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_starter_signal.py -- job2 starter-signal multiplier from the RotoWire starter flag (D52, D104).
 - wnba-oracle/tests/unit/test_stat_leverage.py -- Stat-leverage concentration analysis.
 - wnba-oracle/tests/unit/test_streak_quality.py -- Hot-streak quality assessment.
+- wnba-oracle/tests/unit/test_top1_slot_rank_no_median.py -- PAYOUT_REGIME=top_1 must never rank freeze slots by median finish (#505 / #453).
 - wnba-oracle/tests/unit/test_total_draft_value_objective.py -- Optional total_draft_value optimizer objective (#433).
 - wnba-oracle/tests/unit/test_train_cli.py
+- wnba-oracle/tests/unit/test_train_label_highest_value_only.py -- Training label corpus must be Highest value boards, not winning drafts.
 - wnba-oracle/tests/unit/test_upcoming_games_pool.py -- D109: scope the optimizer pool to games that have not tipped yet.
 - wnba-oracle/tests/unit/test_verify_durable_job.py -- Tests for bounded durable job verification.
 - wnba-oracle/tests/unit/test_watchdog.py -- Watchdog trigger logic  -  pure function tests against a mocked engine.

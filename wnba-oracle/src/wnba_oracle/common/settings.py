@@ -61,9 +61,11 @@ class Settings(RuntimeConfig):
     # src/wnba_oracle/scheduler/shadow.py:_maybe_run_knob_shadow.
     picker_knob_challenger_json: str = Field(default="", alias="PICKER_KNOB_CHALLENGER_JSON")
 
-    # Lineup optimizer config
+    # Lineup optimizer config. Production serving is tournament / draft-win
+    # (#505 / #453): default top_1 so a wiped cron env cannot silently fall
+    # back to cash/top_20. Rollback: PAYOUT_REGIME=top_20.
     payout_regime: Literal["top_50", "top_20", "top_1"] = Field(
-        default="top_20", alias="PAYOUT_REGIME"
+        default="top_1", alias="PAYOUT_REGIME"
     )
     # D56: the prod defaults (5000 samples x 1000 field x C(30,5)=142506 combos)
     # could not finish inside the 15-min cron window -- job2 hung at stage2 and
@@ -365,7 +367,7 @@ class Settings(RuntimeConfig):
     # placement. Low-ownership fade tiebreaker weight (#453) gives a mild
     # preference for underdrafted names when combos are close in expected TV.
     optimizer_objective_mode: Literal["payout", "total_draft_value"] = Field(
-        default="payout", alias="OPTIMIZER_OBJECTIVE_MODE"
+        default="total_draft_value", alias="OPTIMIZER_OBJECTIVE_MODE"
     )
     optimizer_max_value_ownership_fade: float = Field(
         default=0.001, alias="OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE"
@@ -497,11 +499,12 @@ EXPECTED_PROD_CONFIG: dict[str, object] = {
     # revert requires scripts/build_model_research_benchmark.py after the
     # prior-slate ownership guard. See issue #289 and follow-up E1.
     "optimizer_leverage_weight": 0.28,
-    # #453 win-draft stack on mono wnba-production: select by E[committed-order
-    # TV] + ownership-fade tiebreaker. Rollback: set OPTIMIZER_OBJECTIVE_MODE
-    # back to "payout" and restore this expected value to match.
+    # #453 / #523: mono wnba-production selects E[committed-order TV] +
+    # ownership-fade tiebreaker. Keep EXPECTED in sync with live Railway so
+    # config_drift warns on wipe/reset. Rollback: OPTIMIZER_OBJECTIVE_MODE=payout.
     "optimizer_objective_mode": "total_draft_value",
     "optimizer_max_value_ownership_fade": 0.001,
+    "payout_regime": "top_1",
 }
 
 

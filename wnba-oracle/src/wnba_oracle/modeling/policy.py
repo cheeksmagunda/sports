@@ -37,7 +37,7 @@ class ModelPolicy:
 
     optimizer: OptimizeConfig
     artifact_sha: str = ""
-    payout_regime: PayoutRegime = "top_20"
+    payout_regime: PayoutRegime = "top_1"
     contrarian: ContrarianConfig = field(default_factory=ContrarianConfig)
     mixture_variance_enabled: bool = True
     slot_multipliers: tuple[float, ...] = (2.0, 1.8, 1.6, 1.4, 1.2)

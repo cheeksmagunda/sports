@@ -484,3 +484,50 @@ def test_chalk_studs_still_win_when_leverage_cannot_recover() -> None:
         field=field,
     )
     assert 1 in {p.player_id for p in result.picks}
+
+
+def test_tournament_field_slots_use_p90_not_mean() -> None:
+    """Under contest-utility / max_value, field slots rank by p90 (#505 / #453)."""
+    target = slate()
+    decision = target.captured_at
+    projs = tuple(
+        _projection(
+            c.player_id,
+            mean=10.0 - c.player_id if c.player_id != 6 else 3.0,
+            samples=(
+                (2.0, 3.0, 20.0)
+                if c.player_id == 6
+                else (
+                    float(10 - c.player_id) - 0.1,
+                    float(10 - c.player_id),
+                    float(10 - c.player_id) + 0.1,
+                )
+            ),
+        )
+        for c in target.candidates
+    )
+    field = FieldObservation(
+        clock=EvidenceClock(source_available_at=decision, captured_at=decision),
+        entry_count=100,
+        player_counts={1: 90, 2: 90, 3: 90, 4: 90, 5: 80, 6: 60},
+        provenance="test",
+        coverage="complete",
+    )
+    result = optimize(
+        target,
+        projs,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(
+            simulations=120,
+            field_weight=0.5,
+            upside_weight=0.5,
+            seed=9,
+            profile="max_value",
+            min_distinct_teams=1,
+            min_distinct_games=1,
+        ),
+        field=field,
+    )
+    assert len(result.picks) == 5
+    assert result.construction_profile == "max_value"
