@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-27T03:55:00Z (overnight #535; serve knob not flipped)
+Last verified: 2026-09-27T04:07:00Z (overnight #535; serve knob not flipped; CI fix)
 
 ## Serve Tier-0 -> EB primary + vegas/boost (#523 / #535)  -  2026-09-27
 
