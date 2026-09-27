@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1120 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -787,11 +789,14 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - scripts/corpus/schema/coverage_manifest.schema.json
 
 ## scripts/ollama_hv_watcher/
-- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV self-learning slate watcher
+- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV helper on each sport app's daily picks
 - scripts/ollama_hv_watcher/__init__.py -- Codespace Ollama HV/TDV self-learning slate watcher (#574).
 - scripts/ollama_hv_watcher/__main__.py -- python -m ollama_hv_watcher → CLI (#574).
+- scripts/ollama_hv_watcher/app_daemon.py -- App-driven T-40 helper daemon (#574).
 - scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
-- scripts/ollama_hv_watcher/cli.py -- CLI for the Ollama HV/TDV slate watcher (#574).
+- scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
+- scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
+- scripts/ollama_hv_watcher/cli.py -- CLI for the Ollama HV/TDV slate helper (#574).
 - scripts/ollama_hv_watcher/client.py -- Minimal Ollama HTTP client for localhost:11434 (#574).
 - scripts/ollama_hv_watcher/discover.py -- Discover open/upcoming slate windows for the HV watcher (#574).
 - scripts/ollama_hv_watcher/gate.py -- Ollama training gate: coverage_manifest complete OR operator unlock (#574).
@@ -806,7 +811,9 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/windows.py -- Domain-free T-40 → slate-close window math for the HV watcher (#574).
 
 ## scripts/ollama_hv_watcher/adapters/
-- scripts/ollama_hv_watcher/adapters/README.md -- Empty package marker for optional sport calendar adapter scripts (#574).
+- scripts/ollama_hv_watcher/adapters/README.md -- Ollama HV helper adapters (#574)
+- scripts/ollama_hv_watcher/adapters/__init__.py -- Read-only sport app adapters for the Ollama HV helper (#574).
+- scripts/ollama_hv_watcher/adapters/app_api.py -- Read-only adapter over each sport app's public API (#574).
 
 ## scripts/ollama_hv_watcher/fixtures/
 - scripts/ollama_hv_watcher/fixtures/hv_board_sample.json -- (test fixture data)
@@ -858,6 +865,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_check_issue_link.py
 - scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
+- scripts/tests/test_ollama_hv_app_api.py -- Offline tests: pregame leak stop + sport app API adapter + daemon (#574).
 - scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
 - scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).

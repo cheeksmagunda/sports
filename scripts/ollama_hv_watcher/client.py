@@ -56,7 +56,9 @@ def generate(
     try:
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.URLError as exc:
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        # URLError/OSError: daemon down; TimeoutError: slow model; ValueError:
+        # malformed JSON. All surface as one RuntimeError for callers.
         raise RuntimeError(f"ollama_generate_failed:{exc}") from exc
     text = payload.get("response") if isinstance(payload, dict) else None
     if not isinstance(text, str) or not text.strip():

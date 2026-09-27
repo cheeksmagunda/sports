@@ -1,10 +1,17 @@
-"""CLI for the Ollama HV/TDV slate watcher (#574).
+"""CLI for the Ollama HV/TDV slate helper (#574).
 
 Modes (mutually exclusive)::
 
     PYTHONPATH=scripts python -m ollama_hv_watcher --status
     PYTHONPATH=scripts python -m ollama_hv_watcher --once
-    PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
+    PYTHONPATH=scripts python -m ollama_hv_watcher --windows-from-apps \\
+        --day YYYY-MM-DD --sports nfl,wnba
+    PYTHONPATH=scripts python -m ollama_hv_watcher --daemon \\
+        --day YYYY-MM-DD --sports nfl,wnba
+
+``--daemon`` polls each sport app for every armed slate and writes one
+advisory tick per app freeze whose five equals the app's five. The helper
+only reads the apps; it never changes, blocks, or delays their freeze.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 _SCRIPTS = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS) not in sys.path:
@@ -25,9 +33,12 @@ from realsports_corpus.coverage_manifest import (
     ollama_helper_allowed,
 )
 
+from ollama_hv_watcher.adapters import app_api
+from ollama_hv_watcher.app_daemon import AppDaemonConfig, run_app_daemon
 from ollama_hv_watcher.boards import (
-    discover_board_paths,
-    load_board_summary,
+    armed_board_paths,
+    load_history_board_summary,
+    load_pregame_board_summary,
 )
 from ollama_hv_watcher.client import DEFAULT_MODEL
 from ollama_hv_watcher.discover import discover_day_plan
@@ -36,7 +47,7 @@ from ollama_hv_watcher.gate import (
     load_manifest_or_empty,
     operator_unlock_enabled,
 )
-from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.learn import atomic_write_json, run_learn
 from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
@@ -45,12 +56,23 @@ from ollama_hv_watcher.serve import (
     ensure_ollama_serve,
     health_check,
 )
+from ollama_hv_watcher.windows import load_windows_payload
 
 DEFAULT_DATA_ROOT = Path("data/ollama_hv")
+# Slate days follow the US Eastern calendar the sport apps use.
+SLATE_DAY_TZ = ZoneInfo("America/New_York")
 
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def default_day() -> str:
+    return datetime.now(SLATE_DAY_TZ).date().isoformat()
+
+
+def _sports(raw: str | None) -> list[str]:
+    return [s.strip().lower() for s in str(raw or "").split(",") if s.strip()]
 
 
 def _print_json(payload: object) -> None:
@@ -190,24 +212,48 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
 
 def cmd_learn(args: argparse.Namespace) -> int:
+    """Learn ticks. Live: armed slates only. History: explicit file only."""
+
     manifest = load_manifest_or_empty(Path(args.manifest) if args.manifest else None)
-    board_root = Path(args.board_root)
-    paths = discover_board_paths(board_root)
-    if args.board:
+    data_root = Path(args.data_root)
+    history = bool(args.history_board)
+    if history:
+        paths = [Path(args.history_board)]
+    elif args.board:
         paths = [Path(args.board)]
+    else:
+        try:
+            plan = discover_day_plan(
+                windows_json=Path(args.windows_json) if args.windows_json else None,
+                include_fixtures=bool(getattr(args, "allow_fixtures", False)),
+            )
+        except LiveDataRequiredError as exc:
+            _print_json({"error": "LIVE_DATA_REQUIRED", "detail": str(exc)})
+            return 4
+        # Live discovery: only data_root/<sport>/<slate_id>/hv_board.json for
+        # slates armed right now. Never data_root/boards/** (history).
+        paths = armed_board_paths(data_root, plan.active_sessions(_utc_now()))
     if not paths:
-        _print_json({"error": "no_hv_boards_found", "board_root": str(board_root)})
+        _print_json({"error": "no_armed_hv_boards_found", "data_root": str(data_root)})
         return 1
 
     dry_run = not args.execute
     written: list[str] = []
     blocked: str | None = None
     for path in paths:
-        summary = load_board_summary(path)
+        try:
+            summary = (
+                load_history_board_summary(path)
+                if history
+                else load_pregame_board_summary(path)
+            )
+        except LiveDataRequiredError as exc:
+            _print_json({"error": "LIVE_DATA_REQUIRED", "detail": str(exc)})
+            return 4
         try:
             out = run_learn(
                 summary,
-                data_root=Path(args.data_root),
+                data_root=data_root / "history" if history else data_root,
                 manifest=manifest,
                 host=args.host,
                 model=args.model,
@@ -220,6 +266,7 @@ def cmd_learn(args: argparse.Namespace) -> int:
 
     payload: dict[str, object] = {
         "dry_run": dry_run,
+        "mode": "history" if history else "pregame",
         "written": written,
         "boards_seen": [str(p) for p in paths],
     }
@@ -235,15 +282,91 @@ def cmd_learn(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_windows_from_apps(args: argparse.Namespace) -> int:
+    """Write data_root/windows/<day>.json from each sport app's API."""
+
+    sports = _sports(args.sports)
+    if not sports:
+        _print_json({"error": "LIVE_DATA_REQUIRED", "detail": "--sports required"})
+        return 4
+    day = args.day or default_day()
+    try:
+        payload = app_api.windows_payload(day, sports)
+    except LiveDataRequiredError as exc:
+        _print_json({"error": "LIVE_DATA_REQUIRED", "detail": str(exc)})
+        return 4
+    if not payload["slates"]:
+        _print_json({"error": "LIVE_DATA_REQUIRED", **payload})
+        return 4
+    load_windows_payload(payload)  # validate before writing
+    out = atomic_write_json(Path(args.data_root) / "windows" / f"{day}.json", payload)
+    _print_json({"written": str(out), **payload})
+    return 0
+
+
+def cmd_daemon(args: argparse.Namespace) -> int:
+    """Poll each sport app for armed slates; tick once per app freeze."""
+
+    sports = tuple(_sports(args.sports))
+    if not sports and not args.windows_json:
+        _print_json(
+            {
+                "error": "LIVE_DATA_REQUIRED",
+                "detail": "--daemon needs --sports (app windows) or --windows-json",
+            }
+        )
+        return 4
+    for sport in sports:
+        try:
+            app_api.base_url(sport)
+        except LiveDataRequiredError as exc:
+            _print_json({"error": "LIVE_DATA_REQUIRED", "detail": str(exc)})
+            return 4
+    data_root = Path(args.data_root)
+    if args.ensure_serve:
+        # Best effort only: an Ollama outage still records the app's five.
+        ensure_ollama_serve(
+            host=args.host,
+            pidfile=Path(args.pidfile),
+            logfile=data_root / "ollama_serve.log",
+        )
+    cfg = AppDaemonConfig(
+        day=args.day or default_day(),
+        sports=sports,
+        data_root=data_root,
+        windows_json=Path(args.windows_json) if args.windows_json else None,
+        coverage_manifest=Path(args.manifest) if args.manifest else None,
+        host=args.host,
+        model=args.model,
+        execute=bool(args.execute),
+        poll_seconds=max(1.0, float(args.poll_seconds)),
+    )
+    result = run_app_daemon(cfg, max_iterations=args.max_iterations)
+    _print_json(result)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ollama_hv_watcher",
-        description="Ollama HV/TDV self-learning slate watcher (#574)",
+        description="Ollama HV/TDV helper on each sport app's frozen picks (#574)",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--status", action="store_true", help="Health + gate + window")
     mode.add_argument("--once", action="store_true", help="Single watch tick then exit")
-    mode.add_argument("--daemon", action="store_true", help="Watch until latest close")
+    mode.add_argument(
+        "--daemon",
+        action="store_true",
+        help="Poll sport apps for armed slates; tick once per app freeze",
+    )
+    mode.add_argument(
+        "--windows-from-apps",
+        action="store_true",
+        help="Write data_root/windows/<day>.json from the sport app APIs",
+    )
+    parser.add_argument("--day", default="", help="Slate day YYYY-MM-DD (ET today)")
+    parser.add_argument("--sports", default="", help="Comma list, e.g. nfl,wnba")
+    parser.add_argument("--max-iterations", type=int, default=None)
     parser.add_argument("--data-root", default=str(DEFAULT_DATA_ROOT))
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--manifest", default="", help="Path to coverage_manifest.json")
@@ -256,18 +379,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--poll-seconds", type=float, default=30.0)
     parser.add_argument("--ensure-serve", action="store_true")
     parser.add_argument("--pidfile", default=str(DEFAULT_PIDFILE))
-    parser.add_argument("--board-root", default=".")
-    parser.add_argument("--board", default="")
+    parser.add_argument(
+        "--board", default="", help="Explicit PREGAME board for --once --learn"
+    )
+    parser.add_argument(
+        "--history-board",
+        default="",
+        help="Explicit post-game board (history path; never used for live ticks)",
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
         "--execute",
         action="store_true",
-        help="With learn path: call Ollama generate (requires unlock)",
+        help="Call Ollama generate (requires unlock); default is a dry-run tick",
     )
     parser.add_argument(
         "--learn",
         action="store_true",
-        help="During --once/--daemon armed tick, also run HV board learn",
+        help="With --once: run learn on armed-slate pregame boards first",
     )
     return parser
 
@@ -281,20 +410,25 @@ def main(argv: list[str] | None = None) -> int:
         args.manifest = None
     if getattr(args, "board", "") == "":
         args.board = None
+    if getattr(args, "history_board", "") == "":
+        args.history_board = None
     if args.status:
         return cmd_status(args)
+    if args.windows_from_apps:
+        return cmd_windows_from_apps(args)
     if args.once:
         args.once = True
-        if args.learn and args.board:
-            # one-shot learn then watch tick
+        if args.learn or args.history_board:
             code = cmd_learn(args)
             if code not in (0, 3):
                 return code
         return cmd_watch(args)
     if args.daemon:
         args.once = False
-        return cmd_watch(args)
-    parser.error("one of --status / --once / --daemon is required")
+        return cmd_daemon(args)
+    parser.error(
+        "one of --status / --once / --daemon / --windows-from-apps is required"
+    )
     return 2
 
 

@@ -1,7 +1,7 @@
 """Loud fail-closed errors when live slate/board fields are missing (#574).
 
 Never invent placeholder calendars, players, values, or scores. If the field
-the app needs is absent or ambiguous, raise — do not guess.
+the app needs is absent or ambiguous, raise - do not guess.
 """
 
 from __future__ import annotations

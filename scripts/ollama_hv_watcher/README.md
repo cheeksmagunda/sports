@@ -1,46 +1,109 @@
-# Ollama HV/TDV self-learning slate watcher
+# Ollama HV/TDV helper on each sport app's daily picks
 
 Portfolio Codespace helper tracked by
 [#574](https://github.com/cheeksmagunda/sports/issues/574).
 
-## Five players every day
+## What it is (and is not)
 
-Contest card size is fixed at **5** (`FIVE_PLAYER_LINEUP_SIZE` in
-`pick.py`). Every learn tick writes an ordered `five_player_lineup` of
-exactly five distinct players. Boards with fewer than five ranked players
-fail closed.
+Product goal: the root `README.md` **Product goal** (maximize capture of
+the slate's Real Sports `highestBoostedValuePlayers` board; beat the crowd).
 
-## Live only (no placeholders)
+Each sport app (`nfl-oracle`, `wnba-oracle`) fires its own T-40 freeze and
+publishes its frozen five-player lineup on its own API and frontend. This
+helper is only an annotator on top of that:
 
-Default discovery refuses fixture calendars. Supply LIVE windows via
-`--windows-json` or `SPORTS_OLLAMA_WINDOWS_JSON`. Missing or ambiguous
-fields raise `LIVE_DATA_REQUIRED` (exit 4). Opt-in fixtures for offline
-tests only: `--allow-fixtures`.
+- It only READS each app's public API (`adapters/app_api.py`, stdlib
+  `urllib`, bounded timeout and retry, no credentials).
+- Every tick's `five_player_lineup` is exactly the app's five in the app's
+  slot order (`lineup_source=app_frozen_lineup`). Ollama writes notes; it
+  never replaces, reorders, blocks, or delays the app's freeze or serving.
+- If Ollama is down or times out the tick is still written with
+  `notes="ollama_unavailable"` (or `ollama_gate_forbidden` when the gate is
+  closed), so the app's five are always recorded.
+
+## Pre-game only (leak stop)
+
+Live advice only ever sees pre-game data. A board used for a live tick must
+carry `phase: "pregame"` and is refused (`LIVE_DATA_REQUIRED`) when
+`game_status` is final or any player carries `real_score`, `score`, or an
+`actual*` field. Pregame prompts and lineups never emit `real_score`.
+
+Live discovery reads only `data/ollama_hv/<sport>/<slate_id>/hv_board.json`
+for slates armed right now. Post-game boards load only through the explicit
+history path (`--once --history-board PATH`, ticks under
+`data/ollama_hv/history/`); they are never auto-discovered.
+
+## App API adapter
+
+Base URLs come from the environment only:
+
+| Env | App |
+| --- | --- |
+| `SPORTS_OLLAMA_NFL_API_URL` | nfl-oracle recommendations API (`/slate/{day}`, `/lineup/{day}`) |
+| `SPORTS_OLLAMA_WNBA_API_URL` | wnba-oracle API (`/slate/{day}`, `/lineup/{day}`) |
+
+Missing env fails closed. Current public URLs live in each app's
+`STATUS.md`; the helper hardcodes none.
+
+Window per slate (`slate_window`):
+
+- NFL: freeze target is the app's `cutoff_at` (run details before freeze,
+  top level after) minus the app's `next_freeze` lead (40 minutes when not
+  exposed, copied from nfl-oracle). Close is last kickoff + 3h + 1h, the
+  constants copied from nfl-oracle `calendar/week_close.py`. Before the
+  freeze the app lists no games, so `cutoff_at` stands in for the last
+  kickoff; the daemon re-reads the window every poll and the close extends
+  once the frozen snapshot lists its games.
+- WNBA: freeze target is the app's `freeze_target_utc` against
+  `contest_lock_utc` or `first_tip_utc`. The app exposes only the first
+  tip, so close is lock + 6h (helper-owned constant; it only bounds how long
+  the helper stays alive).
+
+`frozen_board` returns `None` until the app freezes, refuses anything but
+exactly five picks, a snapshot the app marks `stale`, or another day's
+answer, and writes the pregame board atomically to
+`data/ollama_hv/<sport>/<day>/hv_board.json`. Board `value` is NFL
+`projected_value`; WNBA exposes no per-player projected value, so `value`
+is the model's pre-game `pred_real_score_p50` (never an actual score).
+
+## Commands for today
+
+```sh
+bash scripts/ollama_hv_watcher/install_codespace.sh
+export SPORTS_OLLAMA_NFL_API_URL=...   # from nfl-oracle/STATUS.md
+export SPORTS_OLLAMA_WNBA_API_URL=...  # from wnba-oracle/STATUS.md
+DAY=$(TZ=America/New_York date +%F)
+
+# 1. Windows from the apps (usable as SPORTS_OLLAMA_WINDOWS_JSON):
+PYTHONPATH=scripts python -m ollama_hv_watcher --windows-from-apps \
+  --day "$DAY" --sports nfl,wnba
+export SPORTS_OLLAMA_WINDOWS_JSON="data/ollama_hv/windows/$DAY.json"
+PYTHONPATH=scripts python -m ollama_hv_watcher --status
+
+# 2. Daemon: polls each app per armed slate, ticks once per app freeze,
+#    exits after the latest close. --execute calls Ollama (needs the gate).
+SPORTS_OLLAMA_UNLOCK=1 nohup env PYTHONPATH=scripts \
+  python -m ollama_hv_watcher --daemon --day "$DAY" --sports nfl,wnba \
+  --execute --ensure-serve > data/ollama_hv/daemon.log 2>&1 &
+ls data/ollama_hv/*/"$DAY"/   # hv_board.json + tick_*.json
+```
+
+Offline fixture calendars (synthetic day 2000-01-03) are tests only:
+`--once --allow-fixtures`.
 
 ## Gate
 
 - Binary install + `ollama serve`: allowed on the Codespace now.
 - Training / `ollama generate`: FORBIDDEN until
   `coverage_manifest.historical_capture_complete` (#526), unless
-  `SPORTS_OLLAMA_UNLOCK=1`.
+  `SPORTS_OLLAMA_UNLOCK=1`. Without `--execute` ticks are dry runs that
+  still record the app's five and the prepared prompt.
 
-## Window math
+## Five players every day
 
-`portfolio_window(slates)` returns `arm_at=min(T-40)`, `close_at=max(close)`,
-with `is_active(now)`.
-
-## Commands
-
-```sh
-bash scripts/ollama_hv_watcher/install_codespace.sh
-# LIVE windows required:
-SPORTS_OLLAMA_WINDOWS_JSON=/path/to/live_windows.json \
-  PYTHONPATH=scripts python -m ollama_hv_watcher --status
-SPORTS_OLLAMA_UNLOCK=1 SPORTS_OLLAMA_WINDOWS_JSON=/path/to/live_windows.json \
-  PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
-# Offline tests only:
-PYTHONPATH=scripts python -m ollama_hv_watcher --once --allow-fixtures --dry-run
-```
+Contest card size is fixed at **5** (`FIVE_PLAYER_LINEUP_SIZE` in
+`pick.py`). App boards must carry exactly five players with slots 1..5;
+anything else fails closed.
 
 Default model: `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`.
 

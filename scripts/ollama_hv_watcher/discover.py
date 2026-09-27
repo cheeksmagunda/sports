@@ -98,7 +98,7 @@ def discover_day_plan(
     Precedence: ``windows_json`` argument, then ``SPORTS_OLLAMA_WINDOWS_JSON``.
     Fixture calendars only when ``include_fixtures=True`` (tests / explicit
     ``--allow-fixtures``). Raises ``LiveDataRequiredError`` when nothing
-    live resolves — never invents placeholder kickoffs.
+    live resolves - never invents placeholder kickoffs.
     """
 
     env = environ if environ is not None else os.environ
