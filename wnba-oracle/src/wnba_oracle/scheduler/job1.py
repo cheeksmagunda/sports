@@ -387,6 +387,7 @@ def _build_enrichment_rows(
         # #523: fuse boost / vegas / home / starter into head_features so they
         # enter the own-model design matrix (EB pace path + optional LGBM heads),
         # not only the features_json top level.
+        # #583: also fuse Odds API h2h moneylines (UNUSED_GOLD → EB moneyline_beta).
         features["head_features"] = fuse_slate_enrichment_into_head_features(
             head_feature,
             card_boost=float(player.multiplier_bonus),
@@ -397,6 +398,16 @@ def _build_enrichment_rows(
             is_starter=int(is_starter),
             starter_slot=int(starter_slot),
             rotowire_confirmed=int(confirmed),
+            # #523: PlatformPlayer already carries these from the RS pool;
+            # fuse into head_features so EB rank / injury hash terms fire.
+            overall_rank=player.overall_rank,
+            injury_body_part=player.injury_body_part,
+            team_moneyline=(
+                float(vegas["team_moneyline"]) if vegas.get("moneyline_available") else None
+            ),
+            opponent_moneyline=(
+                float(vegas["opponent_moneyline"]) if vegas.get("moneyline_available") else None
+            ),
         )
 
         normalized_name = player.display_name.lower().strip()
@@ -526,8 +537,23 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         total = float(g.total_point) if g.total_point is not None else 0.0
         home_spread = float(g.spread_home_point) if g.spread_home_point is not None else 0.0
         away_spread = float(g.spread_away_point) if g.spread_away_point is not None else 0.0
-        team_to_vegas[h_key] = {"vegas_total": total, "vegas_spread": home_spread, "is_home": 1.0}
-        team_to_vegas[a_key] = {"vegas_total": total, "vegas_spread": away_spread, "is_home": 0.0}
+        ml_avail = 1.0 if g.h2h_home is not None or g.h2h_away is not None else 0.0
+        team_to_vegas[h_key] = {
+            "vegas_total": total,
+            "vegas_spread": home_spread,
+            "is_home": 1.0,
+            "team_moneyline": float(g.h2h_home) if g.h2h_home is not None else 0.0,
+            "opponent_moneyline": float(g.h2h_away) if g.h2h_away is not None else 0.0,
+            "moneyline_available": ml_avail,
+        }
+        team_to_vegas[a_key] = {
+            "vegas_total": total,
+            "vegas_spread": away_spread,
+            "is_home": 0.0,
+            "team_moneyline": float(g.h2h_away) if g.h2h_away is not None else 0.0,
+            "opponent_moneyline": float(g.h2h_home) if g.h2h_home is not None else 0.0,
+            "moneyline_available": ml_avail,
+        }
 
     # Build the RotoWire injury index once so the per-player loop stays
     # O(n) and joins by (team, normalized_name). RotoWire is the

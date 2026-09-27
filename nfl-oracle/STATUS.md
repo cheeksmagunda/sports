@@ -1,3 +1,12 @@
+## FEATURE_MATRIX / UNUSED_GOLD (#583)  -  2026-09-27
+
+Portfolio freeze inventory: `oracle_core.feature_matrix` (available | wired |
+serving). NFL ridge already serves pace / kickoff_slot / moneyline /
+overall_rank / injury context. UNUSED_GOLD: `seasonAverages.*` extractor
+exists but is not called on freeze context; `previousMeetings` /
+non-HV draftStats (`mostDrafted`) corpus-only; same-slate ownership
+leakage-blocked. PR branch only near T-40; no serving merge today.
+
 ## Own-model feature map phase 1 (#523, 2026-09-26)
 
 ## Corpus C HV / Total Value export scaffold (#526, 2026-09-27)

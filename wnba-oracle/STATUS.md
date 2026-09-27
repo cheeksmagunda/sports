@@ -2,6 +2,17 @@
 
 Last verified: 2026-09-27T05:31:49Z
 
+## FEATURE_MATRIX / UNUSED_GOLD (#583)  -  2026-09-27
+
+PR branch only (freeze target `17:20Z` today; do not merge/flip serving knobs
+inside the freeze window). Inventory: `oracle_core.feature_matrix`
+(available | wired | serving). High-value wire prepared: job1 fuses Odds API
+h2h moneylines into `head_features` so EB `moneyline_beta` can fire after
+merge+redeploy+job1 (rank/body already fused on main). Still unused gold:
+`PROP_SIGNAL_SCALE` (default 0; EXPECTED_PROD wants 0.3), `seasonAverages.*`,
+popular/mostCommon3x as distinct model terms, `implied_team_total` EB term.
+Production serving unchanged until merge.
+
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
 | Check | Result |

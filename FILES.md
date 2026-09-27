@@ -781,7 +781,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - scripts/corpus/README.md -- Real Sports history corpus (#526)
 - scripts/corpus/export_nfl_from_corpus_g.py -- Export NFL game_stats + matchups from durable Corpus G (zero Real calls).
 - scripts/corpus/export_wnba_from_store.py -- Export WNBA HV boards from durable stores (zero Real Sports calls).
-- scripts/corpus/feature_field_map.md -- Corpus field → own-model FeatureSpec map (#526 → #523)
+- scripts/corpus/feature_field_map.md -- Corpus field → own-model FeatureSpec map (#526 → #523 / #583)
 
 ## scripts/corpus/schema/
 - scripts/corpus/schema/coverage_manifest.schema.json
@@ -1398,7 +1398,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_rotowire_starters_expected.py -- When an empty RotoWire page is a real failure (#319, #441, #535).
 - wnba-oracle/tests/unit/test_rotowire_url.py -- D74: RotoWire URL + CSS selector fix.
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
-- wnba-oracle/tests/unit/test_rs_field_map_523.py -- WNBA RS field matrix (#523 / #526).
+- wnba-oracle/tests/unit/test_rs_field_map_523.py -- WNBA RS field matrix (#523 / #526 / #583).
 - wnba-oracle/tests/unit/test_rs_priority_aliases_523.py -- Priority RS leaf aliases → WNBA EB / head_features (#523).
 - wnba-oracle/tests/unit/test_sampling_offset.py -- score_offset (K) calibration in the copula sampler (D52).
 - wnba-oracle/tests/unit/test_schemas.py -- Pandera schema sanity checks. Validate that good frames pass and obvious

@@ -77,9 +77,9 @@ RS_FIELD_MATRIX: tuple[tuple[str, str, str, str, RsStatus], ...] = (
     (
         "seasonAverages.*",
         "feed / pool when present",
-        "head_features season_avg_*",
-        "optional head_features",
-        "mapped",
+        "extract_season_averages (not called on job1)",
+        "UNUSED_GOLD; fuse accepts season_averages kwargs",
+        "unused",
     ),
     (
         "baseBoostedValue / draftStats score/rank (same slate)",
