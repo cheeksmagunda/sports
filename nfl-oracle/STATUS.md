@@ -1,5 +1,16 @@
 # Status
 
+## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
+
+Locked: train / optimize toward Real Sports **Highest value / Total Value Daily
+Leaderboard** (`highestBoostedValuePlayers` / HIGH TOTAL VALUE boards) for every
+slate - Amihere / Copper / Aubrey-style boards (NFL draftStats Highest-value
+lists). **Do not train on prior users' winning drafts** as the fit target;
+those remain a reference bar. Cash, diversified, and median construction are
+not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
+knobs: Max-value / race construction and mono serve sections below. Existing
+valuelaw + feature ridge only; no new model stacks (#523).
+
 ## Max-value / race construction knobs (#453, 2026-09-26)
 
 Env-driven optimizer construction so the worker can chase maximum attainable

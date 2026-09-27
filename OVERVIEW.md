@@ -17,6 +17,10 @@ calendar, and provider adapters. Dependency direction is one-way: sport
 application to `oracle-core`. Sport apps never import each other or
 `oracle-core` domain code back.
 
+The portfolio product goal is stated once in root `README.md` (Product goal).
+Do not restate it here; each sport `README.md` points at that section and at
+its own `STATUS.md` for current serve knobs.
+
 ## oracle-core (`packages/oracle-core/src/oracle_core/`): 16 files, flat
 
 Domain-free technical infrastructure shared by every app. Prefer schema.org

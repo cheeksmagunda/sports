@@ -5,8 +5,9 @@ available pool and pre-tip signals, builds WNBA-owned features, predicts player
 distributions, optimizes a five-player lineup, freezes the result, and serves
 read-only slate and lineup data.
 
-Current deployment, model, service, schedule, corpus, incident, and measurement
-facts are in `STATUS.md` and must be reverified before production work.
+Portfolio product goal: root `../README.md` (Product goal). Current WNBA serve
+knobs and training-target detail are in `STATUS.md` and must be reverified
+before production work.
 
 ## Connection surfaces
 

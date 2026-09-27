@@ -8,6 +8,14 @@ strategy, calendars, providers, schemas, domain endpoints, operations, and
 runtime permissions. `packages/oracle-core` owns reusable technical
 infrastructure only.
 
+## Product goal
+
+Every sport, every day: commit a **5-player** lineup that maximizes capture of
+that slate's Real Sports **Highest value / Total Value Daily Leaderboard**
+(`highestBoostedValuePlayers`). Prior users' winning drafts are a reference bar
+to beat, not the fit target. Cash and median construction are not the
+objective. Current serve knobs live in each sport application's `STATUS.md`.
+
 ## Development surfaces
 
 The repository is designed to behave the same on a local checkout, in GitHub
