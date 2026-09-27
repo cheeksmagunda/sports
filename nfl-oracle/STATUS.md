@@ -22,7 +22,7 @@ Safe live_ok slate-context features force-included on the production
 - `features.own_model_map` classifies every live_ok FeatureSpec vs
   ridge_core / context_required / identity_encode / leakage_blocked
 - `features.rs_field_map` maps RS field → ingest → store → own-model slot
-- Corpus dump scaffold: `scripts/rs_corpus/` (#526)
+- Key-dump scaffold: `scripts/rs_corpus/` (durable HV corpus: #526 / PR #532)
 
 ### Newly mapped this PR (count)
 - 13 slate context features force-included on production ridge
