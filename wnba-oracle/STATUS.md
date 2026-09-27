@@ -2,44 +2,35 @@
 
 Last verified: 2026-09-27T01:43:00Z
 
-This file records live operational state only. Values marked unverified were
-not exposed by the read-only checks available during this audit.
+## Tip-day RotoWire fix live (#441 / #454 / #453)  -  2026-09-27
 
-## Tip-day fix live on wnba-oracle (#454 / #441 under #453)  -  2026-09-27 ~01:43Z
+Live traffic remains on Railway project **`wnba-oracle`** (not
+`sports-oracle`) through Sunday.
 
-Codespace `fluffy-zebra-g4gqq746477q2jg`; Railway project **`wnba-oracle`**
-(`ab83f44c-…`) / `production`. **Not** `sports-oracle` (traffic stays on
-`wnba-oracle` through Sunday). Via `scripts/codespace-railway-env`. No
-secrets printed.
-
-- Squash-merged PR #454 → `main` commit `4c7c9598f18cddf669ddad3367633b84daff9df0`
-  at 2026-09-27T01:25:50Z (branch `fix/441-rotowire-empty-tip-day` deleted
-  with merge).
-- Live API deployment `b6980bde-bd22-40be-a3b7-c594a15619cc` on tip-day
-  commit `4c7c9598f18c`; `GET https://api-production-7033.up.railway.app/health`
-  → `{"status":"ok","version":"0.1.0"}`.
-- Crons on tip-day `4c7c9598f18c`: `cron-job1` `95353809-…`,
-  `cron-job1-late` `f3dfb782-…`, `cron-job2` `cc2a7a0a-…` (schedule armed;
-  last run completed). `cron-dayclose` active deploy
-  `cd69934d-1aa5-4068-ab39-d7e9526f96e9` on `1adb1250530a` (docs-only tip of
-  `main` after tip-day; tip-day fix is an ancestor).
-- `/watchdog/today` (slate `2026-09-26`): `status=ok`, live `events=[]`
-  (historical `rotowire_empty` remains under `history` only). Tip-window
-  fail-closed no longer sticky-warns non-tip calendar days after deploy.
-- `/watchdog/2026-09-27`: `status=critical` / `no_job1_pool` — **expected**
-  until Sunday ~13:00 UTC job1 sees tip-day RotoWire lineups
-  (tip `2026-09-27T17:00:00Z`).
-
-## RotoWire-empty fail-closed only on tip day (#441)  -  2026-09-27
-
-- Verified in Railway logs: on 2026-09-26 `cron-job1` (13:09Z) and every
-  `cron-job1-late` run (16:01Z to 23:35Z) ended `failed` with
-  `rotowire_empty_near_tip`. The slate's first tip was 2026-09-27 18:00Z,
-  inside the 30h lead, while RotoWire's free page listed no games
-  (`no_games_scheduled`); it shows only today's Eastern games.
+- Merged #454 (`4c7c9598`) into `main` (replaces closed #445 after branch
+  rename for issue-link enforcement). Follow-up #465 regenerated `FILES.md`.
+- Railway (Codespace CLI session as Cheeks Magunda), production:
+  - `api` SUCCESS deploy `b6980bde` on `4c7c9598`
+  - `cron-job1` SUCCESS `95353809` on `4c7c9598`
+  - `cron-job1-late` SUCCESS `f3dfb782` on `4c7c9598`
+  - `cron-job2` SUCCESS `cc2a7a0a` on `4c7c9598`
+  - `cron-dayclose` SUCCESS deploy `cd69934d-1aa5-4068-ab39-d7e9526f96e9`
+    on `1adb1250530a` (from-source after tip-day; tip-day `4c7c9598` is an
+    ancestor). Verified 2026-09-27T01:43Z via Codespace Railway CLI.
+- Live API at 2026-09-27T01:36Z:
+  - `/health` -> `status=ok`
+  - `/watchdog/today` slate `2026-09-26` -> `status=ok`, `events=[]`
+    (historical `rotowire_empty` rows remain under `history` only)
+  - `/slate/2026-09-26` -> first tip `2026-09-27T18:00:00Z`, freeze target
+    `2026-09-27T17:20:00Z`; `/lineup/2026-09-26` -> no freeze yet
+  - `freeze_readiness` still observation-only / blocked with advisory
+    `rotowire_empty` and `job1_last_status=failed` from the 2026-09-26 false
+    alarms; next clean job1 is the Sunday ~13:00Z run
+- Root cause (unchanged): on 2026-09-26 job1/job1late failed with
+  `rotowire_empty_near_tip` inside the 30h lead while RotoWire free page
+  had `no_games_scheduled` (lists only today's Eastern games).
 - Fix: `ingest/rotowire.starters_expected` requires the 30h lead and the
-  tip's Eastern date. job1, job1-lite, and the watchdog `rotowire_empty`
-  check share it. Serving behavior on tip day is unchanged.
+  tip's Eastern date; job1, job1-lite, and watchdog share it.
 
 ## Scheduled WNBA checks report through their Actions runs, not issues (#442)  -  2026-09-26
 

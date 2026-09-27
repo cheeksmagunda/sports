@@ -8,8 +8,10 @@ baseline + prediction skeleton (`labels/`, `baselines/`) is started on
 synthetic labels only. Package wiring includes contest contract and audit
 gates (`contract/`), redacted ingest/provenance (`ingest/`), identity map
 (`identity/`), and freeze-cycle job skeleton (`scheduler/`). No Real-corpus
-baseline fit, contest-law optimizer, hosted API, frontend, Railway
-deployment, or contest entry exists yet.
+baseline fit, contest-law optimizer, hosted API, or contest entry exists
+yet. A lean Vite+React frontend scaffold lives at `frontend/` (#462);
+Railway `nhl-frontend` under sports-oracle `nhl-staging` may host it once
+pointed at this path.
 
 ## Connection surfaces
 
@@ -23,11 +25,26 @@ make test-app APP=nhl-oracle
 scripts/auth-check nhl-oracle --offline
 ```
 
-NHL has no Railway production project yet. Do not create Railway services,
-provider credentials, contest entry paths, or per-agent PATs unless a scoped
-issue explicitly authorizes that work. Cloud projects must include the root
-snapshot bundle plus `nhl-oracle/AGENTS.md`, `nhl-oracle/README.md`, and
+NHL staging lives under the sports-oracle Railway mono-project environment
+`nhl-staging` (see root `ENTRY_POINTS.md` / #457). Do not mint provider
+credentials, contest entry paths, or per-agent PATs unless a scoped issue
+authorizes that work. Cloud projects must include the root snapshot bundle
+plus `nhl-oracle/AGENTS.md`, `nhl-oracle/README.md`, and
 `nhl-oracle/STATUS.md`, then verify against live `main` before material work.
+
+### Frontend (scaffold)
+
+```sh
+cd frontend
+npm ci
+npm run dev          # local Vite
+npm run test
+npm run build        # requires VITE_API_URL=https://... for Docker/serve CSP
+```
+
+The UI is NHL-branded (dark ice), with `/`, `/slate/:date`, and `/health`
+routes plus stub clients for `/health`, `/slate/{date}`, and `/lineup/{date}`.
+Hosted API responses are not required for the static shell to deploy.
 
 ## Commands
 

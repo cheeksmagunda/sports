@@ -1,0 +1,11 @@
+node_modules/
+dist/
+serve.json
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+.secrets
+*.key
+*.pem
+*.tsbuildinfo

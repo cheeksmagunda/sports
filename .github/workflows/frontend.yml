@@ -5,25 +5,34 @@ on:
     branches: [main]
     paths:
       - "wnba-oracle/frontend/**"
+      - "nhl-oracle/frontend/**"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
       - "wnba-oracle/frontend/**"
+      - "nhl-oracle/frontend/**"
       - ".github/workflows/frontend.yml"
 
 permissions:
   contents: read
 
-env:
-  VITE_API_URL: https://api-production-7033.up.railway.app
-
-defaults:
-  run:
-    working-directory: wnba-oracle/frontend
-
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: wnba-oracle
+            vite_api_url: https://api-production-7033.up.railway.app
+          - app: nhl-oracle
+            # Placeholder HTTPS origin until nhl-api is publicly served.
+            vite_api_url: https://nhl-api-placeholder.up.railway.app
+    env:
+      VITE_API_URL: ${{ matrix.vite_api_url }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}/frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -33,7 +42,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: wnba-oracle/frontend/package-lock.json
+          cache-dependency-path: ${{ matrix.app }}/frontend/package-lock.json
 
       - run: npm ci
       - run: npm audit --audit-level=high
@@ -47,13 +56,13 @@ jobs:
         run: >-
           docker build
           --build-arg VITE_API_URL="$VITE_API_URL"
-          --tag wnba-oracle-frontend:ci
-          wnba-oracle/frontend
+          --tag ${{ matrix.app }}-frontend:ci
+          ${{ matrix.app }}/frontend
 
       - name: Smoke production routing and response assurance
         working-directory: ${{ github.workspace }}
         run: |
-          container_id=$(docker run --detach --publish 4173:4173 wnba-oracle-frontend:ci)
+          container_id=$(docker run --detach --publish 4173:4173 ${{ matrix.app }}-frontend:ci)
           cleanup() {
             docker rm --force "$container_id" >/dev/null 2>&1 || true
           }
