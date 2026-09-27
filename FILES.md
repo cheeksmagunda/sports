@@ -1239,7 +1239,7 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_freeze_append_fix.py -- Regression tests for the 2026-06-13 freeze outage.
 - wnba-oracle/tests/unit/test_freeze_audit_snapshot.py
 - wnba-oracle/tests/unit/test_freeze_idempotency.py -- Lock the true-freeze semantics in job2._freeze.
-- wnba-oracle/tests/unit/test_freeze_readiness.py -- Unit tests for advance freeze readiness summarization (#332).
+- wnba-oracle/tests/unit/test_freeze_readiness.py -- Unit tests for advance freeze readiness summarization (#332 / #535).
 - wnba-oracle/tests/unit/test_frozen_append.py -- D82: append-only freeze writes in job2._freeze.
 - wnba-oracle/tests/unit/test_game_script.py -- Game-script tier multipliers + blowout penalty.
 - wnba-oracle/tests/unit/test_game_script_minutes.py -- Game-script (blowout) minutes redistribution.
@@ -1304,7 +1304,7 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_rolling.py -- Rolling-window tests against a synthetic per-player game log.
 - wnba-oracle/tests/unit/test_rotowire_empty_reason.py -- Classify empty RotoWire HTML (#319).
 - wnba-oracle/tests/unit/test_rotowire_parse.py -- RotoWire HTML parse coverage (D100 fix).
-- wnba-oracle/tests/unit/test_rotowire_starters_expected.py -- When an empty RotoWire page is a real failure (#319, #441).
+- wnba-oracle/tests/unit/test_rotowire_starters_expected.py -- When an empty RotoWire page is a real failure (#319, #441, #535).
 - wnba-oracle/tests/unit/test_rotowire_url.py -- D74: RotoWire URL + CSS selector fix.
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
 - wnba-oracle/tests/unit/test_rs_field_map_523.py -- WNBA RS field matrix (#523 / #526).
