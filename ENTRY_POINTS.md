@@ -439,6 +439,37 @@ operator re-uploads snapshots to any configured static project:
 
 ## Railway from the Codespace
 
+### Mono-project home (`sports-oracle`)
+
+Railway project `sports-oracle` (`cca6b03f-8a84-4fb5-aaa5-decb3830392d`) with
+per-sport environments `wnba-production`, `nfl-production`, `nhl-staging`,
+`nba-staging` (plus unused placeholder `production`). Design, env/service map,
+`REALSPORTS_*` hash continuity, runbook, and rollback live on issue #457; per-sport
+serving facts live in each app `STATUS.md`  -  do not restate them here.
+
+**Verified public URLs** (service domains on the mono project; 2026-09-27 cutover
+evidence on #457 / #453):
+
+| Sport | Env | Public URL |
+| --- | --- | --- |
+| NFL API | `nfl-production` | `https://nfl-api-nfl-production.up.railway.app` |
+| WNBA API | `wnba-production` | `https://wnba-api-wnba-production.up.railway.app` |
+| WNBA frontend | `wnba-production` | `https://wnba-frontend-wnba-production.up.railway.app` |
+
+NHL / NBA staging shells may gain `*.up.railway.app` domains later; they are not
+serving paths until the owning app `STATUS.md` says so.
+
+### Cross-project data plane (required)
+
+`*.railway.internal` hostnames resolve **only inside the same Railway project**.
+Never point a service in project A at Postgres/Redis (or any private service) in
+project B via `*.railway.internal`. For a shared data plane across projects
+(for example mono app services still using live DB volumes in an old project
+during cutover), always use the **TCP proxy / public** connection URL
+(`*.proxy.rlwy.net` / `DATABASE_PUBLIC_URL`-shaped values), never the private
+internal URL. Compare connection strings by `sha256[:8]` only; never print
+values.
+
 All Railway mutations and worker SSH (link, restart, redeploy, `train --force`,
 logs, variable changes) run **from inside the GitHub Codespace**, after
 `railway whoami` shows the operator account (Cheeks Magunda). Do not run
