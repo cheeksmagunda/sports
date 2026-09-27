@@ -13,7 +13,8 @@ import json
 import os
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,8 @@ from oracle_core.storage import PoolOptions, create_postgres_engine
 from sqlalchemy import create_engine
 
 from nfl_oracle.calendar.schedule import (
+    SCHEDULE_TIMEZONE,
+    ScheduledGame,
     ensure_offline_schedules,
     resolve_schedule_csv_path,
     try_load_schedules_csv,
@@ -296,6 +299,84 @@ def _disk_usage_metadata(project: Path) -> dict[str, Any]:
     return {"disk": {"status": check.status, **check.metadata}}
 
 
+# Offline pregate (#267). The live T-40 gate below needs a Real Sports fetch
+# (and, on a cold header cache, a full browser launch) just to learn that the
+# freeze is not due yet. The offline nflverse schedule carries kickoff times,
+# so a poll that is clearly far from any kickoff can skip the live calls.
+# The pregate may only ever say "definitely not due yet"; every uncertain case
+# falls through to the unchanged live path, whose kickoff stays authoritative.
+_T40_MINUTES = 40
+_PREGATE_SAFETY_MINUTES = 20
+# Even while the offline schedule says "far away", do one real live poll at
+# least this often. The offline CSV on the worker volume is never refreshed
+# in place, so a kickoff that moved (flex scheduling, weather) is only visible
+# live; each live poll's cutoff also tightens the pregate below.
+_PREGATE_LIVE_REFRESH = timedelta(minutes=30)
+
+
+@dataclass
+class _PregateState:
+    """In-process memory of the last live gate observation."""
+
+    live_checked_at: datetime | None = None
+    live_day: date | None = None
+    live_cutoff: datetime | None = None
+
+
+def _offline_pregate(
+    games: Iterable[ScheduledGame],
+    requested_day: date | None,
+    now: datetime,
+    state: _PregateState | None,
+) -> tuple[date, datetime, datetime] | None:
+    """Return (day, earliest_kickoff, skip_until) when live work can be skipped.
+
+    Returns None (run the live path) unless every condition holds: a live poll
+    ran within ``_PREGATE_LIVE_REFRESH``, every offline game on the slate day
+    has a known kickoff, and ``now`` is before the earliest kickoff that day
+    minus T-40 minus the safety margin. Never raises.
+    """
+    try:
+        if state is None or state.live_checked_at is None:
+            return None
+        if now - state.live_checked_at >= _PREGATE_LIVE_REFRESH:
+            return None
+        rows = tuple(games)
+        if requested_day is not None:
+            day = requested_day
+        else:
+            # nflverse gameday is an Eastern date. A game on an earlier
+            # Eastern date has already kicked off, so the next slate is the
+            # first gameday on or after today's Eastern date.
+            today = now.astimezone(SCHEDULE_TIMEZONE).date()
+            future = sorted(
+                {g.gameday for g in rows if g.gameday is not None and g.gameday >= today}
+            )
+            if not future:
+                return None
+            day = future[0]
+        day_games = [g for g in rows if g.gameday == day]
+        if not day_games:
+            return None
+        kickoffs: list[datetime] = []
+        for game in day_games:
+            kickoff = game.kickoff_at
+            if kickoff is None or kickoff.tzinfo is None or kickoff.utcoffset() is None:
+                return None
+            kickoffs.append(kickoff)
+        # min over ALL games that day (not just upcoming) is the conservative
+        # side: once the first kickoff is near, every later poll goes live.
+        earliest = min(kickoffs)
+        if state.live_day == day and state.live_cutoff is not None:
+            earliest = min(earliest, state.live_cutoff)
+        skip_until = earliest - timedelta(minutes=_T40_MINUTES + _PREGATE_SAFETY_MINUTES)
+        if now < skip_until:
+            return day, earliest, skip_until
+        return None
+    except Exception:
+        return None
+
+
 async def _worker_once(
     project: Path,
     store: RecommendationStore,
@@ -303,6 +384,8 @@ async def _worker_once(
     requested_day: date | None,
     *,
     allow_refreeze: bool = False,
+    schedule_games: Sequence[ScheduledGame] = (),
+    pregate_state: _PregateState | None = None,
 ) -> dict[str, Any] | None:
     headers_from = os.environ.get("NFL_REALSPORTS_STORAGE_STATE", "")
     del headers_from  # The provider module reads its own scoped environment path.
@@ -313,6 +396,26 @@ async def _worker_once(
     ) -> None:
         merged = {**(details or {}), **_disk_usage_metadata(project)}
         store.record_run(day, status=status, detail_code=detail_code, details=merged)
+
+    pregate = _offline_pregate(schedule_games, requested_day, datetime.now(UTC), pregate_state)
+    if pregate is not None and (allow_refreeze or not _already_frozen(store, pregate[0])):
+        pregate_day, earliest, skip_until = pregate
+        try:
+            record_run(
+                pregate_day,
+                status="waiting",
+                detail_code="waiting_offline_pregate",
+                details={
+                    "gate_source": "offline_schedule",
+                    "next_live_check_by": skip_until.isoformat(),
+                    "cutoff_at": earliest.isoformat(),
+                },
+            )
+        except Exception:
+            # Could not record the skip; take the ordinary live path instead.
+            pass
+        else:
+            return None
 
     headers = await headers_or_capture()
     async with httpx.AsyncClient(timeout=25) as client:
@@ -341,6 +444,10 @@ async def _worker_once(
             record_run(day, status="locked", detail_code="slate_cutoff_passed")
             return None
         cutoff = min(game.kickoff_at for game in upcoming)
+        if pregate_state is not None:
+            pregate_state.live_checked_at = now
+            pregate_state.live_day = day
+            pregate_state.live_cutoff = cutoff
         due = cutoff - timedelta(minutes=40)
         if now < due:
             record_run(
@@ -450,7 +557,9 @@ async def _run_worker(
     if not policy.recommendations_enabled:
         print(json.dumps({"status": "blocked", "detail_code": "recommendations_disabled"}))
         return 1
-    pipeline = RecommendationPipeline(store, policy=policy, schedule_games=_schedule_games(project))
+    schedule_games = _schedule_games(project)
+    pipeline = RecommendationPipeline(store, policy=policy, schedule_games=schedule_games)
+    pregate_state = _PregateState()
     next_prune_at = 0.0
     while True:
         now_monotonic = time.monotonic()
@@ -464,6 +573,8 @@ async def _run_worker(
                 pipeline,
                 requested_day,
                 allow_refreeze=allow_refreeze,
+                schedule_games=schedule_games,
+                pregate_state=pregate_state,
             )
             if record is not None:
                 print(

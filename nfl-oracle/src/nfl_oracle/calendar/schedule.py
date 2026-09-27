@@ -14,9 +14,10 @@ import shutil
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 # Primary public source (Lee Sharpe / nflverse nfldata). Release-tag CSV may 404;
 # raw games.csv is the stable offline-cacheable feed.
@@ -41,6 +42,9 @@ DEFAULT_SCHEDULE_BOOTSTRAP_DIR = Path("/opt/nfl-oracle/bootstrap/schedule")
 REGULAR_GAME_TYPES = frozenset({"REG", ""})
 POSTSEASON_GAME_TYPES = frozenset({"WC", "DIV", "CON", "SB", "POST"})
 
+# nflverse ``gametime`` is local wall-clock time in US Eastern (HH:MM).
+SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")
+
 
 @dataclass(frozen=True)
 class ScheduledGame:
@@ -51,6 +55,36 @@ class ScheduledGame:
     home_team: str
     away_team: str
     game_type: str = "REG"
+    # UTC-aware kickoff from nflverse ``gameday`` + ``gametime`` (US Eastern).
+    # None when the CSV has no ``gametime`` column or upstream has not
+    # published a time yet; callers must treat None as "unknown", never as a
+    # default hour.
+    kickoff_at: datetime | None = None
+
+
+def kickoff_from_schedule(gameday: date | None, gametime: str | None) -> datetime | None:
+    """Convert nflverse Eastern ``gameday`` + ``HH:MM`` to a UTC instant.
+
+    DST-aware via zoneinfo. Returns None for a missing or malformed value.
+    """
+
+    if gameday is None:
+        return None
+    raw = (gametime or "").strip()
+    if not raw:
+        return None
+    try:
+        hour_s, minute_s = raw.split(":", 1)
+        hour = int(hour_s)
+        minute = int(minute_s[:2])
+    except ValueError:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    local = datetime(
+        gameday.year, gameday.month, gameday.day, hour, minute, tzinfo=SCHEDULE_TIMEZONE
+    )
+    return local.astimezone(UTC)
 
 
 @dataclass(frozen=True)
@@ -128,6 +162,7 @@ def parse_schedules_csv(text: str, *, season: int | None = None) -> list[Schedul
                 home_team=str(row.get("home_team") or ""),
                 away_team=str(row.get("away_team") or ""),
                 game_type=game_type,
+                kickoff_at=kickoff_from_schedule(gameday, row.get("gametime")),
             )
         )
     return out

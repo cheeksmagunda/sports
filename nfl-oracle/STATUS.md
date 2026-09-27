@@ -1,5 +1,26 @@
 # Status
 
+## Offline T-40 pregate before live fetch (2026-09-24, issue #267)
+
+`ScheduledGame` now carries `kickoff_at` (UTC), converted DST-aware from the
+offline schedule's optional `gametime` column (US Eastern). The committed
+`data/schedule/schedules.csv` gained that column for all 6,771 rows from
+upstream nflverse `games.csv`. `_worker_once` checks an offline pregate
+before `headers_or_capture()` / `reader.day_content()` and records
+`waiting` / `waiting_offline_pregate` with no live calls only when all of
+these hold: a live poll ran in this process within the last 30 minutes, every
+offline game on the slate's Eastern date has a known kickoff, the slate is
+not already frozen, and now is before the earliest kickoff that day (or the
+last live cutoff, if earlier) minus 60 minutes (T-40 plus a 20-minute
+margin). Any other case, including any pregate error, takes the unchanged
+live path; the live kickoff stays authoritative for the real gate and freeze.
+
+Production caveat (from code, not verified live): `ensure_offline_schedules`
+never replaces an existing volume copy and `resolve_schedule_csv_path` prefers
+the volume, so a worker whose volume already holds the older gametime-less
+CSV keeps `kickoff_at=None` everywhere and the pregate stays inert (current
+behavior) until that volume file is refreshed.
+
 ## Stopped using GitHub issues as permanent ledgers/incident trackers (2026-09-24, issue #283, PR #284)
 
 `dayclose-ledger` (used by `nfl-dayclose.yml`/`nfl-weekclose.yml`), and WNBA's
