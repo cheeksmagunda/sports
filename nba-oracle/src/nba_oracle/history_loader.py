@@ -225,13 +225,17 @@ def _replace_coverage(conn: Connection, row: CoverageRow) -> None:
 
 async def _get_json(client: httpx.AsyncClient, url: str) -> dict[str, Any]:
     transport = HttpxAsyncTransport(client)
-    policy = RetryPolicy(max_attempts=5, base_delay=0.5, max_delay=8.0)
+    policy = RetryPolicy(max_attempts=8, base_delay=1.0, max_delay=20.0)
     response = await async_request_with_retry(
         transport,
         "GET",
         url,
         policy=policy,
-        headers={"accept": "application/json"},
+        headers={
+            "accept": "application/json",
+            "origin": "https://www.nba.com",
+            "referer": "https://www.nba.com/",
+        },
     )
     response.raise_for_status()
     payload = response.json()
@@ -535,7 +539,7 @@ async def load_history(
             loaded_player_rows = 0
             failed_games = 0
             first_game_date, last_game_date = _season_rows(scheduled)
-            for batch in _batched(scheduled, max(concurrency * 4, concurrency)):
+            for batch in _batched(scheduled, max(concurrency * 2, concurrency)):
                 results = await asyncio.gather(
                     *(
                         _load_one_game(
@@ -548,6 +552,7 @@ async def load_history(
                     ),
                     return_exceptions=True,
                 )
+                await asyncio.sleep(0.75)
                 game_rows: list[dict[str, Any]] = []
                 player_rows: list[dict[str, Any]] = []
                 for result in results:
@@ -605,7 +610,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_GAME_TYPE_PREFIXES,
         help="Comma-separated NBA game-id prefixes (default: 002,004 regular+playoffs).",
     )
-    parser.add_argument("--concurrency", type=int, default=12)
+    parser.add_argument("--concurrency", type=int, default=6)
     return parser
 
 
