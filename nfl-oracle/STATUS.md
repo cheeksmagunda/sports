@@ -133,7 +133,7 @@ Verified via Codespace `fluffy-zebra-g4gqq746477q2jg` +
 | `--report-gaps` | 2024: games=334 complete=1 missing_players=333; 2025: games=334 complete=5 missing_players=329 |
 | Live worker tip | deploy `02a1c12a` SUCCESS commit `c7c2af4` (ancestor of `a476ae6`); `ENTRYPOINT` present; CLI has `--report-gaps` / `--repair-players` |
 | `.dockerignore` | `!nfl-oracle/docker-entrypoint.sh` allowlisted (lands via #551/#564) |
-| `--repair-players` | **blocked**: sealed RS session `sha256[:8]=c4a729e2` returns `PlatformAuthRequired` 401 on `/games/{id}/sport/nfl/players` (no credential mint) |
+| `--repair-players` | **players.json repair incomplete on mono volume** (`--report-gaps`: 2024 missing_players=333, 2025=329). Worker session `sha256[:8]=c4a729e2` is **present** (Codespaces / GHA / Railway copies match). Do not frame this as auth-missing or operator refresh; diagnose volume repair / sport path / linked Railway env if a `/players` call returns 401 while the hash is present. |
 
 
 ## Total Value HV leaderboard corpus scaffold (#526)  -  2026-09-27

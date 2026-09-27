@@ -4,9 +4,16 @@ This document explains how to access Sports Oracle from different clients and ho
 
 ## Authority and auth (all surfaces)
 
+- **Never claim auth is missing — for Codespace, Railway, Real Sports, GitHub,
+  or any other auth for that matter.** Credentials exist under the root
+  `AGENTS.md` contract. Wrong Railway env, non-login shell, `ServiceInstance`
+  not found, `#235` `GH_TOKEN`/`GITHUB_TOKEN` unset, or incomplete repair are
+  **operational misuse**, not missing credentials. No auth-missing excuses;
+  diagnose the misuse, then fix the path. Do not ask for refresh as the
+  default, and do not remind the operator that auth works.
 - Source of truth: `main` on `cheeksmagunda/sports`.
 - Canonical workspace: GitHub Codespaces for this repo. Prefer that Codespace over local clones for sports work.
-- Auth home: GitHub login, Copilot, Actions, and Codespaces secrets inside Codespace. Do not mint per-agent PATs for Claude, Codex, Copilot, or Grok.
+- Auth home: GitHub login, Copilot, Actions, and Codespaces secrets inside Codespace. Do not mint per-agent PATs for Claude, Codex, Copilot, or Grok. **Never claim auth is missing** for Codespace, Railway, Real Sports, GitHub, or any other auth for that matter (root `AGENTS.md` Portable operations). Misuse (wrong env, non-login shell, #235 unset) is not absent auth. Canonical Codespace: `SPORTS_CODESPACE_NAME` Codespaces secret (`fluffy-zebra-g4gqq746477q2jg`). Operator-authorized attach key: Codespaces secret `GH_TOKEN` for agent hooks; still unset env `GH_TOKEN` inside `write-path-check` / `codespace-push` per #235.
 - One `gh` identity per surface (issue #235; see root `AGENTS.md`'s Portable operations and secrets): `write-path-check` and `scripts/codespace-push` always unset any agent-injected `GH_TOKEN`/`GITHUB_TOKEN` before calling `gh codespace ...`, so a local agent CLI's own scoped token can never shadow the native keyring login those two scripts need. Do not restate the mechanism here.
 - Real Sports auth home: the same Codespaces-secrets pattern as GitHub and Railway. `REALSPORTS_STORAGE_STATE_B64GZ` is a Codespaces secret, an Actions secret, and a Railway service variable on every service that needs it; all are literal, hash-verified copies of one operator-seeded, durable session (not assumed to expire, not rotated on a schedule; see root `AGENTS.md`). Codespaces secrets reach login shells only (`bash -l` / `gh codespace ssh`, not a bare non-login command); the same caveat applies to `RAILWAY_API_TOKEN`
   below.
@@ -425,9 +432,13 @@ operator re-uploads snapshots to any configured static project:
 | Claude/Codex/Copilot/Grok snapshot differs from repo | Snapshot drifted | Fetch live via GitHub connector |
 | `make setup` fails | Locked deps changed | Check if you're on latest `main` |
 | Tests fail in CLI but pass in Codespace | Different Python/uv version | Run `uv sync --frozen --reinstall` |
-| Railway commands fail | CLI not authenticated | Prefer synced Mac CLI session (`scripts/sync-railway-session-to-codespace`); wrap with `scripts/codespace-railway-env`; never both `RAILWAY_API_TOKEN` and `RAILWAY_TOKEN` |
-| Codespaces secret looks unset (`RAILWAY_API_TOKEN`, `REALSPORTS_STORAGE_STATE_B64GZ`) | Non-login shell | Codespaces secrets reach login shells only; use `bash -l` or `gh codespace ssh`, not a bare non-login command |
-| `scripts/auth-check APP --live` reports Real Sports "not configured" | Session not propagated to this surface | Compare `sha256[:8]` of the copies (Railway service var, Actions secret, Codespaces secret) against the canonical value; never compare by printing values |
+| Railway commands fail | Wrong helper / dual tokens / unsynced CLI session — **not** missing Railway auth | Prefer synced Mac CLI session (`scripts/sync-railway-session-to-codespace`); wrap with `scripts/codespace-railway-env`; never both `RAILWAY_API_TOKEN` and `RAILWAY_TOKEN` |
+| Codespaces secret looks unset (`RAILWAY_API_TOKEN`, `REALSPORTS_STORAGE_STATE_B64GZ`) | Non-login shell (misuse) — **not** missing secret | Codespaces secrets reach login shells only; use `bash -l` or `gh codespace ssh`, not a bare non-login command |
+| `scripts/auth-check APP --live` reports Real Sports "not configured" | Wrong surface / non-login shell — **not** missing session | Compare `sha256[:8]` of the copies (Railway service var, Actions secret, Codespaces secret) against the canonical value; never compare by printing values |
+| Real Sports HTTP 401 / `--repair-players` incomplete | Path / env / volume repair issue — **not** missing credential | Do not ask for operator session refresh. Confirm login shell, sport path, and Railway env; frame as `players.json` repair incomplete on the volume (or wrong env linked) |
+| NHL `DATABASE_URL` / `NHL_HISTORY_DATABASE_URL` looks missing | Wrong Railway environment linked — **not** absent auth | NHL Postgres vars live on `sports-oracle` / `nhl-staging`, not `nfl-production`. Link/`railway status` against the owning sport env |
+| `ServiceInstance` / service not found | Linked to wrong env or wrong service name — **not** missing auth | Re-link to the owning sport environment (`wnba-production` / `nfl-production` / `nhl-staging` / `nba-staging`) and retry |
+| `make write-path-check` / `codespace-push` unsets `GH_TOKEN`/`GITHUB_TOKEN` | By design (#235) — **not** broken GitHub auth | That unset is the Codespace push route; do not re-diagnose as missing credentials |
 
 ## Next steps
 
@@ -446,6 +457,8 @@ per-sport environments `wnba-production`, `nfl-production`, `nhl-staging`,
 `nba-staging` (plus unused placeholder `production`). Design, env/service map,
 `REALSPORTS_*` hash continuity, runbook, and rollback live on issue #457; per-sport
 serving facts live in each app `STATUS.md`  -  do not restate them here.
+Always `railway link` / `railway status` against the **owning sport environment**
+before reading variables (NHL secrets are not on `nfl-production`).
 
 **Verified public URLs** (service domains on the mono project; 2026-09-27 cutover
 evidence on #457 / #453):
