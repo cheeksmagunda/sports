@@ -1,6 +1,6 @@
 # NHL Oracle developer targets. The parent workspace owns dependency locking.
 
-.PHONY: help setup install test lint typecheck fmt
+.PHONY: help setup install test lint typecheck fmt history-load
 
 UV_RUN = uv run --frozen --package nhl-oracle
 
@@ -12,6 +12,7 @@ help:
 	@echo "  make lint        - ruff check"
 	@echo "  make typecheck   - mypy"
 	@echo "  make fmt         - ruff format"
+	@echo "  make history-load - load public NHL history into NHL_DATABASE_URL"
 
 setup:
 	$(MAKE) -C .. setup
@@ -31,3 +32,6 @@ typecheck:
 
 fmt:
 	$(UV_RUN) --extra dev ruff format src/ tests/
+
+history-load:
+	$(UV_RUN) python -m nhl_oracle.history_loader
