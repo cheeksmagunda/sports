@@ -15,9 +15,13 @@ This file records application state only.
   the serving image)
 - Calendar: `NEXT_REGULAR_SEASON_OPEN = 2026-10-20`; tracked seasons
   `2002`..(current Eastern season label) for Corpus G planning
-- Ingest: gate writes a blocked coverage matrix and exits non-zero without
-  portfolio `REALSPORTS_*`; no historical rows claimed; HTTP Corpus G client
-  not wired yet
+- Ingest: `nba-corpus-g-backfill` gate writes a blocked coverage matrix and exits
+  non-zero without portfolio `REALSPORTS_*`; HTTP Corpus G client not wired yet.
+  Separate observation-only path: `nba-history-load` loads public `data.nba.com`
+  schedule/gamedetail into Postgres over public TCP (`sslmode=require`), no Real
+  Sports auth.
+- Public history tables (target): `nba_history_games`, `nba_history_player_games`,
+  `nba_history_season_coverage`. Verified counts: pending load this session.
 - Not started: schemas, modeling, scheduling, contest logic, nightly worker
 
 ## Railway mono (`sports-oracle` / `nba-staging`, env `7ac1e6f8-…`)
@@ -30,7 +34,7 @@ Verified 2026-09-27 from Codespace. Non-serving scaffold only (#457 / #504).
 | `nba-worker` | not shown / Failed | Failed | Leave disconnected until Real Sports auth + nightly are authorized. |
 | `nba-frontend` | not shown / Failed | Failed | No frontend package; leave disconnected. |
 | `nfl-frontend` | Offline | Offline | Stray service instance visible in `nba-staging`; not an NBA serving path. |
-| `Postgres-6eeu` | n/a | Online | Volume `postgres-volume-jmAe` ~0.1 GB. No NBA history tables verified; treat multi-year coverage as fully blocked/empty until ingest proves otherwise. |
+| `Postgres-6eeu` | n/a | Online | Volume `postgres-volume-jmAe`. Public TCP proxy ACTIVE (`trolley.proxy.rlwy.net`). `DATABASE_PUBLIC_URL` set with `sslmode=require`. Public history load counts: pending verify. |
 
 No public NBA domain. No contest features. No Real Sports credential verified on NBA services. Serving is not dual-firing for NBA: only `nba-api` is Online (queued rebuild); worker/frontend Failed/Offline.
 

@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 975 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 977 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -121,6 +121,7 @@ Generated from `git ls-files`. 975 tracked files. Regenerate with `scripts/gener
 
 ## nba-oracle/src/nba_oracle/
 - nba-oracle/src/nba_oracle/__init__.py -- NBA Oracle application package.
+- nba-oracle/src/nba_oracle/history_loader.py -- Load multi-year NBA public history into Postgres for NBA-only research.
 
 ## nba-oracle/src/nba_oracle/api/
 - nba-oracle/src/nba_oracle/api/__init__.py -- NBA Oracle HTTP surface (health scaffold only).
@@ -144,6 +145,7 @@ Generated from `git ls-files`. 975 tracked files. Regenerate with `scripts/gener
 ## nba-oracle/tests/
 - nba-oracle/tests/test_calendar_and_ingest_gate.py
 - nba-oracle/tests/test_health_api.py
+- nba-oracle/tests/test_history_loader.py
 - nba-oracle/tests/test_import.py
 
 ## nfl-oracle/
