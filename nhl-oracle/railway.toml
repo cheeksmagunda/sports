@@ -1,0 +1,15 @@
+# NHL Oracle Railway build defaults. No service or environment mutation is
+# performed by this file. Configure API and worker as separate services using
+# this same image and explicit start commands.
+#
+# API start command:
+#   nhl-pipeline serve --host 0.0.0.0 --port ${PORT:-8000}
+# Worker start command:
+#   nhl-pipeline worker
+#
+# Scaffold staging only: observation_only, contest_entry false. No migrate
+# step yet. Frontend uses nhl-oracle/frontend/railway.toml separately.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "nhl-oracle/Dockerfile"

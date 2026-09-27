@@ -32,6 +32,15 @@ make lint
 make typecheck
 ```
 
+## Production container boundary (staging scaffold)
+
+`Dockerfile` and `railway.toml` are NHL-owned deployment source for
+sports-oracle `nhl-staging`. One image, separate roles: `nhl-pipeline serve`
+is the read-only API default; `nhl-pipeline worker` is an idle
+observation-only heartbeat until a real pipeline exists. Credentials never
+enter the image. No contest entry. API must not migrate on startup (no
+schema yet).
+
 ## Verification bar
 
 - Start with focused tests and run `make test`.

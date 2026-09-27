@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-27 (#453 Sunday honesty; discovery/calendar #455; frontend #462; baselines #456)
+Last verified: 2026-09-27 (#482 Docker/Railway staging scaffold; continues #453/#457)
 
 ## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
@@ -12,16 +12,29 @@ Last verified: 2026-09-27 (#453 Sunday honesty; discovery/calendar #455; fronten
 
 This file records application state only.
 
+## Railway nhl-staging scaffold (#482)  -  2026-09-27
+
+- Backend image source: `nhl-oracle/Dockerfile` + `nhl-oracle/railway.toml`
+  (DOCKERFILE builder). Same image for `nhl-api` (default `nhl-pipeline serve`)
+  and `nhl-worker` (`nhl-pipeline worker` start override). Observation-only;
+  `contest_entry: false`. No migrate-on-startup; no secrets in the image.
+- Minimal HTTP surface: `/health`, stub `/slate/{date}`, stub `/lineup/{date}`.
+  Worker is an idle heartbeat only (no Real Sports calls yet).
+- Frontend scaffold (#462 / PR #470): `nhl-oracle/frontend` with its own
+  Dockerfile + `railway.toml`. Staging host under sports-oracle `nhl-staging`
+  is non-contest; verify live deploy IDs after #482 landing.
+- **No contest claims. Staging only. No live WNBA/NFL traffic touched.**
+
 ## Sunday readiness honesty (#453)  -  2026-09-27
 
 - **Week 2 done** (contract/corpus/#325 boost=`none`; discovery/calendar #455).
 - **Week 3 started** as an observation-only baseline skeleton (#456 / PR #459):
   `labels/` + `baselines/` with synthetic-label tests. **Not fitted on Real
-  corpus. Not serving. No Railway. No hosted API. No contest entry.**
-- Frontend scaffold landed (#462) under `nhl-oracle/frontend` (Vite shell +
-  Dockerfile). **Not hosted / not serving contests.** Hosted API still absent.
-- Optimizer / production NHL serving / Railway live contest path: **not started**.
-- Contest discovery/calendar ops code: #455 (this change) lands on main.
+  corpus. No contest entry.**
+- Frontend scaffold landed (#462). Hosted API lifecycle (freeze/publish) still
+  absent; #482 only unblocks the staging container shell.
+- Optimizer / production NHL serving / contest path: **not started**.
+- Contest discovery/calendar ops code: #455 landed on main.
 - Do not treat NHL as Sunday live contest-ready.
 
 ## Application state
@@ -73,11 +86,13 @@ This file records application state only.
 - Frontend scaffold (#462): `nhl-oracle/frontend` Vite+React+TS shell with
   NHL dark-ice branding, `/health` client stub, slate placeholder page,
   Dockerfile + `railway.toml` matching the WNBA frontend deploy shape.
-  Hosted API still absent; UI treats `/health` failures as expected until
-  `nhl-api` serves. Railway: sports-oracle `nhl-staging` should host
-  `nhl-frontend` rooted at `nhl-oracle/frontend` (verify live after merge).
+- Staging container shell (#482): root `nhl-oracle/Dockerfile` +
+  `railway.toml`; `nhl-pipeline serve` / `nhl-pipeline worker` entrypoints.
+  Stub API only; not a freeze/publish lifecycle. Railway `nhl-staging`
+  services `nhl-api` / `nhl-worker` / `nhl-frontend` are configured to build
+  from these paths after merge (verify deploy IDs live).
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
-  optimizer, hosted API implementation, production NHL serving. Any future
+  optimizer, production NHL serving / contest entry. Any future
   picker/backtest must assume zero boosts until every NHL team has played
 
 ## Boundaries
