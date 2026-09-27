@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 965 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1134,6 +1134,7 @@ Generated from `git ls-files`. 965 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_feature_payload.py
 - wnba-oracle/tests/unit/test_features_cohort.py -- Spec / cohort assignment tests.
 - wnba-oracle/tests/unit/test_field_measured_ownership.py -- Field-ownership model: measured-drafts path (D86).
+- wnba-oracle/tests/unit/test_field_popularity_blend.py -- Field-ownership model: popularity-blend path (W2 / #453).
 - wnba-oracle/tests/unit/test_field_stack_aware.py -- Stack-aware correlated field simulation.
 - wnba-oracle/tests/unit/test_freeze_append_fix.py -- Regression tests for the 2026-06-13 freeze outage.
 - wnba-oracle/tests/unit/test_freeze_audit_snapshot.py
