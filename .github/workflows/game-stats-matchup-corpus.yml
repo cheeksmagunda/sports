@@ -1,0 +1,64 @@
+name: game-stats-matchup-corpus
+
+# Durable game-stats + matchup append for HV/TDV (Refs #528 #526 #453).
+#
+# Order relative to #512-style Corpus G nightly:
+#   1) Sport-specific ingest / dayclose refreshes completed games
+#      (WNBA game_log_refresh, NFL Corpus G nightly #512, NHL history-sync,
+#      NBA future Corpus G).
+#   2) This workflow (or operator Codespace job) APPENDS matchup.json +
+#      stats.json into the durable corpus root (orphan `backups` branch or
+#      dedicated corpus repo) — never a full-history live re-fetch.
+#
+# The scheduled job currently runs offline unit coverage only. Live export
+# steps stay manual/`workflow_dispatch` until BACKUP_DATABASE_URL (WNBA) or
+# a Codespace volume Corpus G path (NFL) is wired without minting credentials.
+
+on:
+  schedule:
+    # 05:15 UTC: after planned nfl-corpus-g-nightly 04:30 UTC (#512) and
+    # before WNBA corpus-backup 06:43 UTC.
+    - cron: "15 5 * * *"
+  workflow_dispatch:
+    inputs:
+      confirm_live_append:
+        description: Reserved for future live append (requires existing secrets only)
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-stats-matchup-corpus
+  cancel-in-progress: false
+
+jobs:
+  offline-scaffold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Unit tests for matchup corpus append
+        run: |
+          uv run --frozen --package oracle-core --extra dev python -m pytest packages/oracle-core/tests/test_corpus_matchup.py -q
+          uv run --frozen --package wnba-oracle --extra dev python -m pytest wnba-oracle/tests/unit/test_append_game_stats_matchup.py -q
+          uv run --frozen --package nfl-oracle --extra dev python -m pytest nfl-oracle/tests/unit/test_append_game_stats_matchup.py -q
+          uv run --frozen --package nhl-oracle --extra dev python -m pytest nhl-oracle/tests/test_append_game_stats_matchup.py -q
+          uv run --frozen --package nba-oracle python -c "import pathlib; assert pathlib.Path('nba-oracle/scripts/append_game_stats_matchup.py').is_file()"
+
+      - name: Document live append gate
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_live_append == true }}
+        run: |
+          echo "Live append not enabled in this scaffold."
+          echo "WNBA: export_game_logs.py then wnba-oracle/scripts/append_game_stats_matchup.py"
+          echo "NFL: after #512 Corpus G nightly, nfl-oracle/scripts/append_game_stats_matchup.py --corpus-g-root ..."
+          echo "NHL: after history-sync boxscore files, nhl-oracle/scripts/append_game_stats_matchup.py"
+          echo "NBA: offline payload scaffold only until Corpus G lands."
+          exit 1

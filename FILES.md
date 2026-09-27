@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1075 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -53,6 +53,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - .github/workflows/corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/devcontainer-smoke.yml -- GitHub Actions workflow
 - .github/workflows/frontend.yml -- GitHub Actions workflow
+- .github/workflows/game-stats-matchup-corpus.yml -- GitHub Actions workflow
 - .github/workflows/hv-leaderboard-corpus.yml -- GitHub Actions workflow
 - .github/workflows/issue-link-enforcement.yml -- GitHub Actions workflow
 - .github/workflows/model-research-benchmark.yml -- GitHub Actions workflow
@@ -124,6 +125,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - nba-oracle/railway.toml -- Package/tool configuration
 
 ## nba-oracle/scripts/
+- nba-oracle/scripts/append_game_stats_matchup.py -- NBA game-stats matchup corpus append scaffold.
 - nba-oracle/scripts/export_hv_board.py -- NBA HV board export stub (issue #526).
 
 ## nba-oracle/src/nba_oracle/
@@ -203,6 +205,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/frontend/style.css
 
 ## nfl-oracle/scripts/
+- nfl-oracle/scripts/append_game_stats_matchup.py -- Derive matchup.json sidecars from existing NFL Corpus G game dirs.
 - nfl-oracle/scripts/auth-check-live
 - nfl-oracle/scripts/auth_presence_check.py -- Print presence-only Real Sports auth surface status (never values).
 - nfl-oracle/scripts/backup_corpus.py -- Off-platform logical backup of the irreplaceable NFL decision corpus.
@@ -456,6 +459,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 ## nfl-oracle/tests/unit/
 - nfl-oracle/tests/unit/__init__.py
 - nfl-oracle/tests/unit/test_anti_chalk_high_tv.py -- Anti-chalk + high-potential label path pins for issue #185.
+- nfl-oracle/tests/unit/test_append_game_stats_matchup.py -- Offline unit coverage for NFL Corpus G -> matchup corpus append.
 - nfl-oracle/tests/unit/test_auth_check_live.py -- NFL parity for wnba-oracle's auth-check-live value-free contract.
 - nfl-oracle/tests/unit/test_auth_presence_check.py -- auth_presence_check must see volume-backed Real Sports session files.
 - nfl-oracle/tests/unit/test_backfill_cursor.py -- Tests for season backfill cursor resume and Corpus G gap helpers.
@@ -601,6 +605,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/frontend/src/styles/main.css
 
 ## nhl-oracle/scripts/
+- nhl-oracle/scripts/append_game_stats_matchup.py -- Append NHL public boxscore games into the durable matchup corpus.
 - nhl-oracle/scripts/export_hv_board.py -- NHL HV board export stub (issue #526).
 - nhl-oracle/scripts/live_contract_audit.py -- CLI wrapper for nhl_oracle.ingest.audit (read-only).
 
@@ -656,6 +661,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/src/nhl_oracle/service/cli.py -- CLI entrypoints for NHL staging API serve and idle worker roles.
 
 ## nhl-oracle/tests/
+- nhl-oracle/tests/test_append_game_stats_matchup.py -- NHL public boxscore -> durable matchup corpus append.
 - nhl-oracle/tests/test_audit_fixtures.py
 - nhl-oracle/tests/test_baselines_walk_forward.py -- Week-3 acceptance: chronological baseline + prediction skeleton.
 - nhl-oracle/tests/test_boost_gate.py -- Hard zero-boost gate: multiplier stays 0 while any team is at 0 GP.
@@ -688,6 +694,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/src/oracle_core/browser.py -- Guaranteed-cleanup Playwright browser sessions.
 - packages/oracle-core/src/oracle_core/cache.py -- JSON TTL caching over a technical key-value capability.
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
+- packages/oracle-core/src/oracle_core/corpus_matchup.py -- Provider-neutral durable game-stats + matchup corpus layout.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
 - packages/oracle-core/src/oracle_core/draft_stats_catalog.py -- Daily Draft Stats / draftStats section inventory (issue #526).
@@ -716,6 +723,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/tests/test_artifacts.py
 - packages/oracle-core/tests/test_browser.py
 - packages/oracle-core/tests/test_config.py
+- packages/oracle-core/tests/test_corpus_matchup.py -- Tests for durable game-stats matchup corpus append helpers.
 - packages/oracle-core/tests/test_dayclose.py
 - packages/oracle-core/tests/test_dossier.py
 - packages/oracle-core/tests/test_draft_stats_catalog.py -- Tests for the portfolio draftStats section catalog (#526).
@@ -966,6 +974,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/scripts/analyze_field_intelligence.py -- Field-intelligence study for issue #37 (community lineup intelligence).
 - wnba-oracle/scripts/analyze_stacking_decisions.py -- Read-only analytics for durable contextual-stacking decisions.
 - wnba-oracle/scripts/analyze_strategy_gap.py -- Strategy-gap analysis against the 2026 WNBA leaderboard + slate_labels corpus.
+- wnba-oracle/scripts/append_game_stats_matchup.py -- Append completed WNBA games from ``wnba_game_logs`` rows into matchup corpus.
 - wnba-oracle/scripts/auth-check-live
 - wnba-oracle/scripts/backfill_game_identity.py -- Backfill missing job1_enrichment.features_json.game_id from same-slate rows.
 - wnba-oracle/scripts/backfill_head_features.py -- One-off backfill: merge the D69 `head_features` row into existing
@@ -1220,6 +1229,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_analyze_stacking_decisions.py -- Pure helper tests for read-only stacking-decision analytics.
 - wnba-oracle/tests/unit/test_anchor_floor.py -- Tier 1 lineup anchor floor (D57): the optimizer must field >= min_anchors
 - wnba-oracle/tests/unit/test_api_app.py -- Compatibility and dependency-health coverage for the WNBA API factory.
+- wnba-oracle/tests/unit/test_append_game_stats_matchup.py -- Offline unit coverage for WNBA game-stats matchup append.
 - wnba-oracle/tests/unit/test_archetypes.py -- DFS value archetype classification.
 - wnba-oracle/tests/unit/test_artifact_io.py -- Artifact persistence and integrity compatibility tests.
 - wnba-oracle/tests/unit/test_artifact_serving.py -- Tests for the D45 wiring: job2 loads the trained PickerArtifact and

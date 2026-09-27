@@ -22,6 +22,15 @@ from oracle_core.config import (
     get_runtime_config,
     validate_required_env,
 )
+from oracle_core.corpus_matchup import (
+    MATCHUP_SCHEMA_VERSION,
+    AppendResult,
+    GameMatchupRecord,
+    append_completed_game,
+    game_dir,
+    list_appended_games,
+    validate_matchup_payload,
+)
 from oracle_core.dayclose import (
     CloseOneDay,
     DayCloseOutcome,
@@ -209,6 +218,13 @@ from oracle_core.storage import (
 )
 
 __all__ = [
+    "MATCHUP_SCHEMA_VERSION",
+    "AppendResult",
+    "GameMatchupRecord",
+    "append_completed_game",
+    "game_dir",
+    "list_appended_games",
+    "validate_matchup_payload",
     "ArtifactInfo",
     "AsyncHttpTransport",
     "Achievability",
