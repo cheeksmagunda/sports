@@ -75,6 +75,60 @@ Codespace rebuild, re-run `scripts/sync-railway-session-to-codespace` from the
 Mac so Railway CLI session auth is present again (see **Railway from the
 Codespace** below).
 
+
+### Claude cloud environment (API credentials = GitHub attach key)
+
+Claude's **Edit cloud environment** dialog is the right place for Codespace
+access. Fill it like this:
+
+| Field | Value |
+|---|---|
+| Network access | **Full** (needed for `gh codespace ssh`) |
+| Environment variables | Non-secrets only (e.g. `SPORTS_CODESPACE_NAME=fluffy-zebra-g4gqq746477q2jg`). Never tokens here; that box is visible to anyone using the env. |
+| API credentials | **One** GitHub token. Suggested name: `GH_TOKEN`. Scopes: `codespace`, `repo`, `read:org`, and `workflow` (same shape as the operator Mac `gh` login). |
+| Setup script | Install/auth `gh` from that credential into the CLI store (below). Do **not** leave the default `npm install`. |
+
+**Operator creates the token** (Settings → Developer settings → Personal access
+tokens). Prefer a classic PAT or fine-grained token that can manage Codespaces
+on `cheeksmagunda/sports`. This is an operator-authorized attach key for Claude
+cloud, not a second Railway/Real Sports credential home. Agents must not mint
+tokens.
+
+**Do not** put in API credentials or env vars: `REALSPORTS_STORAGE_STATE_B64GZ`,
+`RAILWAY_API_TOKEN`, `RAILWAY_TOKEN`, or a packed `~/.railway` session. Those
+stay in the Codespace; Claude reaches them only after `gh codespace ssh`.
+
+Recommended setup script (runs before Claude Code):
+
+```bash
+#!/bin/bash
+set -euo pipefail
+# API credential "GH_TOKEN" is injected into the process env by Claude cloud.
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh CLI missing in cloud image; install GitHub CLI before attach" >&2
+  exit 1
+fi
+if [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
+  # Persist into gh's credential store so write-path-check / codespace-push can
+  # unset env GH_TOKEN/GITHUB_TOKEN (issue #235) and still call gh codespace.
+  printf '%s\n' "${GH_TOKEN:-${GITHUB_TOKEN}}" | gh auth login --hostname github.com --with-token
+fi
+gh auth status
+# Optional: wake Codespace early (name from env or default)
+CS="${SPORTS_CODESPACE_NAME:-}"
+if [ -z "$CS" ]; then
+  CS="$(gh codespace list --repo cheeksmagunda/sports --json name,state --jq '[.[]|select(.state!="Deleted")][0].name' 2>/dev/null || true)"
+fi
+if [ -n "$CS" ]; then
+  gh codespace ssh -c "$CS" -- true || true
+fi
+```
+
+After setup, material work still runs **inside** the Codespace (`gh codespace
+ssh` / `scripts/codespace-push` / `scripts/codespace-railway-env`). Passing
+`make write-path-check` from the Claude container should report Codespace push
+route available.
+
 ### Cursor cloud / GitHub coding agents
 
 Allowed and expected:
@@ -88,9 +142,11 @@ Allowed and expected:
 3. Treat Railway and Real Sports as Codespace-only hosts; do not provision
    parallel Railway or Real Sports credentials on the cloud container.
 
-Not allowed: minting a per-agent PAT, copying `REALSPORTS_STORAGE_STATE_B64GZ`
-or Railway tokens into the cloud container env, or declaring Railway/Real
-Sports "blocked" solely because the cloud container itself lacks those secrets.
+Not allowed: an agent minting its own PAT, copying `REALSPORTS_STORAGE_STATE_B64GZ`
+or Railway tokens into the cloud container, or declaring Railway/Real Sports
+"blocked" solely because the cloud container lacks those secrets. An
+**operator-placed** GitHub token with `codespace` scope in Claude **API
+credentials** (see above) is the allowed attach key.
 
 ### Verify attachment (value-free)
 
