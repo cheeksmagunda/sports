@@ -116,7 +116,7 @@ def high_tv_board_from_draft_stats(parsed: ParsedContest, *, top_n: int = 5) -> 
         if row.section == "highestBoostedValuePlayers" and row.value is not None
     ]
     if hv_rows:
-        values = {row.player_id: float(row.value) for row in hv_rows if row.value is not None}
+        values = {row.player_id: float(v) for row in hv_rows if (v := row.value) is not None}
         boosts = [float(row.card_boost) for row in hv_rows]
         source = "nfl_highestBoostedValuePlayers"
         has_tv = True

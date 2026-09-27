@@ -80,7 +80,7 @@ def _as_int(value: object) -> int | None:
     if value is None:
         return None
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(value)  # type: ignore[call-overload]
     except (TypeError, ValueError):
         return None
 
