@@ -65,13 +65,42 @@ make test-wnba
   freeze" and "what actually happened," both from canonical PostgreSQL state
   (issue #34).
 - `GET /slate/{date}`: return first-tip, lock, freeze, and pause metadata.
-- `GET /dossier/{date}`: return the finalized-slate dossier -- our committed
-  entry, the best observed field entry, and the theoretical ceiling, each with
-  explicit achievability, censoring, and gap-exactness metadata. 404 until the
-  slate has a frozen lineup, a captured leaderboard, and realized labels. Gaps
-  touching the theoretical ceiling are always `lower_bound`, never `exact`:
-  the ceiling comes from a top-26-pruned brute force that is not proven
-  optimal under the per-team cap.
+- `GET /dossier/{date}`: return the unified post-slate dossier (issue #35
+  phase 3), a pure composition over already-persisted records
+  (`frozen_lineups`, `freeze_audit_snapshots`, `ScoringProvenance`,
+  `job1_enrichment`, `canonical_player_identities`, `slate_labels`,
+  `contest_leaderboards`, `contest_placements`, `wnba_game_logs`); nothing is
+  recomputed from current prediction or optimizer code. 404 only when the
+  slate has no frozen lineup. Otherwise 200 with:
+  - `status`: `pending` (no `slate_labels` yet), `partial` (leaderboard or
+    placement missing; `status_reason` names which), or `finalized`.
+  - `sections`: one entry per issue #35 point (1 source availability through
+    12 comparison), each with `status` from the closed set `available`,
+    `partial`, `not_captured`, `unavailable`, `pending`, a `reason` whenever
+    not `available`, and the payload `keys` that hold the evidence.
+  - Detail sections: `sources` (per-source status from recorded
+    `source_assurance` observation counts, never the slate-wide assessment
+    copied onto each source), `input_snapshot`, `feature_and_signal_lineage`,
+    `prediction_paths`, `optimizer`, `frozen_lineup`,
+    `realized_player_results`, `contest_results` (with `leaderboard_status`),
+    `our_outcome`, `box_scores` (committed five joined to `wnba_game_logs`
+    only through `canonical_player_identities.wnba_player_id`; an unmapped
+    player is `identity_unresolved`, never name-matched),
+    `comparison`, and `data_quality_and_censoring`.
+  - `comparison`: the committed five plus the top 15 realized non-selected
+    players, each with the persisted prediction named by `predicted_basis`,
+    realized `real_score`, and closed-vocabulary evidence `findings` (for
+    example `fallback_tier:<tier>`, `absent_from_decision_inputs`,
+    `head_features_zero_filled`). `explanation_basis` is `snapshot_exact` for
+    post-phase-2 freezes, `optimizer_inputs` or `selected_players_only` for
+    older ones, else `unavailable`.
+  - `entries` and the three gaps (our committed entry, best observed field
+    entry, theoretical ceiling, each with achievability, censoring, and
+    gap-exactness metadata) only once the frozen lineup, a captured
+    leaderboard, and realized labels all exist; `entries_status` explains
+    their absence otherwise. Gaps touching the theoretical ceiling are always
+    `lower_bound`, never `exact`: the ceiling comes from a top-26-pruned brute
+    force that is not proven optimal under the per-team cap.
 
 Exact production schedules are mutable and belong in `STATUS.md`.
 
