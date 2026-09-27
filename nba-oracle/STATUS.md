@@ -26,7 +26,7 @@ Verified 2026-09-27 from Codespace. Non-serving scaffold only (#457 / #504).
 
 | Service | Source | Last observed | Notes |
 | --- | --- | --- | --- |
-| `nba-api` | `cheeksmagunda/sports` (connected) | Online · Queued | Redeploy waiting on hobby build slot (deployment id `d5348ce6-…`). No public domain. External `/health` therefore unverified. |
+| `nba-api` | `cheeksmagunda/sports` (connected) | Online | Deployment id `c35dd53b-…` Online (post-queue). No public domain. External `/health` therefore unverified from outside Railway. |
 | `nba-worker` | not shown / Failed | Failed | Leave disconnected until Real Sports auth + nightly are authorized. |
 | `nba-frontend` | not shown / Failed | Failed | No frontend package; leave disconnected. |
 | `nfl-frontend` | Offline | Offline | Stray service instance visible in `nba-staging`; not an NBA serving path. |
