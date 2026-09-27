@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1064 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -53,6 +55,7 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - .github/workflows/corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/devcontainer-smoke.yml -- GitHub Actions workflow
 - .github/workflows/frontend.yml -- GitHub Actions workflow
+- .github/workflows/hv-leaderboard-corpus.yml -- GitHub Actions workflow
 - .github/workflows/issue-link-enforcement.yml -- GitHub Actions workflow
 - .github/workflows/model-research-benchmark.yml -- GitHub Actions workflow
 - .github/workflows/nfl-corpus-backup.yml -- GitHub Actions workflow
@@ -121,6 +124,9 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - nba-oracle/STATUS.md -- Status
 - nba-oracle/pyproject.toml -- Package/tool configuration
 - nba-oracle/railway.toml -- Package/tool configuration
+
+## nba-oracle/scripts/
+- nba-oracle/scripts/export_hv_board.py -- NBA HV board export stub (issue #526).
 
 ## nba-oracle/src/nba_oracle/
 - nba-oracle/src/nba_oracle/__init__.py -- NBA Oracle application package.
@@ -206,6 +212,7 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/scripts/cache_nflverse_schedules.py -- Download public nflverse/nfldata games.csv and slim into offline schedule cache.
 - nfl-oracle/scripts/capture_storage_state.py -- Capture a private Playwright session for operator-authorized Real Sports calls.
 - nfl-oracle/scripts/daily_shadow.py -- Minimal daily-shadow scaffold (observation only; no contest entry).
+- nfl-oracle/scripts/export_hv_board.py -- NFL HV board export scaffold (issue #526).
 - nfl-oracle/scripts/full_pool_draft.py -- Rank the complete eligible pool for the remaining games of a slate, and
 - nfl-oracle/scripts/hydrate_identity_fixtures.py -- Offline: build an IdentityMap summary from Corpus G / value_labels fixtures.
 - nfl-oracle/scripts/nfl_corpus_backup_common.py -- Integrity helpers shared by the NFL corpus backup and restore entry points.
@@ -596,6 +603,7 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/frontend/src/styles/main.css
 
 ## nhl-oracle/scripts/
+- nhl-oracle/scripts/export_hv_board.py -- NHL HV board export stub (issue #526).
 - nhl-oracle/scripts/live_contract_audit.py -- CLI wrapper for nhl_oracle.ingest.audit (read-only).
 
 ## nhl-oracle/src/nhl_oracle/
@@ -688,6 +696,7 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/src/oracle_core/fitness.py -- Domain-free WIN/CLOSE fitness helpers for the portfolio backtest race.
 - packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
+- packages/oracle-core/src/oracle_core/hv_board_corpus.py -- Durable Total Value / Highest-value leaderboard helpers (issue #526).
 - packages/oracle-core/src/oracle_core/jobs.py -- Generic job registration, lifecycle, role validation, and execution.
 - packages/oracle-core/src/oracle_core/logging.py -- Structured, redacted logging primitives for application adapters.
 - packages/oracle-core/src/oracle_core/py.typed
@@ -699,6 +708,12 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/src/oracle_core/testing.py -- Deterministic fakes and log capture helpers for application tests.
 - packages/oracle-core/src/oracle_core/timing.py -- Sport-neutral wall-clock timing helpers for scheduled decision gates.
 
+## packages/oracle-core/src/oracle_core/realsports_corpus/
+- packages/oracle-core/src/oracle_core/realsports_corpus/__init__.py -- Provider-neutral Real Sports history corpus layout (issue #526).
+- packages/oracle-core/src/oracle_core/realsports_corpus/layout.py -- Path helpers for the Real Sports history corpus (issue #526).
+- packages/oracle-core/src/oracle_core/realsports_corpus/manifest.py -- Coverage manifest for the Real Sports history corpus (issue #526).
+- packages/oracle-core/src/oracle_core/realsports_corpus/store.py -- Append-only JSON artifact writes for the Real Sports corpus.
+
 ## packages/oracle-core/tests/
 - packages/oracle-core/tests/test_artifacts.py
 - packages/oracle-core/tests/test_browser.py
@@ -709,8 +724,10 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/tests/test_fitness.py
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
+- packages/oracle-core/tests/test_hv_board_corpus.py -- Tests for durable HV board corpus layout helpers (issue #526).
 - packages/oracle-core/tests/test_jobs.py
 - packages/oracle-core/tests/test_race.py
+- packages/oracle-core/tests/test_realsports_corpus.py -- Tests for Real Sports corpus layout + coverage manifest (#526).
 - packages/oracle-core/tests/test_redaction_logging.py
 - packages/oracle-core/tests/test_schemaorg.py -- schema.org contract helpers.
 - packages/oracle-core/tests/test_service.py
@@ -737,6 +754,15 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - scripts/sync-railway-session-to-codespace
 - scripts/with-secrets
 - scripts/write-path-check
+
+## scripts/corpus/
+- scripts/corpus/README.md -- Real Sports history corpus (#526)
+- scripts/corpus/export_nfl_from_corpus_g.py -- Export NFL game_stats + matchups from durable Corpus G (zero Real calls).
+- scripts/corpus/export_wnba_from_store.py -- Export WNBA HV boards from durable stores (zero Real Sports calls).
+- scripts/corpus/feature_field_map.md -- Corpus field → own-model FeatureSpec map (#526 → #523)
+
+## scripts/corpus/schema/
+- scripts/corpus/schema/coverage_manifest.schema.json
 
 ## scripts/realsports_corpus/
 - scripts/realsports_corpus/README.md -- Real Sports contest corpus (portfolio)
@@ -966,6 +992,7 @@ Generated from `git ls-files`. 1045 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/scripts/export_draft_stats_corpus.py -- Dump WNBA slate_labels (all sections) + contest_leaderboards into corpus layout.
 - wnba-oracle/scripts/export_game_identity.py -- Export validated (slate_date, team, opponent) identity from job1_enrichment.
 - wnba-oracle/scripts/export_game_logs.py -- Export the full ``wnba_game_logs`` corpus for offline tournament/benchmark use.
+- wnba-oracle/scripts/export_hv_board.py -- Export one WNBA Highest-value board into the durable HV corpus layout (#526).
 - wnba-oracle/scripts/lab.py -- Offline model lab: the one entry point for evaluating a change.
 - wnba-oracle/scripts/loss_ledger.py -- Per-slate loss ledger: where our frozen lineup lost points, and why.
 - wnba-oracle/scripts/manual_fire.py -- End-to-end manual fire against the live Real Sports slate.
