@@ -9,6 +9,7 @@ from typing import Any
 from nhl_oracle.baselines.metrics import RegressionMetrics, regression_metrics
 from nhl_oracle.baselines.priors import BaselineKind, HistoricalPriorBaseline
 from nhl_oracle.contract.boost_gate import evaluate_boost_eligibility
+from nhl_oracle.labels.hv import TRAINING_LABEL_SECTION, filter_train_labels_to_hv
 from nhl_oracle.labels.schema import ValueLabel
 
 DEFAULT_BASELINES: tuple[BaselineKind, ...] = (
@@ -55,6 +56,7 @@ class WalkForwardReport:
             "observation_only": True,
             "contest_entry": False,
             "boost_regime": "none",
+            "train_label_section": TRAINING_LABEL_SECTION,
         }
 
 
@@ -68,20 +70,28 @@ def evaluate_walk_forward(
     baselines: Sequence[BaselineKind] = DEFAULT_BASELINES,
     min_train_seasons: int = 1,
     team_games_played: dict[str, int] | None = None,
+    prefer_hv_section: bool = True,
 ) -> WalkForwardReport:
     """Evaluate priors OOS: train on seasons strictly earlier than test season.
 
-    Reports honest MAE/RMSE without claiming contest decision value. Goalie
-    ``G`` is included in position buckets when present. Boost regime stays
-    ``none`` while the all-teams-played gate is closed (see ``boost_gate``);
-    the early-season gap before every franchise has >=1 GP is the edge.
+    When ``prefer_hv_section`` is true and any row is tagged
+    ``highestBoostedValuePlayers``, evaluation uses only that HV subset
+    (#535). If no HV-tagged rows exist, falls back to the full label set and
+    notes the corpus gap. Reports honest MAE/RMSE without claiming contest
+    decision value. Goalie ``G`` is included in position buckets when present.
+    Boost regime stays ``none`` while the all-teams-played gate is closed.
     """
 
     eligibility = evaluate_boost_eligibility(team_games_played)
-    # Baselines stay observation-only with boost_regime none while gated;
-    # picker paths must call boost_gate before any boost-aware logic.
     boost_regime = "none"
-    seasons = _seasons(labels)
+
+    working: Sequence[ValueLabel] = labels
+    hv_only = filter_train_labels_to_hv(labels) if prefer_hv_section else ()
+    used_hv = bool(hv_only)
+    if used_hv:
+        working = hv_only
+
+    seasons = _seasons(working)
     notes: list[str] = [
         "Walk-forward by season on NHL Real value labels (shadow / observation).",
         "No contest submission or live entry code paths are exercised.",
@@ -94,7 +104,18 @@ def evaluate_walk_forward(
         ),
         eligibility.detail,
         "Goalie position G is eligible when present in labels.",
+        f"train_label_section={TRAINING_LABEL_SECTION}",
     ]
+    if used_hv:
+        notes.append(
+            f"Using {len(working)} HV-tagged labels "
+            f"(section={TRAINING_LABEL_SECTION}); never winning drafts."
+        )
+    elif prefer_hv_section:
+        notes.append(
+            "HV corpus gap: no highestBoostedValuePlayers-tagged labels; "
+            "falling back to unsectioned value rows for this run."
+        )
     if len(seasons) < 2:
         notes.append("Fewer than two seasons present; no OOS fold can be formed.")
 
@@ -107,8 +128,8 @@ def evaluate_walk_forward(
         train_seasons = tuple(seasons[:idx])
         if len(train_seasons) < min_train_seasons:
             continue
-        train_rows = [row for row in labels if row.season in train_seasons]
-        test_rows = [row for row in labels if row.season == test_season]
+        train_rows = [row for row in working if row.season in train_seasons]
+        test_rows = [row for row in working if row.season == test_season]
         if not test_rows:
             continue
         for kind in baselines:
@@ -138,7 +159,7 @@ def evaluate_walk_forward(
         baselines=tuple(baselines),
         folds=tuple(folds),
         pooled=pooled,
-        n_labels=len(labels),
+        n_labels=len(working),
         seasons=tuple(seasons),
         notes=tuple(notes),
     )

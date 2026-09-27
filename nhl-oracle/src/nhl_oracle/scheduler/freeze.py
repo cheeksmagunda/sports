@@ -20,6 +20,10 @@ from oracle_core.jobs import JobContext, JobResult, JobSpec
 
 DEFAULT_LEASE_KEY = "nhl:freeze_cycle"
 DEFAULT_LEASE_TTL_SECONDS = 300
+# Publication policy: prepare/publish may open at lock_at - 40 minutes under
+# per-contest lock (#535). Wired via scheduler.t40; this constant documents
+# the freeze-cycle contract for STATUS / operators.
+T40_PUBLICATION_OFFSET_MINUTES = 40
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,8 @@ class FreezeCycleRecord:
     prepared: bool
     published: bool
     contest_entry: bool
+    t40_coherent: bool | None = None
+    roster_size: int = 5
 
 
 def run_freeze_cycle(
@@ -43,8 +49,14 @@ def run_freeze_cycle(
     ensure_model_fresh: Callable[[], bool] | None = None,
     prepare: Callable[[], bool] | None = None,
     publish: Callable[[], bool] | None = None,
+    ensure_t40_coherent: Callable[[], bool] | None = None,
 ) -> tuple[JobResult, FreezeCycleRecord]:
-    """Run one freeze cycle in the fixed step order; return (result, record)."""
+    """Run one freeze cycle in the fixed step order; return (result, record).
+
+    Optional ``ensure_t40_coherent`` checks five-player pick + T-40 window
+    against NHL contest algebra (``scheduler.t40``) before prepare. Fail
+    closed when the callable returns False.
+    """
 
     collect()
     decision_at = context.now()
@@ -62,11 +74,31 @@ def run_freeze_cycle(
             prepared=False,
             published=False,
             contest_entry=False,
+            t40_coherent=None,
         )
         return (
             JobResult.retryable_failure("model_not_fresh", decision_at=decision_at.isoformat()),
             record,
         )
+
+    t40_ok: bool | None = None
+    if ensure_t40_coherent is not None:
+        t40_ok = ensure_t40_coherent()
+        if not t40_ok:
+            record = FreezeCycleRecord(
+                decision_at=decision_at,
+                collected=True,
+                context_loaded=True,
+                model_fresh=True,
+                prepared=False,
+                published=False,
+                contest_entry=False,
+                t40_coherent=False,
+            )
+            return (
+                JobResult.retryable_failure("t40_incoherent", decision_at=decision_at.isoformat()),
+                record,
+            )
 
     prepared = True if prepare is None else prepare()
     if not prepared:
@@ -78,6 +110,7 @@ def run_freeze_cycle(
             prepared=False,
             published=False,
             contest_entry=False,
+            t40_coherent=t40_ok,
         )
         return (
             JobResult.retryable_failure("prepare_failed", decision_at=decision_at.isoformat()),
@@ -93,6 +126,7 @@ def run_freeze_cycle(
         prepared=True,
         published=published,
         contest_entry=False,
+        t40_coherent=t40_ok if t40_ok is not None else True,
     )
     if published:
         result = JobResult.success("freeze_cycle_complete", decision_at=decision_at.isoformat())
@@ -108,6 +142,7 @@ def build_freeze_job(
     ensure_model_fresh: Callable[[], bool] | None = None,
     prepare: Callable[[], bool] | None = None,
     publish: Callable[[], bool] | None = None,
+    ensure_t40_coherent: Callable[[], bool] | None = None,
     lease_key: str = DEFAULT_LEASE_KEY,
     lease_ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
 ) -> JobSpec:
@@ -121,6 +156,7 @@ def build_freeze_job(
             ensure_model_fresh=ensure_model_fresh,
             prepare=prepare,
             publish=publish,
+            ensure_t40_coherent=ensure_t40_coherent,
         )
         return result
 
