@@ -1,6 +1,29 @@
 # Status
 
-Last verified: 2026-09-27 CT (#482 nhl-staging Docker live smoke)
+Last verified: 2026-09-27 (#501 hard zero-boost gate; continues #453/#325;
+#482 nhl-staging Docker live smoke)
+
+## Hard zero-boost gate through all-teams-played gap (#501 / #453)  -  2026-09-27
+
+- **Operator strategy:** the edge is the gap between early slate games starting
+  and every NHL team having ≥1 GP this season. Through that entire gap:
+  **ZERO BOOST**. Exploit field mispricing that assumes boosts; never arm
+  boost / ownership-fade / leverage logic early.
+- **Executable gate:** `nhl_oracle.contract.boost_gate` forces
+  `boost_multiplier=0` (and discovery forces `BoostRegime.NONE` over flat /
+  positional) until all 32 clubs have ≥1 GP. Fail closed on missing coverage.
+  Audit checklist key: `zero_boost_until_all_teams_played`.
+- **Unit proof:** `nhl-oracle/tests/test_boost_gate.py` keeps multiplier at 0
+  while any team is still at 0 GP; discovery/gates tests cover flat-card
+  override during the gap.
+- **Current-season team GP coverage (verified 2026-09-26/27 CT via public NHL
+  API, browser UA):**
+  - `regularSeasonStartDate` = **2026-09-29** (`api-web.nhle.com/v1/schedule/now`)
+  - seasonId **20262027** team summary (`gameTypeId=2`): **0** rows
+  - Teams with ≥1 completed regular-season GP through 2026-09-26: **0 / 32**
+  - Teams still at 0 GP: **32 / 32** (gate active; boost must stay off)
+  - Note: `standings/now` still reflects completed **20252026** (32 teams @ 82
+    GP) and must not be used as 2026-27 coverage.
 
 ## Railway nhl-staging live smoke (#482)  -  2026-09-27
 
@@ -46,12 +69,15 @@ Last verified: 2026-09-27 CT (#482 nhl-staging Docker live smoke)
   (no NHL contests on the current home slate at audit time) plus current-slate
   game player cards and contest `/stats` draftStats.
   - `contract/`: `NhlContestContract` defaults now reflect live evidence:
-    `five_card_ordered`, lock `per_contest`, boost `none` (pre-boost until
-    every NHL team has played; #325), score label `"value"`, roster size 5,
+    `five_card_ordered`, lock `per_contest`, boost `none` (hard zero-boost
+    gate until every NHL team has ≥1 GP; #325/#501), score label `"value"`,
+    roster size 5,
     slot multipliers `(2.0, 1.8, 1.6, 1.4, 1.2)`, `goalie_eligible=True`.
-    `contract.discovery` prefers current-slate player-card boost fields;
-    historical contest draftStats `multiplierBonus` may be noted but does
-    not override live pre-boost `none`. `contract.gates` passed on the
+    `contract.boost_gate` + `contract.discovery` force multiplier 0 / regime
+    `none` through the early-slate gap; historical contest draftStats
+    `multiplierBonus` may be noted but does
+    not override live pre-boost `none`. `contract.gates` includes
+    `zero_boost_until_all_teams_played` and passed on the
     redacted live fixture (`contest_entry: False`).
   - `ingest/`: NHL-owned `realsports` client (adapted from the NFL pattern;
     no cross-sport import), `redact`, live `audit` CLI
@@ -100,6 +126,10 @@ Last verified: 2026-09-27 CT (#482 nhl-staging Docker live smoke)
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
   optimizer, production NHL serving / contest entry. Any future
   picker/backtest must assume zero boosts until every NHL team has played
+  (`contract.boost_gate` hard gate). The early-season gap between games
+  starting (when boost fields may tempt the field) and every franchise
+  completing one game is the edge: keep `boost_regime=none` and exploit
+  mispricing while the field may assume boosts.
 
 ## Boundaries
 
@@ -133,7 +163,10 @@ Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
     Prior #299 corpus day `2026-09-24` was 11 games / 22 teams / 772/772
     cards without boost fields. Operator rule: until every NHL team has had
     a game, there are no card boosts; do not design picker logic around
-    boosts. #325 corrects #299/#308 `flat`.
+    boosts. #325 corrects #299/#308 `flat`. The early-season gap between
+    games starting (when boost fields may tempt the field) and every
+    franchise completing one game is the edge: keep `boost_regime=none`
+    and exploit mispricing; `contract.boost_gate` enforces this in code.
   - score_value_label: `value` (contest draftStats)
   - goalie_eligible: `True` (position `G` on live player cards)
   - slot_multipliers: `(2.0, 1.8, 1.6, 1.4, 1.2)`

@@ -31,22 +31,26 @@ def create_app() -> FastAPI:
     @stubs.get("/slate/{slate_date}")
     async def slate_placeholder(slate_date: str) -> dict[str, object]:
         # TODO: serve real slate timing / pool context once freeze artifacts exist.
+        # boost_regime stays none until every team has >=1 GP (contract.boost_gate).
         return {
             "date": slate_date,
             "status": "placeholder",
             "observation_only": True,
             "contest_entry": False,
+            "boost_regime": "none",
             "detail": "hosted NHL slate surface not implemented yet",
         }
 
     @stubs.get("/lineup/{slate_date}")
     async def lineup_placeholder(slate_date: str) -> dict[str, object]:
         # TODO: serve frozen five-card lineup once the hosted lifecycle publishes.
+        # Picker stubs must not assume card boosts in the early-season gap.
         return {
             "date": slate_date,
             "status": "placeholder",
             "observation_only": True,
             "contest_entry": False,
+            "boost_regime": "none",
             "lineup": None,
             "detail": "hosted NHL lineup surface not implemented yet",
         }

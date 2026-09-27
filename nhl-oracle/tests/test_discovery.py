@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from nhl_oracle.contract.boost_gate import NHL_EXPECTED_TEAM_COUNT
 from nhl_oracle.contract.discovery import discover_contract
 from nhl_oracle.contract.schema import BoostRegime, ContestFormat, LockScope
+
+
+def _all_teams_played() -> dict[str, int]:
+    """Cleared gate: every club has >=1 GP (post early-slate gap)."""
+
+    return {f"T{i:02d}": 1 for i in range(NHL_EXPECTED_TEAM_COUNT)}
 
 
 def test_discover_contract_resolves_five_card_ordered_from_explicit_payload() -> None:
@@ -32,6 +39,7 @@ def test_discover_contract_resolves_five_card_ordered_from_explicit_payload() ->
         games_scheduled=1,
         games_captured=1,
         captured_at="2026-09-25T00:00:00Z",
+        team_games_played=_all_teams_played(),
     )
     assert contract.format is ContestFormat.FIVE_CARD_ORDERED
     assert contract.lock_scope is LockScope.PER_CONTEST
@@ -64,6 +72,7 @@ def test_discover_contract_leaves_unknowns_when_payload_sparse() -> None:
     assert contract.open_questions()
     assert evidence.players_seen == 0
     assert candidates == ()
+    assert any("hard_zero_boost_gate" in n for n in evidence.notes)
 
 
 def test_discover_contract_uses_contest_stats_values_for_candidates() -> None:
@@ -171,6 +180,42 @@ def test_discover_contract_flat_only_from_live_card_bonuses() -> None:
         games_scheduled=1,
         games_captured=1,
         captured_at="2026-09-25T00:00:00Z",
+        team_games_played=_all_teams_played(),
     )
     assert contract.boost_regime is BoostRegime.FLAT
     assert any("live player cards" in n for n in evidence.notes)
+
+
+def test_discover_contract_forces_none_when_flat_cards_but_gate_open() -> None:
+    """Early-slate gap: live flat bonuses must not arm boost while a team is at 0 GP."""
+
+    meta = {
+        "info": {
+            "isLocked": False,
+            "contest": {"sport": "nhl", "additionalInfo": {"lineupSize": 5}},
+        }
+    }
+    draftinfo = {"info": {"defaultMultipliers": [2.0, 1.8, 1.6, 1.4, 1.2], "lineupSize": 5}}
+    players = [
+        {
+            "players": [
+                {"id": 1, "position": "C", "value": 10.0, "multiplierBonus": 0.2},
+                {"id": 2, "position": "G", "value": 8.0, "multiplierBonus": 1.5},
+            ]
+        }
+    ]
+    gated = _all_teams_played()
+    gated["T00"] = 0
+    contract, evidence, _candidates = discover_contract(
+        meta=meta,
+        draftinfo=draftinfo,
+        players_payloads=players,
+        contest_ids=(1,),
+        game_ids=(7,),
+        games_scheduled=1,
+        games_captured=1,
+        captured_at="2026-09-25T00:00:00Z",
+        team_games_played=gated,
+    )
+    assert contract.boost_regime is BoostRegime.NONE
+    assert any("hard_zero_boost_gate" in n for n in evidence.notes)
