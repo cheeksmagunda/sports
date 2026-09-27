@@ -117,9 +117,13 @@ change.
   slates in backup; proof wrote 2026-09-22/23/24 contests 2187/2192/2194,
   20 players each) and NFL fixture Corpus G →
   `nfl/fixture/game_19457/{game_stats,matchups,feed}.json`.
-- Live WNBA HV append: Codespace auth present
+- Live WNBA HV append (Codespace `fluffy-zebra`, 2026-09-27): auth
   `REALSPORTS_STORAGE_STATE_B64GZ` sha256[:8]=`c4a729e2` (value never
-  printed). Proof run recorded on linked PR / issue comment.
+  printed). Discovered contest `2205` → finalized **2194** slate
+  **2026-09-24**; wrote staging
+  `wnba/2026/slate_2026-09-24_2194/hv_board.json` with **20** HV players
+  (top: A. Wilson LVA value≈6.97). Corpus-repo push not run (needs
+  `CORPUS_REPO_TOKEN` + sibling hydrate).
 - Label remains Highest-value / Total Value Daily Leaderboard for
   train/grade; FeatureSpec/#523 field map in
   `scripts/corpus/feature_field_map.md`.
