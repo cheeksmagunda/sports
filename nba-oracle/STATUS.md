@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-27 (Codespace `fluffy-zebra-g4gqq746477q2jg` /
+Last verified: 2026-09-27 (public history partial load + TCP proxy verified)
 `scripts/codespace-railway-env`, issue #504 / PR #489)
 
 This file records application state only.
@@ -21,7 +21,7 @@ This file records application state only.
   schedule/gamedetail into Postgres over public TCP (`sslmode=require`), no Real
   Sports auth.
 - Public history tables (target): `nba_history_games`, `nba_history_player_games`,
-  `nba_history_season_coverage`. Verified counts: pending load this session.
+  `nba_history_season_coverage`. Verified counts: games **2086**, player rows **70912** (partial; see section below).
 - Not started: schemas, modeling, scheduling, contest logic, nightly worker
 
 ## Railway mono (`sports-oracle` / `nba-staging`, env `7ac1e6f8-…`)
@@ -34,9 +34,36 @@ Verified 2026-09-27 from Codespace. Non-serving scaffold only (#457 / #504).
 | `nba-worker` | not shown / Failed | Failed | Leave disconnected until Real Sports auth + nightly are authorized. |
 | `nba-frontend` | not shown / Failed | Failed | No frontend package; leave disconnected. |
 | `nfl-frontend` | Offline | Offline | Stray service instance visible in `nba-staging`; not an NBA serving path. |
-| `Postgres-6eeu` | n/a | Online | Volume `postgres-volume-jmAe`. Public TCP proxy ACTIVE (`trolley.proxy.rlwy.net`). `DATABASE_PUBLIC_URL` set with `sslmode=require`. Public history load counts: pending verify. |
+| `Postgres-6eeu` | n/a | Online | Volume `postgres-volume-jmAe`. Public TCP proxy ACTIVE (`trolley.proxy.rlwy.net`). `DATABASE_PUBLIC_URL` set with `sslmode=require`. Public history present (partial): games **2086**, players **70912**. |
 
 No public NBA domain. No contest features. No Real Sports credential verified on NBA services. Serving is not dual-firing for NBA: only `nba-api` is Online (queued rebuild); worker/frontend Failed/Offline.
+
+
+## Public NBA history staging load (#453 / #489)  -  2026-09-27
+
+Verified from Codespace `fluffy-zebra-g4gqq746477q2jg` against
+`sports-oracle` / `nba-staging` Postgres-6eeu via public TCP
+(`trolley.proxy.rlwy.net`, `DATABASE_PUBLIC_URL`, `sslmode=require`; never
+`railway.internal`).
+
+Loader: `nba-history-load` / `nba_oracle.history_loader` (public
+`data.nba.com` schedule + gamedetail).
+
+Verified table counts after partial backfill:
+- `nba_history_games`: **2086**
+- `nba_history_player_games`: **70912**
+- `nba_history_season_coverage`: **3**
+
+Verified season coverage rows (partial; Akamai 403s interrupted later passes):
+- 2021-22: scheduled **1317**, loaded **988**, failed **329**, status `partial`
+- 2022-23: scheduled **1314**, loaded **741**, failed **573**, status `partial`
+- 2023-24: scheduled **1312**, loaded **357**, failed **955**, status `partial`
+  (coverage timestamp from an earlier interrupted pass; games may overlap)
+
+Blocker: Codespace egress began receiving HTTP 403 from `data.nba.com` after
+high-concurrency fetches. Re-run with concurrency<=4 after cool-down to raise
+coverage toward complete. Observation-only; not Real Sports labels; no contest
+entry.
 
 ## Boundaries
 
