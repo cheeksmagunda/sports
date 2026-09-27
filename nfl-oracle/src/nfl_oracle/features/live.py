@@ -194,4 +194,3 @@ def kickoff_slot_features(kickoff_at: Any) -> dict[str, float]:
 
     slot = kickoff_slot_name(kickoff_at)
     return {f"kickoff_slot_{name}": float(slot == name) for name in KICKOFF_SLOT_NAMES}
-

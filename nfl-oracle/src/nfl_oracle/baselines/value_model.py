@@ -108,9 +108,7 @@ def _fit_prior_bank(labels: Sequence[ValueLabel]) -> _PriorBank:
     bank.position_mean = {p: float(statistics.fmean(vs)) for p, vs in by_pos.items() if vs}
     bank.position_median = {p: float(statistics.median(vs)) for p, vs in by_pos.items() if vs}
     bank.player_mean = {pid: float(statistics.fmean(vs)) for pid, vs in by_player.items() if vs}
-    bank.player_median = {
-        pid: float(statistics.median(vs)) for pid, vs in by_player.items() if vs
-    }
+    bank.player_median = {pid: float(statistics.median(vs)) for pid, vs in by_player.items() if vs}
     bank.player_n = {pid: len(vs) for pid, vs in by_player.items()}
     bank.team_mean = {tid: float(statistics.fmean(vs)) for tid, vs in by_team.items() if vs}
     return bank

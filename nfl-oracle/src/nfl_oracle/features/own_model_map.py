@@ -74,9 +74,7 @@ def ridge_core_feature_names() -> frozenset[str]:
     from nfl_oracle.baselines.value_model import MODEL_FEATURE_NAMES
 
     return frozenset(
-        name
-        for name in MODEL_FEATURE_NAMES
-        if name != "intercept" and not name.startswith("pos_")
+        name for name in MODEL_FEATURE_NAMES if name != "intercept" and not name.startswith("pos_")
     )
 
 
