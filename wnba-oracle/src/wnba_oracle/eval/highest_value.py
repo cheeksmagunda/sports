@@ -65,7 +65,6 @@ def filter_highest_value_section(slate_labels: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-
 def _as_float(value: object) -> float:
     if isinstance(value, bool):
         raise TypeError("bool is not a numeric HV field")
