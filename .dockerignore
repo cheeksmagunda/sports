@@ -56,6 +56,7 @@ wnba-oracle/**
 nfl-oracle/**
 !nfl-oracle/Dockerfile
 !nfl-oracle/Dockerfile.production
+!nfl-oracle/docker-entrypoint.sh
 !nfl-oracle/docker-compose.yml
 !nfl-oracle/pyproject.toml
 !nfl-oracle/README.md
