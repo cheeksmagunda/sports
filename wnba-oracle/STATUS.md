@@ -1,6 +1,15 @@
 # Status
 
-Last verified: 2026-09-27T05:31:49Z
+Last verified: 2026-09-27T14:30Z
+
+## Wipe-safe TDV Settings default (#584)  -  2026-09-27T14:30Z
+
+PR branch `feat/584-tdv-default-wipe-safe` only. **HOLD merge until after
+NFL/WNBA freezes** (merge redeploys workers). Code default
+`Settings.optimizer_objective_mode=total_draft_value`; EXPECTED adds
+`serve_primary=eb`. Live env already TDV + `top_1`; `WNBA_SERVE_PRIMARY`
+unset → eb. Focused unit tests green. Does not change today's freeze math
+while env is set.
 
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
