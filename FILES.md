@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 846 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 849 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -564,6 +564,7 @@ Generated from `git ls-files`. 846 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/.mcp.json
 - wnba-oracle/AGENTS.md -- WNBA Oracle Instructions
 - wnba-oracle/CLAUDE.md -- WNBA Oracle Instructions
+- wnba-oracle/COMMUNITY_STRATEGY_FINDINGS.md -- Community Strategy Findings (issue #37), 2026-09-24
 - wnba-oracle/COMMUNITY_STRATEGY_TASK.md -- Community/Field Strategy Calibration — Copilot Task
 - wnba-oracle/Dockerfile
 - wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md -- Model Pick Postmortem — 2026-08-28 Slate
@@ -716,6 +717,7 @@ Generated from `git ls-files`. 846 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/runs/.gitkeep
 
 ## wnba-oracle/scripts/
+- wnba-oracle/scripts/analyze_field_intelligence.py -- Field-intelligence study for issue #37 (community lineup intelligence).
 - wnba-oracle/scripts/analyze_stacking_decisions.py -- Read-only analytics for durable contextual-stacking decisions.
 - wnba-oracle/scripts/analyze_strategy_gap.py -- Strategy-gap analysis against the 2026 WNBA leaderboard + slate_labels corpus.
 - wnba-oracle/scripts/auth-check-live
@@ -947,6 +949,7 @@ Generated from `git ls-files`. 846 tracked files. Regenerate with `scripts/gener
 ## wnba-oracle/tests/unit/
 - wnba-oracle/tests/unit/test_access_coordination.py
 - wnba-oracle/tests/unit/test_all_tiers_integration.py -- End-to-end integration: all three D57 tiers armed at once.
+- wnba-oracle/tests/unit/test_analyze_field_intelligence.py -- Pure-computation tests for the issue #37 field-intelligence study script.
 - wnba-oracle/tests/unit/test_analyze_stacking_decisions.py -- Pure helper tests for read-only stacking-decision analytics.
 - wnba-oracle/tests/unit/test_anchor_floor.py -- Tier 1 lineup anchor floor (D57): the optimizer must field >= min_anchors
 - wnba-oracle/tests/unit/test_api_app.py -- Compatibility and dependency-health coverage for the WNBA API factory.
