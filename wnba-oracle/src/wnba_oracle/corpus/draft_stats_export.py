@@ -71,7 +71,7 @@ def _as_float(value: object) -> float | None:
     if value is None:
         return None
     try:
-        return float(value)  # type: ignore[arg-type]
+        return float(str(value))
     except (TypeError, ValueError):
         return None
 
@@ -80,7 +80,7 @@ def _as_int(value: object) -> int | None:
     if value is None:
         return None
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(str(value))
     except (TypeError, ValueError):
         return None
 
@@ -106,9 +106,7 @@ def _atomic_write_json(path: Path, value: Mapping[str, Any]) -> None:
 
 
 def _atomic_write_jsonl(path: Path, rows: Sequence[Mapping[str, Any]]) -> None:
-    lines = [
-        json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows
-    ]
+    lines = [json.dumps(row, sort_keys=True, separators=(",", ":"), default=str) for row in rows]
     payload = ("\n".join(lines) + ("\n" if lines else "")).encode("utf-8")
     _atomic_write_bytes(path, payload)
 
