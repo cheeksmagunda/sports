@@ -186,6 +186,29 @@ Use `scripts/analyze_stacking_decisions.py` for a read-only production summary.
 The report separates exact, censored, and unknown outcomes and does not infer a
 performance advantage from unresolved placements.
 
+## DraftStats / Total Value corpus export (#526)
+
+`scripts/export_draft_stats_corpus.py` dumps durable Postgres contest history
+into the sibling Real Sports corpus kind-first layout:
+
+- `total_value_leaderboards/wnba/{year}/slate_{date}/highestBoostedValuePlayers.json`
+  (train/grade HV board only)
+- `recorded_states/wnba/{year}/slate_{date}/draft_stats_all_sections.jsonl`
+  (every `slate_labels.section`, including HV)
+- `recorded_states/.../contest_leaderboards.json` (top-N lineup JSON as
+  observation only — never a train label)
+- `manifest/draft_stats_sections.json` (section + field catalog)
+
+```sh
+uv run --frozen --package wnba-oracle python \
+  scripts/export_draft_stats_corpus.py \
+  --corpus-root /tmp/sports-realsports-corpus --demo
+```
+
+Section inventory lives in `oracle_core.draft_stats_catalog`. Live export uses
+`DATABASE_URL` via Codespace railway-env (`--from-database`); never mint Real
+Sports credentials for this path.
+
 ## Race corpus (#337)
 
 `scripts/build_race_corpus.py` exports per-season parquet corpora for the

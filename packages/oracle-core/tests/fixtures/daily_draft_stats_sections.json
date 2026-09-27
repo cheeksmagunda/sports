@@ -1,0 +1,88 @@
+{
+  "displayInfo": {
+    "title": "Daily Draft Stats",
+    "emptyStateText": "Stats will show here once games begin",
+    "details": "Stats will show for drafted players once their games begin"
+  },
+  "contest": {
+    "id": 2100,
+    "day": "2026-09-24",
+    "sport": "wnba",
+    "isFinalized": true
+  },
+  "draftStats": [
+    {
+      "sectionName": "highestBoostedValuePlayers",
+      "players": [
+        {
+          "player": {
+            "id": 11,
+            "displayName": "A. Wilson",
+            "firstName": "A'ja",
+            "lastName": "Wilson"
+          },
+          "team": { "key": "LVA" },
+          "multiplierBonus": 1.5,
+          "value": "42.5",
+          "displayStats": [{ "label": "Drafts", "value": "120" }]
+        }
+      ]
+    },
+    {
+      "sectionName": "popularPlayers",
+      "players": [
+        {
+          "player": {
+            "id": 22,
+            "displayName": "B. Clark",
+            "firstName": "Caitlin",
+            "lastName": "Clark"
+          },
+          "team": { "key": "IND" },
+          "multiplierBonus": 0.5,
+          "value": "31.0",
+          "displayStats": [{ "label": "Drafts", "value": "800" }]
+        }
+      ]
+    },
+    {
+      "sectionName": "mostCommon3xPlayers",
+      "players": [
+        {
+          "player": {
+            "id": 33,
+            "displayName": "C. Collier",
+            "firstName": "Napheesa",
+            "lastName": "Collier"
+          },
+          "team": { "key": "MIN" },
+          "multiplierBonus": 2.0,
+          "value": "38.0",
+          "displayStats": [{ "label": "Drafts", "value": "40" }]
+        }
+      ]
+    },
+    {
+      "sectionName": "mostDrafted",
+      "players": [
+        {
+          "playerId": 99,
+          "multiplierBonus": 0.0,
+          "value": "12.5",
+          "count": 4102,
+          "avgMultiplier": 1.6,
+          "avgPosition": 3.0,
+          "avgScore": 18.0,
+          "highestScore": 40.0,
+          "baseBoostedValue": 12.5,
+          "mostCommonPosition": "3",
+          "countAtHighestPosition": 900,
+          "positionOfHighestScore": "1",
+          "teamId": 7,
+          "player": { "id": 99, "firstName": "Not", "lastName": "Picked" },
+          "team": { "id": 7 }
+        }
+      ]
+    }
+  ]
+}
