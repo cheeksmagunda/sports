@@ -252,11 +252,19 @@ def _apply_head_tier(
     prop_multiplier = _prop_signal_multiplier(
         player.row.get("features_json"), scale=policy.prop_signal_scale
     )
+    # Floor tilt blends mid-slot centers toward p10 (cash/median construction).
+    # Under total_draft_value the objective is max E[TV], so keep the true
+    # center; ownership fade handles differentiation (#453).
+    floor_weight = (
+        0.0
+        if policy.optimizer.objective_mode == "total_draft_value"
+        else policy.picker_floor_tilt_weight
+    )
     floor_multiplier = _floor_tilt_multiplier(
         p10,
         p50,
         player.boost,
-        weight=policy.picker_floor_tilt_weight,
+        weight=floor_weight,
         max_boost=policy.picker_floor_tilt_max_boost,
     )
     predictions.pred_real_scores[player.pid] = max(
