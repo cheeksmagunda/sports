@@ -87,9 +87,7 @@ def fuse_slate_enrichment_into_head_features(
     out["is_home"] = float(is_home)
     out["is_starter"] = float(is_starter)
     out["starter_slot"] = float(starter_slot)
-    out["is_confirmed_starter"] = float(
-        1.0 if int(rotowire_confirmed) and int(is_starter) else 0.0
-    )
+    out["is_confirmed_starter"] = float(1.0 if int(rotowire_confirmed) and int(is_starter) else 0.0)
     return out
 
 
