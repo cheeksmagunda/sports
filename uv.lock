@@ -719,6 +719,7 @@ version = "0.1.0"
 source = { editable = "nba-oracle" }
 dependencies = [
     { name = "oracle-core" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
@@ -734,6 +735,7 @@ requires-dist = [
     { name = "oracle-core", editable = "packages/oracle-core" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7,<1.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32,<1.0" },
 ]
 provides-extras = ["dev"]
 
