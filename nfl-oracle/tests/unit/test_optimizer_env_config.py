@@ -111,3 +111,4 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
     assert max_value.requested_distinct_teams == 1
     assert max_value.requested_distinct_games == 1
     assert max_value.diversity_relaxed is False
+
