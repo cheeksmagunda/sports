@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1027 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1041 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -254,6 +254,8 @@ Generated from `git ls-files`. 1027 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/contests/cli.py -- ``nfl-contest-backfill`` — resumable, read-only Corpus C collection.
 - nfl-oracle/src/nfl_oracle/contests/collector.py -- Read-only sweep of the Real Sports contest id space.
 - nfl-oracle/src/nfl_oracle/contests/field.py -- What winning lineups actually did, measured from the saved contest archive.
+- nfl-oracle/src/nfl_oracle/contests/hv_export.py -- Export Corpus C draft_stats into durable Total Value / HV board artifacts.
+- nfl-oracle/src/nfl_oracle/contests/hv_export_cli.py -- ``nfl-corpus-c-hv-export`` — offline Corpus C → Total Value / HV board export.
 - nfl-oracle/src/nfl_oracle/contests/parse.py -- Turn saved Corpus C payloads into validated records.
 - nfl-oracle/src/nfl_oracle/contests/schema.py -- Typed, validated records parsed out of saved Corpus C payloads.
 - nfl-oracle/src/nfl_oracle/contests/store.py -- Resumable, content-addressed persistence for the Corpus C contest archive.
@@ -378,6 +380,23 @@ Generated from `git ls-files`. 1027 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/fixtures/players_126323.json -- (test fixture data)
 - nfl-oracle/tests/fixtures/stats_126323.json -- (test fixture data)
 
+## nfl-oracle/tests/fixtures/corpus_c_hv/
+- nfl-oracle/tests/fixtures/corpus_c_hv/README.md -- Corpus C HV export fixtures (#526)
+
+## nfl-oracle/tests/fixtures/corpus_c_hv/9001/
+- nfl-oracle/tests/fixtures/corpus_c_hv/9001/draftinfo.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9001/entries.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9001/meta.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9001/payoutinfo.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9001/stats.json -- (test fixture data)
+
+## nfl-oracle/tests/fixtures/corpus_c_hv/9002/
+- nfl-oracle/tests/fixtures/corpus_c_hv/9002/draftinfo.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9002/entries.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9002/meta.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9002/payoutinfo.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/corpus_c_hv/9002/stats.json -- (test fixture data)
+
 ## nfl-oracle/tests/fixtures/corpus_g/
 - nfl-oracle/tests/fixtures/corpus_g/feed_all.json -- (test fixture data)
 - nfl-oracle/tests/fixtures/corpus_g/players.json -- (test fixture data)
@@ -441,6 +460,7 @@ Generated from `git ls-files`. 1027 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_contest_corpus.py -- Corpus C: scoring-law verification, boost recovery, and censoring honesty.
 - nfl-oracle/tests/unit/test_contest_dry_run.py -- Offline contest dry-run: five-card shadow slate + hard-deny submit.
 - nfl-oracle/tests/unit/test_corpus_backup.py
+- nfl-oracle/tests/unit/test_corpus_c_hv_export.py -- Corpus C offline Total Value / HV board export (issue #526).
 - nfl-oracle/tests/unit/test_corpus_g.py -- Tests for Corpus G summarize + persist boundary.
 - nfl-oracle/tests/unit/test_corpus_g_store.py
 - nfl-oracle/tests/unit/test_coverage_matrix.py -- Tests for season coverage matrix status vocabulary.

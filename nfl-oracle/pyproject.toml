@@ -46,6 +46,7 @@ nfl-production-backtest = "nfl_oracle.replay.production_backtest_cli:main"
 nfl-contest-pool-replay = "nfl_oracle.replay.contest_pool_replay_cli:main"
 nfl-pipeline = "nfl_oracle.recommendations.cli:main"
 nfl-contest-backfill = "nfl_oracle.contests.cli:main"
+nfl-corpus-c-hv-export = "nfl_oracle.contests.hv_export_cli:main"
 nfl-boost-watch = "nfl_oracle.contests.boost_watch:main"
 
 [build-system]

@@ -1,5 +1,29 @@
 ## Own-model feature map phase 1 (#523, 2026-09-26)
 
+## Corpus C HV / Total Value export scaffold (#526, 2026-09-27)
+
+Offline export walks on-disk Corpus C and writes durable Total Value boards.
+NFL has no dedicated HV table: boards come from
+`draftStats.highestBoostedValuePlayers` or a reconstructed value ranking.
+Corpus G/C payloads are **not** on the orphan `backups` branch (inventory for
+#526); they live on the worker volume.
+
+- CLI: `nfl-corpus-c-hv-export` (`nfl_oracle.contests.hv_export`)
+- Env: `NFL_CORPUS_C_ROOT` (default `{project}/data/raw/corpus_c`),
+  `NFL_HV_EXPORT_ROOT` (default `{project}/data/export/hv_boards`)
+- Railway volume mount: `/app/nfl-oracle/data` → Corpus C at
+  `/app/nfl-oracle/data/raw/corpus_c` when attached (coordinate with #512
+  Corpus G nightly / volume entrypoint)
+- Per contest: `total_value_leaderboard.json`,
+  `draft_stats_all_sections.jsonl`, `matchups.json` (game links when present)
+- Root `coverage_manifest.json` records gaps (`corpus_c_empty` /
+  `missing_hv_section` / `no_matchup_links` / …). Empty volume scaffolds
+  successfully (Codespace without hydrate).
+- Fixtures: `tests/fixtures/corpus_c_hv/` (shape from
+  `drive/nfl_fixtures`, game id `19457`)
+- **No live scrape in this change.** No credential minting. No serving flip.
+
+
 Safe live_ok slate-context features force-included on the production
 `recommendations.model` ridge context vector and aligned on research
 `FeatureDrivenValueModel` (stdlib ridge only; no LightGBM / PyTorch).
