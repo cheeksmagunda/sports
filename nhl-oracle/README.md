@@ -1,15 +1,13 @@
 # nhl-oracle
 
-NHL Oracle application scaffold.
+NHL Oracle application: verified Real Sports contest contract, read-only
+ingest, redacted corpus store, identity reconciler, contest-range discovery,
+freeze-cycle job skeleton, and a Week 3 chronological baseline skeleton
+(`labels/`, `baselines/`) on synthetic labels only. See `STATUS.md` for the
+current ready bar and explicit next blockers.
 
-Current scope (see `STATUS.md` for verified facts): Week 2 live read-only
-Real Sports contract audit and corpus seed are done; Week 3 chronological
-baseline + prediction skeleton (`labels/`, `baselines/`) is started on
-synthetic labels only. Package wiring includes contest contract and audit
-gates (`contract/`), redacted ingest/provenance (`ingest/`), identity map
-(`identity/`), and freeze-cycle job skeleton (`scheduler/`). No Real-corpus
-baseline fit, contest-law optimizer, hosted API, frontend, Railway
-deployment, or contest entry exists yet.
+No Real-corpus baseline fit, contest-law optimizer, hosted API, frontend,
+Railway project, or contest entry path exists yet.
 
 ## Connection surfaces
 
@@ -28,6 +26,13 @@ provider credentials, contest entry paths, or per-agent PATs unless a scoped
 issue explicitly authorizes that work. Cloud projects must include the root
 snapshot bundle plus `nhl-oracle/AGENTS.md`, `nhl-oracle/README.md`, and
 `nhl-oracle/STATUS.md`, then verify against live `main` before material work.
+
+Live read-only Real Sports contact uses the shared session
+(`REALSPORTS_STORAGE_STATE_B64GZ` / Codespace secret only). CLI:
+
+```sh
+nhl-live-contract-audit
+```
 
 ## Commands
 
