@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-27T03:40:00Z
+Last verified: 2026-09-27T03:45:00Z
 
 ## Next-slate readiness (#453)  -  2026-09-27 ~03:40Z
 
@@ -14,6 +14,25 @@ Last verified: 2026-09-27T03:40:00Z
 | Job2/API knobs | `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value`, `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE=0.001`, `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` (api+job2 process env verified) |
 | QUEUED | Cleared stuck QUEUED deploys via `deploymentCancel` |
 | Residual | Advisory `config_drift` clears after this PR merges+redeploys; advisory `rotowire_empty` until Sunday ~13:00Z job1 |
+
+## Serve Tier-0 -> EB primary + vegas/boost (#523)  -  2026-09-27
+
+Code on branch (not yet production-verified on mono):
+
+- Serve ladder default is `WNBA_SERVE_PRIMARY=eb`: Tier-0 uses
+  `EBHierarchicalBaseline` with optional `team_pace` / `opp_pace` /
+  `vegas_total` / `card_boost` from `head_features` + pool row.
+  Starter confirmation remains a serve-time multiplier.
+  Minutes blend / player-history / heuristic remain cold-start only.
+- LightGBM quantile heads stay in the train artifact and fire only when
+  `WNBA_SERVE_PRIMARY=heads` (rollback without removing train code).
+- `models.yaml` documents EB weight 1.0 / LGBM 0.0 (serve never applied
+  the old 70/30). Train/grade labels remain Highest-value boards (#505).
+- RS field matrix: `features.rs_field_map`; corpus scaffold under
+  `scripts/rs_corpus/` (#526).
+- Production mono job2: unverified until merge + redeploy. Rollback:
+  set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
+  redeploy (cron variable changes need a real redeploy).
 
 ## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
 

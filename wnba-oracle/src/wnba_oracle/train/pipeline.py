@@ -194,6 +194,26 @@ def artifact_content_equal(a: PickerArtifact, b: PickerArtifact) -> tuple[bool, 
             return False, "eb_baseline player_alpha differ"
         if (ea.pace_beta, ea.league_pace) != (eb.pace_beta, eb.league_pace):
             return False, "eb_baseline pace/league params differ"
+        if (
+            getattr(ea, "opp_pace_beta", 0.0),
+            getattr(ea, "league_opp_pace", 0.0),
+        ) != (
+            getattr(eb, "opp_pace_beta", 0.0),
+            getattr(eb, "league_opp_pace", 0.0),
+        ):
+            return False, "eb_baseline opp_pace params differ"
+        if (
+            getattr(ea, "vegas_beta", 0.0),
+            getattr(ea, "league_vegas", 0.0),
+            getattr(ea, "boost_beta", 0.0),
+            getattr(ea, "league_boost", 0.0),
+        ) != (
+            getattr(eb, "vegas_beta", 0.0),
+            getattr(eb, "league_vegas", 0.0),
+            getattr(eb, "boost_beta", 0.0),
+            getattr(eb, "league_boost", 0.0),
+        ):
+            return False, "eb_baseline vegas/boost params differ"
     if a.cohort_means != b.cohort_means:
         return False, "artifact cohort_means differ"
     if getattr(a, "refit_full", False) != getattr(b, "refit_full", False):

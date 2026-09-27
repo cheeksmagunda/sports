@@ -22,6 +22,9 @@ def test_required_live_ok_keys_are_canonical() -> None:
     assert "injury_status_available" in REQUIRED_LIVE_OK_CONTEXT_FEATURES
     assert "weather_temp_f" in REQUIRED_LIVE_OK_CONTEXT_FEATURES
     assert "weather_available" in REQUIRED_LIVE_OK_CONTEXT_FEATURES
+    assert "is_home" in REQUIRED_LIVE_OK_CONTEXT_FEATURES
+    assert "is_divisional" in REQUIRED_LIVE_OK_CONTEXT_FEATURES
+    assert "team_pace_prior" in REQUIRED_LIVE_OK_CONTEXT_FEATURES
     assert set(WEATHER_FEATURE_NAMES) <= set(REQUIRED_LIVE_OK_CONTEXT_FEATURES)
     for name in INJURY_CATEGORIES:
         assert f"injury_{name}" in REQUIRED_LIVE_OK_CONTEXT_FEATURES

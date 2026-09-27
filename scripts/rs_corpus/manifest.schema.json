@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "issue": 526,
+  "description": "Manifest shape for the separate Real Sports corpus repo.",
+  "required_fields": [
+    "sport",
+    "kind",
+    "slate_or_game_id",
+    "captured_at",
+    "source_endpoint",
+    "sha256",
+    "bytes",
+    "key_count"
+  ],
+  "kinds": [
+    "hv_board",
+    "game_stats",
+    "contest_meta",
+    "draft_stats",
+    "pool",
+    "boost_control",
+    "raw_other"
+  ],
+  "label_policy": "highestBoostedValuePlayers / Total Value only; never winning drafts as primary train target"
+}

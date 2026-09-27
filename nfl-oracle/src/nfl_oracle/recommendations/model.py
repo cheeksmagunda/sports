@@ -12,7 +12,7 @@ from typing import Any, Literal, cast
 from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
-from nfl_oracle.features.live import INJURY_CATEGORIES, WEATHER_FEATURE_NAMES
+from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES
 from nfl_oracle.recommendations.high_tv import sample_weights_for_history
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
@@ -127,23 +127,17 @@ def _context_vector(values: Mapping[str, float], names: Sequence[str]) -> list[f
     return [v for name in names for v in (values.get(name, 0.0), float(name not in values))]
 
 
-REQUIRED_LIVE_OK_CONTEXT_FEATURES: tuple[str, ...] = tuple(
-    sorted(
-        {f"injury_{name}" for name in INJURY_CATEGORIES}
-        | {"injury_status_available"}
-        | set(WEATHER_FEATURE_NAMES)
-        | {"weather_available"}
-    )
-)
+# Re-exported from features.live: injury/weather (#418) + slate matchup/pace
+# / kickoff_slot priors (#523).
 
 
 def _context_feature_names(train: Sequence[HistoricalPerformance]) -> tuple[str, ...]:
-    """Observed context keys unioned with canonical live_ok injury/weather names.
+    """Observed context keys unioned with canonical live_ok required names.
 
-    Sparse historical coverage must not drop injury/weather keys from the
-    coefficient vector, or live evidence cannot affect production ratings (#418).
-    Missing values stay 0 with the matching ``__missing`` flag via
-    ``_context_vector``.
+    Sparse historical coverage must not drop injury/weather (#418) or slate
+    matchup/pace/kickoff keys (#523) from the coefficient vector, or live
+    evidence cannot affect production ratings. Missing values stay 0 with the
+    matching ``__missing`` flag via ``_context_vector``.
     """
 
     observed = {key for row in train for key in row.context_features}

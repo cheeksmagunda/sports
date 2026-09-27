@@ -264,6 +264,11 @@ def test_enrichment_row_preserves_provider_signal_shape() -> None:
     assert features["prop_points_line"] == 22.5
     assert features["game_start_utc"] == "2026-06-08T23:00:00Z"
     assert features["game_id"] == "4512"
+    # #523: enrichment always fused into head_features (even without rolling).
+    assert features["head_features"]["card_boost"] == 1.5
+    assert features["head_features"]["vegas_total"] == 164.5
+    assert features["head_features"]["vegas_spread"] == -4.0
+    assert features["head_features"]["is_home"] == 1.0
     assert stats.props_matched == 1
     assert misses == ["A. Wilson (LVA) [unresolved]"]
 
@@ -324,5 +329,8 @@ def test_enrichment_prefers_provider_game_identity_for_opponent() -> None:
     features = json.loads(rows[0]["features_json"])
     assert features["head_features"]["opp_pace"] == 77.0
     assert features["head_features"]["opp_dvp_guard"] == 2.1
+    assert features["head_features"]["card_boost"] == 1.5
+    assert features["head_features"]["vegas_total"] == 164.5
+    assert features["head_features"]["is_home"] == 1.0
     assert stats.head_features_matched == 1
     assert misses == ["B. Stewart (NYL) [unresolved]"]

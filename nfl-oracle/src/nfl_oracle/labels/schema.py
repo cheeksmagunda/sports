@@ -24,7 +24,8 @@ Train vs live:
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
 LabelRole = Literal["train_label", "live_forbidden_feature"]
@@ -48,6 +49,8 @@ class ValueLabel:
     corpus: str = "G"
     source_endpoint: str = "stats"
     did_not_play: bool | None = None
+    # Optional pre-lock slate context for FeatureDrivenValueModel (#523).
+    context_features: Mapping[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -73,6 +76,10 @@ LABEL_FIELD_DOCS: dict[str, str] = {
     "corpus": "Always G for archive game boxes in this package.",
     "source_endpoint": "stats (playerBoxScores), not contest entries.",
     "did_not_play": "Optional provider flag when present on the box row.",
+    "context_features": (
+        "Optional live_ok slate context floats (matchup/pace/injury/weather) "
+        "for FeatureDrivenValueModel; empty on bare Corpus G extract."
+    ),
 }
 
 

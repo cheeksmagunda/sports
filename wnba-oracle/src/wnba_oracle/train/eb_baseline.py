@@ -1,8 +1,9 @@
 """Empirical-Bayes hierarchical baseline.
 
 Closed-form Gaussian-on-Gaussian shrinkage of per-player intercepts toward
-the cohort mean. Used as the 30%-weight ensemble member alongside LightGBM
-(70%). Robust on rookies and edge cases where LightGBM extrapolates badly.
+the cohort mean. Own-model serving path (#523): EB is the default predictor;
+LightGBM heads are optional. Robust on rookies and edge cases where trees
+extrapolate badly.
 
 Math:
     y_ij = mu_cohort + alpha_i + eps_ij,  eps ~ N(0, sigma2)
@@ -11,9 +12,16 @@ Math:
         alpha_hat_i = n_i * tau2 / (n_i * tau2 + sigma2) * (ybar_i - mu_cohort)
 
 Used at predict time as:
-    yhat_baseline = mu_cohort_pred + alpha_hat_player + beta_team * (team_pace - league_pace)
+    yhat_baseline = (
+        mu_cohort_pred + alpha_hat_player
+        + beta_team * (team_pace - league_pace)
+        + beta_opp * (opp_pace - league_opp_pace)
+        + beta_vegas * (vegas_total - league_vegas)
+        + beta_boost * (card_boost - league_boost)
+    )
 
-team_pace effect is a single linear coefficient fit on training data.
+Starter / confirmed-starter is applied at serve as a multiplier
+(``_starter_multiplier``), not as a free-float EB coefficient.
 """
 
 from __future__ import annotations
@@ -25,12 +33,43 @@ import numpy as np
 import polars as pl
 
 
+def _fit_linear_beta(
+    residual: np.ndarray,
+    x: np.ndarray,
+) -> float:
+    if x.size == 0 or float(x.var()) <= 1e-9:
+        return 0.0
+    return float(np.cov(x, residual, ddof=0)[0, 1] / x.var())
+
+
+def _fit_centered_term(
+    df: pl.DataFrame,
+    y_resid: np.ndarray,
+    col: str,
+) -> tuple[float, float, np.ndarray]:
+    """Return (beta, league_mean, residual_after) for one optional column."""
+
+    if col not in df.columns:
+        return 0.0, 0.0, y_resid
+    mean_raw = df.get_column(col).mean()
+    league = float(mean_raw) if isinstance(mean_raw, (int, float)) else 0.0
+    x = (df.get_column(col).to_numpy() - league).astype(float)
+    beta = _fit_linear_beta(y_resid, x)
+    return beta, league, y_resid - beta * x
+
+
 @dataclass
 class EBHierarchicalBaseline:
     cohort_means: dict[str, float] = field(default_factory=dict)
     player_alpha: dict[int, float] = field(default_factory=dict)
     pace_beta: float = 0.0
+    opp_pace_beta: float = 0.0
+    vegas_beta: float = 0.0
+    boost_beta: float = 0.0
     league_pace: float = 0.0
+    league_opp_pace: float = 0.0
+    league_vegas: float = 0.0
+    league_boost: float = 0.0
 
     def fit(
         self,
@@ -40,6 +79,9 @@ class EBHierarchicalBaseline:
         cohort_col: str = "cohort",
         player_col: str = "player_id",
         pace_col: str = "team_pace",
+        opp_pace_col: str = "opp_pace",
+        vegas_col: str = "vegas_total",
+        boost_col: str = "card_boost",
     ) -> None:
         if df.is_empty():
             return
@@ -71,34 +113,20 @@ class EBHierarchicalBaseline:
             shrink = n_i * tau2 / (n_i * tau2 + sigma2) if (n_i * tau2 + sigma2) > 0 else 0.0
             self.player_alpha[int(r[player_col])] = shrink * (ybar_i - mu)
 
-        # Single linear pace effect (least-squares on residuals).
-        if pace_col in df.columns:
-            mean_pace = df.get_column(pace_col).mean()
-            league_pace = float(mean_pace) if isinstance(mean_pace, (int, float)) else 0.0
-        else:
-            league_pace = 0.0
-        self.league_pace = league_pace
-        if pace_col in df.columns:
-            x = (df.get_column(pace_col).to_numpy() - league_pace).astype(float)
-            y = (
-                df.get_column(target).to_numpy()
-                - np.array(
-                    [
-                        self.cohort_means.get(str(c), 0.0)
-                        for c in df.get_column(cohort_col).to_list()
-                    ]
-                )
-                - np.array(
-                    [
-                        self.player_alpha.get(int(p), 0.0)
-                        for p in df.get_column(player_col).to_list()
-                    ]
-                )
-            )
-            if x.var() > 1e-9:
-                self.pace_beta = float(np.cov(x, y, ddof=0)[0, 1] / x.var())
-            else:
-                self.pace_beta = 0.0
+        cohort_offset = np.array(
+            [self.cohort_means.get(str(c), 0.0) for c in df.get_column(cohort_col).to_list()]
+        )
+        player_offset = np.array(
+            [self.player_alpha.get(int(p), 0.0) for p in df.get_column(player_col).to_list()]
+        )
+        y_resid = df.get_column(target).to_numpy() - cohort_offset - player_offset
+
+        self.pace_beta, self.league_pace, y_resid = _fit_centered_term(df, y_resid, pace_col)
+        self.opp_pace_beta, self.league_opp_pace, y_resid = _fit_centered_term(
+            df, y_resid, opp_pace_col
+        )
+        self.vegas_beta, self.league_vegas, y_resid = _fit_centered_term(df, y_resid, vegas_col)
+        self.boost_beta, self.league_boost, _ = _fit_centered_term(df, y_resid, boost_col)
 
     def predict(self, df: pl.DataFrame) -> np.ndarray:
         if df.is_empty():
@@ -112,11 +140,31 @@ class EBHierarchicalBaseline:
             if "team_pace" in df.columns
             else np.zeros(len(df))
         )
+        opp_paces = (
+            df.get_column("opp_pace").to_numpy() if "opp_pace" in df.columns else np.zeros(len(df))
+        )
+        vegas = (
+            df.get_column("vegas_total").to_numpy()
+            if "vegas_total" in df.columns
+            else np.zeros(len(df))
+        )
+        boosts = (
+            df.get_column("card_boost").to_numpy()
+            if "card_boost" in df.columns
+            else np.zeros(len(df))
+        )
         out = np.zeros(len(df), dtype=float)
         for i, (c, p) in enumerate(zip(cohorts, players, strict=True)):
             mu = self.cohort_means.get(str(c), 0.0)
             alpha = self.player_alpha.get(int(p), 0.0) if p is not None else 0.0
-            out[i] = mu + alpha + self.pace_beta * (float(paces[i]) - self.league_pace)
+            out[i] = (
+                mu
+                + alpha
+                + self.pace_beta * (float(paces[i]) - self.league_pace)
+                + self.opp_pace_beta * (float(opp_paces[i]) - self.league_opp_pace)
+                + self.vegas_beta * (float(vegas[i]) - self.league_vegas)
+                + self.boost_beta * (float(boosts[i]) - self.league_boost)
+            )
         return out
 
 

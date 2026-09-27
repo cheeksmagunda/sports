@@ -6,27 +6,33 @@ same-slate finals or the label ``value`` as an input feature.
 
 Stdlib ridge only — no numpy/sklearn required so the default offline path stays
 light. Observation / research only; no contest entry.
+
+Phase-1 (#523): design matrix aligns with production ``recommendations.model``
+by appending ``REQUIRED_LIVE_OK_CONTEXT_FEATURES`` (injury/weather + slate
+matchup/pace/kickoff) via the same value/missing encoding.
 """
 
 from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
+from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES
 from nfl_oracle.features.schema import live_ok_feature_names
 from nfl_oracle.labels.schema import LIVE_FEATURE_BLACKLIST, ValueLabel
 
 # Canonical positions; residual bucket is the reference (all zeros).
 _POSITION_ONE_HOT: tuple[str, ...] = ("QB", "RB", "WR", "TE", "K")
 
-# Live-ok numeric / categorical inputs this model actually consumes.
+# Live-ok numeric / categorical inputs this model actually consumes (core bank).
 MODEL_FEATURE_NAMES: tuple[str, ...] = (
     "intercept",
     "player_prior_mean",
+    "player_prior_median",
     "position_prior_mean",
     "position_prior_median",
     "global_prior_mean",
@@ -38,6 +44,9 @@ MODEL_FEATURE_NAMES: tuple[str, ...] = (
     "pos_TE",
     "pos_K",
 )
+
+# Always-on slate context (same force-include set as production RatingModel).
+CONTEXT_FEATURE_NAMES: tuple[str, ...] = REQUIRED_LIVE_OK_CONTEXT_FEATURES
 
 FORBIDDEN_FEATURE_NAMES: frozenset[str] = frozenset(
     {
@@ -60,6 +69,15 @@ def assert_model_features_leakage_safe() -> None:
             continue
         if name not in live_ok:
             raise AssertionError(f"value model feature not live_ok: {name}")
+    for name in CONTEXT_FEATURE_NAMES:
+        if name in FORBIDDEN_FEATURE_NAMES:
+            raise AssertionError(f"forbidden context feature in value model: {name}")
+
+
+def _context_vector(values: Mapping[str, float], names: Sequence[str]) -> list[float]:
+    """Match production ``recommendations.model._context_vector`` encoding."""
+
+    return [v for name in names for v in (values.get(name, 0.0), float(name not in values))]
 
 
 @dataclass
@@ -68,6 +86,7 @@ class _PriorBank:
     position_mean: dict[str, float] = field(default_factory=dict)
     position_median: dict[str, float] = field(default_factory=dict)
     player_mean: dict[int, float] = field(default_factory=dict)
+    player_median: dict[int, float] = field(default_factory=dict)
     player_n: dict[int, int] = field(default_factory=dict)
     team_mean: dict[int, float] = field(default_factory=dict)
 
@@ -89,6 +108,7 @@ def _fit_prior_bank(labels: Sequence[ValueLabel]) -> _PriorBank:
     bank.position_mean = {p: float(statistics.fmean(vs)) for p, vs in by_pos.items() if vs}
     bank.position_median = {p: float(statistics.median(vs)) for p, vs in by_pos.items() if vs}
     bank.player_mean = {pid: float(statistics.fmean(vs)) for pid, vs in by_player.items() if vs}
+    bank.player_median = {pid: float(statistics.median(vs)) for pid, vs in by_player.items() if vs}
     bank.player_n = {pid: len(vs) for pid, vs in by_player.items()}
     bank.team_mean = {tid: float(statistics.fmean(vs)) for tid, vs in by_team.items() if vs}
     return bank
@@ -101,14 +121,19 @@ def _vector_from_bank(row: ValueLabel, bank: _PriorBank) -> list[float]:
         player_prior = bank.player_mean[row.player_id]
     else:
         player_prior = pos_mean
+    if row.player_id in bank.player_median:
+        player_med = bank.player_median[row.player_id]
+    else:
+        player_med = pos_med
     if row.team_id is not None and row.team_id in bank.team_mean:
         team_prior = bank.team_mean[row.team_id]
     else:
         team_prior = bank.global_mean
     one_hot = [1.0 if row.position == p else 0.0 for p in _POSITION_ONE_HOT]
-    return [
+    core = [
         1.0,
         float(player_prior),
+        float(player_med),
         float(pos_mean),
         float(pos_med),
         float(bank.global_mean),
@@ -118,6 +143,7 @@ def _vector_from_bank(row: ValueLabel, bank: _PriorBank) -> list[float]:
         0.0,
         *one_hot,
     ]
+    return core + _context_vector(row.context_features, CONTEXT_FEATURE_NAMES)
 
 
 @dataclass
@@ -130,6 +156,7 @@ class FeatureDrivenValueModel:
     n_positions: int = 0
     n_features: int = 0
     feature_names: tuple[str, ...] = MODEL_FEATURE_NAMES
+    context_feature_names: tuple[str, ...] = CONTEXT_FEATURE_NAMES
     _bank: _PriorBank = field(default_factory=_PriorBank, repr=False)
     _ridge: RidgeRegressor = field(default_factory=RidgeRegressor, repr=False)
     kind: str = "feature_ridge"
@@ -142,7 +169,7 @@ class FeatureDrivenValueModel:
         self.n_positions = len(self._bank.position_mean)
         x = [_vector_from_bank(row, self._bank) for row in labels]
         y = [row.value for row in labels]
-        self.n_features = len(MODEL_FEATURE_NAMES)
+        self.n_features = len(MODEL_FEATURE_NAMES) + 2 * len(CONTEXT_FEATURE_NAMES)
         self._ridge = RidgeRegressor(alpha=self.alpha).fit(x, y)
         if not labels:
             # Empty train → constant 0 predictor (honest sparse fold).
@@ -168,6 +195,7 @@ class FeatureDrivenValueModel:
         team_id: int | None = None,
         season: int = 0,
         game_id: int = 0,
+        context_features: Mapping[str, float] | None = None,
     ) -> float:
         label = ValueLabel(
             player_id=player_id if player_id is not None else -1,
@@ -176,6 +204,7 @@ class FeatureDrivenValueModel:
             position=position,
             value=0.0,  # ignored for features
             team_id=team_id,
+            context_features=dict(context_features or {}),
         )
         return self.predict([label])[0]
 
@@ -186,6 +215,7 @@ class FeatureDrivenValueModel:
             "n_positions": self.n_positions,
             "n_features": self.n_features,
             "feature_names": list(self.feature_names),
+            "context_feature_names": list(self.context_feature_names),
             "global_prior": self.global_prior,
             "alpha": self.alpha,
             "coefficients": list(self._ridge.coefficients or []),
