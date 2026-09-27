@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
-__all__ = ["__version__"]
+from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 
-__version__ = "0.1.0"
+__all__ = ["FIVE_PLAYER_LINEUP_SIZE", "__version__"]
+
+__version__ = "0.1.1"

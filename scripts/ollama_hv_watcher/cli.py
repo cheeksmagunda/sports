@@ -35,7 +35,9 @@ from ollama_hv_watcher.gate import (
     load_manifest_or_empty,
     operator_unlock_enabled,
 )
-from ollama_hv_watcher.learn import DEFAULT_MODEL, run_learn
+from ollama_hv_watcher.client import DEFAULT_MODEL
+from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
     DEFAULT_HOST,
     DEFAULT_PIDFILE,
@@ -66,6 +68,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             "training_allowed": ollama_helper_allowed(manifest)
             or operator_unlock_enabled(),
             "default_model": DEFAULT_MODEL,
+            "five_player_lineup_size": FIVE_PLAYER_LINEUP_SIZE,
             "data_root": str(Path(args.data_root)),
         }
     )

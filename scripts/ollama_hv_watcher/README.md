@@ -3,6 +3,13 @@
 Portfolio Codespace helper tracked by
 [#574](https://github.com/cheeksmagunda/sports/issues/574).
 
+## Five players every day
+
+Contest card size is fixed at **5** (`FIVE_PLAYER_LINEUP_SIZE` in
+`pick.py`). Every learn tick writes an ordered `five_player_lineup` of
+exactly five distinct players. Boards with fewer than five ranked players
+fail closed.
+
 ## Gate
 
 - Binary install + `ollama serve`: allowed on the Codespace now.

@@ -30,6 +30,33 @@
       "real_score": 22.0,
       "slot": 3,
       "drafts": 5
+    },
+    {
+      "player_id": 404,
+      "name": "Delta Flex",
+      "team": "CC",
+      "value": 34.2,
+      "real_score": 19.5,
+      "slot": 4,
+      "drafts": 4
+    },
+    {
+      "player_id": 505,
+      "name": "Epsilon Closer",
+      "team": "BB",
+      "value": 31.8,
+      "real_score": 17.0,
+      "slot": 5,
+      "drafts": 3
+    },
+    {
+      "player_id": 606,
+      "name": "Zeta Bench",
+      "team": "DD",
+      "value": 28.0,
+      "real_score": 14.0,
+      "slot": 6,
+      "drafts": 1
     }
   ]
 }

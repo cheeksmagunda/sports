@@ -23,6 +23,7 @@ from ollama_hv_watcher.gate import (
     load_manifest_or_empty,
 )
 from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
     DEFAULT_HOST,
     DEFAULT_WATCHER_PIDFILE,
@@ -87,6 +88,7 @@ def status_snapshot(
         "now": now.isoformat().replace("+00:00", "Z"),
         "ollama": health,
         "gate": gate,
+        "five_player_lineup_size": FIVE_PLAYER_LINEUP_SIZE,
         "data_root": str(cfg.data_root),
         "pidfile": str(cfg.pidfile),
         "watcher_pid": read_pidfile(cfg.pidfile),
@@ -116,16 +118,22 @@ def _learn_once(cfg: WatcherConfig, plan: DayWatchPlan) -> list[str]:
         if path in seen:
             continue
         seen.add(path)
-        summary = load_board_summary(path)
-        out = run_learn(
-            summary,
-            data_root=cfg.data_root,
-            manifest=manifest,
-            host=cfg.host,
-            model=cfg.model,
-            dry_run=cfg.dry_run,
-        )
-        written.append(str(out))
+        try:
+            summary = load_board_summary(path)
+            out = run_learn(
+                summary,
+                data_root=cfg.data_root,
+                manifest=manifest,
+                host=cfg.host,
+                model=cfg.model,
+                dry_run=cfg.dry_run,
+            )
+            written.append(str(out))
+        except ValueError as exc:
+            # Fail closed on short boards (<5 players) without killing the day.
+            err_path = cfg.data_root / "watcher_errors.log"
+            with err_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"board={path} error={exc}\n")
     return written
 
 
