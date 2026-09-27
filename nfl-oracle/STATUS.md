@@ -1,5 +1,13 @@
 # Status
 
+## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+
+- Verified scaffold on `sports-oracle` / `nfl-production`: `nfl-api`,
+  `nfl-oracle-worker`, `nfl-frontend`, Postgres. Non-serving; no domains
+  or secret cutover. Design + runbook on #457.
+- Live NFL traffic remains on Railway project `nfl-oracle-staging` /
+  `production` through Sunday 2026-09-27 (#453).
+
 ## Sunday 2026-09-27 T-40 live verify (2026-09-27 ~01:15Z UTC, issue #453)
 
 Evidence-only pass against Railway `nfl-oracle-staging` / `production` from
