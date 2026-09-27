@@ -2,6 +2,17 @@
 
 Last verified: 2026-09-26T03:50:00Z
 
+## RotoWire-empty fail-closed only on tip day (#441)  -  2026-09-27
+
+- Verified in Railway logs: on 2026-09-26 `cron-job1` (13:09Z) and every
+  `cron-job1-late` run (16:01Z to 23:35Z) ended `failed` with
+  `rotowire_empty_near_tip`. The slate's first tip was 2026-09-27 18:00Z,
+  inside the 30h lead, while RotoWire's free page listed no games
+  (`no_games_scheduled`); it shows only today's Eastern games.
+- Fix: `ingest/rotowire.starters_expected` requires the 30h lead and the
+  tip's Eastern date. job1, job1-lite, and the watchdog `rotowire_empty`
+  check share it. Serving behavior on tip day is unchanged.
+
 ## Scheduled WNBA checks report through their Actions runs, not issues (#442)  -  2026-09-26
 
 - Per the issue rule in root `AGENTS.md` (Documentation and state),

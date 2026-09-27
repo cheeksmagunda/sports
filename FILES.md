@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 914 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 915 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1129,6 +1129,7 @@ Generated from `git ls-files`. 914 tracked files. Regenerate with `scripts/gener
 - wnba-oracle/tests/unit/test_rolling.py -- Rolling-window tests against a synthetic per-player game log.
 - wnba-oracle/tests/unit/test_rotowire_empty_reason.py -- Classify empty RotoWire HTML (#319).
 - wnba-oracle/tests/unit/test_rotowire_parse.py -- RotoWire HTML parse coverage (D100 fix).
+- wnba-oracle/tests/unit/test_rotowire_starters_expected.py -- When an empty RotoWire page is a real failure (#319, #441).
 - wnba-oracle/tests/unit/test_rotowire_url.py -- D74: RotoWire URL + CSS selector fix.
 - wnba-oracle/tests/unit/test_rotowire_wired.py -- RotoWire injury wiring: job1 persists is_out into features_json,
 - wnba-oracle/tests/unit/test_sampling_offset.py -- score_offset (K) calibration in the copula sampler (D52).

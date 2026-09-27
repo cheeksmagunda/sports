@@ -17,10 +17,9 @@ boxes carry class 'is-nba' (not 'is-wnba'). Verified by live curl.
 
 from __future__ import annotations
 
+import datetime as dt
 from dataclasses import dataclass
 from typing import Any
-
-import datetime as dt
 
 import httpx
 from bs4 import BeautifulSoup
