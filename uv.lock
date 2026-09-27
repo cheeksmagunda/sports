@@ -820,6 +820,10 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+serve = [
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -831,8 +835,10 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3,<10.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24,<2.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7,<1.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'dev'", specifier = ">=0.32,<1.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'serve'", specifier = ">=0.32,<1.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "serve"]
 
 [[package]]
 name = "numpy"
