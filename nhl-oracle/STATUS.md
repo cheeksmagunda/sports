@@ -1,12 +1,22 @@
 # Status
 
-Last verified: 2026-09-27 (#482 Docker/Railway staging scaffold; continues #453/#457)
+Last verified: 2026-09-27T03:04Z (prediction-data QA over public TCP;
+continues #453/#457/#482)
 
 ## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
 
 - Verified scaffold on `sports-oracle` / `nhl-staging`: `nhl-api`,
   `nhl-worker`, `nhl-frontend`, Postgres. **Non-serving** for NHL; no
   public NHL API/frontend domain claimed yet. Design + runbook on #457.
+- Staging health re-check 2026-09-27T03:04Z:
+  - `https://nhl-api-nhl-staging.up.railway.app/health` → HTTP **200**,
+    body `status=ok`, `observation_only=true`, `contest_entry=false`
+  - `https://nhl-frontend-nhl-staging.up.railway.app/` → HTTP **200**
+  - Serving deploys answering that traffic: `nhl-api`
+    `317c244d` SUCCESS (2026-09-26 21:44 CT); `nhl-worker` `f2431eed`
+    SUCCESS (2026-09-26 21:54 CT). Later `nhl-api` redeploys
+    `4fd6aebd` / `9e71d3ae` / `51466c61` FAILED (build/capacity), so do
+    not treat the newest queued attempt as live.
 - Sibling mono public URLs already answering (other sports, #457/#453):
   - WNBA API `https://wnba-api-wnba-production.up.railway.app`
   - WNBA frontend `https://wnba-frontend-wnba-production.up.railway.app`
@@ -19,11 +29,15 @@ This file records application state only.
 
 ## Public NHL history staging load (#453)  -  2026-09-27
 
-- `sports-oracle` / `nhl-staging` Postgres now holds NHL public-history tables
+- `sports-oracle` / `nhl-staging` Postgres holds NHL public-history tables
   `nhl_history_games`, `nhl_history_player_games`, and
   `nhl_history_season_coverage`, loaded from the public NHL API with a
   browser-style User-Agent via `nhl-history-load`.
-- Verified row counts in staging Postgres:
+- Public TCP connectivity re-check 2026-09-27T03:03Z: `nhl-api`
+  `DATABASE_URL` host `maglev.proxy.rlwy.net:40609` with
+  `sslmode=require`; `SELECT 1` succeeded (private
+  `*.railway.internal` host must not be used from outside the mesh).
+- Verified row counts (same re-check):
   - `nhl_history_games`: **5599**
   - `nhl_history_player_games`: **223901**
   - `nhl_history_season_coverage`: **4**
@@ -32,6 +46,20 @@ This file records application state only.
   - 2022-23: games **1400/1400**, player rows **55980**, status `complete`
   - 2023-24: games **1400/1400**, player rows **55988**, status `complete`
   - 2024-25: games **1398/1398**, player rows **55913**, status `complete`
+- Gaps vs multi-year / nightly accuracy goal (verified):
+  - Four complete seasons (2021-22..2024-25) match the loaded
+    `nhl-history-load` window; pre-2021 seasons and in-progress 2025-26
+    are **not** in `nhl_history_*`.
+  - Alternate raw sync tables also present:
+    `nhl_public_scoreboard_days` **819**, `nhl_public_games` **217**
+    (199 from season-start 2024, 18 from 2026), `nhl_public_sync_runs`
+    **3**. Nightly smoke run_id=1 succeeded (`scoreboard_days_seen=3`,
+    `games_stored=18`). Backfill runs 2 and 3 for seasons 2024-2026 are
+    still open (`finished_at` null, `success` null); not a complete
+    multi-year raw corpus.
+  - No GitHub Actions NHL history/accuracy nightly on `main`. Week 3
+    `labels/` + `baselines/` walk-forward remains synthetic-only; no
+    Real-value accuracy job wired to staging.
 - Scope note: this is official/public NHL game history only. It is useful for
   NHL-owned chronology, schedule, and stat features, but it is **not** the
   Real Sports value-label corpus and does not change the `contest_entry: False`
@@ -106,8 +134,8 @@ This file records application state only.
 - Staging container shell (#482): root `nhl-oracle/Dockerfile` +
   `railway.toml`; `nhl-pipeline serve` / `nhl-pipeline worker` entrypoints.
   Stub API only; not a freeze/publish lifecycle. Railway `nhl-staging`
-  services `nhl-api` / `nhl-worker` / `nhl-frontend` are configured to build
-  from these paths after merge (verify deploy IDs live).
+  services `nhl-api` / `nhl-worker` / `nhl-frontend` build from these paths;
+  live answering deploys recorded under Railway mono-project shell above.
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
   optimizer, production NHL serving / contest entry. Any future
   picker/backtest must assume zero boosts until every NHL team has played
