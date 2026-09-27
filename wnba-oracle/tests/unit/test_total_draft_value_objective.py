@@ -246,3 +246,126 @@ def test_tdv_settings_wiring() -> None:
         cfg = build_optimize_config(s)
     assert cfg.objective_mode == "total_draft_value"
     assert abs(cfg.max_value_ownership_fade - 0.05) < 1e-9
+
+
+def test_expected_prod_config_matches_live_tdv_flip() -> None:
+    """Watchdog config_drift must expect the live mono TDV flip (#453)."""
+    from wnba_oracle.common.settings import EXPECTED_PROD_CONFIG
+
+    assert EXPECTED_PROD_CONFIG["optimizer_objective_mode"] == "total_draft_value"
+    assert EXPECTED_PROD_CONFIG["optimizer_max_value_ownership_fade"] == 0.001
+
+
+def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:
+    """Under TDV, sampler mu must not be faded by contrarian (#453)."""
+    from wnba_oracle.modeling.policy import ModelPolicy
+    from wnba_oracle.modeling.prediction import PlayerPredictions
+    from wnba_oracle.picker.optimize import OptimizeConfig
+    from wnba_oracle.picker.popularity import ContrarianConfig
+    from wnba_oracle.scheduler import job2
+
+    preds = PlayerPredictions(
+        pred_real_scores={1: 4.0, 2: 3.0},
+        rows_by_pid={
+            1: {"team": "A", "opponent": "B", "card_boost": 1.0, "name": "Chalk", "position": "G"},
+            2: {"team": "C", "opponent": "D", "card_boost": 1.0, "name": "Other", "position": "F"},
+        },
+    )
+    calls: list[object] = []
+
+    def _fake_contrarian(scores, pop, cfg):
+        _ = pop
+        calls.append(cfg)
+        return {pid: score - 1.0 for pid, score in scores.items()}
+
+    monkeypatch.setattr(job2, "predict_players", lambda *_args, **_kwargs: preds)
+    monkeypatch.setattr(
+        job2, "_compute_popularity_scores", lambda *_args, **_kwargs: {1: 5000.0, 2: 100.0}
+    )
+    monkeypatch.setattr(job2, "_load_measured_drafts", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(job2, "apply_contrarian_adjustment", _fake_contrarian)
+    monkeypatch.setattr(job2, "player_volatility", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
+        job2,
+        "materialize_specs",
+        lambda adjusted, **_kwargs: (
+            [],
+            [],
+            {pid: {"pred_real_score_p50": score} for pid, score in adjusted.items()},
+        ),
+    )
+    monkeypatch.setattr(job2, "attach_archetypes", lambda *_args, **_kwargs: None)
+
+    policy = ModelPolicy(
+        optimizer=OptimizeConfig(objective_mode="total_draft_value"),
+        contrarian=ContrarianConfig(enabled=True, strength=0.2),
+    )
+    _, _, projections = job2._build_specs(
+        [{"player_id": 1}, {"player_id": 2}],
+        slate_date="2026-09-27",
+        policy=policy,
+        artifact_resolved=True,
+    )
+    assert calls == []
+    assert projections[1]["pred_real_score_p50"] == 4.0
+
+    payout_policy = ModelPolicy(
+        optimizer=OptimizeConfig(objective_mode="payout"),
+        contrarian=ContrarianConfig(enabled=True, strength=0.2),
+    )
+    _, _, payout_proj = job2._build_specs(
+        [{"player_id": 1}, {"player_id": 2}],
+        slate_date="2026-09-27",
+        policy=payout_policy,
+        artifact_resolved=True,
+    )
+    assert len(calls) == 1
+    assert payout_proj[1]["pred_real_score_p50"] == 3.0
+
+
+def test_tdv_disables_floor_tilt_multiplier() -> None:
+    """Floor tilt is cash/median mid-slot blend; TDV must keep the true center."""
+    from wnba_oracle.modeling.policy import ModelPolicy
+    from wnba_oracle.modeling.scoring import _floor_tilt_multiplier
+    from wnba_oracle.picker.optimize import OptimizeConfig
+
+    # Sanity: floor tilt still works when weight > 0 under payout path math.
+    tilted = _floor_tilt_multiplier(1.0, 4.0, boost=0.5, weight=0.2, max_boost=2.0)
+    assert tilted < 1.0
+
+    # TDV path zeros the weight before calling (mirrors prediction.py).
+    policy = ModelPolicy(
+        optimizer=OptimizeConfig(objective_mode="total_draft_value"),
+        picker_floor_tilt_weight=0.2,
+    )
+    floor_weight = (
+        0.0
+        if policy.optimizer.objective_mode == "total_draft_value"
+        else policy.picker_floor_tilt_weight
+    )
+    assert _floor_tilt_multiplier(1.0, 4.0, boost=0.5, weight=floor_weight, max_boost=2.0) == 1.0
+
+
+def test_tdv_bypasses_cash_skip_thresholds() -> None:
+    """TDV objective is raw lineup score; cash skip/caveat thresholds must not
+    suppress a max-value freeze (#453)."""
+    samps, fields = _pool()
+    curve = default_curve_for_regime("top_1")
+    rec = optimize_lineup(
+        samps,
+        fields,
+        curve,
+        cfg=OptimizeConfig(
+            top_n_filter=10,
+            n_samples=400,
+            n_field_lineups=60,
+            max_per_team=5,
+            seed=5,
+            objective_mode="total_draft_value",
+            skip_if_expected_payout_below=1e9,
+            caveat_if_expected_payout_below=1e9,
+            never_skip=False,
+        ),
+    )
+    assert rec.entry_flag == "enter"
+    assert len(rec.player_ids) == 5

@@ -1034,10 +1034,17 @@ def _assemble_recommendation(
     best_ev = selected.objective
     best_indices = selected.indices
     best_samples = selected.samples
+    tdv_mode = cfg.objective_mode == "total_draft_value"
 
+    # Slot order: rearrangement on the quantity the objective multiplies.
+    # TDV maximises E[committed-order TV], so sort by sample mean (not p50
+    # median / cash-robust ordering). Ceiling tilt stays p90.
     if cfg.ceiling_tilt_slots:
         sort_key = np.quantile(real_score_samples[:, list(best_indices)], 0.9, axis=0)
         sort_method = "p90 (ceiling-tilted)"
+    elif tdv_mode:
+        sort_key = np.mean(real_score_samples[:, list(best_indices)], axis=0)
+        sort_method = "mean (tdv rearrangement)"
     else:
         sort_key = np.median(real_score_samples[:, list(best_indices)], axis=0)
         sort_method = "p50 (rearrangement)"
@@ -1045,7 +1052,12 @@ def _assemble_recommendation(
     ordered_player_ids = tuple(pool.player_ids[best_indices[index]] for index in order)
     p10, p50, p90 = np.quantile(best_samples, [0.1, 0.5, 0.9])
 
-    if best_ev < cfg.skip_if_expected_payout_below:
+    # Entry gates are calibrated in E[payout] units (~1.0). In TDV mode the
+    # objective is raw lineup score (~tens of points), so cash/skip thresholds
+    # must not suppress a max-value freeze.
+    if tdv_mode:
+        entry_flag = "enter"
+    elif best_ev < cfg.skip_if_expected_payout_below:
         entry_flag = "skip"
     elif best_ev < cfg.caveat_if_expected_payout_below:
         entry_flag = "skip" if cfg.caveat_is_skip else "enter_with_caveat"
