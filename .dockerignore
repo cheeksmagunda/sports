@@ -1,5 +1,5 @@
 # Root-context builds are deny-first. Allow paths only when a Dockerfile
-# (WNBA backend, NFL production/research, NBA/NHL staging scaffolds) copies
+# (WNBA backend, NFL production/research, or NBA health scaffold) copies
 # them into an image.
 **
 
@@ -13,17 +13,6 @@ packages/oracle-core/**
 !packages/oracle-core/README.md
 !packages/oracle-core/src/
 !packages/oracle-core/src/**
-
-
-# nhl-oracle staging image (sports-oracle / nhl-staging).
-!nhl-oracle/
-nhl-oracle/**
-!nhl-oracle/Dockerfile
-!nhl-oracle/railway.toml
-!nhl-oracle/pyproject.toml
-!nhl-oracle/README.md
-!nhl-oracle/src/
-!nhl-oracle/src/**
 
 # nba-oracle health-scaffold image (sports-oracle / nba-staging).
 !nba-oracle/
@@ -111,6 +100,3 @@ nfl-oracle/data/cache/
 nfl-oracle/data/raw/corpus_g/
 
 nba-oracle/tests/
-
-nhl-oracle/tests/
-nhl-oracle/frontend/

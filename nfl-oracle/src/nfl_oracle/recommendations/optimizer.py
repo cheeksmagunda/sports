@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
+import os
 import random
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from importlib import import_module
 from statistics import mean
@@ -60,6 +61,73 @@ class OptimizerConfig(Record):
     field_weight: Finite = Field(default=0.1, ge=0, le=2)
     game_correlation: Finite = Field(default=0.15, ge=0, le=0.8)
     seed: int = 115
+    # Construction profile is descriptive metadata carried onto the report; it
+    # does not itself change the objective (which is always total_value).
+    profile: str = "diversified"
+
+
+# Production default: three distinct teams, two distinct games. The optimizer
+# still relaxes below these when a slate cannot satisfy them (see ``optimize``),
+# so these are requested minimums, not hard guarantees.
+DIVERSIFIED_MIN_DISTINCT_TEAMS = 3
+DIVERSIFIED_MIN_DISTINCT_GAMES = 2
+
+# Max-value / race construction: chase the single highest projected total-value
+# five with no team/game diversity floor. This realizes the operator thesis that
+# the field never builds the maximum attainable value and that the highest-value
+# (typically underdrafted, right-tail) players should be taken regardless of how
+# concentrated the resulting lineup is. Correlation risk is the explicit trade.
+MAX_VALUE_MIN_DISTINCT_TEAMS = 1
+MAX_VALUE_MIN_DISTINCT_GAMES = 1
+
+OPTIMIZER_PROFILE_PRESETS: dict[str, tuple[int, int]] = {
+    "diversified": (DIVERSIFIED_MIN_DISTINCT_TEAMS, DIVERSIFIED_MIN_DISTINCT_GAMES),
+    "max_value": (MAX_VALUE_MIN_DISTINCT_TEAMS, MAX_VALUE_MIN_DISTINCT_GAMES),
+}
+
+
+def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> OptimizerConfig:
+    """Build an :class:`OptimizerConfig` from the process environment.
+
+    Missing env keeps the production defaults exactly (``diversified``:
+    ``min_distinct_teams=3``, ``min_distinct_games=2``), so an unset worker is
+    byte-identical to today's frozen construction.
+
+    Knobs (fail closed on invalid values so a mis-set Railway var never silently
+    changes which five cards freeze):
+
+    - ``NFL_OPTIMIZER_PROFILE``: ``diversified`` (default) or ``max_value``. The
+      ``max_value`` preset drops the diversity floor to ``1``/``1`` so the
+      optimizer commits the highest projected total-value five outright.
+    - ``NFL_OPTIMIZER_MIN_DISTINCT_TEAMS`` / ``NFL_OPTIMIZER_MIN_DISTINCT_GAMES``:
+      explicit integer overrides (1..5) that win over the profile preset.
+    """
+
+    env = environ if environ is not None else os.environ
+    profile = (env.get("NFL_OPTIMIZER_PROFILE") or "diversified").strip() or "diversified"
+    if profile not in OPTIMIZER_PROFILE_PRESETS:
+        raise ValueError(f"NFL_OPTIMIZER_PROFILE_invalid:{profile}")
+    teams, games = OPTIMIZER_PROFILE_PRESETS[profile]
+    teams = _env_diversity_int(env, "NFL_OPTIMIZER_MIN_DISTINCT_TEAMS", teams)
+    games = _env_diversity_int(env, "NFL_OPTIMIZER_MIN_DISTINCT_GAMES", games)
+    return OptimizerConfig(
+        min_distinct_teams=teams,
+        min_distinct_games=games,
+        profile=profile,
+    )
+
+
+def _env_diversity_int(env: Mapping[str, str], key: str, default: int) -> int:
+    raw = (env.get(key) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError(f"{key}_invalid") from error
+    if not 1 <= value <= 5:
+        raise ValueError(f"{key}_out_of_range")
+    return value
 
 
 class FieldObservation(Record):
@@ -118,6 +186,10 @@ class Recommendation(Record):
     boost_regime: Literal["zero_boost", "provider_boosts_present"]
     boost_nonzero_count: int
     boost_max: Finite
+    # Which construction the frozen five came from ("diversified" production
+    # default or "max_value" race mode). Recorded so a consumer of the frozen
+    # lineup can see whether a diversity floor was requested at all.
+    construction_profile: str = "diversified"
     assumptions: tuple[str, ...]
     contest_entry: Literal[False] = False
 
@@ -533,6 +605,7 @@ def optimize(
         boost_regime=slate.boost_regime,
         boost_nonzero_count=slate.boost_nonzero_count,
         boost_max=slate.boost_max,
+        construction_profile=cfg.profile,
         assumptions=(
             "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
             "game_correlation_is_configured_sensitivity_not_fitted",

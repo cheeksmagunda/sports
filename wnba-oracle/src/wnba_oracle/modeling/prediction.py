@@ -589,6 +589,7 @@ def materialize_specs(
     label_names: dict[int, str],
     K: float,
     volatility: dict[int, float],
+    popularity_scores: dict[int, float] | None = None,
 ) -> tuple[list[PlayerSamplingSpec], list[FieldPlayerSpec], dict[int, dict[str, Any]]]:
     """Build the (sampling, field, projection) triple from the final
     contrarian-adjusted predictions.

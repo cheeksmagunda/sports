@@ -62,15 +62,51 @@ class FieldPlayerSpec:
     # sampler mu still reads contrarian-adjusted pred_real_score.
     # See scripts/calibrate_starter_and_boost.py + PICKER_BOOST_TAIL_LIFT.
     rank_pred_override: float | None = None
+    # W2 (#453): public-bias popularity score from popularity.py.
+    popularity_score: float | None = None
 
 
 def _estimated_ownership_unnormalized(
-    specs: list[FieldPlayerSpec], softmax_temperature: float
+    specs: list[FieldPlayerSpec],
+    softmax_temperature: float,
+    popularity_blend: float = 0.5,
 ) -> np.ndarray:
-    """Pre-D86 estimator: softmax of public-visible value with multiplicative
-    adjustments. Returns an UNNORMALIZED weight per spec."""
-    raw = np.array([s.pred_real_score * (1.0 + s.card_boost) for s in specs], dtype=float)
-    raw = raw - raw.max()  # numerical stability
+    """Ownership estimator: blended model + public-bias value (W2 / #453).
+
+    When specs carry ``popularity_score``, the base weight is a geometric
+    blend of the model-predicted value and the public-popularity signal.
+    When no popularity score is present, falls back to the legacy self-mirror.
+
+    Returns an UNNORMALIZED weight per spec.
+    """
+    model_raw = np.array(
+        [s.pred_real_score * (1.0 + s.card_boost) for s in specs], dtype=float,
+    )
+    have_pop = any(s.popularity_score is not None for s in specs)
+    if have_pop and popularity_blend > 0.0:
+        pop = np.array(
+            [s.popularity_score if s.popularity_score is not None else 0.0 for s in specs],
+            dtype=float,
+        )
+        m_max = model_raw.max()
+        m_norm = model_raw / m_max if m_max > 0.0 else np.ones_like(model_raw)
+        p_max = pop.max()
+        p_norm = pop / p_max if p_max > 0.0 else np.zeros_like(pop)
+        has_score = np.array(
+            [s.popularity_score is not None for s in specs], dtype=bool,
+        )
+        alpha = float(popularity_blend)
+        blended = np.where(
+            has_score,
+            np.power(np.clip(m_norm, 1e-12, None), 1.0 - alpha)
+            * np.power(np.clip(p_norm, 1e-12, None), alpha),
+            m_norm,
+        )
+        blended = blended * m_max
+        raw = blended - blended.max()
+    else:
+        raw = model_raw - model_raw.max()
+
     base = np.exp(raw / max(softmax_temperature, 1e-6))
     adj = np.ones_like(base)
     for i, s in enumerate(specs):
@@ -87,19 +123,20 @@ def project_ownership(
     specs: list[FieldPlayerSpec],
     *,
     softmax_temperature: float = 6.0,
+    popularity_blend: float = 0.5,
 ) -> np.ndarray:
     """Return a 1-D numpy array of ownership probabilities, summing to 1.
 
     Measured path (D86): if any spec carries `measured_drafts`, the ownership
-    marginal is the real draft counts. Players missing a count are back-filled
-    from the estimator, rescaled to the median measured magnitude so the two
-    sources sit on a comparable scale before normalization. When no spec has a
-    measured count this is byte-identical to the pre-D86 estimator.
+    marginal is the real draft counts. W2 (#453): when specs carry
+    ``popularity_score``, the estimator blends the public-bias signal.
     """
     if not specs:
         return np.array([])
 
-    estimated = _estimated_ownership_unnormalized(specs, softmax_temperature)
+    estimated = _estimated_ownership_unnormalized(
+        specs, softmax_temperature, popularity_blend,
+    )
 
     measured = np.array(
         [s.measured_drafts if s.measured_drafts is not None else np.nan for s in specs],
