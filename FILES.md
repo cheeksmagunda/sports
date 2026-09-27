@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1031 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1027 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,8 +17,6 @@ Generated from `git ls-files`. 1031 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
-- FILES.md -- File manifest (generated, do not hand-edit)
-- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -772,8 +770,6 @@ Generated from `git ls-files`. 1031 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md -- Model Pick Postmortem — 2026-08-28 Slate
 - wnba-oracle/Makefile -- Build/test/lint entrypoints
 - wnba-oracle/README.md -- WNBA Oracle
-- wnba-oracle/STATUS.md -- Status
-- wnba-oracle/STATUS.md -- Status
 - wnba-oracle/STATUS.md -- Status
 - wnba-oracle/alembic.ini
 - wnba-oracle/pyproject.toml -- Package/tool configuration
