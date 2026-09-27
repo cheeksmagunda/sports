@@ -1,21 +1,19 @@
 # Status
 
-Last verified: 2026-09-27T04:59:35Z
+Last verified: 2026-09-27T05:31:49Z
 
-## Overnight freeze readiness (#535)  -  2026-09-27T04:25Z
+## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
 | Check | Result |
 |-------|--------|
 | Slate | `2026-09-27`; first tip `2026-09-27T18:00:00Z`; freeze target `2026-09-27T17:20:00Z` |
-| Pool | `job1_enrichment` **124** rows / 8 teams; `captured_at` `2026-09-27T04:07:40Z`; starters **0** |
-| Live watchdog | `status=warn`; live trigger `rotowire_empty` only |
-| Freeze readiness (pre-fix image) | `ready_for_freeze=false`; sticky history blocker `no_job1_pool` (cleared live); `job1_last_status` thrashing `failed`/`running` |
-| Root cause | (1) `freeze_readiness` unioned history hard triggers after live pool recovered; (2) tip-day empty RotoWire fail-closed from Eastern midnight (T-30h) made overnight job1 exit 1; (3) main-merge QUEUED redeploy storm |
-| Mitigation | Cancelled QUEUED/BUILDING redeploys via `deploymentCancel` (kept SUCCESS tip `70b315e` on api/job*); PR softens RW fail-closed to T-4 and live-only hard blockers |
-| Early job1 | After merge+api/job1 image settle: `scripts/codespace-railway-env -- railway ssh -s wnba-cron-job1 -e wnba-production -- oracle-cron --job job1` (safe; refreshes pool). Else scheduled `0 13 * * *` (~13:00Z) |
-
-Last verified: 2026-09-27T04:25:00Z
-
+| Pool | `job1_enrichment` **124** rows; live watchdog `rotowire_empty` only (starters still 0) |
+| Job1 | `success` exit 0 (verified after #559) |
+| Freeze readiness | `ready_for_freeze=true`; phase `advisory`; blockers `[]`; advisories `rotowire_empty` |
+| Knobs | `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on `wnba-api` + `wnba-cron-job2` (verified) |
+| Root cause | Sticky history `no_job1_pool` after redeploy race + tip-day RotoWire fail-closed overnight (T-30h) |
+| Fix | [#559](https://github.com/cheeksmagunda/sports/pull/559) live-only hard blockers + RotoWire fail-closed within T-4; cleared sticky `no_job1_pool`/`config_drift` rows; cancelled QUEUED thrash where authorized |
+| Residual | Advisory `rotowire_empty` until free-page starters post (~13:00Z job1 / job1-late) |
 
 ## DraftStats / recorded_states corpus export (#526)  -  2026-09-27
 
