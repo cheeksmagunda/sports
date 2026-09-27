@@ -2,11 +2,12 @@
 
 Last verified: 2026-09-27T03:25:00Z (mono max_value + volume + health; #453 / #523)
 
-## Training target: Highest value board (#453 / #505 / #523)  -  2026-09-27
+## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
 
 Locked: train / optimize toward Real Sports **Highest value / Total Value Daily
 Leaderboard** (`highestBoostedValuePlayers` / HIGH TOTAL VALUE boards) for every
-slate. **Do not train on prior users' winning drafts** as the fit target;
+slate — Amihere / Copper / Aubrey-style boards (NFL draftStats Highest-value
+lists). **Do not train on prior users' winning drafts** as the fit target;
 those remain a reference bar. Cash, diversified, and median construction are
 not the objective. Portfolio goal: root `../README.md` (Product goal).
 Own-model surface: `nfl_oracle.valuelaw` + feature ridge; **no LightGBM**
