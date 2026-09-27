@@ -249,9 +249,7 @@ def schedule_url(season_start_year: int) -> str:
 
 
 def gamedetail_url(season_start_year: int, game_id: str) -> str:
-    return (
-        f"{DATA_NBA_BASE}/{season_start_year}/scores/gamedetail/{game_id}_gamedetail.json"
-    )
+    return f"{DATA_NBA_BASE}/{season_start_year}/scores/gamedetail/{game_id}_gamedetail.json"
 
 
 def _game_type_prefix(game_id: str) -> str:
@@ -594,9 +592,7 @@ def _parse_game_type_prefixes(value: str) -> tuple[str, ...]:
         raise argparse.ArgumentTypeError("at least one game type prefix is required")
     for part in values:
         if len(part) != 3 or not part.isdigit():
-            raise argparse.ArgumentTypeError(
-                f"game type prefix must be 3 digits (got {part!r})"
-            )
+            raise argparse.ArgumentTypeError(f"game type prefix must be 3 digits (got {part!r})")
     return values
 
 
