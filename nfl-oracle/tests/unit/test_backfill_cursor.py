@@ -10,9 +10,11 @@ from nfl_oracle.ingest.backfill import (
     games_missing_players,
     load_cursor,
     load_season_game_ids,
-    main as backfill_main,
     save_cursor,
     scan_corpus_gaps,
+)
+from nfl_oracle.ingest.backfill import (
+    main as backfill_main,
 )
 from nfl_oracle.ingest.corpus_g import CorpusGStore
 
