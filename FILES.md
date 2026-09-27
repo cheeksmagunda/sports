@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1119 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -330,6 +330,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
+- nfl-oracle/src/nfl_oracle/recommendations/ollama_influence.py -- Optional Ollama slate-shape influence for NFL projections (#574).
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
 - nfl-oracle/src/nfl_oracle/recommendations/picker_knobs.py -- Evidence-backed projection knobs applied after predict, before optimize (#280).
 - nfl-oracle/src/nfl_oracle/recommendations/pipeline.py -- NFL prepare, publish, and lock lifecycle on the shared durable store.
@@ -491,6 +492,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_live_ok_context_features.py -- Canonical live_ok injury/weather context features stay wired (#418).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
 - nfl-oracle/tests/unit/test_multi_contest_day.py -- Multi-contest day selection for the NFL worker and NFLReader.collect.
+- nfl-oracle/tests/unit/test_ollama_influence.py -- Tests for optional NFL Ollama influence (#574).
 - nfl-oracle/tests/unit/test_optimizer_env_config.py -- Env-driven optimizer construction config (max-value / race mode) for #453.
 - nfl-oracle/tests/unit/test_own_model_feature_map_523.py -- Phase-1 (#523): own-model ridge consumes safe live_ok slate context.
 - nfl-oracle/tests/unit/test_picker_knobs.py -- Unit tests for boost-aware / position-calibration picker knobs (#280).
@@ -790,6 +792,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV self-learning slate watcher
 - scripts/ollama_hv_watcher/__init__.py -- Codespace Ollama HV/TDV self-learning slate watcher (#574).
 - scripts/ollama_hv_watcher/__main__.py -- python -m ollama_hv_watcher → CLI (#574).
+- scripts/ollama_hv_watcher/advice.py -- Slate-shape advice for optional app influence (#574).
 - scripts/ollama_hv_watcher/boards.py -- Summarize HV / TDV player boards for Ollama prompts (#574).
 - scripts/ollama_hv_watcher/cli.py -- CLI for the Ollama HV/TDV slate watcher (#574).
 - scripts/ollama_hv_watcher/client.py -- Minimal Ollama HTTP client for localhost:11434 (#574).
@@ -799,6 +802,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/learn.py -- Write self-learning notes/ticks from HV board summaries via Ollama (#574).
 - scripts/ollama_hv_watcher/live.py -- Loud fail-closed errors when live slate/board fields are missing (#574).
 - scripts/ollama_hv_watcher/pick.py -- Five-player daily contest pick contract for Ollama HV/TDV (#574).
+- scripts/ollama_hv_watcher/push_advice_to_volume.sh -- Shell script
 - scripts/ollama_hv_watcher/serve.py -- systemd-less Ollama serve helpers: health curl, pidfile, nohup (#574).
 - scripts/ollama_hv_watcher/training_data_manifest.json
 - scripts/ollama_hv_watcher/training_manifest.py -- Load the HV/TDV training-data inventory for the Ollama watcher (#574).
@@ -858,6 +862,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_check_issue_link.py
 - scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
+- scripts/tests/test_ollama_hv_advice.py -- Tests for Ollama slate advice writer (#574).
 - scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
 - scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).
@@ -1202,6 +1207,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/src/wnba_oracle/picker/__init__.py
 - wnba-oracle/src/wnba_oracle/picker/field.py -- Ownership projection (field model).
 - wnba-oracle/src/wnba_oracle/picker/game_script.py -- Game-script tier multipliers and blowout adjustments.
+- wnba-oracle/src/wnba_oracle/picker/ollama_influence.py -- Optional Ollama slate-shape influence for WNBA pred scores (#574).
 - wnba-oracle/src/wnba_oracle/picker/optimize.py -- Two-stage lineup optimizer.
 - wnba-oracle/src/wnba_oracle/picker/payout.py -- Payout-curve loader and per-lineup EV computation.
 - wnba-oracle/src/wnba_oracle/picker/popularity.py -- Draft-popularity estimator + anti-popularity contrarian adjustment.
@@ -1367,6 +1373,7 @@ Generated from `git ls-files`. 1112 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_model_validity_audit.py -- Model-validity audit (#53 umbrella): machine-readable characterization of
 - wnba-oracle/tests/unit/test_multiple_comparisons.py -- Multiple-comparisons guard: CPCV splitter + deflated-edge test (D63).
 - wnba-oracle/tests/unit/test_objective_shaping.py -- Objective-shaping terms (D87, Phase 1): leverage / ceiling / duplication.
+- wnba-oracle/tests/unit/test_ollama_influence.py -- Tests for optional WNBA Ollama influence (#574).
 - wnba-oracle/tests/unit/test_opp_dvp_lookup.py -- D74: build_opp_dvp_lookup computes per-opponent mean real_score allowed.
 - wnba-oracle/tests/unit/test_ops_common.py -- Secret-safety tests for the portable production automation helpers.
 - wnba-oracle/tests/unit/test_optimizer_input_contract.py -- The optimizer's two player views form one ID-keyed model contract.
