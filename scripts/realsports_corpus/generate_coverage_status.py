@@ -28,7 +28,7 @@ _SCRIPTS = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from realsports_corpus.coverage_manifest import (  # noqa: E402
+from realsports_corpus.coverage_manifest import (
     CoverageManifest,
     OllamaForbiddenError,
     assert_ollama_helper_forbidden,
@@ -38,7 +38,7 @@ from realsports_corpus.coverage_manifest import (  # noqa: E402
     ollama_helper_allowed,
     write_coverage_manifest,
 )
-from realsports_corpus.export_stubs import (  # noqa: E402
+from realsports_corpus.export_stubs import (
     ExportResult,
     apply_export_results_to_manifest,
     export_nfl_corpus_c_contest,
@@ -47,7 +47,7 @@ from realsports_corpus.export_stubs import (  # noqa: E402
     scaffold_all_stub_families,
     write_family_stubs,
 )
-from realsports_corpus.layout import (  # noqa: E402
+from realsports_corpus.layout import (
     REQUIRED_VARIABLE_FAMILIES,
     SPORTS,
     SlateKey,

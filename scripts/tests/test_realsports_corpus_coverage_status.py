@@ -14,8 +14,10 @@ from realsports_corpus.coverage_manifest import (
 )
 from realsports_corpus.generate_coverage_status import (
     build_status_report,
-    main as generate_main,
     run_offline_fixture_export,
+)
+from realsports_corpus.generate_coverage_status import (
+    main as generate_main,
 )
 
 
