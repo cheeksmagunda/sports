@@ -1,12 +1,55 @@
 # Status
 
-## Railway mono-project shell (verified non-serving) (#457)  -  2026-09-27
+## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
-- Verified scaffold on `sports-oracle` / `nfl-production`: `nfl-api`,
-  `nfl-oracle-worker`, `nfl-frontend`, Postgres. Non-serving; no domains
-  or secret cutover. Design + runbook on #457.
-- Live NFL traffic remains on Railway project `nfl-oracle-staging` /
-  `production` through Sunday 2026-09-27 (#453).
+Operator-ordered live cutover from `nfl-oracle-staging` /
+`production` (`dc2d3b51-…`) to mono project **`sports-oracle`**
+(`cca6b03f-8a84-4fb5-aaa5-decb3830392d`) env **`nfl-production`**
+(`766868da-…`). Codespace `fluffy-zebra-g4gqq746477q2jg` via
+`scripts/codespace-railway-env` (`unset GH_TOKEN GITHUB_TOKEN`). No
+credential minting. No secret values printed.
+
+### Data plane
+
+- `NFL_DATABASE_URL` on mono `nfl-api` + `nfl-oracle-worker` pointed at
+  **LIVE** Postgres from `nfl-oracle-staging` (TCP-proxy public form;
+  sha256[:8]=`7b8ce64c`), **not** empty mono `Postgres-IaYb`
+  (prior sha256[:8]=`190f0bdf`). Set with `--skip-deploys`, then
+  redeployed.
+- Knobs unchanged: `NFL_PICKER_BOOST_RANK_BLEND=0.75`,
+  `NFL_PICKER_PROFILE=boost_0.75`; worker `NFL_RECOMMENDATIONS_ENABLED=1`.
+- Worker `REALSPORTS_STORAGE_STATE_B64GZ` sha256[:8]=`c4a729e2`.
+
+### Serving
+
+| Service | Evidence | Verdict |
+|---------|----------|---------|
+| `nfl-api` | deploy `613e8236` SUCCESS @ `01:49Z` commit `70ea992aef99`; public `https://nfl-api-nfl-production.up.railway.app` | **LIVE** |
+| `nfl-oracle-worker` | deploy `31867f7a` SUCCESS @ `01:55Z` commit `70ea992aef99`; logs `status=waiting_or_locked` | **LIVE** |
+| Mono `/health` | HTTP 200 `status=ok` `recommendation_database=ok` (01:56Z) | **READY** |
+| Old public domain | `nfl-oracle-production.up.railway.app` **deleted** from old `nfl-oracle` (HTTP 404) after mono health verified | **split-brain avoided** |
+
+- Old hostname `nfl-oracle-production.up.railway.app` is a Railway
+  **service** domain (not custom DNS). Claim as custom domain on mono
+  `nfl-api` failed; consumers must use
+  `https://nfl-api-nfl-production.up.railway.app` (or add real custom
+  DNS later).
+- Empty mono worker volume (`nfl-oracle-worker-volume`, mount
+  `/app/nfl-oracle/data`) caused `PermissionError` (root-owned volume
+  under image `USER oracle`). **Detached** so worker could boot; volume
+  retained in project for later chown/reattach. Old project worker+volume
+  left running (no public domain) for rollback.
+
+### Rollback
+
+1. Re-generate public domain on old `nfl-oracle-staging` /
+   `production` / `nfl-oracle` (`railway domain` → restores
+   `nfl-oracle-production.up.railway.app` if name still free, else new
+   `*.up.railway.app`).
+2. Delete or leave idle mono `nfl-api` service domain
+   `nfl-api-nfl-production.up.railway.app`.
+3. Keep old services enabled (they were not scaled down). Re-point any
+   external consumers to the restored old domain.
 
 ## Sunday 2026-09-27 T-40 live verify (2026-09-27 ~01:15Z UTC, issue #453)
 
