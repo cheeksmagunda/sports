@@ -101,14 +101,14 @@ def wnba_own_model_gap_matrix() -> list[dict[str, str]]:
     for name in sorted(serving_base_feature_names()):
         status = classify_serving_feature(name)
         rows.append({"feature": name, "status": status, "surface": _surface(status)})
-    for name in sorted(MONOTONE_CONSTRAINT_NAMES - serving_base_feature_names()):
-        rows.append(
-            {
-                "feature": name,
-                "status": "monotone_documented",
-                "surface": "models.yaml monotone; serve via head_features when present",
-            }
-        )
+    rows.extend(
+        {
+            "feature": name,
+            "status": "monotone_documented",
+            "surface": "models.yaml monotone; serve via head_features when present",
+        }
+        for name in sorted(MONOTONE_CONSTRAINT_NAMES - serving_base_feature_names())
+    )
     return rows
 
 

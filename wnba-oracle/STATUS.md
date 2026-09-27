@@ -101,26 +101,6 @@ Missing seasons: none.
   standby). Mono serving URL is healthy; Actions probe URL drift is residual
   cutover debt (also `wnba-pre-freeze-guard`, `wnba-backfill-enrichment`).
 
-## Serve Tier-0 -> EB primary (#523 Option A)  -  2026-09-27
-
-Code on branch (not yet production-verified on mono):
-
-- Serve ladder default is now `WNBA_SERVE_PRIMARY=eb`: Tier-0 uses
-  `EBHierarchicalBaseline` (optional `team_pace` / `opp_pace` from
-  `head_features`). Minutes blend / player-history / heuristic remain
-  cold-start only.
-- LightGBM quantile heads stay in the train artifact and fire only when
-  `WNBA_SERVE_PRIMARY=heads` (rollback without removing train code).
-- `models.yaml` ensemble weights set to EB=1.0 / LGBM=0.0 for the own-model
-  contract; serve path does not blend those weights (Tier-0 selection is
-  `serve_primary`). Train/grade labels remain Highest-value boards (#505).
-- Inventory: `features.own_model_map` classifies serving_features vs EB pace /
-  minutes / optional LGBM.
-- Production mono job2: unverified until merge + redeploy. Rollback:
-  set `WNBA_SERVE_PRIMARY=heads` on `wnba-cron-job2` / `wnba-api` and
-  redeploy (cron variable changes need a real redeploy).
-
-
 ## Sports-oracle cutover (serving) (#453 / #457)  -  2026-09-27 ~02:00Z
 
 Operator-authorized Sunday-path cutover to Railway project **`sports-oracle`**
