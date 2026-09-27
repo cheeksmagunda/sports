@@ -1,0 +1,146 @@
+{
+  "draftStats": [
+    {
+      "sectionName": "highestBoostedValuePlayers",
+      "players": [
+        {
+          "playerId": 401,
+          "multiplierBonus": 0.0,
+          "value": "5.0",
+          "count": 20,
+          "avgMultiplier": 1.6,
+          "avgPosition": 2.0,
+          "mostCommonPosition": "1",
+          "baseBoostedValue": 5.0,
+          "player": {
+            "id": 401,
+            "firstName": "P",
+            "lastName": "0"
+          },
+          "team": {
+            "id": 30,
+            "key": "SEA"
+          },
+          "teamId": 30
+        },
+        {
+          "playerId": 402,
+          "multiplierBonus": 0.5,
+          "value": "4.6",
+          "count": 19,
+          "avgMultiplier": 1.6,
+          "avgPosition": 2.1,
+          "mostCommonPosition": "2",
+          "baseBoostedValue": 4.7,
+          "player": {
+            "id": 402,
+            "firstName": "P",
+            "lastName": "1"
+          },
+          "team": {
+            "id": 21,
+            "key": "NE"
+          },
+          "teamId": 21
+        },
+        {
+          "playerId": 403,
+          "multiplierBonus": 1.0,
+          "value": "4.2",
+          "count": 18,
+          "avgMultiplier": 1.6,
+          "avgPosition": 2.2,
+          "mostCommonPosition": "3",
+          "baseBoostedValue": 4.4,
+          "player": {
+            "id": 403,
+            "firstName": "P",
+            "lastName": "2"
+          },
+          "team": {
+            "id": 30,
+            "key": "SEA"
+          },
+          "teamId": 30
+        },
+        {
+          "playerId": 404,
+          "multiplierBonus": 1.5,
+          "value": "3.8",
+          "count": 17,
+          "avgMultiplier": 1.6,
+          "avgPosition": 2.3,
+          "mostCommonPosition": "4",
+          "baseBoostedValue": 4.1,
+          "player": {
+            "id": 404,
+            "firstName": "P",
+            "lastName": "3"
+          },
+          "team": {
+            "id": 21,
+            "key": "NE"
+          },
+          "teamId": 21
+        },
+        {
+          "playerId": 405,
+          "multiplierBonus": 2.0,
+          "value": "3.4",
+          "count": 16,
+          "avgMultiplier": 1.6,
+          "avgPosition": 2.4,
+          "mostCommonPosition": "5",
+          "baseBoostedValue": 3.8,
+          "player": {
+            "id": 405,
+            "firstName": "P",
+            "lastName": "4"
+          },
+          "team": {
+            "id": 30,
+            "key": "SEA"
+          },
+          "teamId": 30
+        },
+        {
+          "playerId": 406,
+          "multiplierBonus": 2.5,
+          "value": "3.0",
+          "count": 15,
+          "avgMultiplier": 1.6,
+          "avgPosition": 2.5,
+          "mostCommonPosition": "6",
+          "baseBoostedValue": 3.5,
+          "player": {
+            "id": 406,
+            "firstName": "P",
+            "lastName": "5"
+          },
+          "team": {
+            "id": 21,
+            "key": "NE"
+          },
+          "teamId": 21
+        }
+      ]
+    },
+    {
+      "sectionName": "mostDraftedPlayers",
+      "players": [
+        {
+          "playerId": 501,
+          "multiplierBonus": 1.0,
+          "value": "3.2",
+          "count": 5,
+          "player": {
+            "id": 501,
+            "firstName": "Q",
+            "lastName": "Other"
+          },
+          "teamId": 30
+        }
+      ]
+    }
+  ]
+}

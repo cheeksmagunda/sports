@@ -1,0 +1,21 @@
+{
+  "info": {
+    "isLocked": true,
+    "contest": {
+      "id": 9001,
+      "sport": "nfl",
+      "day": "2025-09-15",
+      "endDay": "2025-09-15",
+      "season": 2025,
+      "numBrawlers": 100,
+      "isFinalized": true,
+      "commentCount": 1,
+      "createdAt": "2025-09-14T11:00:20.202Z",
+      "processedAt": "2025-09-16T05:29:37.364Z",
+      "gameId": 19457,
+      "additionalInfo": {
+        "lineupSize": 5
+      }
+    }
+  }
+}

@@ -394,3 +394,33 @@ Do not train on a bare Codespace checkout, and do not use Mac
 `SPORTS_ALLOW_LOCAL_RAILWAY` for this. Respect the T-40 / slate-lock window
 documented in `STATUS.md` before forcing a rebuild on a live slate.
 
+## Corpus C Total Value / HV board export (issue #526)
+
+NFL Highest-value / Total Value Daily Leaderboards are **not** a dedicated
+table. They are reconstructed from Corpus C `stats.json` `draftStats`
+(`highestBoostedValuePlayers` when present, else value-rank reconstruction).
+Corpus C/G history is on the Railway worker volume, not the orphan `backups`
+branch.
+
+| Item | Value |
+|---|---|
+| Volume mount (Railway) | `/app/nfl-oracle/data` |
+| Default Corpus C path | `{project}/data/raw/corpus_c` → `/app/nfl-oracle/data/raw/corpus_c` on worker |
+| Env override | `NFL_CORPUS_C_ROOT`, `NFL_HV_EXPORT_ROOT` |
+| CLI | `nfl-corpus-c-hv-export` |
+
+```sh
+# offline; empty volume writes coverage_manifest gaps + scaffold.json
+uv run --package nfl-oracle nfl-corpus-c-hv-export --json
+
+# fixtures
+uv run --package nfl-oracle nfl-corpus-c-hv-export \
+  --corpus-root nfl-oracle/tests/fixtures/corpus_c_hv \
+  --export-root /tmp/nfl-hv-export --json
+```
+
+Per contest under the export root:
+`nfl/{year}/{slate_date}/contest_{id}/total_value_leaderboard.json`,
+`draft_stats_all_sections.jsonl`, `matchups.json`. Root
+`coverage_manifest.json` lists gaps. Coordinate with Corpus G nightly (#512 /
+#503); do not mint Real Sports credentials.
