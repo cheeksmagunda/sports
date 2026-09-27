@@ -14,6 +14,155 @@ This document explains how to access Sports Oracle from different clients and ho
 - Grok Bot: the only Cursor-based surface. No standing GitHub PAT. Use Cursor cloud agents on this repo, or an operator-authorized one-session `gh` login. Never copy Codespace credentials into chat or other agents.
 - Sync claim: only say "current" after the relevant commit is on live `main`. A dirty or unpushed Codespace is local state, not portfolio state.
 
+
+## Attach any agent to the Codespace (allowed)
+
+Cloud agents, remote containers, Cursor cloud sessions, Claude/Codex/Copilot
+cloud, and GitHub agents have the **same authority** as a local Mac agent once
+they reach the canonical Codespace write path. That is already portfolio policy
+in root `AGENTS.md` (Operator authorization and agent authority). This section
+is the explicit attach recipe. Credentials stay in the Codespace; do not copy
+Codespaces secrets, Railway tokens, or Real Sports session blobs into a cloud
+container, chat, or agent settings.
+
+### What "attached" means
+
+| Capability | Where it runs | How the agent reaches it |
+|---|---|---|
+| `git` commit / push | Inside Codespace | `gh codespace ssh` or `scripts/codespace-push` |
+| Railway CLI / worker SSH | Inside Codespace | `gh codespace ssh` then `scripts/codespace-railway-env -- ...` |
+| Real Sports (Playwright) | Inside Codespace | Login shell so Codespaces secret `REALSPORTS_STORAGE_STATE_B64GZ` is available; use app helpers / `scripts/auth-check` |
+
+A cloud container that only has a GitHub checkout (or a static snapshot) is
+**not** attached for Railway or Real Sports until it drives the Codespace as
+above.
+
+### Attach recipe (every cloud or Mac agent)
+
+Prerequisite on the operator Mac (or any surface with native `gh` + `codespace`
+scope): you can list and SSH the repo Codespace. Agents must
+`unset GITHUB_TOKEN GH_TOKEN` (or use helpers that do) before `gh codespace ...`
+so an injected token cannot shadow the native login (issue #235).
+
+```bash
+# 1) Find and wake the canonical Codespace
+env -u GH_TOKEN -u GITHUB_TOKEN gh codespace list --repo cheeksmagunda/sports
+# If state is Shutdown, this resumes it (postStart runs health-check/prune):
+env -u GH_TOKEN -u GITHUB_TOKEN gh codespace ssh -c <name> -- true
+
+# 2) Prove the write path from this surface
+make write-path-check
+# Mac / cloud-with-gh: expects "Codespace push route: available"
+# Inside Codespace: expects direct dry-run push to origin
+
+# 3) Run material Git / Railway / Real Sports work INSIDE the Codespace
+env -u GH_TOKEN -u GITHUB_TOKEN gh codespace ssh -c <name> -- bash -lc '
+  cd /workspaces/sports
+  git fetch origin && git switch main && git pull --ff-only
+  scripts/codespace-railway-env -- railway whoami
+  scripts/auth-check nfl-oracle --offline
+  # Real Sports secret is present in login shells / gh codespace ssh;
+  # never print REALSPORTS_STORAGE_STATE_B64GZ
+'
+
+# 4) Optional: sync uncommitted local edits through Codespace Git auth
+# (local HEAD must already exist on origin; see scripts/codespace-push)
+SPORTS_CODESPACE_NAME=<name> scripts/codespace-push "commit message"
+```
+
+Set `SPORTS_CODESPACE_NAME` when more than one Codespace exists. After a
+Codespace rebuild, re-run `scripts/sync-railway-session-to-codespace` from the
+Mac so Railway CLI session auth is present again (see **Railway from the
+Codespace** below).
+
+
+### Claude cloud environment (API credentials = GitHub attach key)
+
+Claude's **Edit cloud environment** → **API credentials** → **Add credential**
+dialog is a **Bearer HTTP credential** (Claude attaches `Authorization: Bearer
+…` only to the websites you list). It is **not** a visible env var and it is
+**not** automatically `GH_TOKEN` for every shell.
+
+#### Fill-in for Codespace attach (this dialog)
+
+| Field | Value |
+|---|---|
+| Add to | Environment: Sports |
+| Name | `GitHub Codespaces` |
+| Credential type | **Bearer** |
+| Allowed websites | `api.github.com` (add `*.github.com` only if Claude's tools also call non-api GitHub hosts; prefer the tight list) |
+| Custom headers → Authorization | Prefix **Bearer**; Value = operator PAT with scopes `codespace`, `repo`, `read:org`, `workflow` |
+| Then | **Connect** |
+
+Network access on the parent env stays **Full**. Put only non-secrets in
+Environment variables (e.g. `SPORTS_CODESPACE_NAME=fluffy-zebra-g4gqq746477q2jg`).
+
+**Operator creates the PAT.** Agents must not mint tokens. This is an
+operator-authorized GitHub attach key so Claude can call the Codespaces API
+on `api.github.com`.
+
+**Do not** add Bearer credentials for Railway or Real Sports here. Those stay
+in the Codespace; Claude reaches them only after Codespace SSH / helpers.
+
+#### Shell `gh` vs Bearer credential
+
+- **Claude HTTP / API tools** to `api.github.com` use this Bearer automatically.
+- **Shell `gh codespace ssh` / `codespace-push`** need a stored `gh` login. If
+  the cloud image exposes the same token to the setup script as an env var,
+  persist it with `gh auth login --with-token` (so issue #235 unset of env
+  `GH_TOKEN` still leaves CLI auth). If Claude only injects Bearer for HTTP
+  tools and not into the shell, run Railway/Real/`git push` by having Claude
+  drive `gh` after `gh auth login`, or work inside a browser/VS Code Codespace
+  session where `gh` is already authenticated.
+
+Recommended setup script when a token *is* available in the process env:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
+  printf '%s\n' "${GH_TOKEN:-${GITHUB_TOKEN}}" | gh auth login --hostname github.com --with-token
+  gh auth status
+fi
+```
+
+Replace the default `npm install`. This repo is Python/`uv`, not npm.
+
+### Cursor cloud / GitHub coding agents
+
+Allowed and expected:
+
+1. Open or resume the repo Codespace (browser, VS Code/Cursor Remote, or
+   `gh codespace ssh`).
+2. Run the agent **in that Codespace terminal**, or have the agent invoke
+   `gh codespace ssh -c <name> -- ...` / `scripts/codespace-push` /
+   `scripts/codespace-railway-env` from a surface that already has native `gh`
+   codespace scope.
+3. Treat Railway and Real Sports as Codespace-only hosts; do not provision
+   parallel Railway or Real Sports credentials on the cloud container.
+
+Not allowed: an agent minting its own PAT, copying `REALSPORTS_STORAGE_STATE_B64GZ`
+or Railway tokens into the cloud container, or declaring Railway/Real Sports
+"blocked" solely because the cloud container lacks those secrets. An
+**operator-placed** GitHub token with `codespace` scope in Claude **API
+credentials** (see above) is the allowed attach key.
+
+### Verify attachment (value-free)
+
+```bash
+env -u GH_TOKEN -u GITHUB_TOKEN gh codespace ssh -c <name> -- bash -lc '
+  cd /workspaces/sports
+  make write-path-check
+  scripts/codespace-railway-env -- railway whoami
+  scripts/auth-check nfl-oracle --offline
+'
+```
+
+All three should succeed without printing secret values. If Railway whoami
+fails, re-sync the Mac CLI session; if Real Sports looks unset, confirm you
+used a login shell (`bash -l` or `gh codespace ssh`), not a bare non-login
+command.
+
 ## Quick-start by entry point
 
 ### GitHub Codespaces (browser, app, or forwarded editor)
@@ -108,6 +257,8 @@ Use Grok against the GitHub repository or Codespace when that connector is avail
 **Sync status:** Live client with a connector; otherwise read-only or static snapshot. Only `main` is portfolio-current.
 
 ### Cloud project snapshots
+
+Snapshots are for context only. For Git push, Railway, or Real Sports, attach to the Codespace using **Attach any agent to the Codespace** above; do not expect those secrets inside the cloud project container.
 
 Use this for Claude projects, Codex projects, Copilot reusable chat/project context, Grok knowledge bases, and mobile chats that cannot read the live repository directly.
 
@@ -358,7 +509,9 @@ scripts/codespace-railway-env -- railway ssh --service nfl-oracle-worker -- \
 ```
 
 Do not rely on `railway ssh --session` / tmux unless the worker image has
-tmux. Prefer a long SSH or worker-side nohup for long jobs.## Codespace stay-awake around slates
+tmux. Prefer a long SSH or worker-side nohup for long jobs.
+
+## Codespace stay-awake around slates
 
 Keep the Codespace **Available** around live slate / lock windows (NFL TNF,
 WNBA tip windows, etc.). Wake-and-hold; do not assume Shutdown self-heals
