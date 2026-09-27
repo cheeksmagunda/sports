@@ -2,6 +2,9 @@
 
 NBA Oracle application scaffold.
 
+Portfolio product goal: root `../README.md` (Product goal). Current NBA serve
+knobs (none while scaffold-only) are in `STATUS.md`.
+
 Current scope is infrastructure only: package wiring, boundary-safe layout, a
 health-only FastAPI process for Railway mono staging, and verification targets.
 Domain behavior (providers, schemas, models, contests, and operations) is

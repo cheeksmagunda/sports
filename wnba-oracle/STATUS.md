@@ -2,6 +2,19 @@
 
 Last verified: 2026-09-27T03:03:43Z
 
+## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
+
+Locked: train / optimize on Real Sports **Highest value / Total Value Daily
+Leaderboard** (`draftStats.sectionName=highestBoostedValuePlayers`) for every
+slate - Amihere / Copper / Aubrey-style boards down the list.
+**Do not train on prior users' winning drafts** (`contest_leaderboards` /
+`leaderboard_lineup`); those are a reference bar to beat, not fit targets.
+Popularity sections are excluded from the EB label corpus. Backtests grade
+each slate against that slate's Highest value players, not winning drafts.
+Portfolio goal: root `../README.md` (Product goal). Current serve knobs live
+in the mono / Win-draft sections below. Existing EB / ridge surface only; no
+new model stacks (#523).
+
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
 
 Read-only verify via Codespace `fluffy-zebra-g4gqq746477q2jg` +
