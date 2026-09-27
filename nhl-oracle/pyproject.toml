@@ -9,6 +9,8 @@ authors = [{ name = "Ben Oracle" }]
 
 dependencies = [
     "oracle-core==0.1.0",
+    "httpx>=0.28,<0.30",
+    "playwright>=1.59.0",
 ]
 
 [tool.uv.sources]
@@ -17,6 +19,7 @@ oracle-core = { workspace = true }
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0.3,<10.0",
+    "pytest-asyncio>=0.24,<2.0",
     "ruff>=0.7,<1.0",
     "mypy>=1.13,<2.0",
 ]
@@ -31,6 +34,7 @@ packages = ["src/nhl_oracle"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
