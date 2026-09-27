@@ -70,19 +70,33 @@ def family_slate_dir(corpus_root: Path, family: str, slate_date: str) -> Path:
 def _as_float(value: object) -> float | None:
     if value is None:
         return None
-    try:
-        return float(str(value))
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _as_int(value: object) -> int | None:
     if value is None:
         return None
-    try:
-        return int(str(value))
-    except (TypeError, ValueError):
-        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _atomic_write_bytes(path: Path, payload: bytes) -> None:
