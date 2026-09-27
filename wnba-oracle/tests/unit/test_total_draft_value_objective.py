@@ -273,25 +273,27 @@ def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:
     )
     calls: list[object] = []
 
-    def _fake_contrarian(scores, pop, cfg):  # noqa: ANN001
+    def _fake_contrarian(scores, pop, cfg):
         calls.append(cfg)
         return {pid: score - 1.0 for pid, score in scores.items()}
 
-    monkeypatch.setattr(job2, "predict_players", lambda *a, **k: preds)
-    monkeypatch.setattr(job2, "_compute_popularity_scores", lambda *a, **k: {1: 5000.0, 2: 100.0})
-    monkeypatch.setattr(job2, "_load_measured_drafts", lambda *a, **k: {})
+    monkeypatch.setattr(job2, "predict_players", lambda *_a, **_k: preds)
+    monkeypatch.setattr(
+        job2, "_compute_popularity_scores", lambda *_a, **_k: {1: 5000.0, 2: 100.0}
+    )
+    monkeypatch.setattr(job2, "_load_measured_drafts", lambda *_a, **_k: {})
     monkeypatch.setattr(job2, "apply_contrarian_adjustment", _fake_contrarian)
-    monkeypatch.setattr(job2, "player_volatility", lambda *a, **k: {})
+    monkeypatch.setattr(job2, "player_volatility", lambda *_a, **_k: {})
     monkeypatch.setattr(
         job2,
         "materialize_specs",
-        lambda adjusted, **k: (
+        lambda adjusted, **_k: (
             [],
             [],
             {pid: {"pred_real_score_p50": score} for pid, score in adjusted.items()},
         ),
     )
-    monkeypatch.setattr(job2, "attach_archetypes", lambda *a, **k: None)
+    monkeypatch.setattr(job2, "attach_archetypes", lambda *_a, **_k: None)
 
     policy = ModelPolicy(
         optimizer=OptimizeConfig(objective_mode="total_draft_value"),
@@ -322,9 +324,9 @@ def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:
 
 def test_tdv_disables_floor_tilt_multiplier() -> None:
     """Floor tilt is cash/median mid-slot blend; TDV must keep the true center."""
+    from wnba_oracle.modeling.policy import ModelPolicy
     from wnba_oracle.modeling.scoring import _floor_tilt_multiplier
     from wnba_oracle.picker.optimize import OptimizeConfig
-    from wnba_oracle.modeling.policy import ModelPolicy
 
     # Sanity: floor tilt still works when weight > 0 under payout path math.
     tilted = _floor_tilt_multiplier(1.0, 4.0, boost=0.5, weight=0.2, max_boost=2.0)

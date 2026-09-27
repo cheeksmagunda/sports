@@ -1,6 +1,19 @@
 # Status
 
-Last verified: 2026-09-27T03:03:43Z
+Last verified: 2026-09-27T03:40:00Z
+
+## Next-slate readiness (#453)  -  2026-09-27 ~03:40Z
+
+| Check | Result |
+|-------|--------|
+| Slate | `2026-09-26`; first tip `2026-09-27T18:00:00Z`; freeze target `2026-09-27T17:20:00Z` |
+| Serving health | API `/health` ok; frontend HTTP 200; watchdog `status=ok`, `ready_for_freeze=true` |
+| Dual-fire | Live `wnba-oracle` cron schedules **null**; mono schedules armed (job1 `0 13`, job1-late `*/30 16-23`, job2 `*/5 14-23,0-3`, dayclose `0 6`) |
+| DATA_PLANE_MATCH | Same live Postgres (`acela.proxy.rlwy.net:51730`, password hash match) and Redis (`altaria.proxy.rlwy.net:13969` = live redis TCP proxy); mono uses `sslmode=require` |
+| DB freshness | `wnba_game_logs` seasons **2017-2026** present (49756 rows; 2026 max game_date `2026-09-24`) |
+| Job2/API knobs | `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value`, `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE=0.001`, `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` (api+job2 process env verified) |
+| QUEUED | Cleared stuck QUEUED deploys via `deploymentCancel` |
+| Residual | Advisory `config_drift` clears after this PR merges+redeploys; advisory `rotowire_empty` until Sunday ~13:00Z job1 |
 
 ## Multi-year `wnba_game_logs` accuracy (#509 / #492 / #498 / #453)  -  2026-09-27T03:03Z
 
@@ -108,8 +121,8 @@ printed.
 ## Win-draft knobs on mono (verified) (#453)  -  2026-09-27
 
 - `PAYOUT_REGIME=top_1` on `wnba-cron-job2` + `wnba-api` (was `top_20`; rollback: restore `top_20`).
-- `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on `wnba-cron-job2` (process env verified via `railway run`; rollback: `payout`).
-- `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE=0.001` on `wnba-cron-job2`.
+- `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` on `wnba-cron-job2` + `wnba-api` (process env verified; rollback: `payout`).
+- `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE=0.001` on those services.
 - `LIVE_OWNERSHIP_CAPTURE_ENABLED=true` on those services.
 - `EXPECTED_PROD_CONFIG["optimizer_objective_mode"]` synced to `total_draft_value` so job2 watchdog does not warn `config_drift` against the live flip.
 - Under TDV, job2 skips contrarian sampler fade and floor-tilt (cash/median mid-slot blend); ownership preference is only the fade tiebreaker.
