@@ -1,8 +1,9 @@
 """Discover open/upcoming slate windows for the HV watcher (#574).
 
-Sport applications own live calendars. This module stays import-safe: it
-loads an explicit windows JSON (operator/CI/fixture) and optionally merges
-static calendar stubs under ``fixtures/calendars/``. No sport-app imports.
+Sport applications own live calendars. Default path is LIVE ONLY: explicit
+``--windows-json`` or ``SPORTS_OLLAMA_WINDOWS_JSON``. Fixture calendars are
+opt-in for offline tests via ``include_fixtures=True`` / ``--allow-fixtures``.
+Never invent placeholder kickoff/close times. No sport-app imports.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.windows import (
     DayWatchPlan,
     SlateWindow,
@@ -40,7 +42,11 @@ load_windows_json = load_windows_file
 
 
 def load_fixture_calendars(root: Path | None = None) -> DayWatchPlan | None:
-    """Merge ``*.json`` calendar stubs under fixtures/calendars if present."""
+    """Merge ``*.json`` calendar stubs under fixtures/calendars if present.
+
+    Offline tests only. Production watchers must not call this unless the
+    operator explicitly passed ``--allow-fixtures``.
+    """
 
     calendars = Path(root) if root is not None else DEFAULT_FIXTURE_CALENDARS
     if not calendars.is_dir():
@@ -53,44 +59,46 @@ def load_fixture_calendars(root: Path | None = None) -> DayWatchPlan | None:
         elif isinstance(payload, dict) and isinstance(payload.get("slates"), list):
             rows = payload["slates"]
         else:
-            continue
-        for row in rows:
-            if isinstance(row, dict):
-                windows.append(SlateWindow.from_dict(row))
+            raise LiveDataRequiredError(
+                "slates",
+                context=f"fixture_calendar={path}",
+            )
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                raise LiveDataRequiredError(
+                    f"slates[{index}]",
+                    context=f"fixture_calendar={path}",
+                )
+            windows.append(SlateWindow.from_dict(row))
     if not windows:
         return None
     return build_day_plan(windows)
 
 
 def fixture_example_payload() -> dict[str, Any]:
-    """Offline example used by docs/CLI ``--example``; not live calendar data."""
+    """Offline example for docs only; NEVER treat as live calendar data."""
 
     plan = load_fixture_calendars()
     if plan is not None:
-        return {"slates": [s.to_dict() for s in plan.slates]}
-    return {
-        "slates": [
-            {
-                "sport": "nfl",
-                "slate_id": "2026-09-27-main",
-                "freeze_or_kickoff_at": "2026-09-27T17:00:00Z",
-                "close_at": "2026-09-28T04:00:00Z",
-                "lead_minutes": 40,
-            }
-        ]
-    }
+        return {
+            "slates": [s.to_dict() for s in plan.slates],
+            "WARNING": "fixture_only_not_live",
+        }
+    raise LiveDataRequiredError("fixture_calendars", context="docs_example")
 
 
 def discover_day_plan(
     *,
     windows_json: Path | None = None,
-    include_fixtures: bool = True,
+    include_fixtures: bool = False,
     environ: dict[str, str] | None = None,
 ) -> DayWatchPlan:
-    """Resolve a day plan from explicit JSON, env path, and/or fixtures.
+    """Resolve a LIVE day plan from explicit JSON or env path.
 
-    Precedence: ``windows_json`` argument, then ``SPORTS_OLLAMA_WINDOWS_JSON``,
-    then fixture calendars. Raises ``FileNotFoundError`` when nothing resolves.
+    Precedence: ``windows_json`` argument, then ``SPORTS_OLLAMA_WINDOWS_JSON``.
+    Fixture calendars only when ``include_fixtures=True`` (tests / explicit
+    ``--allow-fixtures``). Raises ``LiveDataRequiredError`` when nothing
+    live resolves — never invents placeholder kickoffs.
     """
 
     env = environ if environ is not None else os.environ
@@ -101,9 +109,11 @@ def discover_day_plan(
     if env_path:
         candidates.append(Path(env_path))
 
+    missing_candidates: list[str] = []
     for path in candidates:
         if path.is_file():
             return load_windows_file(path)
+        missing_candidates.append(str(path))
 
     if include_fixtures:
         plan = load_fixture_calendars()
@@ -111,7 +121,11 @@ def discover_day_plan(
             return plan
 
     searched = ", ".join(str(p) for p in candidates) or "(none)"
-    raise FileNotFoundError(
-        "no_slate_windows_found: provide --windows-json or set "
-        f"{WINDOWS_ENV} (searched={searched})"
+    raise LiveDataRequiredError(
+        "slate_windows",
+        context=(
+            f"provide --windows-json or set {WINDOWS_ENV} with LIVE freeze/"
+            f"kickoff+close per sport; fixtures off by default "
+            f"(searched={searched}; missing={missing_candidates})"
+        ),
     )

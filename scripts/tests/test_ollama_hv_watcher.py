@@ -25,6 +25,7 @@ from ollama_hv_watcher.learn import (
     build_learn_prompt,
     write_learning_tick,
 )
+from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.pick import (
     FIVE_PLAYER_LINEUP_SIZE,
     five_player_lineup,
@@ -168,11 +169,35 @@ def test_board_summary_ranks_by_value() -> None:
     assert "DAILY CONTEST CARD" in prompt
 
 
+def test_discover_live_only_refuses_fixture_default() -> None:
+    with pytest.raises(LiveDataRequiredError, match="LIVE_DATA_REQUIRED"):
+        discover_day_plan(include_fixtures=False, environ={})
+
+
+def test_discover_fixtures_opt_in_only() -> None:
+    plan = discover_day_plan(include_fixtures=True, environ={})
+    sports = {s.sport for s in plan.slates}
+    assert "nfl" in sports
+
+
+def test_board_refuses_missing_value_placeholder() -> None:
+    with pytest.raises(LiveDataRequiredError, match="value\\|max_value"):
+        summarize_board_payload(
+            {
+                "sport": "nfl",
+                "slate_key": "x",
+                "section": "highestBoostedValuePlayers",
+                "players": [{"player_id": 1, "name": "A"}],
+            }
+        )
+
+
 def test_five_player_lineup_every_day() -> None:
     summary = summarize_board_payload(
         {
             "sport": "nfl",
             "slate_key": "sun",
+            "section": "highestBoostedValuePlayers",
             "players": _five_players(),
         }
     )
@@ -187,6 +212,7 @@ def test_five_player_lineup_fails_closed_when_short() -> None:
         {
             "sport": "wnba",
             "slate_key": "short",
+            "section": "highestBoostedValuePlayers",
             "players": [
                 {"player_id": 1, "name": "A", "value": 3.0},
                 {"player_id": 2, "name": "B", "value": 2.0},
@@ -202,6 +228,7 @@ def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
         {
             "sport": "wnba",
             "slate_key": "2026-09-27",
+            "section": "highestBoostedValuePlayers",
             "players": _five_players(),
         }
     )

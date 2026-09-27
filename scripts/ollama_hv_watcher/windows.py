@@ -12,18 +12,25 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from ollama_hv_watcher.live import LiveDataRequiredError, require_live
+
 DEFAULT_T40_MINUTES = 40
 
 
 def parse_iso_utc(value: str) -> datetime:
     """Parse an ISO-8601 timestamp into an aware UTC datetime."""
 
-    raw = value.strip()
+    raw = require_live(value, "timestamp")
+    assert isinstance(raw, str)
+    raw = raw.strip()
     if raw.endswith("Z"):
         raw = raw[:-1] + "+00:00"
     dt = datetime.fromisoformat(raw)
     if dt.tzinfo is None:
-        raise ValueError(f"timestamp_must_be_timezone_aware:{value!r}")
+        raise LiveDataRequiredError(
+            "timestamp_timezone",
+            context=f"value={value!r}; refuse naive placeholders",
+        )
     return dt.astimezone(UTC)
 
 
@@ -99,11 +106,34 @@ class SlateWindow:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> SlateWindow:
-        lead = int(payload.get("lead_minutes", DEFAULT_T40_MINUTES))
+        if not isinstance(payload, dict):
+            raise LiveDataRequiredError("slate_row", context="not_a_dict")
+        missing = [
+            key
+            for key in ("sport", "slate_id", "freeze_or_kickoff_at", "close_at")
+            if key not in payload or payload[key] in (None, "")
+        ]
+        if missing:
+            raise LiveDataRequiredError(
+                ",".join(missing),
+                context="slate_window; refuse invented kickoff/close",
+            )
+        if "lead_minutes" in payload and payload["lead_minutes"] is None:
+            raise LiveDataRequiredError(
+                "lead_minutes",
+                context="explicit null is ambiguous; omit key for T-40 default",
+            )
+        lead = (
+            int(payload["lead_minutes"])
+            if "lead_minutes" in payload
+            else DEFAULT_T40_MINUTES
+        )
         return cls(
-            sport=str(payload["sport"]),
-            slate_id=str(payload["slate_id"]),
-            freeze_or_kickoff_at=parse_iso_utc(str(payload["freeze_or_kickoff_at"])),
+            sport=str(require_live(payload["sport"], "sport")),
+            slate_id=str(require_live(payload["slate_id"], "slate_id")),
+            freeze_or_kickoff_at=parse_iso_utc(
+                str(payload["freeze_or_kickoff_at"])
+            ),
             close_at=parse_iso_utc(str(payload["close_at"])),
             lead_minutes=lead,
         )
@@ -195,9 +225,19 @@ def load_windows_payload(payload: dict[str, Any] | list[Any]) -> DayWatchPlan:
     else:
         rows = payload.get("slates")
         if not isinstance(rows, list):
-            raise TypeError("windows_json_requires_slates_list")
-    windows = [SlateWindow.from_dict(row) for row in rows if isinstance(row, dict)]
+            raise LiveDataRequiredError(
+                "slates",
+                context="windows_json_requires_slates_list",
+            )
+    windows: list[SlateWindow] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise LiveDataRequiredError(
+                f"slates[{index}]",
+                context="row_must_be_object; refuse silent skip",
+            )
+        windows.append(SlateWindow.from_dict(row))
     plan = portfolio_window(windows)
     if plan is None:
-        raise ValueError("windows_json_empty_slates")
+        raise LiveDataRequiredError("slates", context="windows_json_empty")
     return plan

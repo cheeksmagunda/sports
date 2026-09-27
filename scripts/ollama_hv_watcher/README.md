@@ -10,6 +10,13 @@ Contest card size is fixed at **5** (`FIVE_PLAYER_LINEUP_SIZE` in
 exactly five distinct players. Boards with fewer than five ranked players
 fail closed.
 
+## Live only (no placeholders)
+
+Default discovery refuses fixture calendars. Supply LIVE windows via
+`--windows-json` or `SPORTS_OLLAMA_WINDOWS_JSON`. Missing or ambiguous
+fields raise `LIVE_DATA_REQUIRED` (exit 4). Opt-in fixtures for offline
+tests only: `--allow-fixtures`.
+
 ## Gate
 
 - Binary install + `ollama serve`: allowed on the Codespace now.
@@ -26,9 +33,13 @@ with `is_active(now)`.
 
 ```sh
 bash scripts/ollama_hv_watcher/install_codespace.sh
-PYTHONPATH=scripts python -m ollama_hv_watcher --status
-PYTHONPATH=scripts python -m ollama_hv_watcher --once --dry-run
-SPORTS_OLLAMA_UNLOCK=1 PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
+# LIVE windows required:
+SPORTS_OLLAMA_WINDOWS_JSON=/path/to/live_windows.json \
+  PYTHONPATH=scripts python -m ollama_hv_watcher --status
+SPORTS_OLLAMA_UNLOCK=1 SPORTS_OLLAMA_WINDOWS_JSON=/path/to/live_windows.json \
+  PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
+# Offline tests only:
+PYTHONPATH=scripts python -m ollama_hv_watcher --once --allow-fixtures --dry-run
 ```
 
 Default model: `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`.

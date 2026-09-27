@@ -37,6 +37,7 @@ from ollama_hv_watcher.gate import (
     operator_unlock_enabled,
 )
 from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
     DEFAULT_HOST,
@@ -59,6 +60,16 @@ def _print_json(payload: object) -> None:
 def cmd_status(args: argparse.Namespace) -> int:
     health = health_check(args.host)
     manifest = load_manifest_or_empty(Path(args.manifest) if args.manifest else None)
+    plan_error: str | None = None
+    plan_payload: dict[str, object] | None = None
+    try:
+        plan = discover_day_plan(
+            windows_json=Path(args.windows_json) if args.windows_json else None,
+            include_fixtures=bool(getattr(args, "allow_fixtures", False)),
+        )
+        plan_payload = plan.to_dict()
+    except LiveDataRequiredError as exc:
+        plan_error = str(exc)
     _print_json(
         {
             "health": health,
@@ -69,9 +80,14 @@ def cmd_status(args: argparse.Namespace) -> int:
             or operator_unlock_enabled(),
             "default_model": DEFAULT_MODEL,
             "five_player_lineup_size": FIVE_PLAYER_LINEUP_SIZE,
+            "live_only": not bool(getattr(args, "allow_fixtures", False)),
             "data_root": str(Path(args.data_root)),
+            "plan": plan_payload,
+            "plan_error": plan_error,
         }
     )
+    if plan_error is not None:
+        return 4
     return 0 if health.get("ok") else 1
 
 
@@ -86,10 +102,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
-    plan = discover_day_plan(
-        windows_json=Path(args.windows_json) if args.windows_json else None,
-        include_fixtures=not args.no_fixtures,
-    )
+    try:
+        plan = discover_day_plan(
+            windows_json=Path(args.windows_json) if args.windows_json else None,
+            include_fixtures=bool(getattr(args, "allow_fixtures", False)),
+        )
+    except LiveDataRequiredError as exc:
+        _print_json({"error": "LIVE_DATA_REQUIRED", "detail": str(exc)})
+        return 4
     now = _utc_now()
     payload = plan.to_dict()
     payload["now"] = now.isoformat().replace("+00:00", "Z")
@@ -102,10 +122,14 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
-    plan = discover_day_plan(
-        windows_json=Path(args.windows_json) if args.windows_json else None,
-        include_fixtures=not args.no_fixtures,
-    )
+    try:
+        plan = discover_day_plan(
+            windows_json=Path(args.windows_json) if args.windows_json else None,
+            include_fixtures=bool(getattr(args, "allow_fixtures", False)),
+        )
+    except LiveDataRequiredError as exc:
+        _print_json({"error": "LIVE_DATA_REQUIRED", "detail": str(exc)})
+        return 4
     data_root = Path(args.data_root)
     data_root.mkdir(parents=True, exist_ok=True)
     poll = max(1.0, float(args.poll_seconds))
@@ -224,7 +248,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--manifest", default="", help="Path to coverage_manifest.json")
     parser.add_argument("--windows-json", default="")
-    parser.add_argument("--no-fixtures", action="store_true")
+    parser.add_argument(
+        "--allow-fixtures",
+        action="store_true",
+        help="Opt-in offline fixture calendars (tests only). Default is LIVE ONLY.",
+    )
     parser.add_argument("--poll-seconds", type=float, default=30.0)
     parser.add_argument("--ensure-serve", action="store_true")
     parser.add_argument("--pidfile", default=str(DEFAULT_PIDFILE))
