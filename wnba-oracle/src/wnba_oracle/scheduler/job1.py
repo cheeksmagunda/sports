@@ -52,7 +52,7 @@ from wnba_oracle.ingest.realsports import (
     fetch_slate_game_times,
     headers_or_capture,
 )
-from wnba_oracle.ingest.rotowire import fetch_lineups
+from wnba_oracle.ingest.rotowire import fetch_lineups, starters_expected
 
 log = get_logger("oracle.job1")
 
@@ -100,14 +100,12 @@ __all__ = [
 ]
 
 
-# Fail closed when RotoWire is empty inside the ~30h pre-tip window where
-# expected lineups should already be posted (#319). Outside that window an
-# empty scrape is normal (contest opened early; no games on the page yet).
-_ROTOWIRE_NEAR_TIP = dt.timedelta(hours=30)
-
-
+# Fail closed when RotoWire is empty once expected lineups should already be
+# posted (#319): inside the lead window and on the tip's Eastern date (#441).
+# Outside that, an empty scrape is normal (contest opened early; no games on
+# the page yet).
 def _rotowire_near_tip(slate_date: str, now_utc: dt.datetime | None = None) -> bool:
-    """True when starters are expected for this slate (tip within 30h)."""
+    """True when starters are expected for this slate on RotoWire's free page."""
     now_utc = now_utc or dt.datetime.now(dt.UTC)
     try:
         from wnba_oracle.scheduler.job2_io import _load_slate_lock_time
@@ -118,10 +116,7 @@ def _rotowire_near_tip(slate_date: str, now_utc: dt.datetime | None = None) -> b
     if tip is None:
         # No tip yet: do not fail the morning seed on an off-day empty page.
         return False
-    if tip.tzinfo is None:
-        tip = tip.replace(tzinfo=dt.UTC)
-    tip = tip.astimezone(dt.UTC)
-    return now_utc >= (tip - _ROTOWIRE_NEAR_TIP)
+    return starters_expected(tip, now_utc)
 
 
 def _rotowire_empty_degraded(slate_date: str, lineups: list) -> tuple[str, ...]:
@@ -132,7 +127,7 @@ def _rotowire_empty_degraded(slate_date: str, lineups: list) -> tuple[str, ...]:
         log.error(
             "job1_rotowire_empty_near_tip",
             slate_date=slate_date,
-            note="starters expected within 30h of tip; empty RotoWire is fail-closed",
+            note="starters expected on tip day within 30h; empty RotoWire is fail-closed",
         )
         return ("rotowire_empty_near_tip",)
     log.warning(
