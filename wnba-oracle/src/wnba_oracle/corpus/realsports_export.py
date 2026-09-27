@@ -122,7 +122,7 @@ def _as_float(value: object) -> float | None:
     if value is None:
         return None
     try:
-        return float(value)  # type: ignore[arg-type]
+        return float(str(value))
     except (TypeError, ValueError):
         return None
 
@@ -131,7 +131,7 @@ def _as_int(value: object) -> int | None:
     if value is None:
         return None
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(str(value))
     except (TypeError, ValueError):
         return None
 
