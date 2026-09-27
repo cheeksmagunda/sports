@@ -4,14 +4,23 @@ Defaults below reflect Week 2 live read-only audit (#299) as corrected by the
 pre-boost re-audit (#325): five-card ordered, per-contest lock, score label
 "value", goalie eligible, and boost_regime none until every NHL team has
 played. Historical contest 1901 draftStats may show flat multiplierBonus from
-a later window; that must not drive the live pre-boost default. Re-open a
-field to UNKNOWN/None only when a later live audit contradicts these facts.
+a later window; that must not drive the live pre-boost default.
+
+Strategy (#501 / #453): the edge is the gap between early slate games starting
+and every NHL team having >=1 GP. Through that entire gap: ZERO BOOST. Exploit
+field mispricing; never arm boost logic early. The hard gate lives in
+``contract.boost_gate``. Re-open a field to UNKNOWN/None only when a later live
+audit contradicts these facts.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from nhl_oracle.contract.boost_gate import TeamGamesPlayed
 
 OPEN_QUESTION_FORMAT = "contest_format_five_card_ordered_vs_roster_construction"
 OPEN_QUESTION_LOCK_SCOPE = "lock_scope_per_contest_vs_per_game"
@@ -103,6 +112,9 @@ class NhlAuditFixture:
     contract: NhlContestContract
     candidates: tuple[NhlCandidate, ...]
     expected_roster_size: int
+    # Current-season team GP for the hard zero-boost gate. None / incomplete
+    # / any 0-GP team keeps boost disabled (fail closed). See boost_gate.py.
+    team_games_played: tuple[TeamGamesPlayed, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.expected_roster_size <= 0:

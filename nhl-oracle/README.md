@@ -92,9 +92,14 @@ and see five ordered Real Sports recommendations for manual entry. Week 2
 live audit (#299) plus pre-boost correction (#325) confirmed five-card-ordered
 format, per-contest lock, score label "value", goalie eligibility, and slot
 multipliers (2.0/1.8/1.6/1.4/1.2). Boost regime is **none** (pre-boost) until
-every NHL team has played; current-slate player cards lack card boost fields.
-Do not design picker logic around boosts before that milestone. Historical
-contest 1901 draftStats may show flat `multiplierBonus` from a later window.
+every NHL team has played.
+
+**Hard gate (#501):** `contract.boost_gate` keeps boost multiplier at **0**
+through the early-slate gap (games starting before all 32 clubs have ≥1 GP).
+That gap is the strategy window: exploit field mispricing; never arm boost /
+ownership-fade / leverage early. Fail closed when team-GP coverage is missing.
+Historical contest 1901 draftStats may show flat `multiplierBonus` from a
+later window and must not override the gate.
 
 1. **Product and provider contract.** Audit current and historical contest
    identities, exact score/value labels, candidate completeness, goalie

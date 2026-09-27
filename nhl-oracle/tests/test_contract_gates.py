@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from nhl_oracle.contract.boost_gate import NHL_EXPECTED_TEAM_COUNT, TeamGamesPlayed
 from nhl_oracle.contract.gates import evaluate_nhl_audit
 from nhl_oracle.contract.schema import (
     BoostRegime,
@@ -13,6 +14,12 @@ from nhl_oracle.contract.schema import (
 )
 
 DECISION_AT = datetime(2026, 10, 1, 0, 0, tzinfo=UTC)
+
+
+def _all_teams_played() -> tuple[TeamGamesPlayed, ...]:
+    return tuple(
+        TeamGamesPlayed(team_id=f"T{i:02d}", games_played=1) for i in range(NHL_EXPECTED_TEAM_COUNT)
+    )
 
 
 def _confirmed_contract() -> NhlContestContract:
@@ -43,6 +50,7 @@ def test_complete_pool_passes_all_gates() -> None:
         contract=_confirmed_contract(),
         candidates=_complete_candidates(),
         expected_roster_size=5,
+        team_games_played=_all_teams_played(),
     )
     report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
     assert report.all_gates_ok is True
@@ -55,6 +63,7 @@ def test_incomplete_pool_fails_pool_completeness_gate() -> None:
         contract=_confirmed_contract(),
         candidates=_complete_candidates()[:3],
         expected_roster_size=5,
+        team_games_played=_all_teams_played(),
     )
     report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
     assert "pool_completeness" in report.blocked_reasons
@@ -73,6 +82,7 @@ def test_ambiguous_boost_regime_fails_boost_regime_gate() -> None:
         contract=contract,
         candidates=_complete_candidates(),
         expected_roster_size=5,
+        team_games_played=_all_teams_played(),
     )
     report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
     assert "boost_regime" in report.blocked_reasons
@@ -90,6 +100,7 @@ def test_future_capture_fails_clock_freshness_gate() -> None:
         contract=_confirmed_contract(),
         candidates=(*_complete_candidates()[:4], future_candidate),
         expected_roster_size=5,
+        team_games_played=_all_teams_played(),
     )
     report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
     assert "clock_freshness" in report.blocked_reasons
@@ -107,6 +118,7 @@ def test_unresolved_identity_fails_identity_resolution_gate() -> None:
         contract=_confirmed_contract(),
         candidates=(*_complete_candidates()[:4], unresolved_candidate),
         expected_roster_size=5,
+        team_games_played=_all_teams_played(),
     )
     report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
     assert "identity_resolution" in report.blocked_reasons
@@ -125,6 +137,21 @@ def test_unknown_lock_scope_fails_lock_scope_gate() -> None:
         contract=contract,
         candidates=_complete_candidates(),
         expected_roster_size=5,
+        team_games_played=_all_teams_played(),
     )
     report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
     assert "lock_scope" in report.blocked_reasons
+
+
+def test_flat_regime_blocked_while_any_team_at_zero_gp() -> None:
+    coverage = list(_all_teams_played())
+    coverage[0] = TeamGamesPlayed(team_id="T00", games_played=0)
+    fixture = NhlAuditFixture(
+        contract=_confirmed_contract(),
+        candidates=_complete_candidates(),
+        expected_roster_size=5,
+        team_games_played=tuple(coverage),
+    )
+    report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
+    assert "zero_boost_until_all_teams_played" in report.blocked_reasons
+    assert report.contest_entry is False

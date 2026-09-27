@@ -28,11 +28,13 @@ def test_health_and_stub_routes_are_observation_only() -> None:
     assert slate.status_code == 200
     assert slate.json()["contest_entry"] is False
     assert slate.json()["status"] == "placeholder"
+    assert slate.json()["boost_regime"] == "none"
 
     lineup = client.get("/lineup/2026-09-27")
     assert lineup.status_code == 200
     assert lineup.json()["lineup"] is None
     assert lineup.json()["contest_entry"] is False
+    assert lineup.json()["boost_regime"] == "none"
 
 
 def test_worker_once_emits_idle_heartbeat(capsys: pytest.CaptureFixture[str]) -> None:

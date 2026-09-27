@@ -80,8 +80,11 @@ def schema_document() -> dict[str, Any]:
                 "than the evaluation season; never peek at same-season labels."
             ),
             "boost_note": (
-                "Pre-boost regime (none) until every NHL team has played; "
-                "do not treat card boosts as labels or live features before that."
+                "Hard gate: boost_regime=none until every NHL team has >=1 GP "
+                "this season. The gap between early games starting (when boost "
+                "fields may tempt the field) and every team completing one game "
+                "is the edge - keep none and exploit mispricing; do not treat "
+                "card boosts as labels or live features before that milestone."
             ),
         },
         "live": {

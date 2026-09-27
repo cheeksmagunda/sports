@@ -115,6 +115,38 @@ def gate_boost_regime(fixture: NhlAuditFixture) -> GateItem:
     return GateItem(key="boost_regime", ok=True, detail="boost_regime_confirmed")
 
 
+def gate_zero_boost_until_all_teams_played(fixture: NhlAuditFixture) -> GateItem:
+    """Hard deny boosted regimes while any team is still at 0 GP this season.
+
+    Strategy: through the early-slate / all-teams-played gap, boost multiplier
+    stays 0. Missing coverage fails closed (gate not cleared).
+    """
+
+    from nhl_oracle.contract.boost_gate import evaluate_boost_eligibility
+
+    eligibility = evaluate_boost_eligibility(fixture.team_games_played)
+    if not eligibility.boost_allowed:
+        if fixture.contract.boost_regime is not BoostRegime.NONE:
+            return GateItem(
+                key="zero_boost_until_all_teams_played",
+                ok=False,
+                detail=(
+                    f"boost_regime_{fixture.contract.boost_regime.value}_blocked; "
+                    f"{eligibility.detail}"
+                ),
+            )
+        return GateItem(
+            key="zero_boost_until_all_teams_played",
+            ok=True,
+            detail=eligibility.detail,
+        )
+    return GateItem(
+        key="zero_boost_until_all_teams_played",
+        ok=True,
+        detail=eligibility.detail,
+    )
+
+
 def gate_lock_scope(fixture: NhlAuditFixture) -> GateItem:
     if fixture.contract.lock_scope is LockScope.UNKNOWN:
         return GateItem(key="lock_scope", ok=False, detail="lock_scope_unconfirmed")
@@ -129,6 +161,7 @@ def evaluate_nhl_audit(fixture: NhlAuditFixture, *, decision_at: datetime) -> Nh
         gate_clock_freshness(fixture, decision_at=decision_at),
         gate_identity_resolution(fixture),
         gate_boost_regime(fixture),
+        gate_zero_boost_until_all_teams_played(fixture),
         gate_lock_scope(fixture),
     )
     blocked = tuple(item.key for item in items if not item.ok)

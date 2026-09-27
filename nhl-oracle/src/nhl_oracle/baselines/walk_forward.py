@@ -8,6 +8,7 @@ from typing import Any
 
 from nhl_oracle.baselines.metrics import RegressionMetrics, regression_metrics
 from nhl_oracle.baselines.priors import BaselineKind, HistoricalPriorBaseline
+from nhl_oracle.contract.boost_gate import evaluate_boost_eligibility
 from nhl_oracle.labels.schema import ValueLabel
 
 DEFAULT_BASELINES: tuple[BaselineKind, ...] = (
@@ -66,20 +67,32 @@ def evaluate_walk_forward(
     *,
     baselines: Sequence[BaselineKind] = DEFAULT_BASELINES,
     min_train_seasons: int = 1,
+    team_games_played: dict[str, int] | None = None,
 ) -> WalkForwardReport:
     """Evaluate priors OOS: train on seasons strictly earlier than test season.
 
     Reports honest MAE/RMSE without claiming contest decision value. Goalie
-    ``G`` is included in position buckets when present.
+    ``G`` is included in position buckets when present. Boost regime stays
+    ``none`` while the all-teams-played gate is closed (see ``boost_gate``);
+    the early-season gap before every franchise has >=1 GP is the edge.
     """
 
+    eligibility = evaluate_boost_eligibility(team_games_played)
+    # Baselines stay observation-only with boost_regime none while gated;
+    # picker paths must call boost_gate before any boost-aware logic.
+    boost_regime = "none"
     seasons = _seasons(labels)
     notes: list[str] = [
         "Walk-forward by season on NHL Real value labels (shadow / observation).",
         "No contest submission or live entry code paths are exercised.",
         "Unseen positions fall back to the global prior from the train window.",
         "player_mean falls back to position then global.",
-        "Boost regime none (pre-boost): do not design around card boosts yet.",
+        (
+            f"Boost regime {boost_regime}: hard-gated none until every team has "
+            ">=1 GP; early-season gap before that is the edge - do not design "
+            "picker logic around card boosts yet."
+        ),
+        eligibility.detail,
         "Goalie position G is eligible when present in labels.",
     ]
     if len(seasons) < 2:

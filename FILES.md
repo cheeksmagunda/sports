@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 968 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -568,6 +568,7 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 
 ## nhl-oracle/src/nhl_oracle/contract/
 - nhl-oracle/src/nhl_oracle/contract/__init__.py -- NHL contest contract shape and audit gates (observation only, pre-provider).
+- nhl-oracle/src/nhl_oracle/contract/boost_gate.py -- Hard zero-boost gate until every NHL team has played this season.
 - nhl-oracle/src/nhl_oracle/contract/discovery.py -- Infer NhlContestContract fields from Real Sports payloads.
 - nhl-oracle/src/nhl_oracle/contract/gates.py -- NHL contract audit gates (always observation only, never contest entry).
 - nhl-oracle/src/nhl_oracle/contract/schema.py -- NHL contest contract shape confirmed against live Real Sports evidence.
@@ -601,6 +602,7 @@ Generated from `git ls-files`. 966 tracked files. Regenerate with `scripts/gener
 ## nhl-oracle/tests/
 - nhl-oracle/tests/test_audit_fixtures.py
 - nhl-oracle/tests/test_baselines_walk_forward.py -- Week-3 acceptance: chronological baseline + prediction skeleton.
+- nhl-oracle/tests/test_boost_gate.py -- Hard zero-boost gate: multiplier stays 0 while any team is at 0 GP.
 - nhl-oracle/tests/test_calendar_season.py
 - nhl-oracle/tests/test_contract_gates.py
 - nhl-oracle/tests/test_contract_schema.py

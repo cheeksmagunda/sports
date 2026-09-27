@@ -6,6 +6,7 @@ unknown (or None) rather than being guessed from NFL/WNBA defaults.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -164,14 +165,25 @@ def _regime_from_bonuses(bonuses: list[float]) -> BoostRegime:
 def boost_regime_from_players_and_stats(
     players_payloads: list[dict[str, Any]],
     contest_stats: dict[str, Any] | None = None,
+    *,
+    team_games_played: Mapping[str, int] | Sequence[Any] | None = None,
+    expected_team_count: int | None = None,
 ) -> tuple[BoostRegime, tuple[str, ...]]:
     """Infer live boost regime, preferring current-slate player cards.
 
-    Pre-boost / zero-boost rule: until every NHL team has played, live cards
-    carry no card boosts. Historical contest draftStats may still show nonzero
+    Hard gate (#501): boost stays ``none`` (multiplier 0) until every NHL team
+    has >=1 GP this season. The edge is the gap after early slate games start
+    and before that coverage clears; exploit field mispricing, never arm boost
+    early. Historical contest draftStats may still show nonzero
     ``multiplierBonus`` from a later window; that must not override live-slate
-    absence or zeros. Returns (regime, notes).
+    absence, zeros, or the team-GP gate. Returns (regime, notes).
     """
+
+    from nhl_oracle.contract.boost_gate import (
+        NHL_EXPECTED_TEAM_COUNT,
+        evaluate_boost_eligibility,
+        force_none_while_gated,
+    )
 
     notes: list[str] = []
     card_bonuses, players_seen = _collect_player_card_bonuses(players_payloads)
@@ -191,41 +203,54 @@ def boost_regime_from_players_and_stats(
                 "historical_contest_draftStats_had_nonzero_multiplierBonus "
                 "(not applied to live pre-boost regime)"
             )
-        return regime, tuple(notes)
-
-    if card_regime is BoostRegime.NONE:
+    elif card_regime is BoostRegime.NONE:
+        regime = BoostRegime.NONE
         notes.append("boost_regime=none (multiplierBonus present on player cards and all zero)")
         if stats_regime is BoostRegime.FLAT:
             notes.append(
                 "historical_contest_draftStats_had_nonzero_multiplierBonus "
                 "(not applied; live cards are zero)"
             )
-        return BoostRegime.NONE, tuple(notes)
-
-    if card_regime is BoostRegime.FLAT:
+    elif card_regime is BoostRegime.FLAT:
+        regime = BoostRegime.FLAT
         notes.append(
             "boost_regime=flat from nonzero multiplierBonus/cardBoost on live player cards"
         )
-        return BoostRegime.FLAT, tuple(notes)
-
-    # No usable live player rows: fall back to contest draftStats only.
-    if stats_regime is BoostRegime.FLAT:
+    elif stats_regime is BoostRegime.FLAT:
+        # No usable live player rows: fall back to contest draftStats only.
+        regime = BoostRegime.FLAT
         notes.append(
             "boost_regime=flat from contest draftStats multiplierBonus "
             "(no live player-card boost fields available)"
         )
-        return BoostRegime.FLAT, tuple(notes)
-    if stats_regime is BoostRegime.NONE:
+    elif stats_regime is BoostRegime.NONE:
+        regime = BoostRegime.NONE
         notes.append(
             "boost_regime=none (contest draftStats multiplierBonus present and all zero; "
             "no live player-card boost fields)"
         )
-        return BoostRegime.NONE, tuple(notes)
+    else:
+        regime = BoostRegime.UNKNOWN
+        notes.append(
+            "boost_regime still unknown (no multiplierBonus/cardBoost on players or draftStats)"
+        )
 
-    notes.append(
-        "boost_regime still unknown (no multiplierBonus/cardBoost on players or draftStats)"
+    # Hard team-GP gate always wins through the early-slate gap (fail closed
+    # when coverage is omitted: treat as gated).
+    eligibility = evaluate_boost_eligibility(
+        team_games_played,
+        expected_team_count=(
+            NHL_EXPECTED_TEAM_COUNT if expected_team_count is None else expected_team_count
+        ),
     )
-    return BoostRegime.UNKNOWN, tuple(notes)
+    regime, eligibility = force_none_while_gated(regime, eligibility)
+    notes.append(eligibility.detail)
+    if not eligibility.boost_allowed:
+        notes.append(
+            "hard_zero_boost_gate: multiplier=0 through all-teams-played gap "
+            "(do not arm boost / ownership-fade / leverage early)"
+        )
+    return regime, tuple(notes)
 
 
 def lock_scope_from_meta(meta: dict[str, Any]) -> LockScope:
@@ -370,6 +395,8 @@ def discover_contract(
     games_captured: int,
     captured_at: str,
     contest_stats: dict[str, Any] | None = None,
+    team_games_played: Mapping[str, int] | Sequence[Any] | None = None,
+    expected_team_count: int | None = None,
 ) -> tuple[NhlContestContract, DiscoveryEvidence, tuple[NhlCandidate, ...]]:
     notes: list[str] = []
     multipliers = extract_slot_multipliers(draftinfo)
@@ -389,7 +416,12 @@ def discover_contract(
     else:
         notes.append("lock_scope still unknown (no contest-level isLocked boolean)")
 
-    boost, boost_notes = boost_regime_from_players_and_stats(players_payloads, contest_stats)
+    boost, boost_notes = boost_regime_from_players_and_stats(
+        players_payloads,
+        contest_stats,
+        team_games_played=team_games_played,
+        expected_team_count=expected_team_count,
+    )
     notes.extend(boost_notes)
 
     goalie = goalie_eligible_from_players(players_payloads)
