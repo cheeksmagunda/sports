@@ -1,5 +1,26 @@
 # Status
 
+## NFL picker knobs live-verified (2026-09-27 ~01:14Z, Refs #453 / #330 / #37)
+
+Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`
+against Railway project `nfl-oracle-staging` / `production`. No secret values
+printed.
+
+- `NFL_PICKER_BOOST_RANK_BLEND=0.75` and `NFL_PICKER_PROFILE=boost_0.75` are
+  **set** on both `nfl-oracle-worker` and `nfl-oracle` (API). Confirmed via
+  `railway variables --json` and `railway run` process env. No env mutation or
+  restart was required; knobs already matched the authorized #330 / #37 targets.
+- `NFL_PICKER_POSITION_CALIBRATION` absent on both (expected; leave unset).
+- `REALSPORTS_STORAGE_STATE_B64GZ` on worker: present when rendered
+  (`railway run`); CLI listing sealed/empty. `sha256[:8]=c4a729e2`, len=9248
+  (matches canonical). Absent on API (worker-only; expected).
+- Worker Online (deployment `ba995a0d-…`), polling `waiting_or_locked` after
+  container start `2026-09-27T01:11:55Z`. Current-deploy logs: no
+  error/exception/failed lines (redacted review).
+- API `https://nfl-oracle-production.up.railway.app/health` ->
+  `status=ok`, `recommendation_database=ok`.
+
+
 ## Scheduled NFL jobs report through their Actions runs, not issues (2026-09-26, issue #442)
 
 Per the issue rule in root `AGENTS.md` (Documentation and state),
@@ -34,10 +55,10 @@ contest-pool rows via `EvalContext.extras` (no live Corpus G fit in the hook).
 <!-- merged-330-e3fba499 -->
 - Squash-merged measured boost-aware picker knobs (Corpus C identity 51.7% ->
   boost_0.75 57.9%). Refs #280, #327. Parent race campaign: #332 / #336.
-- Railway intended (and previously authorized): `NFL_PICKER_BOOST_RANK_BLEND=0.75`,
-  `NFL_PICKER_PROFILE=boost_0.75` on worker+API. Defaults in code remain identity;
-  live profile is env-driven. Knobs are read once at worker start; restart required
-  after env flips.
+- Railway live-verified 2026-09-27 (#453): `NFL_PICKER_BOOST_RANK_BLEND=0.75`,
+  `NFL_PICKER_PROFILE=boost_0.75` on worker+API (authorized #330 / #37). Defaults
+  in code remain identity; live profile is env-driven. Knobs are read once at
+  worker start; restart required after env flips.
 - Follow-on in flight: zero-boost equal-boost no-op (#334 / PR #340) so uniform
   pools are not shuffled by `player_id` under live `boost_0.75`.
 

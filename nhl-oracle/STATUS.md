@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-25 CT (pre-boost live re-audit #325; continues #299)
+Last verified: 2026-09-26 CT (Week 3 baseline skeleton #456 under #453)
 
 This file records application state only.
 
@@ -36,11 +36,21 @@ This file records application state only.
     `oracle_core.jobs`/`oracle_core.storage.LeaseStore` for single-active-writer.
     No real collector, model, or publisher is wired in; every step is an
     injected callable.
+  - `labels/` + `baselines/`: Week 3 prediction skeleton (#456). `ValueLabel`
+    schema and transparent historical priors (`global_mean`, `position_mean`,
+    `position_median`, `player_mean`) with season walk-forward evaluator.
+    Reports set `observation_only: True`, `contest_entry: False`, and
+    `boost_regime: none`. Goalie `G` is a first-class position bucket. No
+    Real-corpus fit yet; tests use synthetic labels only.
 - Wired for root checks: test, lint, typecheck, build, boundary, and app contract
-- Not started: chronological baselines / walk-forward predictions, contest-law
-  optimizer, hosted API, frontend, deployment. No backtest harness exists yet;
-  any future picker/backtest must assume zero boosts until every NHL team has
-  played
+- Week 3 started (#456): NHL-owned `labels/` + `baselines/` chronological
+  prior skeleton (global/position/player means, season walk-forward,
+  `observation_only: True`, `contest_entry: False`, boost regime `none`).
+  Synthetic-label unit tests lock the acceptance contract. Not yet fitted on
+  seeded Real corpus; no picker/optimizer.
+- Not started: Real-corpus baseline fit / walk-forward report, contest-law
+  optimizer, hosted API, frontend, deployment / Railway. Any future
+  picker/backtest must assume zero boosts until every NHL team has played
 
 ## Boundaries
 
@@ -83,6 +93,13 @@ Plan: `README.md` Roadmap section. Moved off the issue tracker 2026-09-24
   the redacted fixture. Coverage at #325 live re-audit: games 4/4;
   players_resolved/seen 30/30 (scored contest pool); live cards inspected
   for boosts 244; `gates_ok=true`; `contest_entry=false`.
-  Still not started in Week 2: chronological baselines adapted from NFL
-  `baselines/` + walk-forward (`observation_only: True`).
-- **Weeks 3+ (roadmap steps 3 to 6): not started.**
+  Chronological baselines moved to Week 3 (#456); Week 2 contract/corpus
+  slice is closed.
+- **Week 3 (chronological baseline + prediction skeleton): started (#456).**
+  NHL-owned `labels/` + `baselines/` landed with unit tests. No
+  cross-sport import. No contest entry. No Railway.
+  **Next step:** fit priors / walk-forward on seeded Real value labels from
+  the Week 2 corpus (and any expanded historical capture), publish an
+  observation-only eval report, then expand skater/goalie approaches only
+  with OOS evidence. Still not started after that: contest-law optimizer,
+  hosted API, frontend, deployment (roadmap steps 4–6).

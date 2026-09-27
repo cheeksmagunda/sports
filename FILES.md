@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 915 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 924 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 915 tracked files. Regenerate with `scripts/gener
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -504,6 +506,12 @@ Generated from `git ls-files`. 915 tracked files. Regenerate with `scripts/gener
 ## nhl-oracle/src/nhl_oracle/
 - nhl-oracle/src/nhl_oracle/__init__.py -- NHL Oracle application package.
 
+## nhl-oracle/src/nhl_oracle/baselines/
+- nhl-oracle/src/nhl_oracle/baselines/__init__.py -- Chronological Real value baselines (offline / observation only).
+- nhl-oracle/src/nhl_oracle/baselines/metrics.py -- Honest scalar metrics for Real value baselines (stdlib only).
+- nhl-oracle/src/nhl_oracle/baselines/priors.py -- Transparent historical priors for Real ``value`` (no fancy models).
+- nhl-oracle/src/nhl_oracle/baselines/walk_forward.py -- Season walk-forward evaluation of Real value baselines (OOS by season).
+
 ## nhl-oracle/src/nhl_oracle/common/
 - nhl-oracle/src/nhl_oracle/common/__init__.py -- NHL-owned shared helpers (paths, etc.).
 - nhl-oracle/src/nhl_oracle/common/paths.py -- Project-owned runtime path discovery for nhl-oracle.
@@ -526,12 +534,17 @@ Generated from `git ls-files`. 915 tracked files. Regenerate with `scripts/gener
 - nhl-oracle/src/nhl_oracle/ingest/realsports.py -- Thin Real Sports HTTP client for NHL (read-only).
 - nhl-oracle/src/nhl_oracle/ingest/redact.py -- Redact identity fields from Real Sports NHL payloads before persistence.
 
+## nhl-oracle/src/nhl_oracle/labels/
+- nhl-oracle/src/nhl_oracle/labels/__init__.py -- NHL Real ``value`` label types (train / research only).
+- nhl-oracle/src/nhl_oracle/labels/schema.py -- Real ``value`` label schema for NHL chronological baselines.
+
 ## nhl-oracle/src/nhl_oracle/scheduler/
 - nhl-oracle/src/nhl_oracle/scheduler/__init__.py -- NHL freeze-cycle job skeleton (no live provider, no contest entry).
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
 
 ## nhl-oracle/tests/
 - nhl-oracle/tests/test_audit_fixtures.py
+- nhl-oracle/tests/test_baselines_walk_forward.py -- Week-3 acceptance: chronological baseline + prediction skeleton.
 - nhl-oracle/tests/test_contract_gates.py
 - nhl-oracle/tests/test_contract_schema.py
 - nhl-oracle/tests/test_discovery.py
