@@ -63,6 +63,8 @@ class OptimizerConfig(Record):
     seed: int = 115
     # Construction profile is descriptive metadata carried onto the report; it
     # does not itself change the objective (which is always total_value).
+    # Serving reads NFL_OPTIMIZER_PROFILE via optimizer_config_from_env
+    # (default max_value / win-draft). Bare OptimizerConfig() stays diversified.
     profile: str = "diversified"
 
 
@@ -89,14 +91,15 @@ OPTIMIZER_PROFILE_PRESETS: dict[str, tuple[int, int]] = {
 def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> OptimizerConfig:
     """Build an :class:`OptimizerConfig` from the process environment.
 
-    Missing env keeps the production defaults exactly (``diversified``:
-    ``min_distinct_teams=3``, ``min_distinct_games=2``), so an unset worker is
-    byte-identical to today's frozen construction.
+    Missing env keeps the win-draft production default (``max_value``:
+    ``min_distinct_teams=1``, ``min_distinct_games=1``) so a wiped Railway
+    profile cannot silently fall back to cash-style diversified construction
+    (#505 / #453). Rollback: ``NFL_OPTIMIZER_PROFILE=diversified``.
 
     Knobs (fail closed on invalid values so a mis-set Railway var never silently
     changes which five cards freeze):
 
-    - ``NFL_OPTIMIZER_PROFILE``: ``diversified`` (default) or ``max_value``. The
+    - ``NFL_OPTIMIZER_PROFILE``: ``max_value`` (default) or ``diversified``. The
       ``max_value`` preset drops the diversity floor to ``1``/``1`` so the
       optimizer commits the highest projected total-value five outright.
     - ``NFL_OPTIMIZER_MIN_DISTINCT_TEAMS`` / ``NFL_OPTIMIZER_MIN_DISTINCT_GAMES``:
@@ -104,7 +107,7 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
     """
 
     env = environ if environ is not None else os.environ
-    profile = (env.get("NFL_OPTIMIZER_PROFILE") or "diversified").strip() or "diversified"
+    profile = (env.get("NFL_OPTIMIZER_PROFILE") or "max_value").strip() or "max_value"
     if profile not in OPTIMIZER_PROFILE_PRESETS:
         raise ValueError(f"NFL_OPTIMIZER_PROFILE_invalid:{profile}")
     teams, games = OPTIMIZER_PROFILE_PRESETS[profile]
@@ -516,7 +519,20 @@ def optimize(
             key=lambda p: math.log(max(rng.random(), 1e-12)) / max(0.001, ownership[p.player_id]),
             reverse=True,
         )[:5]
-        field_selected.sort(key=lambda p: -p.mean)
+        # Tournament field slotting: under upside/field contest utility (or
+        # max_value construction), assign high slots by sample p90 rather than
+        # mean (median-finish cash construction). Cash path keeps mean.
+        if cfg.upside_weight > 0 or cfg.field_weight > 0 or cfg.profile == "max_value":
+
+            def _field_slot_key(player: Projection) -> float:
+                samples = sorted(player.samples)
+                if not samples:
+                    return player.mean
+                return samples[min(len(samples) - 1, int(0.9 * (len(samples) - 1)))]
+
+            field_selected.sort(key=lambda p: -_field_slot_key(p))
+        else:
+            field_selected.sort(key=lambda p: -p.mean)
         field_scores.append(
             sum(
                 scoring_policy.score(

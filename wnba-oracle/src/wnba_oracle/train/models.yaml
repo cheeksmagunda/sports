@@ -115,7 +115,7 @@ picker:
   top_n_filter: 30
   n_samples: 5000
   budget_seconds: 30
-  default_payout_regime: top_20
+  default_payout_regime: top_1
   entry_recommendation:
     skip_if_expected_payout_ratio_below: 0.95
     enter_with_caveat_below: 1.10

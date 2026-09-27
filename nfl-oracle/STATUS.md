@@ -1,5 +1,59 @@
 # Status
 
+Last verified: 2026-09-27T03:04Z (dual-fire / data-plane gate #453)
+
+## Dual-fire + data-plane gate re-verify (#453)  -  2026-09-27T03:04Z
+
+Codespace `fluffy-zebra-g4gqq746477q2jg` via `scripts/codespace-railway-env`.
+NFL has **no Railway cron schedules** on either project (API + worker are
+always-on services). Dual-fire surface is **worker write contention**, not
+job2 cron.
+
+| Service | Project / env | `cronSchedule` | Deploy @ verify |
+|---------|---------------|----------------|-----------------|
+| `nfl-oracle` (API) | live `nfl-oracle-staging` / `production` (`dc2d3b51`) | null | DEPLOYING @ 02:50Z |
+| `nfl-oracle-worker` | live | null | **SUCCESS** @ 02:50Z |
+| `nfl-api` | mono `sports-oracle` / `nfl-production` (`cca6b03f`) | null | **FAILED** @ 01:36Z; public health HTTP 404 `Application not found` |
+| `nfl-oracle-worker` | mono | null | **CRASHED** @ 03:02Z |
+
+Data plane: mono `NFL_DATABASE_URL` sha8=`7b8ce64c`
+(`altaria.proxy.rlwy.net:45838`, db `railway`, user `postgres`) shares
+password sha with live worker internal URL sha8=`01110714` (public vs
+internal form of the same live Postgres).
+
+### Risk verdict
+
+**No active NFL dual-write now** (mono worker crashed / API down; only live
+worker SUCCESS). **Latent dual-fire** when mono worker returns to Online
+while live worker still runs against the same DB. Do **not** stop live
+worker until mono is healthy (Sunday path). After mono worker SUCCESS +
+`/health` ok, scale down or stop live `nfl-oracle-worker` (rollback: re-enable
+live). No cron mutation applicable. No credential minting.
+
+## Win-draft construction (#505 / #453)  -  2026-09-27T03:10Z
+
+NFL has no `PAYOUT_REGIME` (objective is always total_value). Win-draft
+serving is `NFL_OPTIMIZER_PROFILE=max_value` so the worker cannot silently
+fall back to diversified cash construction when the var is wiped.
+
+| Service | `NFL_OPTIMIZER_PROFILE` | Picker | Notes |
+|---------|------------------------|--------|-------|
+| `nfl-oracle-worker` | `max_value` | `boost_0.75` / blend `0.75` | freeze writer |
+| `nfl-api` | `max_value` | `boost_0.75` / blend `0.75` | read path parity |
+| `nfl-frontend` | N/A | N/A | — |
+
+Rollback: `NFL_OPTIMIZER_PROFILE=diversified`. Code default via
+`optimizer_config_from_env` is `max_value` when unset (#505).
+
+## Corpus G nightly gap (#453)  -  2026-09-27T02:55Z
+
+- `.github/workflows/nfl-corpus-g-nightly.yml` is **absent on `main`**
+  (`gh` workflow lookup 404). No scheduled Corpus G nightly run yet.
+- Durable catalog / volume persistence for Corpus G therefore remains a
+  residual: worker volume must stay attached and writable (see volume note
+  under cutover). Unverified: whether a draft nightly workflow exists only
+  on an unmerged branch.
+
 ## NFL cutover to sports-oracle / nfl-production (2026-09-27 ~01:56Z, #457 / #453)
 
 Operator-ordered live cutover from `nfl-oracle-staging` /
@@ -39,9 +93,25 @@ credential minting. No secret values printed.
   real custom DNS later). Legacy remains until cron/domain cut finishes.
 - Empty mono worker volume (`nfl-oracle-worker-volume`, mount
   `/app/nfl-oracle/data`) caused `PermissionError` (root-owned volume
-  under image `USER oracle`). **Detached** so worker could boot; volume
-  retained in project for later chown/reattach. Old project worker+volume
-  left running for rollback.
+  under image `USER oracle`) at cutover. Initially **detached** so worker
+  could boot; volume retained in project. Old project worker+volume left
+  running for rollback.
+
+### Volume attach re-check (2026-09-27T02:55Z)
+
+Verified via Codespace Railway CLI `railway volume list` on
+`sports-oracle` / `nfl-production` (no secret values):
+
+- `nfl-oracle-worker-volume` mount `/app/nfl-oracle/data` is **attached**
+  to service `nfl-oracle-worker` again.
+- Worker env `RAILWAY_VOLUME_MOUNT_PATH=/app/nfl-oracle/data` **set**.
+- Mono API `/health` ok + `/slate/2026-09-27` `waiting` /
+  `waiting_offline_pregate` with `cutoff_at=2026-09-27T17:00:00Z` (re-check
+  02:58Z). Legacy `nfl-oracle-production.up.railway.app/health` still HTTP
+  200.
+- **Unverified:** whether volume ownership was chown'd from root to
+  `oracle` (write path). Treat PermissionError risk as open until a
+  successful volume write is observed in worker logs.
 
 ### Rollback
 

@@ -257,6 +257,7 @@ def lineup_score_samples(
     lineup_indices: list[int],
     slot_multipliers: np.ndarray,
     committed_order: bool = False,
+    committed_rank_quantile: float | None = None,
 ) -> np.ndarray:
     """Compute lineup_score per sample for one candidate lineup.
 
@@ -275,12 +276,16 @@ def lineup_score_samples(
       overstates high-dispersion lineups most, because they gain the most from
       re-sorting. Used as an optimizer objective it therefore biases SELECTION
       toward volatile combinations.
-    - True: fix the order ONCE by each player's mean across samples, then score
-      every draw under that fixed order. This is max over ex-ante orders of
-      E[score], which is what an entrant can actually achieve. Ranking on the
-      mean is exact rather than heuristic: the boost term sum(rs_i * boost_i) is
-      invariant to the pairing, so only sum(rs_i * slot_i) depends on it, and
-      the rearrangement inequality applied to E[rs] maximises its expectation.
+    - True: fix the order ONCE from a per-player sample summary, then score
+      every draw under that fixed order. Default summary is the mean (exact
+      for maximising E[score] under rearrangement). When
+      ``committed_rank_quantile`` is set (e.g. 0.9 under PAYOUT_REGIME=top_1
+      or ceiling-tilted slots), rank by that sample quantile instead so the
+      committed order prefers ceiling over median finish (#453). Ranking on
+      the mean is exact rather than heuristic for E[score]: the boost term
+      sum(rs_i * boost_i) is invariant to the pairing, so only
+      sum(rs_i * slot_i) depends on it, and the rearrangement inequality
+      applied to E[rs] maximises its expectation.
 
     See wnba_oracle.eval.contest_score for the same distinction on realized
     values, and the fixture proving the platform pairs slots with the committed
@@ -291,7 +296,11 @@ def lineup_score_samples(
 
     if committed_order:
         # kind='stable' for deterministic tie-breaking by input order
-        order = np.argsort(rs_per_player.mean(axis=0), kind="stable")[::-1]
+        if committed_rank_quantile is None:
+            rank_key = rs_per_player.mean(axis=0)
+        else:
+            rank_key = np.quantile(rs_per_player, float(committed_rank_quantile), axis=0)
+        order = np.argsort(rank_key, kind="stable")[::-1]
         rs_ordered = rs_per_player[:, order]
         effective = boosts_lineup[order] + slot_multipliers
         # One fixed order for every draw, so this is a single vectorized

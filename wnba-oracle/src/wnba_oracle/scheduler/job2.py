@@ -414,10 +414,17 @@ def _build_specs(
         bonus=bonus,
     )
 
-    # Apply contrarian adjustment
-    adjusted = apply_contrarian_adjustment(
-        preds.pred_real_scores, popularity_scores, contrarian_cfg
-    )
+    # Contrarian reshapes sampler means toward low-ownership names. That is
+    # correct for E[payout] under top_1, but under total_draft_value it
+    # undervalues high-TV chalk in the Monte Carlo objective itself (#453).
+    # Ownership preference in TDV is only the max_value_ownership_fade term,
+    # which reads measured drafts from live capture when enabled (#434).
+    if policy.optimizer.objective_mode == "total_draft_value":
+        adjusted = dict(preds.pred_real_scores)
+    else:
+        adjusted = apply_contrarian_adjustment(
+            preds.pred_real_scores, popularity_scores, contrarian_cfg
+        )
 
     # Per-player sampling sigma from volatility (D52/D55). A flat sigma priced
     # every player the same; ceiling plays (high game-to-game variance) should
