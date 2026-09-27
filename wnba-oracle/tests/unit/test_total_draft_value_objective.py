@@ -278,9 +278,7 @@ def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:
         return {pid: score - 1.0 for pid, score in scores.items()}
 
     monkeypatch.setattr(job2, "predict_players", lambda *_a, **_k: preds)
-    monkeypatch.setattr(
-        job2, "_compute_popularity_scores", lambda *_a, **_k: {1: 5000.0, 2: 100.0}
-    )
+    monkeypatch.setattr(job2, "_compute_popularity_scores", lambda *_a, **_k: {1: 5000.0, 2: 100.0})
     monkeypatch.setattr(job2, "_load_measured_drafts", lambda *_a, **_k: {})
     monkeypatch.setattr(job2, "apply_contrarian_adjustment", _fake_contrarian)
     monkeypatch.setattr(job2, "player_volatility", lambda *_a, **_k: {})
@@ -342,6 +340,4 @@ def test_tdv_disables_floor_tilt_multiplier() -> None:
         if policy.optimizer.objective_mode == "total_draft_value"
         else policy.picker_floor_tilt_weight
     )
-    assert (
-        _floor_tilt_multiplier(1.0, 4.0, boost=0.5, weight=floor_weight, max_boost=2.0) == 1.0
-    )
+    assert _floor_tilt_multiplier(1.0, 4.0, boost=0.5, weight=floor_weight, max_boost=2.0) == 1.0
