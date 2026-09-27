@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1077 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -622,12 +624,25 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/src/nhl_oracle/common/__init__.py -- NHL-owned shared helpers (paths, etc.).
 - nhl-oracle/src/nhl_oracle/common/paths.py -- Project-owned runtime path discovery for nhl-oracle.
 
+## nhl-oracle/src/nhl_oracle/contest/
+- nhl-oracle/src/nhl_oracle/contest/__init__.py -- NHL contest algebra package (five-card scoring + pick; observation only).
+- nhl-oracle/src/nhl_oracle/contest/algebra.py -- NHL five-card contest algebra (observation / research only).
+- nhl-oracle/src/nhl_oracle/contest/pick.py -- Five-player NHL pick under verified contest algebra (observation only).
+
 ## nhl-oracle/src/nhl_oracle/contract/
 - nhl-oracle/src/nhl_oracle/contract/__init__.py -- NHL contest contract shape and audit gates (observation only, pre-provider).
 - nhl-oracle/src/nhl_oracle/contract/boost_gate.py -- Hard zero-boost gate until every NHL team has played this season.
 - nhl-oracle/src/nhl_oracle/contract/discovery.py -- Infer NhlContestContract fields from Real Sports payloads.
 - nhl-oracle/src/nhl_oracle/contract/gates.py -- NHL contract audit gates (always observation only, never contest entry).
 - nhl-oracle/src/nhl_oracle/contract/schema.py -- NHL contest contract shape confirmed against live Real Sports evidence.
+
+## nhl-oracle/src/nhl_oracle/eval/
+- nhl-oracle/src/nhl_oracle/eval/__init__.py -- NHL evaluation helpers (HV backtest; observation only).
+- nhl-oracle/src/nhl_oracle/eval/backtest.py -- HV board backtest helpers for NHL (observation only).
+
+## nhl-oracle/src/nhl_oracle/features/
+- nhl-oracle/src/nhl_oracle/features/__init__.py -- NHL feature schemas and own-model maps (no LightGBM primary).
+- nhl-oracle/src/nhl_oracle/features/own_model_map.py -- Own-model pre-slate feature map for NHL (#535 / #523 pattern).
 
 ## nhl-oracle/src/nhl_oracle/identity/
 - nhl-oracle/src/nhl_oracle/identity/__init__.py -- NHL player identity map and collision reconciliation.
@@ -644,11 +659,13 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 
 ## nhl-oracle/src/nhl_oracle/labels/
 - nhl-oracle/src/nhl_oracle/labels/__init__.py -- NHL Real ``value`` label types (train / research only).
+- nhl-oracle/src/nhl_oracle/labels/hv.py -- Highest Total Value board as the NHL train + backtest target (#535 / #453).
 - nhl-oracle/src/nhl_oracle/labels/schema.py -- Real ``value`` label schema for NHL chronological baselines.
 
 ## nhl-oracle/src/nhl_oracle/scheduler/
 - nhl-oracle/src/nhl_oracle/scheduler/__init__.py -- NHL freeze-cycle job skeleton (no live provider, no contest entry).
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
+- nhl-oracle/src/nhl_oracle/scheduler/t40.py -- T-40 freeze publication policy coherent with NHL contest algebra (#535).
 
 ## nhl-oracle/src/nhl_oracle/service/
 - nhl-oracle/src/nhl_oracle/service/__init__.py -- Minimal NHL staging HTTP service and pipeline CLI.
@@ -665,6 +682,7 @@ Generated from `git ls-files`. 1065 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/tests/test_discovery.py
 - nhl-oracle/tests/test_freeze_cycle.py
 - nhl-oracle/tests/test_history_loader.py
+- nhl-oracle/tests/test_hv_train_target.py -- HV train/backtest target + contest algebra + T-40 coherence (#535).
 - nhl-oracle/tests/test_identity_reconcile.py
 - nhl-oracle/tests/test_import.py
 - nhl-oracle/tests/test_ingest_discovery.py
