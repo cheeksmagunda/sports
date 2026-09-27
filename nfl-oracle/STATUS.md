@@ -1,6 +1,16 @@
 # Status
 
-Last verified: 2026-09-27T17:25Z
+Last verified: 2026-09-28T02:59:00Z
+
+## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
+
+Code contract only; **production tilt weight stays 0** (identity). Live money
+path remains Corpus G → ridge → max_value → freeze → `/lineup` → frontend.
+Ollama learn writes `data/ollama_hv/<sport>/<slate>/latest_tick.json`; NFL
+picker can read it when `NFL_OLLAMA_TICK_TILT_WEIGHT>0` and
+`NFL_OLLAMA_TICK_TILT_PATH` points at a mounted tick. Codespace ticks are not
+on the Railway volume by default. Related inbound app→Ollama helper: PR #582
+merged 2026-09-28 (`578566d`).
 
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 

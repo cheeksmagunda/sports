@@ -12,6 +12,9 @@ Standing authorization for evidence-backed live knob/Railway flips: commit
 ``3ec2bad`` ("per explicit operator authorization"), issue #37 implementation
 authority, reaffirmed 2026-09-25 for NFL picker knobs. Record numbers in
 STATUS.md when applying.
+
+Optional Ollama tick tilt (#574): default weight 0 never opens a tick file.
+Arm only with an explicit path + weight after mounting Codespace ticks.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from statistics import mean, pstdev
 
 from pydantic import Field, field_validator
@@ -32,6 +36,9 @@ class PickerKnobs(Record):
 
     boost_rank_blend: float = Field(default=0.0, ge=0.0, le=1.0)
     position_calibration: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Ollama tick tilt (#574): default off. Path required only when weight > 0.
+    ollama_tick_tilt_weight: float = Field(default=0.0, ge=0.0, le=1.0)
+    ollama_tick_tilt_path: str = ""
     profile: str = "identity"
 
     @field_validator("profile")
@@ -45,23 +52,30 @@ class PickerKnobs(Record):
 
 
 def picker_knobs_from_env(environ: Mapping[str, str] | None = None) -> PickerKnobs:
-    """Read ``NFL_PICKER_BOOST_RANK_BLEND`` / ``NFL_PICKER_POSITION_CALIBRATION``.
+    """Read picker env knobs including optional Ollama tick tilt (#574).
 
     Missing or empty values keep the identity defaults. Invalid floats raise
     ``ValueError`` so a mis-set Railway knob fails closed rather than silently
-    ignoring the override.
+    ignoring the override. ``NFL_OLLAMA_TICK_TILT_WEIGHT`` default 0 never
+    opens a tick file (today's freeze unchanged unless explicitly armed).
     """
+    from nfl_oracle.recommendations.ollama_tick_tilt import ollama_tilt_from_env
+
     env = environ if environ is not None else os.environ
     blend = _env_unit_float(env, "NFL_PICKER_BOOST_RANK_BLEND", 0.0)
     position = _env_unit_float(env, "NFL_PICKER_POSITION_CALIBRATION", 0.0)
+    ollama_weight, ollama_path = ollama_tilt_from_env(env)
     profile = (env.get("NFL_PICKER_PROFILE") or "identity").strip() or "identity"
-    if blend == 0.0 and position == 0.0:
+    active = blend > 0.0 or position > 0.0 or ollama_weight > 0.0
+    if not active:
         profile = "identity"
-    elif profile == "identity" and (blend > 0.0 or position > 0.0):
+    elif profile == "identity":
         profile = "env"
     return PickerKnobs(
         boost_rank_blend=blend,
         position_calibration=position,
+        ollama_tick_tilt_weight=ollama_weight,
+        ollama_tick_tilt_path=str(ollama_path) if ollama_path is not None else "",
         profile=profile,
     )
 
@@ -107,8 +121,22 @@ def apply_picker_knobs(
     Position calibration: add ``position_calibration * bias[position]`` to the
     conditional mean (and samples), where bias is mean holdout residual
     (actual - predicted) for that position. Missing positions get 0.
+
+    Ollama tick tilt (#574): when ``ollama_tick_tilt_weight`` > 0, multiply
+    means for the tick's five by a slot-weighted factor. Default weight 0
+    never opens the path (satellite / identity on live freeze).
     """
-    if knobs.boost_rank_blend == 0.0 and knobs.position_calibration == 0.0:
+    from nfl_oracle.recommendations.ollama_tick_tilt import (
+        apply_ollama_tick_tilt,
+        load_slot_multipliers,
+    )
+
+    identity = (
+        knobs.boost_rank_blend == 0.0
+        and knobs.position_calibration == 0.0
+        and knobs.ollama_tick_tilt_weight == 0.0
+    )
+    if identity:
         return tuple(projections)
     boost_of = {c.player_id: float(c.card_boost) for c in slate.candidates}
     position_of = {c.player_id: c.position for c in slate.candidates}
@@ -116,39 +144,53 @@ def apply_picker_knobs(
     if set(by_id) != {c.player_id for c in slate.candidates}:
         raise ValueError("projection_slate_player_mismatch")
 
-    aligned = _boost_aligned_means(projections, boost_of)
-    bias = position_bias or {}
-    adjusted: list[Projection] = []
-    for projection in projections:
-        player_id = projection.player_id
-        base_cond = projection.conditional_mean
-        target = aligned[player_id]
-        blended = (1.0 - knobs.boost_rank_blend) * base_cond + knobs.boost_rank_blend * target
-        pos_bias = float(bias.get(position_of[player_id], 0.0))
-        calibrated = blended + knobs.position_calibration * pos_bias
-        delta = calibrated - base_cond
-        probability = projection.availability_probability
-        new_samples = tuple(sample + delta for sample in projection.samples)
-        sample_center = mean(new_samples) if new_samples else calibrated
-        # Keep mean = conditional * availability, matching predict().
-        new_mean = sample_center * probability
-        provenance = projection.provenance + (
-            f"picker:{knobs.profile}",
-            f"boost_rank_blend={knobs.boost_rank_blend:.3f}",
-            f"position_calibration={knobs.position_calibration:.3f}",
-        )
-        adjusted.append(
-            projection.model_copy(
-                update={
-                    "conditional_mean": calibrated,
-                    "mean": new_mean,
-                    "samples": new_samples,
-                    "provenance": provenance,
-                    "stddev": _stddev_with_availability(new_samples, probability, sample_center),
-                }
+    if knobs.boost_rank_blend == 0.0 and knobs.position_calibration == 0.0:
+        adjusted_tuple: tuple[Projection, ...] = tuple(projections)
+    else:
+        aligned = _boost_aligned_means(projections, boost_of)
+        bias = position_bias or {}
+        adjusted: list[Projection] = []
+        for projection in projections:
+            player_id = projection.player_id
+            base_cond = projection.conditional_mean
+            target = aligned[player_id]
+            blended = (1.0 - knobs.boost_rank_blend) * base_cond + knobs.boost_rank_blend * target
+            pos_bias = float(bias.get(position_of[player_id], 0.0))
+            calibrated = blended + knobs.position_calibration * pos_bias
+            delta = calibrated - base_cond
+            probability = projection.availability_probability
+            new_samples = tuple(sample + delta for sample in projection.samples)
+            sample_center = mean(new_samples) if new_samples else calibrated
+            new_mean = sample_center * probability
+            provenance = projection.provenance + (
+                f"picker:{knobs.profile}",
+                f"boost_rank_blend={knobs.boost_rank_blend:.3f}",
+                f"position_calibration={knobs.position_calibration:.3f}",
             )
-        )
-    return tuple(adjusted)
+            adjusted.append(
+                projection.model_copy(
+                    update={
+                        "conditional_mean": calibrated,
+                        "mean": new_mean,
+                        "samples": new_samples,
+                        "provenance": provenance,
+                        "stddev": _stddev_with_availability(
+                            new_samples, probability, sample_center
+                        ),
+                    }
+                )
+            )
+        adjusted_tuple = tuple(adjusted)
+
+    if knobs.ollama_tick_tilt_weight == 0.0:
+        return adjusted_tuple
+    if not knobs.ollama_tick_tilt_path.strip():
+        raise ValueError("ollama_tick_tilt_path_required")
+    multipliers = load_slot_multipliers(
+        Path(knobs.ollama_tick_tilt_path),
+        weight=knobs.ollama_tick_tilt_weight,
+    )
+    return apply_ollama_tick_tilt(adjusted_tuple, multipliers=multipliers)
 
 
 def _boost_aligned_means(
@@ -181,8 +223,6 @@ def _stddev_with_availability(
         conditional_variance = 0.0
     else:
         conditional_variance = pstdev(samples) ** 2
-    # math.sqrt keeps the return typed as float; ``x ** 0.5`` is Any under typeshed
-    # because float**float may be complex (CI mypy no-any-return).
     return math.sqrt(
         probability * conditional_variance + probability * (1.0 - probability) * conditional**2
     )
@@ -200,5 +240,7 @@ def accumulate_position_residuals(
 
 def summarize_knob_label(knobs: PickerKnobs) -> str:
     return (
-        f"{knobs.profile}:boost={knobs.boost_rank_blend:.2f},pos={knobs.position_calibration:.2f}"
+        f"{knobs.profile}:boost={knobs.boost_rank_blend:.2f},"
+        f"pos={knobs.position_calibration:.2f},"
+        f"ollama={knobs.ollama_tick_tilt_weight:.2f}"
     )

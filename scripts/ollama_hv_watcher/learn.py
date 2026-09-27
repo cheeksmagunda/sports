@@ -29,6 +29,7 @@ from ollama_hv_watcher.pick import (
 
 OLLAMA_UNAVAILABLE_NOTES = "ollama_unavailable"
 OLLAMA_GATE_FORBIDDEN_NOTES = "ollama_gate_forbidden"
+LATEST_TICK_FILENAME = "latest_tick.json"
 
 
 def utc_now_iso() -> str:
@@ -147,7 +148,14 @@ def write_learning_tick(
     }
     if extra:
         payload.update(extra)
-    return atomic_write_json(out_path, payload)
+    atomic_write_json(out_path, payload)
+    # Stable pointer for env-gated picker tilt / tooling (#574).
+    latest_payload = {
+        **payload,
+        "tick_path": out_path.name,
+    }
+    atomic_write_json(out_dir / LATEST_TICK_FILENAME, latest_payload)
+    return out_path
 
 
 def run_learn(
