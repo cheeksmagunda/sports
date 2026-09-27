@@ -432,6 +432,7 @@ def _build_specs(
         label_names=label_names,
         K=K,
         volatility=volatility,
+        popularity_scores=popularity_scores,
     )
 
     attach_archetypes(
