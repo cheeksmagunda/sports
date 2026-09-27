@@ -1,23 +1,40 @@
-"""Unit tests for advance freeze readiness summarization (#332)."""
+"""Unit tests for advance freeze readiness summarization (#332 / #535)."""
 
 from __future__ import annotations
 
 from wnba_oracle.ops.freeze_readiness import summarize_freeze_readiness
 
 
-def test_blocked_when_hard_trigger_in_history_only() -> None:
+def test_cleared_hard_trigger_in_history_does_not_block() -> None:
+    """Live pool recovery must not sticky-block on a prior no_job1_pool (#535)."""
     summary = summarize_freeze_readiness(
         picks_paused=False,
         slate_timing_captured=True,
         lineup_frozen=False,
         job1_status="success",
         job1_exit_code=0,
-        events=[],
-        history=[{"trigger": "model_artifact_unset"}],
+        events=[{"trigger": "rotowire_empty"}],
+        history=[{"trigger": "no_job1_pool"}, {"trigger": "config_drift"}],
+    )
+    assert summary["ready_for_freeze"] is True
+    assert summary["phase"] == "advisory"
+    assert summary["blockers"] == []
+    assert summary["advisories"] == ["config_drift", "rotowire_empty"]
+
+
+def test_live_hard_trigger_blocks() -> None:
+    summary = summarize_freeze_readiness(
+        picks_paused=False,
+        slate_timing_captured=True,
+        lineup_frozen=False,
+        job1_status="success",
+        job1_exit_code=0,
+        events=[{"trigger": "no_job1_pool"}],
+        history=[],
     )
     assert summary["ready_for_freeze"] is False
     assert summary["phase"] == "blocked"
-    assert summary["blockers"] == ["model_artifact_unset"]
+    assert summary["blockers"] == ["no_job1_pool"]
 
 
 def test_advisory_still_ready_for_freeze() -> None:
@@ -61,3 +78,18 @@ def test_already_frozen_is_ready() -> None:
     )
     assert summary["ready_for_freeze"] is True
     assert summary["phase"] == "already_frozen"
+
+
+def test_running_job1_does_not_block_when_live_clean() -> None:
+    summary = summarize_freeze_readiness(
+        picks_paused=False,
+        slate_timing_captured=True,
+        lineup_frozen=False,
+        job1_status="running",
+        job1_exit_code=None,
+        events=[{"trigger": "rotowire_empty"}],
+        history=[{"trigger": "no_job1_pool"}],
+    )
+    assert summary["ready_for_freeze"] is True
+    assert summary["phase"] == "advisory"
+    assert summary["job1_success"] is None

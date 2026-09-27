@@ -101,36 +101,64 @@ __all__ = [
 ]
 
 
-# Fail closed when RotoWire is empty once expected lineups should already be
-# posted (#319): inside the lead window and on the tip's Eastern date (#441).
-# Outside that, an empty scrape is normal (contest opened early; no games on
-# the page yet).
-def _rotowire_near_tip(slate_date: str, now_utc: dt.datetime | None = None) -> bool:
-    """True when starters are expected for this slate on RotoWire's free page."""
-    now_utc = now_utc or dt.datetime.now(dt.UTC)
+# Fail closed when RotoWire is empty once starters should be firm enough for
+# freeze (#319 / #441 / #535): tip's Eastern date is inside the free-page
+# window (``starters_expected``) AND we are within ``ROTOWIRE_FAIL_CLOSED_LEAD``
+# of tip. Overnight tip-day and the 13:00Z seed still warn-only when the pool
+# is healthy; watchdog ``rotowire_empty`` remains the advisory signal.
+ROTOWIRE_FAIL_CLOSED_LEAD = dt.timedelta(hours=4)
+
+
+def _load_tip(slate_date: str) -> dt.datetime | None:
     try:
         from wnba_oracle.scheduler.job2_io import _load_slate_lock_time
 
-        tip = _load_slate_lock_time(slate_date)
+        return _load_slate_lock_time(slate_date)
     except Exception:
-        tip = None
+        return None
+
+
+def _rotowire_near_tip(slate_date: str, now_utc: dt.datetime | None = None) -> bool:
+    """True when starters are expected for this slate on RotoWire's free page."""
+    now_utc = now_utc or dt.datetime.now(dt.UTC)
+    tip = _load_tip(slate_date)
     if tip is None:
         # No tip yet: do not fail the morning seed on an off-day empty page.
         return False
     return starters_expected(tip, now_utc)
 
 
+def _rotowire_fail_closed(slate_date: str, now_utc: dt.datetime | None = None) -> bool:
+    """True when empty RotoWire must fail the cron exit (near freeze)."""
+    now_utc = now_utc or dt.datetime.now(dt.UTC)
+    tip = _load_tip(slate_date)
+    if tip is None:
+        return False
+    if tip.tzinfo is None:
+        tip = tip.replace(tzinfo=dt.UTC)
+    if not starters_expected(tip, now_utc):
+        return False
+    return now_utc >= tip - ROTOWIRE_FAIL_CLOSED_LEAD
+
+
 def _rotowire_empty_degraded(slate_date: str, lineups: list) -> tuple[str, ...]:
-    """Fail closed near tip when RotoWire returned no starters; else warn only."""
+    """Fail closed near freeze when RotoWire returned no starters; else warn only."""
     if lineups:
         return ()
-    if _rotowire_near_tip(slate_date):
+    if _rotowire_fail_closed(slate_date):
         log.error(
             "job1_rotowire_empty_near_tip",
             slate_date=slate_date,
-            note="starters expected on tip day within 30h; empty RotoWire is fail-closed",
+            note="starters expected within 4h of tip; empty RotoWire is fail-closed",
         )
         return ("rotowire_empty_near_tip",)
+    if _rotowire_near_tip(slate_date):
+        log.warning(
+            "job1_rotowire_empty_tip_day_early",
+            slate_date=slate_date,
+            note="tip-day free page empty but still outside 4h fail-closed lead; warn only",
+        )
+        return ()
     log.warning(
         "job1_rotowire_empty_before_window",
         slate_date=slate_date,
@@ -369,15 +397,6 @@ def _build_enrichment_rows(
             is_starter=int(is_starter),
             starter_slot=int(starter_slot),
             rotowire_confirmed=int(confirmed),
-            overall_rank=getattr(player, "overall_rank", None),
-            injury_body_part=getattr(player, "injury_body_part", None),
-            team_moneyline=(
-                float(vegas["team_moneyline"]) if vegas.get("moneyline_available") else None
-            ),
-            opponent_moneyline=(
-                float(vegas["opponent_moneyline"]) if vegas.get("moneyline_available") else None
-            ),
-            last_ten_wins=(float(vegas["last_ten_wins"]) if "last_ten_wins" in vegas else None),
         )
 
         normalized_name = player.display_name.lower().strip()
@@ -507,26 +526,8 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         total = float(g.total_point) if g.total_point is not None else 0.0
         home_spread = float(g.spread_home_point) if g.spread_home_point is not None else 0.0
         away_spread = float(g.spread_away_point) if g.spread_away_point is not None else 0.0
-        team_to_vegas[h_key] = {
-            "vegas_total": total,
-            "vegas_spread": home_spread,
-            "is_home": 1.0,
-            "team_moneyline": float(g.h2h_home) if g.h2h_home is not None else 0.0,
-            "opponent_moneyline": float(g.h2h_away) if g.h2h_away is not None else 0.0,
-            "moneyline_available": (
-                1.0 if g.h2h_home is not None or g.h2h_away is not None else 0.0
-            ),
-        }
-        team_to_vegas[a_key] = {
-            "vegas_total": total,
-            "vegas_spread": away_spread,
-            "is_home": 0.0,
-            "team_moneyline": float(g.h2h_away) if g.h2h_away is not None else 0.0,
-            "opponent_moneyline": float(g.h2h_home) if g.h2h_home is not None else 0.0,
-            "moneyline_available": (
-                1.0 if g.h2h_home is not None or g.h2h_away is not None else 0.0
-            ),
-        }
+        team_to_vegas[h_key] = {"vegas_total": total, "vegas_spread": home_spread, "is_home": 1.0}
+        team_to_vegas[a_key] = {"vegas_total": total, "vegas_spread": away_spread, "is_home": 0.0}
 
     # Build the RotoWire injury index once so the per-player loop stays
     # O(n) and joins by (team, normalized_name). RotoWire is the
@@ -745,7 +746,7 @@ def run_lite(slate_date: str | None = None) -> Job1Result:
             degraded_reasons=("rotowire_fetch_failed",),
         )
     if not lineups or not settings.database_url:
-        if not lineups and _rotowire_near_tip(sd):
+        if not lineups and _rotowire_fail_closed(sd):
             log.error(
                 "job1_lite_rotowire_empty_near_tip",
                 slate_date=sd,
