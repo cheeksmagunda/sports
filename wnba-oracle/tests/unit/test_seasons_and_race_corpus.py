@@ -56,7 +56,7 @@ class TestParseSeasons:
             seasons_common.parse_seasons("2100")
 
     def test_default_value(self):
-        assert seasons_common.DEFAULT_SEASONS == "2025,2026"
+        assert seasons_common.DEFAULT_SEASONS == "2017,2018,2019,2020,2021,2022,2023,2024,2025,2026"
 
 
 # ====================================================================
