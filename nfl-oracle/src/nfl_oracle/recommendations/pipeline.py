@@ -38,7 +38,10 @@ from nfl_oracle.recommendations.store import RecommendationStore
 class PipelinePolicy(Record):
     recommendations_enabled: bool = False
     freeze_minutes: Literal[40] = 40
-    input_max_age_seconds: int = Field(default=900, ge=60, le=900)
+    # Full-pool collect can exceed 15 minutes under provider throttle; collect
+    # unifies clocks to one epoch (#590). Ceiling stays above that sweep so a
+    # same-tick prepare→publish cannot false-stale if epoch unify regresses.
+    input_max_age_seconds: int = Field(default=900, ge=60, le=3600)
     model_max_age_days: int = Field(default=8, ge=1, le=30)
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
     picker: PickerKnobs = Field(default_factory=PickerKnobs)

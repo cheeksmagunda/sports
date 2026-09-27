@@ -559,6 +559,18 @@ _RETENTION_SECONDS = {
 }
 _PRUNE_INTERVAL_SECONDS = 60 * 60
 
+# Clock-skew and collect-duration gates that clear on the next poll. Recording
+# them as sticky `error` made /lineup look dead after the 2026-09-27 early miss
+# even though a later tick could have frozen (#590).
+_RETRYABLE_FREEZE_REASONS = frozenset(
+    {
+        "stale_player",
+        "stale_or_future_slate",
+        "future_forecast",
+        "future_evidence",
+    }
+)
+
 
 def _prune_data_retention(project: Path) -> None:
     """Sweep bounded-retention directories. Best-effort: never blocks a poll."""
@@ -634,20 +646,28 @@ async def _run_worker(
             # is safe to keep. Other exception types can carry provider URLs or
             # query values, so those stay type-only.
             reason = str(error)[:200] if type(error) is ValueError else ""
+            retryable = reason in _RETRYABLE_FREEZE_REASONS
             _record_worker_failure(
                 store,
                 day,
-                status="error",
-                detail_code=type(error).__name__.lower(),
-                details={"reason": reason} if reason else None,
+                status="waiting" if retryable else "error",
+                detail_code=reason if retryable else type(error).__name__.lower(),
+                details={"reason": reason, "retryable": True}
+                if retryable
+                else ({"reason": reason} if reason else None),
             )
             print(
                 json.dumps(
-                    {"status": "error", "error_type": type(error).__name__, "reason": reason}
+                    {
+                        "status": "waiting" if retryable else "error",
+                        "error_type": type(error).__name__,
+                        "reason": reason,
+                        "retryable": retryable,
+                    }
                 )
             )
             if once:
-                return 1
+                return 0 if retryable else 1
         if once:
             return 0
         await asyncio.sleep(max(10, min(poll_seconds, 60)))

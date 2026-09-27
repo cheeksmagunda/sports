@@ -1,3 +1,22 @@
+# Status
+
+Last verified: 2026-09-27T17:25Z
+
+## Win-draft harden (#590)  -  2026-09-27T17:25Z
+
+Early window failed (`future_forecast` then `stale_player`). Harden landed so
+afternoon T-40 **19:25Z** cannot die the same way:
+
+| Failure | Fix |
+|---------|-----|
+| NWS `generatedAt` skew → `future_forecast` abort | Soft-skip weather for that period |
+| Full-pool search ages early player clocks → `stale_player` | Collect unifies one evidence epoch at end |
+| Sticky `error` run status after retryable gate | Worker records `waiting` + retries next poll |
+| `input_max_age` ceiling blocked longer sweeps | Policy ceiling raised to 3600s (default still 900) |
+
+Afternoon slate remains auto-armed: `next_freeze=19:25Z`, `cutoff_at=20:05Z`.
+Worker redeploy required on this commit before 19:25Z.
+
 ## Own-model feature map phase 1 (#523, 2026-09-26)
 
 ## Corpus C HV / Total Value export scaffold (#526, 2026-09-27)

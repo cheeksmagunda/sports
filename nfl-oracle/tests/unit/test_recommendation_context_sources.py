@@ -352,11 +352,11 @@ def test_nws_forecast_is_predecision_and_venue_coordinates_are_verified() -> Non
         "weather_precip_prob": 0.2,
     }
 
-    with pytest.raises(ValueError, match="future_forecast"):
-        future = source.model_copy(
-            update={"rows": ({**source.rows[0], "forecast_generated_at": "2026-09-10T00:00:00Z"},)}
-        )
-        forecast_features(future, datetime(2026, 9, 13, 17, tzinfo=UTC), NOW)
+    # NWS generatedAt skew must not abort freeze (#590); skip weather for that row.
+    future = source.model_copy(
+        update={"rows": ({**source.rows[0], "forecast_generated_at": "2026-09-10T00:00:00Z"},)}
+    )
+    assert forecast_features(future, datetime(2026, 9, 13, 17, tzinfo=UTC), NOW) == {}
 
 
 def _value_history() -> list[SimpleNamespace]:

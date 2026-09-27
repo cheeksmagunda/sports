@@ -345,9 +345,14 @@ class NFLReader:
                     ),
                 )
             )
-        # Refresh lock after the sweep, preserving each player's actual capture.
+        # Refresh lock after the sweep. Full-pool rating search sleeps and
+        # retries per name; early hits can age past input_max_age (900s) before
+        # the last name returns. One worker-tick collect is one evidence epoch
+        # (#590 stale_player on 2026-09-27 early window).
         contest = await self.contest(contest_id)
         now = self.clock()
+        epoch = EvidenceClock(source_available_at=now, captured_at=now)
+        candidates = [candidate.model_copy(update={"clock": epoch}) for candidate in candidates]
         # The tested BoostObservation classification is the single source of
         # truth for zero-boost-vs-published, not a second, ad hoc count kept
         # in sync by hand. It reads the same raw multiplierBonus values used
