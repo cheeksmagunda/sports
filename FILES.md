@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 829 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -436,6 +436,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_schedule_bootstrap.py -- Tests for schedule bootstrap into an empty worker data volume.
 - nfl-oracle/tests/unit/test_schedule_census_and_aliases.py -- Identity alias reconciliation + schedule helper smoke (offline).
 - nfl-oracle/tests/unit/test_schedule_coverage_edges.py -- Edge cases: schedule density, empty coverage, posture, algebra override.
+- nfl-oracle/tests/unit/test_schedule_kickoff.py -- Offline kickoff time-of-day parsing and the T-40-equivalent offline gate (#267).
 - nfl-oracle/tests/unit/test_schedule_parse.py -- Offline nflverse schedule CSV parse + density.
 - nfl-oracle/tests/unit/test_schedule_slate_census.py -- Continuous season slate discovery + coverage census (offline nflverse).
 - nfl-oracle/tests/unit/test_schedule_slate_resolve.py -- Week/slate resolution helpers over dense offline schedules.
@@ -450,6 +451,7 @@ Generated from `git ls-files`. 827 tracked files. Regenerate with `scripts/gener
 - nfl-oracle/tests/unit/test_weekclose.py
 - nfl-oracle/tests/unit/test_weekclose_gate.py
 - nfl-oracle/tests/unit/test_worker_context_bootstrap.py -- Worker context cold-start for Week-2 / TNF freezes (no baked-in artifacts).
+- nfl-oracle/tests/unit/test_worker_offline_gate.py -- Offline T-40 pre-check skips the live fetch when it can confidently vouch
 - nfl-oracle/tests/unit/test_worker_retry.py
 - nfl-oracle/tests/unit/test_worker_terminal_state.py -- A published slate is terminal: freeze once, then stop.
 

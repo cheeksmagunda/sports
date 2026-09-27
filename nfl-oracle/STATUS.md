@@ -1,5 +1,48 @@
 # Status
 
+## T-40 worker gate now checks offline first (issue #267, 2026-09-20)
+
+Follow-on to the 2026-09-20 disk-fill incident (#266) and its hotfix (#268).
+`_worker_once` used to pay for a live fetch -- and, on a cold cache, a full
+Chromium launch via `headers_or_capture()` -- on every poll, even when the
+T-40 gate was going to say "not due" every time until 40 minutes before
+kickoff.
+
+- `nfl_oracle/scripts/cache_nflverse_schedules.py` now keeps nflverse's
+  `gametime` column (local kickoff time-of-day, America/New_York) alongside
+  the existing columns; `data/schedule/schedules.csv` regenerated
+  (2002-2026, 6,771 rows). Blank for a game whose exact kickoff has not been
+  published upstream yet -- none of the current 2002-2026 window is blank,
+  but the parser still treats a blank/malformed value as absent, never
+  guessed.
+- `ScheduledGame` gained `kickoff_at: datetime | None`, parsed in
+  `parse_schedules_csv` by combining `gameday` + `gametime` and localizing
+  to America/New_York before converting to UTC. `None` whenever `gameday`
+  or `gametime` is missing/unparseable.
+- New `nfl_oracle.calendar.schedule.offline_t40_gate` (built on
+  `oracle_core.timing.window_decision`, landed unconsumed in #268's
+  hotfix): a best-effort, provider-free T-40 decision. It only ever
+  shortcuts "not yet due" -- it returns `None` (never a false "due") the
+  moment it cannot vouch for an answer: no known upcoming kickoff, or any
+  game sharing the nearest gameday is missing a parsed `kickoff_at`.
+- `_worker_once` now runs this offline pre-check before
+  `headers_or_capture()` / `reader.day_content()`, but only in the
+  unattended poll loop (`requested_day is None` -- an explicit `--day` /
+  `NFL_SLATE_DATE` catch-up run always goes live, since the offline gate's
+  "nearest upcoming day" concept would not necessarily match an explicit
+  backfill day). A confident "not due" records `waiting` /
+  `waiting_for_t40_offline` and returns without any live call. Anything
+  else -- including the offline gate itself saying `due` -- falls straight
+  through to the existing live path unchanged, because a live kickoff can
+  still move (weather delay, flex) after the offline schedule was cut; the
+  live per-day payload's own kickoff times remain authoritative for the
+  actual freeze decision, exactly as before this change.
+
+Verification: `make test-core` (87 passed), `make test-app APP=nfl-oracle`
+(425 passed/1 skipped/1 deselected -- 17 new: offline kickoff parsing +
+gate edge cases, worker skip/fallthrough behavior), `make lint`,
+`make typecheck`, `make check-boundaries` all pass.
+
 ## main red: restored oracle-core.browser/timing dropped from the disk-fill fix (issue #268, 2026-09-20)
 
 `main` was red from 19:05 UTC to (this fix) on 2026-09-20: `backend-ci`

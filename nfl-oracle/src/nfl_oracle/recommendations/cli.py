@@ -24,7 +24,12 @@ from oracle_core.service import DiskUsageHealthContributor
 from oracle_core.storage import PoolOptions, create_postgres_engine
 from sqlalchemy import create_engine
 
-from nfl_oracle.calendar.schedule import ensure_offline_schedules
+from nfl_oracle.calendar.schedule import (
+    ensure_offline_schedules,
+    offline_t40_gate,
+    resolve_schedule_csv_path,
+    try_load_schedules_csv,
+)
 from nfl_oracle.common.logging import get_logger
 from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
@@ -302,6 +307,29 @@ async def _worker_once(
     ) -> None:
         merged = {**(details or {}), **_disk_usage_metadata(project)}
         store.record_run(day, status=status, detail_code=detail_code, details=merged)
+
+    # Offline T-40 pre-check (#267): every poll used to pay for a live fetch
+    # (and, on a cold cache, a full Chromium launch) even when no game's
+    # T-40 window could possibly be open yet. When a requested day is
+    # explicit, an offline "not due" answer for a *different* nearest day
+    # would be meaningless, so this pre-check only applies to the
+    # unattended poll loop. It only ever shortcuts "not yet due"; anything
+    # else (missing offline kickoff data, or the offline gate itself saying
+    # due) falls through to the live path unchanged below, because a live
+    # kickoff can still move after this offline snapshot was cut.
+    if requested_day is None:
+        offline_games = try_load_schedules_csv(
+            resolve_schedule_csv_path(resolve_data_paths(project).root)
+        )
+        offline_gate = offline_t40_gate(offline_games, now=datetime.now(UTC))
+        if offline_gate is not None and not offline_gate.decision.due:
+            record_run(
+                offline_gate.day,
+                status="waiting",
+                detail_code="waiting_for_t40_offline",
+                details=offline_gate.decision.as_details(),
+            )
+            return None
 
     headers = await headers_or_capture()
     async with httpx.AsyncClient(timeout=25) as client:

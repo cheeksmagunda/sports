@@ -14,9 +14,20 @@ import shutil
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
+
+from oracle_core.timing import WindowDecision, window_decision
+
+# nflverse/nfldata's `gametime` column is local kickoff time-of-day in this
+# zone (verified against known kickoffs, e.g. a published 20:20 Thursday
+# Night Football start). Empty for games whose exact kickoff has not been
+# published upstream yet (common for early historical seasons and
+# not-yet-flex-scheduled future weeks) -- ScheduledGame.kickoff_at is None
+# in that case, never guessed.
+_SCHEDULE_TZ = ZoneInfo("America/New_York")
 
 # Primary public source (Lee Sharpe / nflverse nfldata). Release-tag CSV may 404;
 # raw games.csv is the stable offline-cacheable feed.
@@ -51,6 +62,7 @@ class ScheduledGame:
     home_team: str
     away_team: str
     game_type: str = "REG"
+    kickoff_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +107,28 @@ class SeasonSlateCensus:
         return asdict(self)
 
 
+def _parse_kickoff_at(gameday: date | None, gametime_raw: str) -> datetime | None:
+    """Combine an offline gameday + nflverse `gametime` into a UTC instant.
+
+    Fails closed to ``None`` on anything unparsed rather than guessing: a
+    missing or malformed kickoff time-of-day must fall through to the live
+    provider gate, never silently pass or fail a T-40 decision.
+    """
+
+    if gameday is None:
+        return None
+    raw = gametime_raw.strip()
+    if not raw:
+        return None
+    try:
+        hour_str, minute_str = raw.split(":", 1)
+        local_time = time(hour=int(hour_str), minute=int(minute_str))
+    except ValueError:
+        return None
+    local = datetime.combine(gameday, local_time, tzinfo=_SCHEDULE_TZ)
+    return local.astimezone(UTC)
+
+
 def parse_schedules_csv(text: str, *, season: int | None = None) -> list[ScheduledGame]:
     """Parse nflverse/nfldata schedules CSV text into ScheduledGame rows."""
 
@@ -128,6 +162,7 @@ def parse_schedules_csv(text: str, *, season: int | None = None) -> list[Schedul
                 home_team=str(row.get("home_team") or ""),
                 away_team=str(row.get("away_team") or ""),
                 game_type=game_type,
+                kickoff_at=_parse_kickoff_at(gameday, str(row.get("gametime") or "")),
             )
         )
     return out
@@ -532,3 +567,68 @@ def research_schedule_summary(
             games=games,
         )
     return payload
+
+
+def next_offline_slate_day(games: Iterable[ScheduledGame], *, now: datetime) -> date | None:
+    """Nearest gameday at/after ``now`` with a known, not-yet-started kickoff.
+
+    Purely offline (no provider call). Used only to decide whether a T-40
+    poll is worth waking the live path at all; the live path's own day
+    resolution (``NFLReader.next_day``) remains authoritative for which day
+    a freeze is actually recorded against. Returns ``None`` when no known
+    kickoff qualifies, so the caller always falls through to the live path.
+    """
+
+    pairs: list[tuple[datetime, date | None]] = [
+        (g.kickoff_at, g.gameday) for g in games if g.kickoff_at is not None and g.kickoff_at > now
+    ]
+    if not pairs:
+        return None
+    return min(pairs, key=lambda pair: pair[0])[1]
+
+
+@dataclass(frozen=True)
+class OfflineGate:
+    """An offline T-40-equivalent decision, paired with the day it is for."""
+
+    day: date
+    decision: WindowDecision
+
+
+def offline_t40_gate(
+    games: Iterable[ScheduledGame],
+    *,
+    now: datetime,
+    lead: timedelta = timedelta(minutes=40),
+) -> OfflineGate | None:
+    """Best-effort T-40-equivalent gate from the offline schedule alone.
+
+    Returns ``None`` whenever the offline schedule cannot vouch for an
+    answer: no known upcoming kickoff, or any game sharing the nearest
+    gameday is missing a parsed ``kickoff_at`` (unpublished gametime). The
+    caller must treat ``None`` exactly like the pre-existing behavior: fetch
+    live and re-derive the gate from the live payload.
+
+    A result with ``decision.due=False`` is the only case safe to act on
+    offline (skip the live fetch this poll). ``due=True`` here is *not*
+    sufficient by itself to proceed to a freeze -- a live kickoff can still
+    move (weather delay, flex) after this offline snapshot was cut -- so the
+    caller must fall through to the live path in that case too, exactly as
+    when this returns ``None``. This function only ever shortcuts "not yet
+    due"; it never shortcuts "due".
+    """
+
+    rows = list(games)
+    day = next_offline_slate_day(rows, now=now)
+    if day is None:
+        return None
+    day_games = [g for g in rows if g.gameday == day]
+    if not day_games or any(g.kickoff_at is None for g in day_games):
+        return None
+    day_upcoming_kickoffs: list[datetime] = [
+        g.kickoff_at for g in day_games if g.kickoff_at is not None and g.kickoff_at > now
+    ]
+    if not day_upcoming_kickoffs:
+        return None
+    cutoff = min(day_upcoming_kickoffs)
+    return OfflineGate(day=day, decision=window_decision(now=now, target_at=cutoff, lead=lead))
