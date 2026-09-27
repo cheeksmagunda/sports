@@ -11,7 +11,7 @@ VERIFIED live (public APIs + Railway `sports-oracle` / `wnba-production`). No se
 | WNBA T-40 | Slate `2026-09-27`; first tip `18:00Z`; freeze target `17:20Z` (`/slate/today`) |
 | Pool / freeze | Pool **124**; `ready_for_freeze=true`; phase `advisory`; blockers `[]`; advisories `rotowire_empty` |
 | Dual-fire | Live `wnba-oracle` / `production`: **no Cron jobs** (schedules disarmed). Mono Online: job1 `0 13`, job1-late `*/30 16-23`, job2 `*/5 14-23,0-3`, dayclose `0 6` |
-| Ollama | HV helper annotate-only (`llama3.1:8b` daemon `--execute --learn`); does not replace the app five. PR #582 OPEN unmerged. |
+| Ollama | HV helper annotate-only (8b present); does not replace the app five |
 | Cross-app | Legacy NFL disarmed + mono `max_value` + disk 13.6% + NFL T-40 16:20Z: see `nfl-oracle/STATUS.md` docs lock |
 
 Residual (unchanged): advisory `rotowire_empty` until free-page starters post (~13:00Z job1 / job1-late). Knobs `PAYOUT_REGIME=top_1`, `OPTIMIZER_OBJECTIVE_MODE=total_draft_value` remain on `wnba-api` + `wnba-cron-job2` (prior verify).

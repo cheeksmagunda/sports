@@ -9,7 +9,7 @@ VERIFIED live (Codespace `fluffy-zebra` + public APIs). No secrets printed.
 | Disk | `/slate/2026-09-27` `run.details.disk.percent_used=13.6` (mono; no legacy ~34% alternation) |
 | NFL T-40 | `2026-09-27T16:20:00Z`; 9 early games 13:00 ET (`17:00Z`); `cutoff_at=17:00Z`; `next_live_check_by=16:00Z` |
 | Crons | Mono worker Online (continuous serve path); WNBA mono crons armed (see `wnba-oracle/STATUS.md`) |
-| Ollama | HV helper annotate-only (`llama3.1:8b` daemon `--execute --learn`); does not replace the app five. PR #582 OPEN unmerged. |
+| Ollama | HV helper annotate-only (8b present); does not replace the app five |
 
 ## Own-model feature map phase 1 (#523, 2026-09-26)
 
