@@ -43,3 +43,10 @@ PYTHONPATH=scripts python -m ollama_hv_watcher --once --allow-fixtures --dry-run
 ```
 
 Default model: `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`.
+
+## Training-data inventory
+
+Machine-readable board roots + gate pointers live in
+`training_data_manifest.json` (loader: `training_manifest.py`). Use it to
+point `--board-root` / sparse corpus hydrates at HV/TDV sources without
+guessing paths.
