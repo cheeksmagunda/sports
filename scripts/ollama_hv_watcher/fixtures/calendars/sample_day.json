@@ -1,0 +1,32 @@
+{
+  "slates": [
+    {
+      "sport": "wnba",
+      "slate_id": "2026-09-27",
+      "freeze_or_kickoff_at": "2026-09-27T23:00:00Z",
+      "close_at": "2026-09-28T02:30:00Z",
+      "lead_minutes": 40
+    },
+    {
+      "sport": "nfl",
+      "slate_id": "2026-W04-sun",
+      "freeze_or_kickoff_at": "2026-09-27T17:00:00Z",
+      "close_at": "2026-09-28T04:00:00Z",
+      "lead_minutes": 40
+    },
+    {
+      "sport": "nhl",
+      "slate_id": "2026-09-27",
+      "freeze_or_kickoff_at": "2026-09-27T23:30:00Z",
+      "close_at": "2026-09-28T03:00:00Z",
+      "lead_minutes": 40
+    },
+    {
+      "sport": "nba",
+      "slate_id": "2026-09-27",
+      "freeze_or_kickoff_at": "2026-09-28T00:00:00Z",
+      "close_at": "2026-09-28T03:30:00Z",
+      "lead_minutes": 40
+    }
+  ]
+}

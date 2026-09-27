@@ -586,3 +586,17 @@ not mint this token. Auth for scrapes remains the portfolio
 corpus work. **Ollama is forbidden** until `coverage_manifest.json` reports
 complete historical capture.
 
+## Ollama HV/TDV slate watcher (Codespace) — issue #574
+
+Portfolio helper under `scripts/ollama_hv_watcher/`: arms at earliest T-40
+across sport slate windows, stays until latest slate close, and writes
+self-learning notes from HV/TDV boards under gitignored `data/ollama_hv/`.
+
+- Training / generate is gated by `coverage_manifest.historical_capture_complete`
+  (`OllamaForbiddenError`). Operator override for the Codespace helper only:
+  `SPORTS_OLLAMA_UNLOCK=1`.
+- Binary install + `ollama serve` healthchecks (`:11434`) are allowed anytime.
+- CLI: `cd scripts && python -m ollama_hv_watcher status|plan|watch|learn|serve`
+- systemd-less: `nohup` + pidfile under `data/ollama_hv/`; optional postStart
+  snippet in `scripts/devcontainer-poststart.sh` ensures serve is up.
+

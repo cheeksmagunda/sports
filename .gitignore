@@ -40,3 +40,6 @@ drive/corpus_g_coverage_samples/
 /corpus/
 **/corpus/sport=*/
 **/corpus/manifest/
+
+# Ollama HV/TDV watcher artifacts (notes/ticks/pidfiles; never secrets) (#574)
+/data/ollama_hv/

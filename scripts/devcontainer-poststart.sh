@@ -69,4 +69,17 @@ disown
 ) &
 disown
 
+# Optional Ollama HV watcher health (#574): if ollama is installed, keep
+# serve up via nohup (zstd is only needed for first-time install, not here).
+(
+  if command -v ollama >/dev/null 2>&1; then
+    mkdir -p data/ollama_hv
+    if ! curl -sf --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+      nohup ollama serve >data/ollama_hv/ollama_serve.log 2>&1 &
+      echo $! >data/ollama_hv/ollama_serve.pid
+    fi
+  fi
+) >/tmp/sports-ollama-poststart.log 2>&1 &
+disown
+
 exit 0

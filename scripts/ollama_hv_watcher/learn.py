@@ -1,0 +1,133 @@
+"""Write self-learning notes/ticks from HV board summaries via Ollama (#574)."""
+
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.request
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from ollama_hv_watcher.boards import BoardSummary
+from ollama_hv_watcher.gate import ensure_ollama_training_allowed
+from realsports_corpus.coverage_manifest import CoverageManifest
+
+DEFAULT_MODEL = "llama3.2:3b"
+DEFAULT_HOST = "http://127.0.0.1:11434"
+
+
+def utc_now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def artifact_dir(
+    data_root: Path,
+    *,
+    sport: str,
+    slate_id: str,
+) -> Path:
+    safe_sport = sport.replace("/", "_")
+    safe_slate = slate_id.replace("/", "_")
+    return Path(data_root) / safe_sport / safe_slate
+
+
+def build_learn_prompt(summary: BoardSummary) -> str:
+    return (
+        "You are a sports analytics self-learning helper for Highest-value "
+        "(HV) and Total Value (TDV) daily fantasy boards.\n"
+        "Given the board summary below, write concise structured notes:\n"
+        "1) top_1 / max_value signal players\n"
+        "2) stacking or correlation guesses (teams)\n"
+        "3) one calibration question for the next slate\n"
+        "Keep under 250 words. No secrets, no credentials, no URLs with tokens.\n\n"
+        f"{summary.prompt_block()}\n"
+    )
+
+
+def call_ollama_generate(
+    prompt: str,
+    *,
+    host: str = DEFAULT_HOST,
+    model: str = DEFAULT_MODEL,
+    timeout_s: float = 120.0,
+) -> str:
+    url = f"{host.rstrip('/')}/api/generate"
+    body = json.dumps(
+        {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"ollama_generate_failed:{exc}") from exc
+    text = payload.get("response")
+    if not isinstance(text, str) or not text.strip():
+        raise RuntimeError("ollama_generate_empty_response")
+    return text.strip()
+
+
+def write_learning_tick(
+    data_root: Path,
+    summary: BoardSummary,
+    *,
+    notes: str,
+    model: str,
+    gate_reason: str,
+    dry_run: bool = False,
+) -> Path:
+    sport = summary.sport or "unknown"
+    slate_id = summary.slate_key or "unknown"
+    out_dir = artifact_dir(data_root, sport=sport, slate_id=slate_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = utc_now_iso().replace(":", "").replace("-", "")
+    out_path = out_dir / f"tick_{stamp}.json"
+    payload: dict[str, Any] = {
+        "written_at": utc_now_iso(),
+        "gate_reason": gate_reason,
+        "model": model,
+        "dry_run": dry_run,
+        "board": summary.to_dict(),
+        "notes": notes,
+    }
+    out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return out_path
+
+
+def run_learn(
+    summary: BoardSummary,
+    *,
+    data_root: Path,
+    manifest: CoverageManifest,
+    host: str = DEFAULT_HOST,
+    model: str = DEFAULT_MODEL,
+    dry_run: bool = False,
+    environ: dict[str, str] | None = None,
+) -> Path:
+    reason = ensure_ollama_training_allowed(manifest, environ=environ)
+    prompt = build_learn_prompt(summary)
+    if dry_run:
+        notes = (
+            "[dry_run] prompt prepared; Ollama generate skipped.\n"
+            f"gate={reason}\n\n{prompt}"
+        )
+    else:
+        notes = call_ollama_generate(prompt, host=host, model=model)
+    return write_learning_tick(
+        data_root,
+        summary,
+        notes=notes,
+        model=model,
+        gate_reason=reason,
+        dry_run=dry_run,
+    )

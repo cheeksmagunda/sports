@@ -1,0 +1,35 @@
+{
+  "sport": "nfl",
+  "slate_key": "2026-01-01",
+  "section": "highestBoostedValuePlayers",
+  "label": "total_value_leaderboard",
+  "players": [
+    {
+      "player_id": 101,
+      "name": "Alpha Runner",
+      "team": "AA",
+      "value": 42.5,
+      "real_score": 28.0,
+      "slot": 1,
+      "drafts": 12
+    },
+    {
+      "player_id": 202,
+      "name": "Beta Stack",
+      "team": "BB",
+      "value": 39.1,
+      "real_score": 25.5,
+      "slot": 2,
+      "drafts": 8
+    },
+    {
+      "player_id": 303,
+      "name": "Gamma Value",
+      "team": "AA",
+      "value": 37.0,
+      "real_score": 22.0,
+      "slot": 3,
+      "drafts": 5
+    }
+  ]
+}
