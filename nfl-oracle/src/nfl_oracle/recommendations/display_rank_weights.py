@@ -6,8 +6,10 @@ boost is known, the top-k sample weight follows
     value * (top_slot + card_boost)
 
 which is the Highest-value board's rank key. Draft count is not a weight.
-With no boost map, the weights match the raw-value top-k used before this
-map existed, so a Corpus G fit that has no HV export is unchanged.
+With no boost map, the weights match the raw-value top five used before
+this map existed, so a Corpus G fit that has no HV export is unchanged.
+With a boost map, the default window is the top 10 display ranks
+(``NFL_HV_DISPLAY_TOP_K``).
 """
 
 from __future__ import annotations
@@ -27,17 +29,57 @@ from oracle_core.high_tv import sample_weights_for_labeled_rows
 
 _EASTERN = ZoneInfo("America/New_York")
 
+RAW_VALUE_TOP_K = 5
+DISPLAY_RANK_TOP_K = 10
+DISPLAY_TOP_K_ENV = "NFL_HV_DISPLAY_TOP_K"
+
+
+def resolve_contest_display_top_k(
+    *,
+    boosts_present: bool,
+    top_k: int | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    """Window for contest-display sample weights.
+
+    An explicit ``top_k`` always wins. A missing boost map stays at the
+    raw-value top five and ignores ``NFL_HV_DISPLAY_TOP_K``. A present map
+    uses that env, or 10 when it is unset.
+    """
+
+    if top_k is not None:
+        if top_k < 1:
+            raise ValueError("top_k_out_of_range")
+        return top_k
+    if not boosts_present:
+        return RAW_VALUE_TOP_K
+    source = os.environ if environ is None else environ
+    raw = str(source.get(DISPLAY_TOP_K_ENV, "")).strip()
+    if not raw:
+        return DISPLAY_RANK_TOP_K
+    try:
+        parsed = int(raw)
+    except ValueError as exc:
+        raise ValueError(DISPLAY_TOP_K_ENV) from exc
+    if parsed < 1:
+        raise ValueError(DISPLAY_TOP_K_ENV)
+    return parsed
+
 
 def sample_weights_contest_display(
     rows: Sequence[Any],
     *,
     boosts: Mapping[tuple[int, int], float] | None = None,
-    top_k: int = 5,
+    top_k: int | None = None,
     high_weight: float = 4.0,
     base_weight: float = 1.0,
 ) -> list[float]:
-    """Per-row weights. ``boosts`` keys are ``(player_id, game_id)``."""
+    """Per-row weights. ``boosts`` keys are ``(player_id, game_id)``.
 
+    ``draft_count`` and any winning-draft flag on the row are ignored.
+    """
+
+    resolved = resolve_contest_display_top_k(boosts_present=bool(boosts), top_k=top_k)
     wrapped: list[SimpleNamespace] = []
     for row in rows:
         card_boost = None
@@ -53,7 +95,7 @@ def sample_weights_contest_display(
             )
         )
     return sample_weights_for_labeled_rows(
-        wrapped, top_k=top_k, high_weight=high_weight, base_weight=base_weight
+        wrapped, top_k=resolved, high_weight=high_weight, base_weight=base_weight
     )
 
 

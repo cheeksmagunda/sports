@@ -205,7 +205,10 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         raise RuntimeError("hv_tdv_training_rows_insufficient")
     metadata = load_history_metadata(root, rows)
     enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
-    from nfl_oracle.recommendations.display_rank_weights import load_contest_boosts
+    from nfl_oracle.recommendations.display_rank_weights import (
+        load_contest_boosts,
+        resolve_contest_display_top_k,
+    )
     from nfl_oracle.recommendations.model import (
         attach_enrichment,
         drop_ambiguous_identity_rows,
@@ -235,6 +238,7 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         "contest_display_rank": (
             "value_times_top_slot_plus_boost" if contest_boosts else "raw_value_no_boost_map"
         ),
+        "contest_display_top_k": resolve_contest_display_top_k(boosts_present=bool(contest_boosts)),
         "contest_display_boost_keys": 0 if not contest_boosts else len(contest_boosts),
         "draft_count_is_label": False,
         "contest_entry": False,
