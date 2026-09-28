@@ -269,6 +269,8 @@ def test_enrichment_row_preserves_provider_signal_shape() -> None:
     assert features["head_features"]["vegas_total"] == 164.5
     assert features["head_features"]["vegas_spread"] == -4.0
     assert features["head_features"]["is_home"] == 1.0
+    assert features["head_features"]["moneyline_available"] == 0.0
+    assert "team_moneyline" not in features["head_features"]
     assert stats.props_matched == 1
     assert misses == ["A. Wilson (LVA) [unresolved]"]
 
@@ -334,3 +336,50 @@ def test_enrichment_prefers_provider_game_identity_for_opponent() -> None:
     assert features["head_features"]["is_home"] == 1.0
     assert stats.head_features_matched == 1
     assert misses == ["B. Stewart (NYL) [unresolved]"]
+
+
+def test_enrichment_wires_moneyline_and_season_averages() -> None:
+    player = SimpleNamespace(
+        platform_id="123",
+        display_name="A. Wilson",
+        first_name="A'ja",
+        last_name="Wilson",
+        team="LVA",
+        injury_status="",
+        primary_ranking=1,
+        position="F",
+        multiplier_bonus=1.5,
+        game_start_utc="2026-06-08T23:00:00Z",
+        game_id="4512",
+        overall_rank=4,
+        season_averages={"pts": 22.4, "reb": 9.1, "note": "x"},
+    )
+    context = job1._EnrichmentContext(
+        team_to_opp={"LVA": "NYL"},
+        team_to_vegas={
+            "LVA": {
+                "vegas_total": 164.5,
+                "vegas_spread": -4.0,
+                "is_home": 1.0,
+                "team_moneyline": -140.0,
+                "opponent_moneyline": 120.0,
+                "moneyline_available": 1.0,
+            }
+        },
+        rotowire=job1._index_rotowire([]),
+        minutes={},
+        head_features={},
+        resolver=None,
+        team_stats={},
+        opponent_dvp={},
+        props={},
+    )
+    rows, _stats, _misses = job1._build_enrichment_rows("2026-06-08", [player], context)
+    head = json.loads(rows[0]["features_json"])["head_features"]
+    assert head["team_moneyline"] == -140.0
+    assert head["opponent_moneyline"] == 120.0
+    assert head["moneyline_available"] == 1.0
+    assert head["overall_rank"] == 4.0
+    assert head["season_avg_pts"] == 22.4
+    assert head["season_avg_reb"] == 9.1
+    assert "note" not in head

@@ -89,7 +89,7 @@ do not share that catalog.
 
 ## oracle-core (`packages/oracle-core/src/oracle_core/`)
 
-Domain-free technical infrastructure. 26 Python modules as of this sync,
+Domain-free technical infrastructure. 27 Python modules as of this sync,
 including package `realsports_corpus/` (layout, manifest, store). Prefer
 schema.org (and PROV-O / IPTC Sport Schema only where noted in `AGENTS.md`)
 for shared entity contracts; see `schemaorg.py`. The package README is the
@@ -106,6 +106,7 @@ inline list; this table is the outline.
 | `schemaorg.py`, `high_tv.py` | schema.org / JSON-LD constructors; high-TV board helpers |
 | `race.py`, `fitness.py` | WIN/CLOSE backtest race (search, genetics, elite band). Domain-free |
 | `draft_stats_catalog.py`, `hv_board_corpus.py` | Draft Stats section inventory; HV board document helper (#526) |
+| `feature_matrix.py` | available / wired / serving inventory; `wire_available_to_freeze` copies serve-on keys (#583) |
 | `realsports_corpus/` | Sibling-repo layout, coverage manifest, store |
 | `corpus_matchup.py` | Idempotent `{sport}/{season}/{game_id}/` matchup + stats append |
 
@@ -144,7 +145,8 @@ Frontend is a static `index.html` (no build pipeline).
 | `recommendations/` | 19 | Live pipeline: prepare/publish/lock, optimizer, T-40 watchdog, CLI |
 | `strategy/` | 16 | Five-card legality, clocks, scoring algebra |
 | `contests/` | 11 | Contest archive parsing, including Corpus C HV export |
-| `baselines/`, `features/` | 10 each | Ridge / priors / walk-forward; own-model feature map |
+| `baselines/` | 10 | Ridge / priors / walk-forward |
+| `features/` | 11 | Own-model feature map and FEATURE_MATRIX wire |
 | `replay/` | 8 | Historical contest replay |
 | `data/` | 8 | Coverage and catalog helpers |
 | `ingest/` | 7 | Corpus G ingest and Real Sports client |

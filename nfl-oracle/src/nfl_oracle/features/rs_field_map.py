@@ -71,9 +71,9 @@ RS_FIELD_MATRIX: tuple[tuple[str, str, str, str, RsStatus], ...] = (
     ),
     (
         "seasonAverages.*",
-        "game feed players",
-        "context_features season_avg_*",
-        "optional context",
+        "game feed players when present",
+        "context_features season_avg_* via FEATURE_MATRIX serve=on",
+        "recommendations.context enrich (#583)",
         "mapped",
     ),
     (

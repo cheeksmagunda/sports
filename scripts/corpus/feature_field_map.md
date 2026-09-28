@@ -1,8 +1,12 @@
-# Corpus field → own-model FeatureSpec map (#526 → #523)
+# Corpus field → own-model FeatureSpec map (#526 → #523 / #583)
 
 Total Value leaderboard is the label. Corpus artifacts feed the existing own
 learner surfaces (NFL ridge / valuelaw / context; WNBA EB + serving features).
 Do not invent a parallel model stack.
+
+Portfolio freeze inventory (available | wired | serving) lives in
+`oracle_core.feature_matrix`. Rows with `serve="on"` are copied into the
+freeze payload by `wire_available_to_freeze`.
 
 ## HV board (`hv_board.json`)
 

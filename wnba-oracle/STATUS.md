@@ -1,6 +1,16 @@
 # Status
 
-Last verified: 2026-09-28T02:58:00Z
+Last verified: 2026-09-28T03:40:00Z
+
+## FEATURE_MATRIX serve-on wire (#583)  -  2026-09-28
+
+Code on this change copies serve-on matrix rows into job1 `head_features`:
+h2h moneyline when Odds API `h2h_*` is present, `overall_rank` when the pool
+sends it, and `season_avg_*` when `seasonAverages` is a numeric map. EB
+already reads `team_moneyline` through `moneyline_beta` on the loaded
+artifact (zero beta is a no-op). `PROP_SIGNAL_SCALE` stays at its code
+default `0.0`. Production job1 image is unchanged until this commit is
+deployed; that redeploy is unverified here. NFL picker blend is not touched.
 
 ## EB F-cohort serve fallback (#592)  -  2026-09-28T02:55:47Z
 

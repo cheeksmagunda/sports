@@ -320,6 +320,8 @@ class NFLReader:
             home_player = player["teamId"] == game.home_team_id
             overall_rank = player.get("overallRank")
             body_part = player.get("injuryBodyPart")
+            raw_averages = player.get("seasonAverages")
+            season_averages = raw_averages if isinstance(raw_averages, dict) else None
             candidates.append(
                 Candidate(
                     player_id=pid,
@@ -343,6 +345,7 @@ class NFLReader:
                     injury_body_part=(
                         str(body_part) if body_part is not None and str(body_part).strip() else None
                     ),
+                    season_averages=season_averages,
                 )
             )
         # Refresh lock after the sweep. Full-pool rating search sleeps and

@@ -27,6 +27,7 @@ from wnba_oracle.common.logging import configure_logging, get_logger
 from wnba_oracle.common.settings import get_settings
 from wnba_oracle.db.engine import get_engine
 from wnba_oracle.features.serving_features import (
+    apply_feature_matrix,
     build_head_feature_lookup,
     build_opp_dvp_lookup,
     build_team_pace_lookup,
@@ -387,6 +388,10 @@ def _build_enrichment_rows(
         # #523: fuse boost / vegas / home / starter into head_features so they
         # enter the own-model design matrix (EB pace path + optional LGBM heads),
         # not only the features_json top level.
+        # #583: FEATURE_MATRIX serve=on copies moneyline, rank, and seasonAverages.
+        moneyline_flag = float(vegas.get("moneyline_available", 0.0) or 0.0)
+        team_moneyline = vegas.get("team_moneyline")
+        opponent_moneyline = vegas.get("opponent_moneyline")
         features["head_features"] = fuse_slate_enrichment_into_head_features(
             head_feature,
             card_boost=float(player.multiplier_bonus),
@@ -397,6 +402,27 @@ def _build_enrichment_rows(
             is_starter=int(is_starter),
             starter_slot=int(starter_slot),
             rotowire_confirmed=int(confirmed),
+            overall_rank=getattr(player, "overall_rank", None),
+            injury_body_part=getattr(player, "injury_body_part", None),
+            team_moneyline=(
+                float(team_moneyline) if moneyline_flag and team_moneyline is not None else None
+            ),
+            opponent_moneyline=(
+                float(opponent_moneyline)
+                if moneyline_flag and opponent_moneyline is not None
+                else None
+            ),
+            season_averages=getattr(player, "season_averages", None),
+        )
+        features["head_features"] = apply_feature_matrix(
+            features["head_features"],
+            {
+                "team_moneyline": team_moneyline,
+                "opponent_moneyline": opponent_moneyline,
+                "moneyline_available": moneyline_flag,
+                "overall_rank": getattr(player, "overall_rank", None),
+                "season_averages": getattr(player, "season_averages", None),
+            },
         )
 
         normalized_name = player.display_name.lower().strip()
@@ -526,8 +552,23 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         total = float(g.total_point) if g.total_point is not None else 0.0
         home_spread = float(g.spread_home_point) if g.spread_home_point is not None else 0.0
         away_spread = float(g.spread_away_point) if g.spread_away_point is not None else 0.0
-        team_to_vegas[h_key] = {"vegas_total": total, "vegas_spread": home_spread, "is_home": 1.0}
-        team_to_vegas[a_key] = {"vegas_total": total, "vegas_spread": away_spread, "is_home": 0.0}
+        ml_avail = 1.0 if g.h2h_home is not None or g.h2h_away is not None else 0.0
+        team_to_vegas[h_key] = {
+            "vegas_total": total,
+            "vegas_spread": home_spread,
+            "is_home": 1.0,
+            "team_moneyline": float(g.h2h_home) if g.h2h_home is not None else 0.0,
+            "opponent_moneyline": float(g.h2h_away) if g.h2h_away is not None else 0.0,
+            "moneyline_available": ml_avail,
+        }
+        team_to_vegas[a_key] = {
+            "vegas_total": total,
+            "vegas_spread": away_spread,
+            "is_home": 0.0,
+            "team_moneyline": float(g.h2h_away) if g.h2h_away is not None else 0.0,
+            "opponent_moneyline": float(g.h2h_home) if g.h2h_home is not None else 0.0,
+            "moneyline_available": ml_avail,
+        }
 
     # Build the RotoWire injury index once so the per-player loop stays
     # O(n) and joins by (team, normalized_name). RotoWire is the

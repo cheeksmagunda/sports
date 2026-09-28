@@ -21,6 +21,10 @@ C). Own model is valuelaw plus feature ridge (`features.own_model_map`,
 `recommendations.model`). No LightGBM primary. Ollama
 (`scripts/ollama_hv_watcher`) notes on those same boards. It does not
 replace the ridge serve path and it does not publish the freeze.
+`recommendations.context` copies `oracle_core.feature_matrix` rows with
+`serve="on"` onto the context vector (moneyline and rank already extracted,
+plus `season_avg_*` when the pool sends `seasonAverages`). Picker blend
+stays the code default `0.0` unless `NFL_PICKER_BOOST_RANK_BLEND` is set.
 
 **T-40 runner.** The worker publishes. `recommendations/pipeline.py` sets
 due at contest cutoff minus 40 minutes. `recommendations/cli.py` waits with

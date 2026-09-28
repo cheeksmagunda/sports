@@ -28,6 +28,9 @@ The public package includes:
   SportsTeam, SportsOrganization, SportsEvent, Place, OrganizationRole,
   identifier/PropertyValue, sameAs, Observation, QuantitativeValue, ItemList,
   plus optional PROV-O attribution; high-TV boards in `oracle_core.high_tv`;
+  freeze feature inventory in `oracle_core.feature_matrix` (available /
+  wired / serving, plus `wire_available_to_freeze` for rows with `serve="on"`;
+  issue #583);
   Real Sports history corpus layout in `oracle_core.realsports_corpus`
   (`{sport}/{season}/{slate_or_game_id}/{artifact}.json` + coverage
   manifest) and HV board helpers in `oracle_core.hv_board_corpus`

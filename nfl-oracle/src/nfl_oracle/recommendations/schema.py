@@ -107,6 +107,7 @@ class Candidate(Record):
     clock: EvidenceClock
     overall_rank: Finite | None = None
     injury_body_part: str | None = None
+    season_averages: dict[str, Any] | None = None
 
 
 class Slate(Record):

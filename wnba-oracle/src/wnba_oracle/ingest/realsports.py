@@ -126,6 +126,7 @@ class PlatformPlayer:
     game_id: str = ""
     overall_rank: float | None = None
     injury_body_part: str | None = None
+    season_averages: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -692,6 +693,8 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
             team = (team_obj or "").upper()
         overall_rank = p.get("overallRank")
         body_part = p.get("injuryBodyPart")
+        raw_averages = p.get("seasonAverages")
+        season_averages = raw_averages if isinstance(raw_averages, dict) else None
         out.append(
             PlatformPlayer(
                 platform_id=str(p.get("id", "")),
@@ -714,6 +717,7 @@ def _parse_pool(body: dict[str, Any]) -> list[PlatformPlayer]:
                 injury_body_part=(
                     str(body_part) if body_part is not None and str(body_part).strip() else None
                 ),
+                season_averages=season_averages,
             )
         )
     return out

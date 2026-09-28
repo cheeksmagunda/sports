@@ -19,7 +19,9 @@ Inline contract for this app. Live Railway values stay in `STATUS.md`.
 primary. Minutes blend and heuristics are cold-start only. Ollama
 (`scripts/ollama_hv_watcher`) writes five-player notes on the same HV/TDV
 boards from the Codespace. It is not this app's serve model and it does not
-freeze a lineup.
+freeze a lineup. Job 1 copies `oracle_core.feature_matrix` rows with
+`serve="on"` (h2h moneyline, overall rank, seasonAverages when the pool
+sends numbers) into `head_features` so the EB freeze path can read them.
 
 **T-40 runner.** `scheduler/job2.py` skips fires before
 `first_tip - FREEZE_LEAD_MINUTES` and freezes once at or after that instant.

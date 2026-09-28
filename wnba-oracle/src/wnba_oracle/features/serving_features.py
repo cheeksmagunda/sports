@@ -109,6 +109,30 @@ def fuse_slate_enrichment_into_head_features(
     return out
 
 
+def apply_feature_matrix(
+    head: Mapping[str, Any] | None,
+    available: Mapping[str, Any],
+) -> dict[str, float]:
+    """Copy FEATURE_MATRIX serve-on keys onto a freeze head_features row (#583).
+
+    Boost, vegas, and starter flags stay on ``fuse_slate_enrichment``. This
+    step is what turns available moneyline, rank, and seasonAverages into
+    the payload job2 already knows how to read.
+    """
+
+    from oracle_core.feature_matrix import wire_available_to_freeze
+
+    out: dict[str, float] = {}
+    if isinstance(head, Mapping):
+        for key, value in head.items():
+            try:
+                out[str(key)] = float(value)
+            except (TypeError, ValueError):
+                continue
+    out.update(wire_available_to_freeze("wnba", available))
+    return out
+
+
 def _norm(s: str | None) -> str:
     return (
         unicodedata.normalize("NFKD", str(s or ""))

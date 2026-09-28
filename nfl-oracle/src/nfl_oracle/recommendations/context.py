@@ -24,6 +24,7 @@ from nfl_oracle.features.live import (
     weather_availability_flag,
 )
 from nfl_oracle.features.matchup import is_divisional_matchup
+from nfl_oracle.features.matrix_wire import apply_feature_matrix
 from nfl_oracle.features.opponent_defense import (
     RealValueHistoryIndex,
     observations_from_history,
@@ -673,6 +674,7 @@ def build_context(
             )
         if not vector["history_game_count"]:
             gaps.append("player_history_missing")
+        apply_feature_matrix(vector, season_averages=player.season_averages)
         features[player.player_id] = vector
         captured = max(
             [player.clock.captured_at] + [s.clock.captured_at for s in snapshot.sources.values()]

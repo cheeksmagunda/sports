@@ -783,7 +783,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - scripts/corpus/README.md -- Real Sports history corpus (#526)
 - scripts/corpus/export_nfl_from_corpus_g.py -- Export NFL game_stats + matchups from durable Corpus G (zero Real calls).
 - scripts/corpus/export_wnba_from_store.py -- Export WNBA HV boards from durable stores (zero Real Sports calls).
-- scripts/corpus/feature_field_map.md -- Corpus field → own-model FeatureSpec map (#526 → #523)
+- scripts/corpus/feature_field_map.md -- Corpus field → own-model FeatureSpec map (#526 → #523 / #583)
 
 ## scripts/corpus/schema/
 - scripts/corpus/schema/coverage_manifest.schema.json

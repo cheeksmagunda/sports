@@ -77,8 +77,8 @@ RS_FIELD_MATRIX: tuple[tuple[str, str, str, str, RsStatus], ...] = (
     (
         "seasonAverages.*",
         "feed / pool when present",
-        "head_features season_avg_*",
-        "optional head_features",
+        "head_features season_avg_* via FEATURE_MATRIX serve=on",
+        "job1 apply_feature_matrix (#583)",
         "mapped",
     ),
     (

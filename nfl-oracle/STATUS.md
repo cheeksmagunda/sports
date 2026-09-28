@@ -1,6 +1,16 @@
 # Status
 
-Last verified: 2026-09-28T02:59:00Z
+Last verified: 2026-09-28T03:40:00Z
+
+## FEATURE_MATRIX serve-on wire (#583)  -  2026-09-28
+
+Context build copies serve-on matrix keys onto the freeze vector, including
+`season_avg_*` when the rating-lineup payload carries numeric
+`seasonAverages`. Moneyline and rank were already extracted; the matrix is
+now the filter that keeps leakage-blocked names off that vector. This change
+does not set `NFL_PICKER_BOOST_RANK_BLEND`. Code default remains `0.0`.
+Live Railway values stay in the sections below and were not re-checked for
+this code change.
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
