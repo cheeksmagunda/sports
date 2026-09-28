@@ -39,6 +39,33 @@ from typing import Any
 DEFAULT_SLOT_MULTIPLIERS: tuple[float, ...] = (2.0, 1.8, 1.6, 1.4, 1.2)
 TOP_SLOT_MULTIPLIER: float = DEFAULT_SLOT_MULTIPLIERS[0]
 LINEUP_SIZE: int = 5
+# Train-audit encoding. The prose home is OVERVIEW.md (Win stack, #653).
+HV_CAPTURE_OBJECTIVE = "5-player lineup maximizing capture of highestBoostedValuePlayers"
+SHAPE_CONDITION_OBJECTIVE = (
+    "Learn the shapes of every HV/TDV board appearance over history, "
+    "learn the slate conditions that produced each shape, and at T-40 "
+    "match shape and condition together to commit the 5-player lineup "
+    "that maximizes capture of that slate's Highest value / Total Value board."
+)
+
+
+def hv_objective_flags() -> dict[str, Any]:
+    """Fields a fit writes for the product goal and the shape-and-condition campaign.
+
+    Winning drafts are a reference bar. Cash and median construction are
+    not the objective. Models stay in the sport app.
+    """
+
+    return {
+        "objective": HV_CAPTURE_OBJECTIVE,
+        "shape_condition_objective": SHAPE_CONDITION_OBJECTIVE,
+        "lineup_size": LINEUP_SIZE,
+        "winning_drafts_are_reference_bar": True,
+        "winning_drafts_are_label": False,
+        "cash_is_objective": False,
+        "median_is_objective": False,
+    }
+
 
 _DEFENDER_CODES = frozenset(
     {

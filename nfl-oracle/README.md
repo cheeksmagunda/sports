@@ -465,9 +465,10 @@ five, and that env is ignored. Draft counts, popularity sections, winning
 drafts, and reconstructed boards are excluded.
 Corpus G box `value` is not y. Fewer than 30 leaderboard rows fails with
 `hv_tdv_training_rows_insufficient`. The JSON report includes
-`training_target`, `archive_depth`, and `hv_overlay` (`boards`,
+`training_target`, `archive_depth`, `hv_feature_emphasis`, and `hv_overlay` (`boards`,
 `rows_overlaid`, `rows_excluded`, `rows_raw` is 0, `conflicts`,
-`fit_seasons`, `operator_lock`).
+`fit_seasons`, `operator_lock`). The emphasis record is the #653
+shape-and-condition campaign in root `../OVERVIEW.md` (Win stack).
 
 Label roots (missing directories add no boards, so those games stay out of the fit):
 

@@ -209,6 +209,7 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         load_contest_boosts,
         resolve_contest_display_top_k,
     )
+    from nfl_oracle.recommendations.hv_emphasis import hv_feature_emphasis
     from nfl_oracle.recommendations.model import (
         attach_enrichment,
         drop_ambiguous_identity_rows,
@@ -242,6 +243,7 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         "contest_display_boost_keys": 0 if not contest_boosts else len(contest_boosts),
         "draft_count_is_label": False,
         "contest_entry": False,
+        "hv_feature_emphasis": hv_feature_emphasis(),
         **identity_audit,
     }
     try:

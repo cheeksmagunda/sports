@@ -88,7 +88,8 @@ re-check Railway.
 - Live knobs and freeze readiness: Win-draft knobs and Overnight freeze
   readiness below.
 - Ollama is not a WNBA serve primary. It notes on the same HV/TDV boards
-  from the Codespace. Role: root `../OVERVIEW.md`.
+  from the Codespace. Role and shape-and-condition campaign (#653): root
+  `../OVERVIEW.md` (Win stack).
 
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
