@@ -84,6 +84,13 @@ nfl-oracle/**
 !nfl-oracle/data/raw/
 !nfl-oracle/data/raw/.gitkeep
 
+# NFL production image copies the generic Ollama HTTP client only.
+!scripts/
+scripts/**
+!scripts/ollama_hv_watcher/
+scripts/ollama_hv_watcher/**
+!scripts/ollama_hv_watcher/client.py
+
 # The deny-first rule above also excludes these local and sensitive paths.
 # They are listed to make the build boundary auditable.
 .git/
