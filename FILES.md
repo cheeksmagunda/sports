@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1152 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1154 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -838,6 +838,7 @@ Generated from `git ls-files`. 1152 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/live.py -- Loud fail-closed errors when live slate/board fields are missing (#574).
 - scripts/ollama_hv_watcher/pick.py -- Five-player daily contest pick contract for Ollama HV/TDV (#574).
 - scripts/ollama_hv_watcher/serve.py -- systemd-less Ollama serve helpers: health curl, pidfile, nohup (#574).
+- scripts/ollama_hv_watcher/sim.py -- Total-draft-value simulation for the Ollama HV helper (#620).
 - scripts/ollama_hv_watcher/training_data_manifest.json
 - scripts/ollama_hv_watcher/training_manifest.py -- Load the HV/TDV training-data inventory for the Ollama watcher (#574).
 - scripts/ollama_hv_watcher/watcher.py -- Portfolio HV/TDV slate watcher loop (issue #574).
@@ -900,6 +901,7 @@ Generated from `git ls-files`. 1152 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
 - scripts/tests/test_ollama_client_json.py -- JSON generate contract for the shared Ollama HTTP client (#595).
 - scripts/tests/test_ollama_hv_app_api.py -- Offline tests: pregame leak stop + sport app API adapter + daemon (#574).
+- scripts/tests/test_ollama_hv_sim.py -- Total-draft-value sim on Ollama learn ticks (#620).
 - scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
 - scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).
