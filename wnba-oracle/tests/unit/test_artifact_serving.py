@@ -82,7 +82,6 @@ def test_eb_predict_one_applies_pace_when_provided() -> None:
     assert _eb_predict_one(art, 42, "F") == pytest.approx(4.0)
 
 
-
 def test_eb_predict_one_f_only_artifact_falls_back_for_g_and_c() -> None:
     """#592: F-only trained artifact must use F mean for G/C positions.
 
