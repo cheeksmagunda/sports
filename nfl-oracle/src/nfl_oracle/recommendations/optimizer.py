@@ -795,6 +795,15 @@ def optimize(
         "field_win_rate_against_simulated_opponent_not_payout_probability",
         "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
         "lineup_selected_by_contest_utility_over_expected_score_beam",
+        (
+            "committed_slots_follow_descending_projected_mean"
+            if cfg.slot_by_mean
+            else "committed_slots_follow_search_order"
+        ),
+        f"max_kickers={cfg.max_kickers}",
+        f"max_defenders={cfg.max_defenders}",
+        f"slate_regime={slate_regime_name(len(slate.games))}",
+        f"slate_pool={len(eligible)}",
     )
     if cfg.ollama_engine:
         selection = score_candidates(
@@ -863,21 +872,5 @@ def optimize(
         boost_nonzero_count=slate.boost_nonzero_count,
         boost_max=slate.boost_max,
         construction_profile=cfg.profile,
-        assumptions=(
-            "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
-            "game_correlation_is_configured_sensitivity_not_fitted",
-            "field_win_rate_against_simulated_opponent_not_payout_probability",
-            "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
-            "lineup_selected_by_contest_utility_over_expected_score_beam",
-            (
-                "committed_slots_follow_descending_projected_mean"
-                if cfg.slot_by_mean
-                else "committed_slots_follow_search_order"
-            ),
-            f"max_kickers={cfg.max_kickers}",
-            f"max_defenders={cfg.max_defenders}",
-            f"slate_regime={slate_regime_name(len(slate.games))}",
-            f"slate_pool={len(eligible)}",
-        ),
         assumptions=assumptions,
     )
