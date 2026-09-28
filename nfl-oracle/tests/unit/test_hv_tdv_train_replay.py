@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from nfl_oracle.recommendations.cli import _parser
 from nfl_oracle.recommendations.hv_boards import (
+    HV_TDV_LABEL_POLICY,
+    HV_TDV_TRAINING_TARGET,
     HvBoard,
     HvBoardPlayer,
     apply_hv_board_labels,
     boards_from_contest_root,
     is_hv_board_document,
+    load_and_apply_hv_labels,
+    require_hv_tdv_leaderboard_rows,
 )
 from nfl_oracle.recommendations.model import HistoricalPerformance, fit_model
 from nfl_oracle.replay.hv_board_replay import (
@@ -58,9 +63,8 @@ def test_overlay_prefers_hv_section_and_ignores_most_drafted() -> None:
     ]
     updated, audit = apply_hv_board_labels(rows, boards)
     by_player = {row.player_id: row.value for row in updated}
+    assert set(by_player) == {401}
     assert by_player[401] == 5.0
-    assert by_player[501] == 9.0
-    assert by_player[999] == 3.0
     assert audit.hv_board_rows_relabeled == 1
     assert audit.raw_box_rows == 2
     assert audit.win_frequency_target_rows == 0
@@ -188,11 +192,36 @@ def test_fit_records_hv_audit_and_never_counts_win_frequency_targets() -> None:
             "win_frequency_target_rows": 99,
         },
     )
-    assert model.evaluation["hv_label_policy"] == "prefer_hv_tdv_board_when_present_else_raw_box"
+    assert model.evaluation["hv_label_policy"] == HV_TDV_LABEL_POLICY
     assert model.evaluation["hv_boards_seen"] == 2
     assert model.evaluation["hv_board_rows_relabeled"] == 3
+    assert model.evaluation["hv_excluded_non_leaderboard_rows"] == 45
     assert model.evaluation["hv_win_frequency_target_rows"] == 0
-    assert model.evaluation["training_target"] == "high_total_value_full_archive_not_win_chalk"
+    assert model.evaluation["training_target"] == HV_TDV_TRAINING_TARGET
+
+
+def test_missing_leaderboard_is_not_a_raw_box_or_chalk_target(tmp_path: Path) -> None:
+    saved = {
+        key: os.environ.pop(key, None)
+        for key in ("NFL_CORPUS_C_ROOT", "NFL_HV_EXPORT_ROOT", "NFL_HV_BOARD_ROOT")
+    }
+    kickoff = datetime(2025, 9, 28, 17, tzinfo=UTC)
+    rows = [_row(player_id=1, game_id=1, value=9.0, kickoff=kickoff)]
+    try:
+        labeled, audit = load_and_apply_hv_labels(rows, tmp_path)
+    finally:
+        for key, value in saved.items():
+            if value is not None:
+                os.environ[key] = value
+    assert labeled == []
+    assert audit.hv_board_rows == 0
+    assert audit.win_frequency_target_rows == 0
+    try:
+        require_hv_tdv_leaderboard_rows(labeled, audit)
+    except ValueError as error:
+        assert str(error) == "hv_tdv_leaderboard_target_required"
+    else:
+        raise AssertionError("expected leaderboard target refusal")
 
 
 def test_train_parser_accepts_dry_run() -> None:

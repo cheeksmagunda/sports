@@ -1,22 +1,26 @@
 # Status
 
-Last verified: 2026-09-28T03:20Z
+Last verified: 2026-09-28T03:25Z
 
-## HV/TDV Value column (#597)  -  2026-09-28T03:20Z
+## HV/TDV leaderboard target lock (#597)  -  2026-09-28T03:25Z
 
-Operator screenshots (NFL multi-slate, TNF GB at ATL, WNBA) fix the objective
-on the Value column, not draft frequency. Boswell is Value 29 on 24 drafts
-because `5.8 * (2.0 + 3.0) = 29`. Gibbs is Value 18.7 on 1.7k drafts
-(`9.4 * 2.0 = 18.8`, display rounding). London is Value 33.5 and also chalk.
-A'ja Wilson is Value 19.2 (`9.6 * 2.0`) and also chalk. Sparse high value
-plus boost often wins. When chalk is also the high value, it stays.
+`nfl-pipeline train` and `train --force` fit one target:
+`hv_tdv_leaderboard_only`. That is the Highest-value / Total Value
+leaderboard (`highestBoostedValuePlayers` and exported HV boards). Rows that
+do not join a board are excluded. Draft frequency is not a target.
+`hv_win_frequency_target_rows` is 0. A fit with no leaderboard rows raises
+`hv_tdv_leaderboard_target_required`.
 
-Ridge `y` stays realized production (the left-hand number, or the Corpus G
-box score). Training on 29 and then multiplying by `(slot + boost)` again
-would score Boswell as 145. Sample weights and HV rank use the Value column
-(`displayed_value` or `highestScore` when stated, else
-`realized * (slot + boost)`). Draft counts are stored and never a label.
-`hv_win_frequency_target_rows` stays 0.
+Ridge `y` on those rows is the leaderboard's realized value (Boswell's
+left-hand 5.8, not 29). The Value column is `5.8 * (2.0 + 3.0) = 29` on 24
+drafts. Gibbs is about 18.8 on 1.7k drafts. Training `y` on 29 and then
+multiplying by `(slot + boost)` again would score Boswell as 145. Sample
+weights and `nfl-hv-board-replay` rank the Value column. The replay's
+draft-count lineup is a comparison, not the target. London (33.5) and A'ja
+(19.2) stay in an HV lineup when they are the high value.
+
+`nfl-hv-board-replay` reports `training_target=hv_tdv_leaderboard_only` and
+`chalk_is_training_target=false`.
 
 ### T-40 knobs that reproduce an HV lineup
 
@@ -46,7 +50,7 @@ set. It was not flipped here.
 | Consumer | What it scores |
 |---|---|
 | Ollama watcher (`scripts/ollama_hv_watcher`) | Ranks by `displayed_value` or `highestScore` when the board states the Value column, else by `value`. Never by `drafts`. Does not apply slot multipliers itself. |
-| Ridge (`fit_model` via `nfl-pipeline train`) | Learns realized production. A joined board replaces the box score with that realized number and attaches `value_column` for weights only. `value_column` is excluded from the training fingerprint. |
+| Ridge (`nfl-pipeline train` and `train --force`) | Target rows are HV/TDV leaderboard joins only. `y` is that row's realized value. `value_column` is the sample-weight rank and is excluded from the training fingerprint. Non-joins are dropped. |
 | Optimizer | Objective stays `total_value`: `projection * (slot + boost)`. With the HV knobs the freeze is that expected total. |
 | `nfl-hv-board-replay` | HV-rank five (Value column), chalk five (draft count), hindsight ceiling. Slots `(2.0, 1.8, 1.6, 1.4, 1.2)`. Chosen HV players are placed by descending realized value. |
 
@@ -123,8 +127,8 @@ is Jahmyr Gibbs at 18.8.
 A perfect-foresight optimizer call with `HV_T40_KNOBS` on those six means and
 boosts (one game, one team) keeps Boswell and drops Gibbs.
 
-Checks on this VM after the Value-column change: `pytest nfl-oracle/tests`
-568 passed, 1 docker test deselected. `mypy` on the touched modules passed.
+Checks on this VM after the leaderboard-only lock: `pytest nfl-oracle/tests`
+569 passed, 1 docker test deselected. `mypy` on the touched modules passed.
 Ollama watcher tests in `scripts/tests/test_ollama_hv_watcher.py` passed in
 the same focused run (Boswell's stated Value 29 ranks ahead of Gibbs).
 

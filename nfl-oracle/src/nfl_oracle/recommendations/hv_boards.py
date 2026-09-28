@@ -12,9 +12,11 @@ Entrypoints this module serves:
 
 Two numbers, on purpose:
 
-- Ridge ``y`` is realized production: the left-hand board number, or the
-  Corpus G box score when no board joins. Training ``y`` on the Value column
-  and then multiplying by ``(slot + boost)`` again would double-count.
+- The training target is the HV/TDV leaderboard only. Rows that do not join
+  a board are excluded. Draft counts are not a target. Ridge ``y`` is the
+  leaderboard's realized production (the left-hand number). Training ``y``
+  on the Value column and then multiplying by ``(slot + boost)`` again
+  would double-count.
 - The Value column is ``realized * (slot_multiplier + card_boost)``, or the
   provider ``highestScore`` / transcribed ``displayed_value`` when that number
   is present. Sample weights and the replay HV rank use this column. Draft
@@ -39,7 +41,10 @@ from zoneinfo import ZoneInfo
 from nfl_oracle.contests.parse import iter_contests
 from nfl_oracle.contests.schema import OBSERVED_SLOT_MULTIPLIERS
 from nfl_oracle.contests.store import ContestStore
+from nfl_oracle.recommendations.high_tv import HV_TDV_LABEL_POLICY, HV_TDV_TRAINING_TARGET
 from nfl_oracle.recommendations.model import HistoricalPerformance
+
+__all__ = ["HV_TDV_LABEL_POLICY", "HV_TDV_TRAINING_TARGET"]
 
 HV_SECTION = "highestBoostedValuePlayers"
 EASTERN = ZoneInfo("America/New_York")
@@ -426,13 +431,14 @@ def apply_hv_board_labels(
     *,
     audit: HvLabelAudit | None = None,
 ) -> tuple[list[HistoricalPerformance], HvLabelAudit]:
-    """Replace box scores with HV/TDV realized values where a board joins.
+    """Keep only HV/TDV leaderboard joins as the training target.
 
     A join is ``(player_id, game_id)`` when the board names a game, otherwise
     ``(player_id, America/New_York slate date)`` for boards that have a date
-    and no game id. Rows with no join keep their Corpus G value. Joined rows
-    also receive ``value_column`` (the Value column) for sample weights.
-    Ridge still trains on ``value``.
+    and no game id. Rows with no join are counted and dropped. They are not
+    a raw-box fallback and they are not a draft-frequency target. Joined rows
+    keep realized production as ridge ``y`` and receive ``value_column`` for
+    sample weights.
     """
 
     report = audit or HvLabelAudit(boards_seen=len(boards))
@@ -444,7 +450,6 @@ def apply_hv_board_labels(
         label = _lookup(row, index)
         if label is None:
             report.raw_box_rows += 1
-            updated.append(row)
             continue
         report.hv_board_rows += 1
         report.value_column_rows += 1
@@ -477,7 +482,7 @@ def load_and_apply_hv_labels(
     rows: Sequence[HistoricalPerformance],
     project: Path,
 ) -> tuple[list[HistoricalPerformance], HvLabelAudit]:
-    """Discover on-disk boards and overlay them. Missing roots leave raw labels."""
+    """Return HV/TDV leaderboard rows only. Missing boards yield an empty target."""
 
     contest_root, export_root, board_root = discover_hv_label_roots(project)
     try:
@@ -487,5 +492,21 @@ def load_and_apply_hv_labels(
             board_root=board_root,
         )
     except (OSError, ValueError):
-        return list(rows), HvLabelAudit()
+        return [], HvLabelAudit(raw_box_rows=len(rows))
+    if not boards:
+        audit.raw_box_rows = len(rows)
+        return [], audit
     return apply_hv_board_labels(rows, boards, audit=audit)
+
+
+def require_hv_tdv_leaderboard_rows(
+    rows: Sequence[HistoricalPerformance],
+    audit: HvLabelAudit,
+) -> list[HistoricalPerformance]:
+    """Refuse a fit whose target is empty or includes draft frequency."""
+
+    if audit.win_frequency_target_rows != 0:
+        raise ValueError("draft_frequency_is_not_a_training_target")
+    if audit.hv_board_rows < 1 or len(rows) < 1:
+        raise ValueError("hv_tdv_leaderboard_target_required")
+    return list(rows)

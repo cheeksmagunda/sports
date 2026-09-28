@@ -266,23 +266,26 @@ isolated per profile (shared pool skips stay on every profile).
 
 ### HV / TDV train objective and draft-image replay (issue #597)
 
-`nfl-pipeline train` loads Corpus G, then overlays Highest-value / Total Value
-boards before `fit_model`. A board joins on `(player_id, game_id)` when the
-contest names a game, otherwise on `(player_id, America/New_York slate date)`.
-Ridge `y` is the board's realized value (the left-hand number), or the raw
-box score when no board joins. It is not `drafts` / `count`. It is also not
-the Value column: the optimizer already multiplies projections by
+`nfl-pipeline train` and `train --force` load Corpus G, then keep only rows
+that join a Highest-value / Total Value leaderboard. A board joins on
+`(player_id, game_id)` when the contest names a game, otherwise on
+`(player_id, America/New_York slate date)`. Rows with no join are excluded.
+There is no raw-box fallback and no draft-frequency target. With no board
+the fit refuses (`hv_tdv_leaderboard_target_required`).
+
+Ridge `y` is the leaderboard's realized value (the left-hand number). It is
+not the Value column: the optimizer already multiplies projections by
 `(slot + boost)`, so training on that product would double-count. Sample
-weights rank by the Value column when the board states one (`displayed_value`
+weights on those leaderboard rows rank by the Value column (`displayed_value`
 or `highestScore`, else `realized * (most common slot + boost)`). Reconstructed
 exports are ignored.
 
-`nfl-hv-board-replay` scores each real HV board with
+`nfl-hv-board-replay` scores each HV/TDV leaderboard with
 `realized_value * (slot_multiplier + card_boost)` and the observed slots
-`(2.0, 1.8, 1.6, 1.4, 1.2)`. HV rank is the five highest Value-column players,
-then placed by descending realized value. Chalk is the five highest draft
-counts. Hindsight is the exact best five. Ollama ranks `displayed_value` /
-`highestScore` when present, else `value`, and never draft count.
+`(2.0, 1.8, 1.6, 1.4, 1.2)`. The replay target is the Value-column five.
+Draft-count chalk is a comparison, not a training target. Hindsight is the
+exact best five. Ollama ranks `displayed_value` / `highestScore` when
+present, else `value`, and never draft count.
 
 T-40 HV lineup env (`HV_T40_KNOBS` in `recommendations/hv_boards.py`):
 

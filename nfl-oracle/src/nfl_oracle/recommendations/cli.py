@@ -36,7 +36,12 @@ from nfl_oracle.common.logging import get_logger
 from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
-from nfl_oracle.recommendations.hv_boards import load_and_apply_hv_labels
+from nfl_oracle.recommendations.hv_boards import (
+    HV_TDV_LABEL_POLICY,
+    HV_TDV_TRAINING_TARGET,
+    load_and_apply_hv_labels,
+    require_hv_tdv_leaderboard_rows,
+)
 from nfl_oracle.recommendations.optimizer import optimizer_config_from_env
 from nfl_oracle.recommendations.picker_knobs import picker_knobs_from_env
 from nfl_oracle.recommendations.pipeline import (
@@ -218,10 +223,10 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
     # sees must be the same filtered set, or the training fingerprint the
     # model records will not match the history this bundle persists.
     enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
-    # Prefer HV/TDV board realized values when a board joins the row. Raw
-    # Corpus G box scores remain the fallback. The Value column is attached
-    # for sample weights only. Draft counts are not a target.
+    # Target is the HV/TDV leaderboard only. Non-joins are dropped. Draft
+    # counts are not a target. Ridge y is the leaderboard realized value.
     labeled, hv_audit = load_and_apply_hv_labels(enriched, project)
+    labeled = require_hv_tdv_leaderboard_rows(labeled, hv_audit)
     enriched = tuple(labeled)
     model = fit_model(enriched, trained_at=now, hv_label_audit=hv_audit.to_dict())
     return ModelBundle(
@@ -237,7 +242,8 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
             "context_evidence_mode": enrichment.evidence_mode,
             "contest_entry": False,
             "hv_labels": hv_audit.to_dict(),
-            "hv_label_policy": "prefer_hv_tdv_board_when_present_else_raw_box",
+            "hv_label_policy": HV_TDV_LABEL_POLICY,
+            "training_target": HV_TDV_TRAINING_TARGET,
             **identity_audit,
         },
     )
@@ -698,7 +704,11 @@ def _train_report(
         "selected_estimator": model.selected_estimator,
         "training_rows": model.training_rows,
         "holdout_rows": model.evaluation.get("holdout_rows"),
+        "training_target": model.evaluation.get("training_target"),
         "hv_label_policy": model.evaluation.get("hv_label_policy"),
+        "hv_excluded_non_leaderboard_rows": model.evaluation.get(
+            "hv_excluded_non_leaderboard_rows"
+        ),
         "hv_boards_seen": model.evaluation.get("hv_boards_seen"),
         "hv_board_rows": model.evaluation.get("hv_board_rows"),
         "hv_board_rows_relabeled": model.evaluation.get("hv_board_rows_relabeled"),
@@ -915,23 +925,24 @@ def _parser() -> argparse.ArgumentParser:
     migrate_command = commands.add_parser("migrate")
     migrate_command.set_defaults()
     train = commands.add_parser(
-        "train", help="ensure an active model exists, or rebuild one with --force"
+        "train",
+        help="fit the HV/TDV leaderboard target, or rebuild it with --force",
     )
     train.add_argument(
         "--force",
         action="store_true",
         help=(
-            "retrain and activate even when the active model is still inside "
-            "its age limit, resetting the staleness clock; this is what a "
-            "weekly scheduled retrain needs"
+            "retrain on the HV/TDV leaderboard only, not draft frequency, "
+            "and activate even when the active model is still inside its "
+            "age limit"
         ),
     )
     train.add_argument(
         "--dry-run",
         action="store_true",
         help=(
-            "fit on Corpus G plus any on-disk HV/TDV boards and print the "
-            "label audit without activating a model or writing the store"
+            "fit the HV/TDV leaderboard target and print the label audit "
+            "without activating a model or writing the store"
         ),
     )
     dayclose = commands.add_parser("dayclose")

@@ -13,7 +13,11 @@ from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
 from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES
-from nfl_oracle.recommendations.high_tv import sample_weights_for_history
+from nfl_oracle.recommendations.high_tv import (
+    HV_TDV_LABEL_POLICY,
+    HV_TDV_TRAINING_TARGET,
+    sample_weights_for_history,
+)
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
     Finite,
@@ -454,7 +458,8 @@ def _hv_label_evaluation(audit: Mapping[str, int] | None) -> dict[str, int | str
     if audit is None:
         return {}
     return {
-        "hv_label_policy": "prefer_hv_tdv_board_when_present_else_raw_box",
+        "hv_label_policy": HV_TDV_LABEL_POLICY,
+        "hv_excluded_non_leaderboard_rows": int(audit.get("raw_box_rows", 0)),
         "hv_boards_seen": int(audit.get("boards_seen", 0)),
         "hv_board_rows": int(audit.get("hv_board_rows", 0)),
         "hv_board_rows_relabeled": int(audit.get("hv_board_rows_relabeled", 0)),
@@ -657,7 +662,7 @@ def fit_model(
             "holdout_winner_mae": candidates_mae[holdout_winner],
             "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
             "high_tv_sample_weighting": "per_game_top5_value_column_else_realized_full_archive",
-            "training_target": "high_total_value_full_archive_not_win_chalk",
+            "training_target": HV_TDV_TRAINING_TARGET,
             **_hv_label_evaluation(hv_label_audit),
             "context_evidence_disclosure": (
                 "retrospective_reconstructed_context_included"

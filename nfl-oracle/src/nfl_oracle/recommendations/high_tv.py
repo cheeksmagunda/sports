@@ -32,8 +32,14 @@ from nfl_oracle.contests.schema import DraftStatRow
 from nfl_oracle.data.coverage_matrix import CoverageMatrixDocument, load_coverage_matrix_doc
 from nfl_oracle.data.label_depth import label_depth_report
 
+# Train --force and train --dry-run use this target. Draft frequency is not it.
+HV_TDV_TRAINING_TARGET = "hv_tdv_leaderboard_only"
+HV_TDV_LABEL_POLICY = "hv_tdv_leaderboard_only_not_draft_frequency"
+
 # Re-export shared names so NFL call sites can import from one place.
 __all__ = [
+    "HV_TDV_LABEL_POLICY",
+    "HV_TDV_TRAINING_TARGET",
     "ArchiveSeasonDepth",
     "HighTvBoard",
     "TvBoardCoverage",

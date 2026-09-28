@@ -22,9 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="nfl-hv-board-replay",
         description=(
-            "Score Highest-value / Total Value boards with slot multipliers "
-            "and realized values. HV-rank five versus win-frequency chalk "
-            "versus the hindsight ceiling. Observation only."
+            "Score Highest-value / Total Value leaderboards. The target is "
+            "the Value column, not draft frequency. Chalk is a comparison "
+            "only. Observation only."
         ),
     )
     parser.add_argument("--project", type=Path, default=None)
@@ -78,6 +78,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         _synthetic_results, synthetic_summary = replay_synthetic(args.synthetic, seed=args.seed)
     return {
         "kind": "hv_tdv_board_replay",
+        "training_target": "hv_tdv_leaderboard_only",
+        "chalk_is_training_target": False,
         "contest_entry": False,
         "railway_mutation": False,
         "draft_law": "realized_value * (slot_multiplier + card_boost)",
@@ -87,10 +89,11 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
             "when present, else value; never draft count"
         ),
         "ridge_label": (
-            "realized production (left-hand value or Corpus G box). "
-            "Not the Value column, which the optimizer multiplies again."
+            "realized production on HV/TDV leaderboard rows only. "
+            "Not draft frequency. Not the Value column, which the optimizer "
+            "multiplies again."
         ),
-        "sample_weight_rank": "value_column when a board joined, else realized value",
+        "sample_weight_rank": "value_column on leaderboard rows, never draft count",
         "optimizer_objective": "total_value",
         "hv_t40_knobs": (
             "max_value, teams=1, games=1, upside_weight=0, field_weight=0, "
