@@ -21,17 +21,6 @@ The portfolio product goal is stated once in root `README.md` (Product goal).
 Do not restate it here; each sport `README.md` points at that section and at
 its own `STATUS.md` for current serve knobs.
 
-## T-40 five-card hook
-
-Each sport owns its hook graph in `<app>/CONNECTORS.md`. The shared shape
-is corpora, then that sport's features, then its own model, then picker or
-optimizer knobs, then a T-40 freeze, then that sport's Railway services,
-then its frontend. NFL is the live five-card path (`nfl-oracle/CONNECTORS.md`
-holds the MNF required-ON list). WNBA is the live five-player path with its
-own tip-relative freeze. NHL has the policy in code and no hosted freeze.
-NBA is not hooked. The Ollama helper reads a published five and writes a
-note. It is not the freeze. Serve knobs stay in each `STATUS.md`.
-
 ## Monorepo layout
 
 Three layers. Dependency direction is sport application to `oracle-core`.
@@ -62,20 +51,6 @@ domain-free. Same-slate settlement features stay off the live clock. The
 train record is a schema.org FeatureSpec and condition Observation. Do
 not restore NFL blend 0.75. Near-term slate facts stay in each app
 `STATUS.md`.
-
-### Model map (#620, reconciled with #597 / #644 / #654)
-
-| Piece | State |
-|---|---|
-| NFL HV/TDV train labels (`hv_labels`) | connected; Corpus G rows without a linked board are excluded under the #599 operator lock |
-| Display-rank sample weights (`display_rank_weights`) | connected; boost map present → top-k (default 10); no map → raw-value top 5 |
-| Shape/condition train record (`hv_emphasis`) | connected |
-| Production replay HV labels + boosts | connected (`replay.hv_train_inputs`) |
-| Ollama TDV sim per learn tick (`ollama_hv_watcher.sim`) | connected; does not publish a freeze |
-| NHL sim boost in the Ollama helper | 0 unless a future board path explicitly allows boosts |
-| Live NFL blend / upside / field | stay at 0 (live values in `nfl-oracle/STATUS.md`) |
-| Boost-rank blend `0.75` | not restored |
-| Cross-sport imports | forbidden |
 
 1. **Label.** Real Sports Highest value / Total Value boards
    (`highestBoostedValuePlayers`). Prior users' winning drafts are a
@@ -156,6 +131,7 @@ inline list; this table is the outline.
 | `draft_stats_catalog.py`, `hv_board_corpus.py` | Draft Stats section inventory; HV board document helper (#526) |
 | `realsports_corpus/` | Sibling-repo layout, coverage manifest, store |
 | `corpus_matchup.py` | Idempotent `{sport}/{season}/{game_id}/` matchup + stats append |
+| `slate_advice.py` | Freshness and clamped tilt map for optional app influence (#574) |
 
 ## wnba-oracle
 
@@ -167,7 +143,7 @@ Postgres, Redis. Service list and live knobs: `STATUS.md`. Stable contract:
 
 | Subpackage | Files | Purpose |
 |---|---|---|
-| `scheduler/` | 26 | Jobs, including T-40 freeze in `job2` |
+| `scheduler/` | 27 | Jobs, including T-40 freeze in `job2` |
 | `features/` | 13 | Feature engineering, including `rs_field_map` |
 | `ingest/` | 11 | Provider ingest |
 | `eval/` | 10 | Evaluation, including highest-value grading |
@@ -179,9 +155,8 @@ Postgres, Redis. Service list and live knobs: `STATUS.md`. Stable contract:
 | `audit/`, `schemas/` | 2 each | Audit trail; schema definitions |
 | `monitoring/`, `ops/` | 1 each | Monitoring hooks; ops helpers |
 
-## nfl-oracle: live five-card path
+## nfl-oracle
 
-Hook graph and the required-ON contract: `nfl-oracle/CONNECTORS.md`.
 Railway API + worker are in production use for read-only research and
 freeze/grade. Contest entry stays forbidden. Live facts: `STATUS.md`.
 Frontend is a static `index.html` (no build pipeline).

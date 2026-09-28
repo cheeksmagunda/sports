@@ -11,6 +11,12 @@ Stable chain and the MNF required-ON contract: `CONNECTORS.md`
 #653 / #654 on main) remain the last verified process state. No serving
 flip and no Railway env write in this change.
 
+## Ollama influence default-off (#574)  -  2026-09-28T17:50Z
+
+Advice influence path lands default-off. MNF daemon armed on Codespace for
+NFL T-40 23:35Z; influence weight stays OFF. History learn coverage:
+1035/1036 boards already ticked (`full_history_learn_summary.json`).
+
 ## HV/TDV offline backtest harness (#603)  -  2026-09-28T17:45Z
 
 Offline research only. Reports under `nfl-oracle/reports/hv_regime_backtest.{md,json}`
