@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES, WEATHER_FEATURE_NAMES
+from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES
 from nfl_oracle.recommendations.hv_emphasis import (
     hv_feature_emphasis,
     hv_feature_emphasis_names,
@@ -25,6 +25,10 @@ def _feature_spec_names(node: object) -> set[str]:
                 "pace",
                 "slate",
                 "injury",
+                "external_pregame",
+                "player_profile",
+                "slate_conditions",
+                "conditions",
                 "FeatureSpec role",
             }:
                 found.add(name)
@@ -45,6 +49,7 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     assert "team_pace_prior" in names
     assert "overall_rank" in names
     assert "injury_status" in names
+    assert "weather_temp_f" in names
     assert "prior_log_count" not in names
     assert "draft_count" not in names
     assert "card_boost_post_settlement" not in names
@@ -54,8 +59,20 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     context = {row["name"] for row in report["ridge_context"]}
     assert context <= set(REQUIRED_LIVE_OK_CONTEXT_FEATURES)
     assert "prior_minutes" in context
-    assert "weather_temp_f" not in context
-    assert set(WEATHER_FEATURE_NAMES) <= set(report["weather_not_emphasis"])
+    assert "weather_temp_f" in context
+    assert "weather_available" in context
+    condition_names = {row["name"] for row in report["conditions"]}
+    assert {"position", "player_prior_mean", "prior_started"} <= {
+        row["name"] for row in report["conditions"] if row["role"] == "player_profile"
+    }
+    assert {"season", "kickoff_slot", "days_rest", "team_pace_prior"} <= {
+        row["name"] for row in report["conditions"] if row["role"] == "slate_conditions"
+    }
+    assert {"weather_temp_f", "team_moneyline", "injury_status"} <= {
+        row["name"] for row in report["conditions"] if row["role"] == "external_pregame"
+    }
+    assert "draft_count" not in condition_names
+    assert "prior_log_count" not in condition_names
     assert report["draft_count_is_label"] is False
     assert report["winning_drafts_are_label"] is False
     assert report["boost_interaction"]["ridge_feature"] is False
@@ -80,10 +97,20 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     walked = _feature_spec_names(observation)
     assert "opp_def_value_allowed_prior" in walked
     assert "position" in walked
+    assert "season" in walked
+    assert "weather_wind_mph" in walked
     assert "prior_log_count" not in walked
     assert "draft_count" not in walked
     assert "card_boost_post_settlement" not in walked
+    conditions = next(
+        item for item in observation["additionalProperty"] if item["name"] == "conditions"
+    )
+    assert conditions["propertyID"] == "oracle:condition"
+    assert conditions["valueReference"]["@type"] == "Observation"
     compact = hv_feature_emphasis_names()
     json.dumps(compact)
     assert compact["boost_is_ridge_feature"] is False
     assert "winning_drafts" in compact["chalk_off"]
+    assert "weather_temp_f" in compact["conditions"]["external_pregame"]
+    assert "position" in compact["conditions"]["player_profile"]
+    assert "season" in compact["conditions"]["slate_conditions"]

@@ -1,8 +1,10 @@
-"""Live features that can put an HV-board row in the display top 10.
+"""Live features and the conditions that put an HV-board row in the top 10.
 
 The train sample is every player on the HV/TDV leaderboard. High weight is
-that board's display top 10. Draft count, winning drafts, and the ridge
-``prior_log_count`` slot are not how a row enters that window.
+that board's display top 10. The same rows carry the conditions that
+produced them: player profile, slate conditions, and external pre-game
+factors. Draft count, winning drafts, and the ridge ``prior_log_count``
+slot are not how a row enters that window.
 
 Card boost is the display rank key and the optimizer score. It is not a
 ridge coefficient. ``card_boost_post_settlement`` stays live-forbidden.
@@ -65,6 +67,58 @@ _SPEC_ROLES: dict[str, tuple[tuple[str, str], ...]] = {
         ("injury_status_available", "injury"),
         ("injury_body_part", "injury"),
     ),
+    "external_pregame": (
+        ("weather_temp_f", "weather"),
+        ("weather_wind_mph", "weather"),
+        ("weather_precip_prob", "weather"),
+        ("weather_available", "weather"),
+    ),
+}
+
+# Conditions that produced an HV-board row. Names are live FeatureSpecs.
+# A name may also sit in a role above. Draft count is not a condition.
+_CONDITIONS: dict[str, tuple[tuple[str, str], ...]] = {
+    "player_profile": (
+        ("position", "identity"),
+        ("team_id", "identity"),
+        ("player_prior_mean", "prior"),
+        ("player_prior_median", "prior"),
+        ("position_prior_mean", "prior"),
+        ("position_prior_median", "prior"),
+        ("team_prior_mean", "prior"),
+        ("prior_n_games", "prior"),
+        ("prior_fallback_level", "prior"),
+        ("prior_started", "prior"),
+        ("prior_minutes", "prior"),
+        ("prior_did_not_play", "prior"),
+    ),
+    "slate_conditions": (
+        ("season", "calendar"),
+        ("week", "calendar"),
+        ("gameday", "calendar"),
+        ("days_rest", "calendar"),
+        ("kickoff_slot", "slate_meta"),
+        ("overall_rank", "slate_meta"),
+        ("home_away", "matchup"),
+        ("opponent_team", "matchup"),
+        ("is_divisional", "matchup"),
+        ("team_pace_prior", "pace"),
+        ("opponent_pace_prior", "pace"),
+        ("opponent_adjusted_prior", "prior"),
+        ("opp_def_value_allowed_prior", "matchup"),
+    ),
+    "external_pregame": (
+        ("weather_temp_f", "weather"),
+        ("weather_wind_mph", "weather"),
+        ("weather_precip_prob", "weather"),
+        ("weather_available", "weather"),
+        ("team_moneyline", "matchup"),
+        ("opponent_moneyline", "matchup"),
+        ("last_ten_wins", "matchup"),
+        ("injury_status", "injury"),
+        ("injury_status_available", "injury"),
+        ("injury_body_part", "injury"),
+    ),
 }
 
 _RIDGE_CONTEXT_ROLES: dict[str, tuple[str, ...]] = {
@@ -88,6 +142,7 @@ _RIDGE_CONTEXT_ROLES: dict[str, tuple[str, ...]] = {
         "injury_body_part_available",
         *(f"injury_{name}" for name in INJURY_CATEGORIES),
     ),
+    "external_pregame": (*WEATHER_FEATURE_NAMES, "weather_available"),
 }
 
 _CHALK_OFF: dict[str, str] = {
@@ -100,19 +155,33 @@ _RANK_KEY = "value * (top_slot + card_boost)"
 _SCORE_LAW = "value * (slot_multiplier + card_boost)"
 
 
+def _live_spec_rows(
+    registry: dict[str, Any],
+    pairs: tuple[tuple[str, str], ...],
+    *,
+    bucket: str,
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for name, group in pairs:
+        spec = registry.get(name)
+        if spec is None or not spec.live_ok or not spec.train_ok or spec.group != group:
+            raise ValueError(f"hv_emphasis_feature_invalid:{name}")
+        if spec.group == "label_only" or name in {"draft_count", "prior_log_count"}:
+            raise ValueError(f"hv_emphasis_feature_invalid:{name}")
+        rows.append({"name": name, "group": spec.group, "role": bucket})
+    return rows
+
+
 def hv_feature_emphasis() -> dict[str, Any]:
     """Catalog used by ``nfl-pipeline train``. Names that are not live fail closed."""
 
     registry = {spec.name: spec for spec in feature_registry()}
     feature_spec: list[dict[str, str]] = []
     for role, pairs in _SPEC_ROLES.items():
-        for name, group in pairs:
-            spec = registry.get(name)
-            if spec is None or not spec.live_ok or not spec.train_ok or spec.group != group:
-                raise ValueError(f"hv_emphasis_feature_invalid:{name}")
-            if spec.group == "label_only" or name in {"draft_count", "prior_log_count"}:
-                raise ValueError(f"hv_emphasis_feature_invalid:{name}")
-            feature_spec.append({"name": name, "group": spec.group, "role": role})
+        feature_spec.extend(_live_spec_rows(registry, pairs, bucket=role))
+    conditions: list[dict[str, str]] = []
+    for condition, pairs in _CONDITIONS.items():
+        conditions.extend(_live_spec_rows(registry, pairs, bucket=condition))
 
     live_context = set(REQUIRED_LIVE_OK_CONTEXT_FEATURES)
     ridge_context: list[dict[str, str]] = []
@@ -134,16 +203,15 @@ def hv_feature_emphasis() -> dict[str, Any]:
     if settlement.live_ok:
         raise ValueError("hv_emphasis_post_settlement_boost_live")
 
-    weather = tuple(name for name in (*WEATHER_FEATURE_NAMES, "weather_available"))
     report = {
         "sample": "every HV/TDV leaderboard row",
         "high_weight": f"display top 10 by {_RANK_KEY}",
         "draft_count_is_label": False,
         "winning_drafts_are_label": False,
         "feature_spec": feature_spec,
+        "conditions": conditions,
         "ridge_core": list(ridge_core),
         "ridge_context": ridge_context,
-        "weather_not_emphasis": list(weather),
         "chalk_off": dict(_CHALK_OFF),
         "boost_interaction": {
             "rank_key": _RANK_KEY,
@@ -163,11 +231,15 @@ def hv_feature_emphasis_names() -> dict[str, Any]:
     by_role: dict[str, list[str]] = {}
     for row in full["feature_spec"]:
         by_role.setdefault(row["role"], []).append(row["name"])
+    by_condition: dict[str, list[str]] = {}
+    for row in full["conditions"]:
+        by_condition.setdefault(row["role"], []).append(row["name"])
     context_by_role: dict[str, list[str]] = {}
     for row in full["ridge_context"]:
         context_by_role.setdefault(row["role"], []).append(row["name"])
     return {
         "feature_spec": by_role,
+        "conditions": by_condition,
         "ridge_core": list(full["ridge_core"]),
         "ridge_context": context_by_role,
         "chalk_off": list(full["chalk_off"]),
@@ -236,6 +308,35 @@ def _observation(report: dict[str, Any]) -> dict[str, Any]:
                 value_reference=_role_observation(role, rows),
             )
         )
+    by_condition: dict[str, list[dict[str, str]]] = {}
+    for row in report["conditions"]:
+        by_condition.setdefault(str(row["role"]), []).append(row)
+    condition_properties = [
+        property_value(
+            name=condition,
+            value=len(rows),
+            property_id="oracle:condition",
+            value_reference=_role_observation(condition, rows),
+        )
+        for condition, rows in by_condition.items()
+    ]
+    properties.append(
+        property_value(
+            name="conditions",
+            value=len(report["conditions"]),
+            property_id="oracle:condition",
+            value_reference=observation(
+                about=sports_event(
+                    identifier="hv-tdv-conditions",
+                    name="HV/TDV conditions",
+                ),
+                measured_property=property_value(name="conditions that produced the board"),
+                value=len(by_condition),
+                unit_text="condition",
+                additional_properties=condition_properties,
+            ),
+        )
+    )
     node = observation(
         about=sports_event(identifier="hv-tdv-leaderboard", name="HV/TDV contest board"),
         measured_property=property_value(name="HV top-10 feature emphasis"),

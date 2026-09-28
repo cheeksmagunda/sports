@@ -332,7 +332,7 @@ Generated from `git ls-files`. 1145 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
-- nfl-oracle/src/nfl_oracle/recommendations/hv_emphasis.py -- Live features that can put an HV-board row in the display top 10.
+- nfl-oracle/src/nfl_oracle/recommendations/hv_emphasis.py -- Live features and the conditions that put an HV-board row in the top 10.
 - nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Keep only HV/TDV leaderboard rows as the NFL train target.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/ollama_engine.py -- Ollama JSON utilities over optimizer candidate lineups.

@@ -69,22 +69,26 @@ Code inventory only. No Railway read and no serving-knob change.
 `seasonAverages.*` is unused on the NFL freeze path. The matrix does not
 flip optimizer or picker env.
 
-## HV/TDV top-10 display-rank weights (#644) - 2026-09-28T04:44Z
+## HV/TDV history train (#644) - 2026-09-28T04:44Z
 
-Sample-weight window only. No Railway variable write, no deploy, no
-contest entry. `NFL_TRAIN_DISPLAY_TOP_K` is read by `nfl-pipeline train`
-when set; unset means 10. It is not set on Railway from this session.
-Invalid values fail closed. It does not change
-`NFL_PICKER_BOOST_RANK_BLEND`, `NFL_OPTIMIZER_UPSIDE_WEIGHT`, or
-`NFL_OPTIMIZER_FIELD_WEIGHT`. Leave those at blend `0`, upside `0`, field
-`0`. Do not restore `0.75`. Max 1 DEF and max 1 K stay the code defaults
-from #616.
+Operator lock. Learn the shape of every player on Highest-value and
+Total-value boards over history, and the conditions that produced those
+rows. The train mass is the full board. Top 10 by `value * (2 + card_boost)`
+on each Eastern slate takes the high weight. Every other board player stays
+in the fit at the base weight. Draft-count chalk is not the label. Winning
+drafts are not the label. No Railway variable write, no deploy, and no
+contest entry from this change. `NFL_TRAIN_DISPLAY_TOP_K` is read by
+`nfl-pipeline train` when set; unset means 10. It is not set on Railway
+from this session. Invalid values fail closed. Leave
+`NFL_PICKER_BOOST_RANK_BLEND`, `NFL_OPTIMIZER_UPSIDE_WEIGHT`, and
+`NFL_OPTIMIZER_FIELD_WEIGHT` at blend `0`, upside `0`, field `0`. Do not
+restore `0.75`. Max 1 DEF and max 1 K stay the code defaults from #616.
 
 When a card-boost map is present, each contest board (one Eastern slate)
 high-weights its top 10 by `value * (2 + card_boost)`. The regression
 label stays the board's base value. No boost map keeps the per-game
-raw-value top 5. Draft count and winning drafts are not labels. There is
-no year cap; a season without an HV boost map stays on the raw rung.
+raw-value top 5. There is no year cap; a season without an HV boost map
+stays on the raw rung.
 
 The best five inside that top-10 window, scored with
 `value * (slot + card_boost)`, against the full visible-board ceiling.
@@ -121,9 +125,19 @@ window, and most of it is not the chalk set. Every HV-board player stays
 a training row. Players outside this window keep the base weight.
 
 `nfl-pipeline train` writes `hv_feature_emphasis` on the audit. The
-observation nests each role as its own schema.org Observation. Each live
-feature on that role is a PropertyValue with propertyID `oracle:FeatureSpec`.
-The parent records that draft count and winning drafts are not labels.
+observation nests each role, and each condition, as its own schema.org
+Observation. Each live feature is a PropertyValue with propertyID
+`oracle:FeatureSpec`. The parent records that draft count and winning
+drafts are not labels.
+
+Conditions that produced an HV-board row:
+
+| Condition | FeatureSpec names |
+|---|---|
+| player profile | `position`, `team_id`, `player_prior_mean`, `player_prior_median`, `position_prior_mean`, `position_prior_median`, `team_prior_mean`, `prior_n_games`, `prior_fallback_level`, `prior_started`, `prior_minutes`, `prior_did_not_play` |
+| slate conditions | `season`, `week`, `gameday`, `days_rest`, `kickoff_slot`, `overall_rank`, `home_away`, `opponent_team`, `is_divisional`, `team_pace_prior`, `opponent_pace_prior`, `opponent_adjusted_prior`, `opp_def_value_allowed_prior` |
+| external pre-game | `weather_temp_f`, `weather_wind_mph`, `weather_precip_prob`, `weather_available`, `team_moneyline`, `opponent_moneyline`, `last_ten_wins`, `injury_status`, `injury_status_available`, `injury_body_part` |
+
 Live FeatureSpec roles that can move an HV-board row:
 
 | Role | FeatureSpec names |
@@ -134,6 +148,7 @@ Live FeatureSpec roles that can move an HV-board row:
 | pace | `team_pace_prior`, `opponent_pace_prior` |
 | slate | `overall_rank`, `kickoff_slot`, `days_rest` |
 | injury | `injury_status`, `injury_status_available`, `injury_body_part` |
+| external pre-game | `weather_temp_f`, `weather_wind_mph`, `weather_precip_prob`, `weather_available` |
 
 Ridge core slots that multiply a coefficient: `player_mean_shrunk`,
 `recent_mean_shrunk`, `position_mean`, `prior_stddev`, `opportunity_trend`.
@@ -143,12 +158,12 @@ Ridge context slots in the same roles add `is_home`, `moneyline_available`,
 `injury_body_part_available`, and the `injury_<category>` one-hots
 (`active`, `questionable`, `doubtful`, `out`, `inactive`, `ir`,
 `suspended`, `limited`, `dnp`, `full`, `unknown`) beside the usage,
-matchup, and pace names above. Weather (`weather_temp_f`,
-`weather_wind_mph`, `weather_precip_prob`, `weather_available`) is live
-context and is not in this emphasis set. Chalk channels stay off:
-`prior_log_count` (coefficient forced to 0), draft count, winning drafts.
-Card boost is the rank key `value * (2 + card_boost)` and the optimizer
-score `value * (slot + card_boost)`. It is not a ridge coefficient.
+matchup, and pace names above. External pre-game weather is on the ridge
+context as `weather_temp_f`, `weather_wind_mph`, `weather_precip_prob`,
+and `weather_available`. Chalk channels stay off: `prior_log_count`
+(coefficient forced to 0), draft count, winning drafts. Card boost is the
+rank key `value * (2 + card_boost)` and the optimizer score
+`value * (slot + card_boost)`. It is not a ridge coefficient.
 `card_boost_post_settlement` stays `live_ok` false.
 
 Public `GET /lineup/2026-09-27` at `2026-09-28T04:42:07Z` is `locked`,
