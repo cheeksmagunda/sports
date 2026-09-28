@@ -51,7 +51,8 @@ class HistoricalPerformance(Record):
     role: str | None = None
     did_not_play: bool = False
     # hv_tdv_leaderboard: y came from highestBoostedValuePlayers (HV + TDV).
-    # raw_box: no leaderboard scoped this player-game (ladder fallback).
+    # raw_box: graded box rows and older artifacts. nfl-pipeline train drops
+    # these before fit (operator lock: HV/TDV only).
     label_kind: Literal["hv_tdv_leaderboard", "raw_box"] = "raw_box"
     context_features: dict[str, Finite] = Field(default_factory=dict)
     context_clock: EvidenceClock | None = None

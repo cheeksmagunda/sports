@@ -199,10 +199,10 @@ def _load_context(project: Path, slate: Any, now: datetime) -> ContextSnapshot:
 def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> ModelBundle:
     root = Path(os.environ.get("NFL_HISTORY_ROOT", str(project / "data" / "raw" / "corpus_g")))
     rows, excluded = load_history(root)
-    # Objective: HV + TDV leaderboards. Missing boards keep the raw box value.
+    # Operator lock (#599): y is the #185 HV/TDV rung only. Box rows are dropped.
     rows, hv_audit = apply_hv_tdv_labels(project, rows)
-    if len(rows) < 30:
-        raise RuntimeError("historical_training_rows_insufficient")
+    if len(rows) < 30 or any(row.label_kind != "hv_tdv_leaderboard" for row in rows):
+        raise RuntimeError("hv_tdv_training_rows_insufficient")
     metadata = load_history_metadata(root, rows)
     enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
     from nfl_oracle.recommendations.model import (
@@ -221,22 +221,33 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
     # model records will not match the history this bundle persists.
     enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
     model = fit_model(enriched, trained_at=now)
+    audit: dict[str, Any] = {
+        "history_root": str(root),
+        "history_rows": len(rows),
+        "history_excluded": excluded,
+        "hv_overlay": hv_audit.to_dict(),
+        "training_target": hv_audit.training_target,
+        "context_rows": len(enrichment.rows),
+        "context_excluded": enrichment.excluded,
+        "context_evidence_mode": enrichment.evidence_mode,
+        "contest_entry": False,
+        **identity_audit,
+    }
+    try:
+        from nfl_oracle.recommendations.high_tv import report_nfl_archive_season_depth
+
+        audit["archive_depth"] = report_nfl_archive_season_depth(
+            project_root=project,
+            fit_rows=rows,
+            corpus_g_root=root,
+        ).to_dict()
+    except (OSError, ValueError, KeyError, TypeError):
+        audit["archive_depth"] = {"status": "unverified"}
     return ModelBundle(
         model=model,
         history=tuple(enriched),
         source_hashes=tuple(source.sha256 for source in snapshot.sources.values()),
-        audit={
-            "history_root": str(root),
-            "history_rows": len(rows),
-            "history_excluded": excluded,
-            "hv_overlay": hv_audit.to_dict(),
-            "training_target": hv_audit.training_target,
-            "context_rows": len(enrichment.rows),
-            "context_excluded": enrichment.excluded,
-            "context_evidence_mode": enrichment.evidence_mode,
-            "contest_entry": False,
-            **identity_audit,
-        },
+        audit=audit,
     )
 
 
@@ -903,9 +914,9 @@ def _parser() -> argparse.ArgumentParser:
         "train",
         help=(
             "ensure an active model exists, or rebuild one with --force; "
-            "objective is HV + TDV leaderboards "
-            "(highestBoostedValuePlayers); raw box value is only the "
-            "fallback when that game has no leaderboard"
+            "objective is HV + TDV leaderboards only "
+            "(highestBoostedValuePlayers via the #185 ladder). "
+            "Rows off that board are excluded. Corpus G box value is not the target"
         ),
     )
     train.add_argument(

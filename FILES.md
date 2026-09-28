@@ -332,7 +332,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
-- nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Overlay HV + TDV leaderboard labels onto Corpus G history.
+- nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Keep only HV/TDV leaderboard rows as the NFL train target.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/ollama_tick_tilt.py -- Env-gated Ollama tick tilt for NFL picker projections (#574).
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
@@ -491,7 +491,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
 - nfl-oracle/tests/unit/test_hv_board_replay.py -- HV-rank five, draft-count chalk, and hindsight ceiling use the draft-image law.
-- nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV board values replace box labels only when the HV section scopes the game.
+- nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV leaderboard rows are the only train labels. Box rows are excluded.
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
