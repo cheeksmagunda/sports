@@ -670,6 +670,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 ## nhl-oracle/src/nhl_oracle/scheduler/
 - nhl-oracle/src/nhl_oracle/scheduler/__init__.py -- NHL freeze-cycle job skeleton (no live provider, no contest entry).
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
+- nhl-oracle/src/nhl_oracle/scheduler/readiness.py -- T-40 win-freeze readiness for a live NHL slate (observation only).
 - nhl-oracle/src/nhl_oracle/scheduler/t40.py -- T-40 freeze publication policy coherent with NHL contest algebra (#535).
 
 ## nhl-oracle/src/nhl_oracle/service/
@@ -696,6 +697,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/tests/test_realsports_auth_bootstrap.py
 - nhl-oracle/tests/test_redact.py
 - nhl-oracle/tests/test_service_scaffold.py -- Staging HTTP service and Docker/Railway scaffold contracts.
+- nhl-oracle/tests/test_win_freeze_readiness.py -- T-40 win freeze: complete pool, zero boost until every team has played.
 
 ## nhl-oracle/tests/fixtures/realsports/
 - nhl-oracle/tests/fixtures/realsports/contest_draftinfo.json -- (test fixture data)

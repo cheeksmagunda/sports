@@ -102,13 +102,13 @@ rather than printing or copying connection strings locally.
 Training and backtest product target: each slate's Real Sports **Highest
 value / Total Value** board (`highestBoostedValuePlayers`). Objective is a
 **5-player** ordered contest pick under slot multipliers
-`(2.0, 1.8, 1.6, 1.4, 1.2)`, graded and fit on HV boards — never winning
+`(2.0, 1.8, 1.6, 1.4, 1.2)`, graded and fit on HV boards. Never use winning
 drafts. Pre-slate features map through `features.own_model_map` into the
 priors / future ridge-valuelaw path (**no LightGBM primary**). T-40 freeze
 policy: `scheduler.t40` (`lock_at - 40m`, per-contest lock). **Corpus gap:**
 durable multi-contest HV ingest is not landed yet; `labels.hv.report_hv_corpus_gap`
 documents it (#526). Models stay in this app; `frontend/` is separately
-owned — backend PRs must not edit it. Verified milestone progress lives in
+owned. Backend PRs must not edit it. Verified milestone progress lives in
 `STATUS.md`.
 
 The approved plan from the current scaffold to a verified, autonomous
@@ -128,6 +128,9 @@ every NHL team has played.
 through the early-slate gap (games starting before all 32 clubs have ≥1 GP).
 That gap is the strategy window: exploit field mispricing; never arm boost /
 ownership-fade / leverage early. Fail closed when team-GP coverage is missing.
+T-40 win-freeze readiness (`scheduler.readiness`) refuses a five-card freeze
+unless that gate holds, the slate pool matches its denominator (not a
+five-player stub), and the clock is inside `lock_at - 40m`.
 Historical contest 1901 draftStats may show flat `multiplierBonus` from a
 later window and must not override the gate.
 

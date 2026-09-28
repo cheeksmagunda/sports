@@ -115,7 +115,19 @@ class NhlAuditFixture:
     # Current-season team GP for the hard zero-boost gate. None / incomplete
     # / any 0-GP team keeps boost disabled (fail closed). See boost_gate.py.
     team_games_played: tuple[TeamGamesPlayed, ...] | None = None
+    # Slate denominator for a winning freeze. None keeps the Week-1 audit
+    # behavior (at least expected_roster_size candidates). A live freeze sets
+    # this to the full contest pool, not the five-card roster.
+    expected_pool_size: int | None = None
+    games_scheduled: int | None = None
+    games_captured: int | None = None
 
     def __post_init__(self) -> None:
         if self.expected_roster_size <= 0:
             raise ValueError("expected_roster_size_must_be_positive")
+        if self.expected_pool_size is not None and self.expected_pool_size <= 0:
+            raise ValueError("expected_pool_size_must_be_positive")
+        if self.games_scheduled is not None and self.games_scheduled < 0:
+            raise ValueError("games_scheduled_must_be_non_negative")
+        if self.games_captured is not None and self.games_captured < 0:
+            raise ValueError("games_captured_must_be_non_negative")

@@ -51,9 +51,43 @@ def _aware(value: str) -> datetime:
 
 
 def gate_pool_completeness(fixture: NhlAuditFixture) -> GateItem:
+    """Require a priced pool large enough to fill the roster.
+
+    When ``expected_pool_size`` or a games captured/scheduled pair is set, a
+    five-card stub is not complete: the observed pool must equal the slate
+    denominator and every scheduled game must be captured. Missing either
+    games field, when the other is set, fails closed.
+    """
+
     count = len(fixture.candidates)
+    ids = [c.player_id for c in fixture.candidates]
+    if len(set(ids)) != count:
+        return GateItem(
+            key="pool_completeness",
+            ok=False,
+            detail="duplicate_player_ids",
+        )
+    if fixture.games_scheduled is not None or fixture.games_captured is not None:
+        scheduled = fixture.games_scheduled
+        captured = fixture.games_captured
+        if scheduled is None or captured is None or scheduled <= 0 or captured != scheduled:
+            shown_captured = captured if captured is not None else "missing"
+            shown_scheduled = scheduled if scheduled is not None else "missing"
+            return GateItem(
+                key="pool_completeness",
+                ok=False,
+                detail=f"games_incomplete_{shown_captured}_of_{shown_scheduled}",
+            )
     missing_value = [c.player_id for c in fixture.candidates if c.score_value is None]
-    if count < fixture.expected_roster_size:
+    target = fixture.expected_pool_size
+    if target is not None:
+        if target < fixture.expected_roster_size or count != target:
+            return GateItem(
+                key="pool_completeness",
+                ok=False,
+                detail=f"pool_incomplete_{count}_of_{target}",
+            )
+    elif count < fixture.expected_roster_size:
         return GateItem(
             key="pool_completeness",
             ok=False,

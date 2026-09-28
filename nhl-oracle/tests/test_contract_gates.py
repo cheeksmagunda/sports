@@ -58,6 +58,34 @@ def test_complete_pool_passes_all_gates() -> None:
     assert report.blocked_reasons == ()
 
 
+def test_slate_denominator_rejects_five_player_stub() -> None:
+    fixture = NhlAuditFixture(
+        contract=_confirmed_contract(),
+        candidates=_complete_candidates(),
+        expected_roster_size=5,
+        expected_pool_size=8,
+        games_scheduled=2,
+        games_captured=2,
+        team_games_played=_all_teams_played(),
+    )
+    report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
+    assert "pool_completeness" in report.blocked_reasons
+
+
+def test_uncaptured_games_fail_pool_completeness_gate() -> None:
+    fixture = NhlAuditFixture(
+        contract=_confirmed_contract(),
+        candidates=_complete_candidates(),
+        expected_roster_size=5,
+        expected_pool_size=5,
+        games_scheduled=2,
+        games_captured=1,
+        team_games_played=_all_teams_played(),
+    )
+    report = evaluate_nhl_audit(fixture, decision_at=DECISION_AT)
+    assert "pool_completeness" in report.blocked_reasons
+
+
 def test_incomplete_pool_fails_pool_completeness_gate() -> None:
     fixture = NhlAuditFixture(
         contract=_confirmed_contract(),

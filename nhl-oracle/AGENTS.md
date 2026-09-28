@@ -23,7 +23,7 @@ styling, components, tests, or build configuration.
 Five-player ordered pick + T-40 freeze (`contest/`, `scheduler.t40`). Own-model
 path is priors / ridge-valuelaw (`features.own_model_map`); no LightGBM
 primary. When durable RS contest HV ingest is missing, use
-`report_hv_corpus_gap` — do not invent labels. Early-season boost stays none
+`report_hv_corpus_gap`. Do not invent labels. Early-season boost stays none
 until every franchise has 1 GP (`contract.boost_gate`).
 
 ## Exact local commands
@@ -49,10 +49,12 @@ make typecheck
 
 `Dockerfile` and `railway.toml` are NHL-owned deployment source for
 sports-oracle `nhl-staging`. One image, separate roles: `nhl-pipeline serve`
-is the read-only API default; `nhl-pipeline worker` is an idle
-observation-only heartbeat until a real pipeline exists. Credentials never
-enter the image. No contest entry. API must not migrate on startup (no
-schema yet).
+is the read-only API default; `nhl-pipeline worker` is an observation-only
+heartbeat that reports T-40 win-freeze readiness and does not collect a live
+slate. `nhl-pipeline readiness` prints the same fail-closed report.
+Credentials never enter the image. No contest entry. API must not migrate
+on startup (no schema yet). The root `.dockerignore` must allowlist
+`nhl-oracle/src` or the Railway image build cannot see this package.
 
 ## Verification bar
 

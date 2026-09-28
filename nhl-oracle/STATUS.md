@@ -1,7 +1,7 @@
 # Status
 
-Last verified: 2026-09-27 CT (#535 HV train/backtest wiring; continues #453/#526;
-#501 zero-boost gate; #482 nhl-staging Docker live smoke)
+Last verified: 2026-09-28 UTC (#601 T-40 win-freeze readiness; continues #535
+HV train/backtest wiring, #501 zero-boost gate, #482 nhl-staging image)
 
 ## Win stack index (#594)
 
@@ -22,10 +22,14 @@ Pointer only. Not a new live check.
 - **Contest algebra:** `nhl_oracle.contest` scores ordered five-card picks as
   `value * (slot_multiplier + effective_card_boost)` with slots
   `(2.0, 1.8, 1.6, 1.4, 1.2)`. Effective boost stays 0 under `boost_gate`.
-- **T-40 freeze:** `scheduler.t40` + `run_freeze_cycle(ensure_t40_coherent=...)`
-  open at `lock_at - 40m` under per-contest lock; fail closed when the
-  five-player pick is incoherent with the contract. **Serving path still
-  unverified live** (skeleton only; no hosted freeze publish).
+- **T-40 freeze:** `scheduler.t40` + `scheduler.readiness` +
+  `run_freeze_cycle(ensure_t40_coherent=...)` open at `lock_at - 40m` under
+  per-contest lock. A winning five is ready only when the slate pool matches
+  its denominator, effective card boost is 0 while the all-teams gate is
+  closed, and the clock is inside the window. `GET /readiness` and
+  `nhl-pipeline readiness` report that check. With no injected slate they
+  stay `freeze_ready=false` and do not invent a lineup. **Hosted freeze
+  publish is still unverified live** (no snapshot collector on the worker).
 - **Own-model map:** `features.own_model_map` routes pre-slate history features
   into priors / future ridge-valuelaw (explicitly **no LightGBM primary**).
 - **RS contest HV ingest gap (verified in-tree):** Week 2 audit seeds redacted
@@ -64,23 +68,67 @@ Pointer only. Not a new live check.
 - Stub only: `nhl-oracle/scripts/export_hv_board.py` exits 78 (fail-closed).
 - Portfolio layout: `oracle_core.hv_board_corpus` + `hv-leaderboard-corpus.yml`.
 
-## Railway nhl-staging live smoke (#482)  -  2026-09-27
+## T-40 win-freeze readiness (#601)  -  2026-09-28
 
-- Source: `nhl-oracle/Dockerfile` + `railway.toml`; root `.dockerignore`
-  allowlists `nhl-oracle` paths (PR #494). `dockerfilePath` set on
-  `nhl-api` / `nhl-worker` (`nhl-oracle/Dockerfile`) and `nhl-frontend`
-  (`Dockerfile` + `rootDirectory=nhl-oracle/frontend`).
-- Verified live (staging only, no contest claims):
-  - `GET https://nhl-api-nhl-staging.up.railway.app/health` →
+- **Runners:** GitHub still has `nhl-history-nightly` only (public NHL
+  history, no Real Sports). There is no NHL T-40 Actions watchdog. Railway
+  `nhl-worker` start command remains `nhl-pipeline worker`. The heartbeat
+  now includes `readiness` and stays `freeze_ready=false` until a complete
+  slate snapshot is injected inside T-40. It does not call Real Sports.
+- **Pool:** `gate_pool_completeness` still accepts a roster-sized fixture
+  when no slate denominator is set (Week 2 audit shape). A win freeze sets
+  `expected_pool_size` and `games_scheduled` / `games_captured` and fails
+  unless the observed pool equals that denominator and every scheduled game
+  was captured. A five-player stub is not a complete slate.
+- **Zero boost:** unchanged rule (#501). Effective card boost stays 0 until
+  all 32 clubs have >=1 GP. Missing coverage fails closed. A flat contract
+  label is forced to `none` for the freeze score while the gate is closed.
+- **Code:** `nhl_oracle.scheduler.readiness`. Unit proof:
+  `tests/test_win_freeze_readiness.py`. `contest_entry` stays false.
+
+## Public 2026-27 coverage (verified 2026-09-28 UTC)
+
+- `GET https://api-web.nhle.com/v1/schedule/now`:
+  `regularSeasonStartDate=2026-09-29`.
+- Team summary
+  `https://api.nhle.com/stats/rest/en/team/summary` with
+  `seasonId=20262027` and `gameTypeId=2`: **total 0**.
+- `standings/now` is still seasonId **20252026**, 32 teams at 82 GP. That
+  is not 2026-27 coverage. The zero-boost gate stays closed.
+- Opening cluster on `schedule/2026-09-29` (`gameDate` was absent on the
+  payload; identified by `startTimeUTC`): five regular-season games, all
+  `gameState=FUT`, season **20262027**, `gameType=2`:
+  FLA@CAR 2026-09-29T21:00Z, MTL@TOR 2026-09-29T23:00Z, NYR@BOS
+  2026-09-30T00:00Z, VAN@EDM 2026-09-30T02:00Z, CHI@VGK 2026-09-30T02:30Z.
+  Ten clubs. Not every franchise.
+
+## Railway nhl-staging (#482 / #601)  -  2026-09-28
+
+- Source: `nhl-oracle/Dockerfile` + `railway.toml`. `dockerfilePath` on
+  `nhl-api` / `nhl-worker` is `nhl-oracle/Dockerfile`. `nhl-frontend` uses
+  its own `Dockerfile` and `rootDirectory=nhl-oracle/frontend`.
+- **Build blocker, verified:** commit `7f390cd` (#497) deleted the #494
+  `nhl-oracle` allowlist from root `.dockerignore`. Subsequent main builds
+  fail with `/nhl-oracle/src: not found`. Example: `nhl-api` deployment
+  `9abecece-0fbe-435b-863d-27f1ad2c29a0` FAILED at build
+  (2026-09-28T02:57Z, commit `e636040`). This change restores the allowlist.
+  The image is not redeployed until this lands on `main`.
+- Last SUCCESS still serving (verified 2026-09-28T03:00Z):
+  - `GET https://nhl-api-nhl-staging.up.railway.app/health` returned
     `status=ok`, `observation_only=true`, `contest_entry=false`
-  - `nhl-frontend` HTTPS 200 at
-    `https://nhl-frontend-nhl-staging.up.railway.app/`
-  - Deploy commit `cf532a93` (dockerignore fix on top of #487 scaffold).
-    Deploy IDs (verified SUCCESS): api `27b8fed2…`, worker `f2431eed…`,
-    frontend `e5aa846c…`.
-- Worker role: idle observation-only heartbeat (`nhl-pipeline worker`).
-  No Real Sports provider loop; no migrate-on-startup; no secrets in image.
-- Design/runbook context: #457. **No contest entry. Staging only.**
+    (`checked_at=2026-09-28T03:00:10Z`). Deployment
+    `317c244d-c43c-4bf7-a905-e27524ffab60`, commit `4c6a225`
+    (2026-09-27T02:44Z). That image does not yet serve `/readiness`.
+  - `nhl-worker` SUCCESS `f2431eed-e07f-4f2d-ad2e-cea684f872c2`, commit
+    `cf532a9` (2026-09-27T02:54Z). Idle heartbeat; no Real Sports loop.
+  - `nhl-frontend` SUCCESS `e5aa846c-67f4-4f2a-9e6f-2fc9792f6592`. Not part
+    of this change.
+- Rollback if a post-merge `nhl-api` or `nhl-worker` deploy fails: api
+  `317c244d-c43c-4bf7-a905-e27524ffab60`, worker
+  `f2431eed-e07f-4f2d-ad2e-cea684f872c2`. Do not redeploy `nhl-frontend`
+  for this change.
+- No migrate-on-startup. No secrets in the image. **No contest entry.
+  Staging only.**
 
 ## Railway mono-project shell (#457)  -  2026-09-27
 
@@ -167,11 +215,9 @@ Pointer only. Not a new live check.
 - Frontend scaffold (#462): `nhl-oracle/frontend` Vite+React+TS shell with
   NHL dark-ice branding, `/health` client stub, slate placeholder page,
   Dockerfile + `railway.toml` matching the WNBA frontend deploy shape.
-- Staging container shell (#482): root `nhl-oracle/Dockerfile` +
-  `railway.toml`; `nhl-pipeline serve` / `nhl-pipeline worker` entrypoints.
-  Stub API only; not a freeze/publish lifecycle. Railway `nhl-staging`
-  services `nhl-api` / `nhl-worker` / `nhl-frontend` are configured to build
-  from these paths after merge (verify deploy IDs live).
+- Staging container shell (#482 / #601): `nhl-pipeline serve`, `worker`, and
+  `readiness`. Live deploy IDs and the dockerignore build blocker are in
+  the Railway section above. No hosted freeze publisher yet.
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
   optimizer, production NHL serving / contest entry. Any future
   picker/backtest must assume zero boosts until every NHL team has played
