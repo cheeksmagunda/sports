@@ -2,6 +2,20 @@
 
 Last verified: 2026-09-28T03:17:45Z
 
+
+## Washington HV signal evidence (Refs #647 / #644 / #597)  -  2026-09-28T04:45Z
+
+Operator evidence files (not a knob flip; live blend stays 0):
+
+- `nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.md`
+- `nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.json`
+
+Mike Washington Jr. (player_id 26932, RB, LV@NO 2026-09-27) is the anti-chalk
+RB case for HV/TDV top-10 train wiring: freeze card boost 3.0, ownership ~7.4%,
+slot 5 / multiplier 1.2. Train target remains HV/TDV boards, not draft chalk.
+LLM-internal Ollama learn/tilt stays on top of existing schemas (runs-on-shape).
+No serving-path flip in the freeze window. Max 1 DEF / blend=0 unchanged.
+
 ## MNF pregate (#599)  -  2026-09-28T03:17:45Z
 
 Public read of `nfl-api` (`/health` and `/slate/2026-09-28`). No Railway

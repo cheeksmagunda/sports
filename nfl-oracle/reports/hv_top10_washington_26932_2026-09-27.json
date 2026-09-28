@@ -1,0 +1,51 @@
+{
+  "slate_date": "2026-09-27",
+  "player_id": 26932,
+  "name": "Mike Washington Jr.",
+  "freeze": {
+    "frozen_at": "2026-09-27T19:36:23.724672+00:00",
+    "cutoff_at": "2026-09-27T20:05:00+00:00",
+    "digest": "030c3eecfc5a97c5b2dcfd3065b523705878257d0a773b0bc0907ec0af497ba0",
+    "model_fingerprint": "c894e080a462b8e14e4801ce9e8859bef4cd43379acb75e19bd5aae621f46f82",
+    "card_boost": 3.0,
+    "projected_value": 3.583067813595295,
+    "projected_score": 15.04888481710024,
+    "ownership": 0.074,
+    "slot": 5,
+    "slot_multiplier": 1.2,
+    "uncertainty": 2.7659111675365993,
+    "candidate_count": 661,
+    "total_value": 91.29623858278046
+  },
+  "prepared_features_by_player": null,
+  "prepared_features_status": "not_on_volume_backup_pre_freeze; Postgres prepared:2026-09-27 only",
+  "feature_recon": {
+    "season": 2026,
+    "week": 3,
+    "gameday": "2026-09-27",
+    "days_rest": 7.0,
+    "kickoff_slot": "late",
+    "is_home": 0.0,
+    "opponent_team": "NO",
+    "is_divisional": 0.0,
+    "team_moneyline": 160.0,
+    "opponent_moneyline": -210.0,
+    "roof": "dome"
+  },
+  "hv_vs_popular_deltas_HV_only_minus_popular_only": {
+    "value": 2.463,
+    "drafts": -4613.5,
+    "boost": 0.673,
+    "avg_score": 9.388,
+    "high_score": 10.628,
+    "mult": 0.59,
+    "n_exclusive": 22,
+    "contests": [
+      "2167",
+      "2179",
+      "2182",
+      "2196"
+    ]
+  },
+  "live_blend_unchanged": 0.0
+}

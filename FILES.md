@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1143 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1145 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -205,6 +205,10 @@ Generated from `git ls-files`. 1143 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/frontend/app.js
 - nfl-oracle/frontend/index.html -- Static frontend page
 - nfl-oracle/frontend/style.css
+
+## nfl-oracle/reports/
+- nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.json
+- nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.md -- HV top-10 train note: Washington 26932 (2026-09-27)
 
 ## nfl-oracle/scripts/
 - nfl-oracle/scripts/append_game_stats_matchup.py -- Derive matchup.json sidecars from existing NFL Corpus G game dirs.
