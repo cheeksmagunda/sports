@@ -1,7 +1,22 @@
 # Status
 
-Last verified: 2026-09-28T04:46Z
+Last verified: 2026-09-28T04:59Z
 
+
+
+## Live train after #650 day-scope (Refs #647)  -  2026-09-28T04:59Z
+
+Outside MNF T-40. Slate status `waiting`, `next_freeze` `2026-09-28T23:35:00Z`.
+Worker SUCCESS deploy `5285cbd2-c244-4a7e-9ab2-62214f5508e5` commit `266fb60`
+(#650). Knobs unchanged: `NFL_PICKER_BOOST_RANK_BLEND=0`, upside=0, field=0,
+`NFL_SLATE_DATE=2026-09-28`. Never restore 0.75. Max 1 DEF unchanged.
+
+```json
+{"status": "trained", "retrained": true, "model_sha256": "e36f14104787331047afc9926f2fe67fd721243b6f22a6443bc2dddb3ce07892", "trained_at": "2026-09-28T04:58:28.560870+00:00", "selected_estimator": "ridge", "training_rows": 824, "holdout_rows": 203, "training_target": "hv_tdv_leaderboards", "contest_entry": false, "history_rows": 824, "hv_overlay": {"boards": 72, "rows_overlaid": 824, "rows_raw": 0, "rows_excluded": 36886, "conflicts": 0, "skipped_unscoped": 19, "skipped_boards": 20, "training_target": "hv_tdv_leaderboards", "label_section": "highestBoostedValuePlayers", "operator_lock": "hv_tdv_only", "raw_box_used_as_target": false, "fit_seasons": [2024, 2025], "draft_count_is_label": false, "winning_drafts_are_label": false}}
+```
+
+`hv_tdv_training_rows_insufficient` cleared by Corpus G day-scope fallback.
+Washington HV evidence remains on main under `nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.{md,json}`.
 
 ## Washington HV signal evidence (Refs #647 / #644 / #597)  -  2026-09-28T04:45Z
 
