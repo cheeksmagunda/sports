@@ -43,13 +43,19 @@ Product goal (one statement): root `README.md`. The stack that pursues it:
    (`highestBoostedValuePlayers`). Prior users' winning drafts are a
    reference bar, not the fit target.
 2. **Own model, inside the app.** WNBA serve primary is empirical-Bayes
-   (`WNBA_SERVE_PRIMARY`, code default `eb`). NFL serve math is valuelaw
-   plus feature ridge. NHL priors / ridge-valuelaw path is in-app and not
-   a hosted freeze. LightGBM is not the primary. No new model stack lives
-   in `oracle-core`.
-3. **Ollama, inside that model path.** `scripts/ollama_hv_watcher` notes
-   on the same HV/TDV boards and writes a five-player learn tick. It is
-   not a serve primary and it does not publish a freeze. Gate and commands:
+   (`WNBA_SERVE_PRIMARY`, code default `eb`) trained on
+   `highestBoostedValuePlayers`. NFL serve math is valuelaw plus feature
+   ridge. NFL train and replay (`recommendations.hv_train`) up-weight a
+   linked Highest-value board when the contest names game ids, and otherwise
+   keep per-game top-5 box value. NHL priors / ridge-valuelaw path prefers
+   HV-tagged rows and is not a hosted freeze. NBA has no train or freeze
+   path (`scripts/export_hv_board.py` exits 78). LightGBM is not the
+   primary. No new model stack lives in `oracle-core`.
+3. **Ollama, inside that model path.** `scripts/ollama_hv_watcher` runs a
+   total-draft-value sim (`value * (slot + boost)`) and writes notes about
+   that sim. NHL boosts in the sim stay 0. It is not a serve primary and it
+   does not publish a freeze. NFL can read a mounted tick only when
+   `NFL_OLLAMA_TICK_TILT_WEIGHT` is above 0 (default 0). Gate and commands:
    `ENTRY_POINTS.md` and `scripts/ollama_hv_watcher/README.md`.
 4. **T-40 runner, per sport.** Table below. Portfolio Ollama arms at the
    earliest supplied T-40; that arm is a learn window, not a freeze.

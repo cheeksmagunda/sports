@@ -15,12 +15,19 @@ Contest submission and live contest entry remain hard-forbidden by policy.
 
 Inline contract for this app. Live Railway values stay in `STATUS.md`.
 
-**Model path.** Train toward Highest value / Total Value boards
-(`highestBoostedValuePlayers` or a reconstructed value ranking from Corpus
-C). Own model is valuelaw plus feature ridge (`features.own_model_map`,
-`recommendations.model`). No LightGBM primary. Ollama
-(`scripts/ollama_hv_watcher`) notes on those same boards. It does not
-replace the ridge serve path and it does not publish the freeze.
+**Model path.** Train and replay sample weights follow the #185 ladder
+(`recommendations.hv_train`, `recommendations.model.fit_model`). When a
+finalized contest has `highestBoostedValuePlayers` and a game id that joins
+to Corpus G, the top 5 on that board get the high weight and raw box-score
+leaders in that game do not. Games with no linked board keep per-game top-5
+box `value` weights. The ridge still predicts raw box value so live scoring
+can apply `value * (slot + boost)` once. Reconstructed rankings and winning
+drafts are not the fit target. Own model is valuelaw plus feature ridge
+(`features.own_model_map`, `recommendations.model`). No LightGBM primary.
+Ollama (`scripts/ollama_hv_watcher`) scores a total-draft-value sim on those
+boards and writes notes about that sim. `NFL_OLLAMA_TICK_TILT_WEIGHT`
+defaults to 0, so the tick does not move a live freeze unless an operator
+sets a weight and mounts the tick. It does not publish the freeze.
 
 **T-40 runner.** The worker publishes. `recommendations/pipeline.py` sets
 due at contest cutoff minus 40 minutes. `recommendations/cli.py` waits with
@@ -53,6 +60,16 @@ diversified (3 teams / 2 games) and is not the serve default.
 
 Invalid optimizer or picker values raise. Live process values (including
 any blend above the identity default) are in `STATUS.md`.
+
+Exact five-card search runs when upside and field weights are 0. That search
+covers a Sunday pool (about 600-800) and a one-night pool (about 150). The
+beam width of 150 is the fallback when those weights are above 0 or the
+solver is missing. Do not put boost-rank blend back to 0.75: that reassigns
+projected means into provider boost order (chalk). Code defaults for upside
+(0.15) and field (0.10) remain the rollback if those env vars are wiped.
+`NFL_OLLAMA_TICK_TILT_WEIGHT` stays 0 on the worker. `gameTeamComparison`
+standings and `boostControl` fixtures stay unused until a measured encoding
+exists; they are not silent features.
 
 ## Connection surfaces
 

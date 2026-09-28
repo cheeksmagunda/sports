@@ -361,6 +361,35 @@ def _production_fit(
     return fit_model(rows, trained_at=trained_at, fit_config=fit_config)
 
 
+def bind_hv_fitter(
+    fitter: Fitter,
+    hv_weights: Mapping[tuple[int, int], float] | None,
+    hv_covered_game_ids: Iterable[int] | None = None,
+) -> Fitter:
+    """Use the production fitter with the #185 HV weight ladder when provided.
+
+    A caller-supplied fitter is left alone so tests can still stub failures.
+    ``hv_weights is None`` keeps the box-value weight path.
+    """
+
+    if hv_weights is None or fitter is not _production_fit:
+        return fitter
+    covered = () if hv_covered_game_ids is None else tuple(hv_covered_game_ids)
+
+    def _bound(
+        rows: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
+        return fit_model(
+            rows,
+            trained_at=trained_at,
+            fit_config=fit_config,
+            hv_weights=hv_weights,
+            hv_covered_game_ids=covered,
+        )
+
+    return _bound
+
+
 def _default_fold(spec: _SlateSpec) -> str:
     return spec.key
 
@@ -376,6 +405,8 @@ def backtest_production_pipeline(
     fit_config: FitConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
+    hv_weights: Mapping[tuple[int, int], float] | None = None,
+    hv_covered_game_ids: Iterable[int] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> tuple[tuple[SlateBacktestResult, ...], dict[str, int]]:
     """Walk-forward replay of fit/predict/optimize over enriched history rows.
@@ -389,6 +420,7 @@ def backtest_production_pipeline(
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
     model_fit_config = fit_config or FitConfig()
+    fitter = bind_hv_fitter(fitter, hv_weights, hv_covered_game_ids)
     fold_key = fold_of or _default_fold
     specs = group_slates(rows, grouping)
     folds: dict[Hashable, list[_SlateSpec]] = defaultdict(list)

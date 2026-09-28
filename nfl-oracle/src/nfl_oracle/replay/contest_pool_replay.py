@@ -71,6 +71,7 @@ from nfl_oracle.replay.production_backtest import (
     LeakageError,
     _production_fit,
     assert_no_leakage,
+    bind_hv_fitter,
     build_slate,
     compact_projections,
     naive_ewma_projections,
@@ -221,6 +222,8 @@ def replay_contest_pools(
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
     picker: PickerKnobs | None = None,
+    hv_weights: Mapping[tuple[int, int], float] | None = None,
+    hv_covered_game_ids: Iterable[int] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> tuple[tuple[ContestPoolResult, ...], dict[str, int]]:
     """Walk-forward production replay restricted to each contest's visible pool.
@@ -233,6 +236,7 @@ def replay_contest_pools(
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
     model_fit_config = fit_config or FitConfig()
+    fitter = bind_hv_fitter(fitter, hv_weights, hv_covered_game_ids)
     knobs = picker or PickerKnobs()
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)
@@ -510,6 +514,8 @@ def replay_contest_pools_knob_sweep(
     fit_config: FitConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
+    hv_weights: Mapping[tuple[int, int], float] | None = None,
+    hv_covered_game_ids: Iterable[int] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> dict[str, tuple[tuple[ContestPoolResult, ...], dict[str, int]]]:
     """One walk-forward fit, many picker settings. Keys are ``PickerKnobs.profile``."""
@@ -521,6 +527,7 @@ def replay_contest_pools_knob_sweep(
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
     model_fit_config = fit_config or FitConfig()
+    fitter = bind_hv_fitter(fitter, hv_weights, hv_covered_game_ids)
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)
     shared_excluded: dict[str, int] = defaultdict(int)

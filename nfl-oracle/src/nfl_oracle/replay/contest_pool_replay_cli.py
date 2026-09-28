@@ -17,6 +17,7 @@ from typing import Any
 
 from nfl_oracle.contests.parse import iter_contests
 from nfl_oracle.contests.store import ContestStore
+from nfl_oracle.recommendations.hv_train import overlay_for_replay
 from nfl_oracle.recommendations.optimizer import (
     OPTIMIZER_PROFILE_PRESETS,
     OptimizerConfig,
@@ -126,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
 
     started = datetime.now(UTC)
     fit_config = fit_config_from_args(args)
+    hv_overlay = overlay_for_replay(args.history_root, corpus_c_root=args.contest_root)
     picker = PickerKnobs(
         boost_rank_blend=args.boost_rank_blend,
         position_calibration=args.position_calibration,
@@ -151,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         fit_config=fit_config,
         compact_samples=not args.full_samples,
         picker=picker,
+        hv_weights=hv_overlay.weights,
+        hv_covered_game_ids=hv_overlay.covered_game_ids,
         progress=progress,
     )
     summary = summarize(results, excluded)
@@ -159,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         "issue": 280,
         "retrain": args.retrain,
         "fit_config": fit_config.model_dump(mode="json"),
+        "hv_train": hv_overlay.to_dict(),
         "picker": picker.model_dump(mode="json"),
         "optimizer": optimizer_config.model_dump(mode="json"),
         "contests_with_field_evidence": len(contests),

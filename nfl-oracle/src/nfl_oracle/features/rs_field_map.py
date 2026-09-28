@@ -87,8 +87,8 @@ RS_FIELD_MATRIX: tuple[tuple[str, str, str, str, RsStatus], ...] = (
         "draftStats[]",
         "contest /games/.../stats",
         "corpus contest dump (#526)",
-        "offline replay only until HV parsed",
-        "gap",
+        "HV sample weights when highestBoostedValuePlayers links a game id",
+        "label",
     ),
     (
         "card boost / multiplierBonus (pre-lock pool)",

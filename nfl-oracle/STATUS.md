@@ -2,6 +2,16 @@
 
 Last verified: 2026-09-28T02:59:00Z
 
+## HV train ladder on the live fit (#620)
+
+`nfl-pipeline train` and the production replay CLIs now pass Corpus C /
+exported `highestBoostedValuePlayers` boards into `fit_model` sample weights
+when a contest links game ids. Unlinked games stay on per-game top-5 box
+value. This change does not retrain the worker and does not change live
+picker or optimizer env. Live blend, upside, and field stay at 0. Do not
+restore boost-rank blend 0.75. Code defaults 0.15 / 0.10 remain the rollback
+if those two weight vars are wiped.
+
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
 Code contract only; **production tilt weight stays 0** (identity). Live money

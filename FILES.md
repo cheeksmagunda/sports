@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1122 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -329,6 +329,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
+- nfl-oracle/src/nfl_oracle/recommendations/hv_train.py -- Load Highest-value boards into NFL train and replay sample weights (#185, #620).
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/ollama_tick_tilt.py -- Env-gated Ollama tick tilt for NFL picker projections (#574).
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
@@ -484,6 +485,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_feature_value_model.py -- Leakage-safe feature_ridge value model + strategy wiring.
 - nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
+- nfl-oracle/tests/unit/test_hv_train_ladder.py -- HV board sample weights on the NFL train ladder (#185, #620).
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
@@ -803,6 +805,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/live.py -- Loud fail-closed errors when live slate/board fields are missing (#574).
 - scripts/ollama_hv_watcher/pick.py -- Five-player daily contest pick contract for Ollama HV/TDV (#574).
 - scripts/ollama_hv_watcher/serve.py -- systemd-less Ollama serve helpers: health curl, pidfile, nohup (#574).
+- scripts/ollama_hv_watcher/sim.py -- Total-draft-value simulation for the Ollama HV helper (#620).
 - scripts/ollama_hv_watcher/training_data_manifest.json
 - scripts/ollama_hv_watcher/training_manifest.py -- Load the HV/TDV training-data inventory for the Ollama watcher (#574).
 - scripts/ollama_hv_watcher/watcher.py -- Portfolio HV/TDV slate watcher loop (issue #574).
@@ -864,6 +867,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
 - scripts/tests/test_ollama_hv_app_api.py -- Offline tests: pregame leak stop + sport app API adapter + daemon (#574).
+- scripts/tests/test_ollama_hv_sim.py -- Total-draft-value sim on Ollama learn ticks (#620).
 - scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
 - scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).

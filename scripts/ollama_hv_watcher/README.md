@@ -10,16 +10,25 @@ the slate's Real Sports `highestBoostedValuePlayers` board; beat the crowd).
 
 Each sport app (`nfl-oracle`, `wnba-oracle`) fires its own T-40 freeze and
 publishes its frozen five-player lineup on its own API and frontend. This
-helper is only an annotator on top of that:
+helper scores a total-draft-value sim and annotates it. It does not publish.
 
 - It only READS each app's public API (`adapters/app_api.py`, stdlib
   `urllib`, bounded timeout and retry, no credentials).
-- Every tick's `five_player_lineup` is exactly the app's five in the app's
-  slot order (`lineup_source=app_frozen_lineup`). Ollama writes notes; it
-  never replaces, reorders, blocks, or delays the app's freeze or serving.
+- When the board is the app's frozen five (`lineup_source=app_frozen_lineup`),
+  the tick keeps that five in that slot order. The `sim` block scores it.
+  Ollama writes notes about that card. It never replaces, reorders, blocks,
+  or delays the app's freeze or serving.
+- When the board is not an app freeze, the tick's `five_player_lineup` is the
+  sim that maximizes `value * (slot_multiplier + card_boost)`
+  (`lineup_source=total_draft_value_sim`, via `lineup_for_summary`). Notes
+  explain that sim. They are not a second lineup. `card_boost` stays on the
+  board summary so the sim can see it. The raw `five_player_lineup()` helper
+  still returns board order when a caller asks for that order.
+- NHL rows in the sim use boost 0. This helper does not decide that every
+  club has played.
 - If Ollama is down or times out the tick is still written with
   `notes="ollama_unavailable"` (or `ollama_gate_forbidden` when the gate is
-  closed), so the app's five are always recorded.
+  closed) and a `sim` block, so the five and the score are still recorded.
 
 ## Pre-game only (leak stop)
 

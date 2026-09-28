@@ -28,7 +28,7 @@ keeps the contest-law detail; this table is the map.
 | Boost | `contract.boost_gate`: multiplier 0 until every club has at least 1 GP |
 | T-40 runner | `scheduler.t40` opens at `lock_at - 40m`. `run_freeze_cycle(..., ensure_t40_coherent=)` fails closed. No hosted publish |
 | Own model | `features.own_model_map` routes pre-slate history to priors / ridge-valuelaw. No LightGBM primary |
-| Ollama | Portfolio helper on the same boards (`../OVERVIEW.md`). Not an NHL serve model |
+| Ollama | Portfolio sim on the same boards (`../OVERVIEW.md`). NHL boost in that sim stays 0. Not an NHL serve model |
 | Serve knobs | None. No `OPTIMIZER_*` / profile env contract |
 | HV export | `scripts/export_hv_board.py` exits 78 |
 | Connectors | Real Sports read-only audit client (`ingest/realsports.py`); public NHL API via `history_loader.py` and `nhl-history-nightly.yml`; Railway staging shell in `STATUS.md` |

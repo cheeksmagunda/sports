@@ -9,7 +9,7 @@ Board/label serializations prefer schema.org via oracle_core.schemaorg.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -44,6 +44,7 @@ __all__ = [
     "player_high_tv_weights_from_draft_stats",
     "report_nfl_archive_season_depth",
     "sample_weights_for_history",
+    "sample_weights_with_hv_boards",
     "tv_board_coverage_from_contests",
 ]
 
@@ -184,6 +185,41 @@ def sample_weights_for_history(
     return sample_weights_for_labeled_rows(
         rows, top_k=top_k, high_weight=high_weight, base_weight=base_weight
     )
+
+
+def sample_weights_with_hv_boards(
+    rows: Sequence[object],
+    hv_weights: Mapping[tuple[int, int], float],
+    *,
+    covered_game_ids: Iterable[int] = (),
+    top_k: int = 5,
+    high_weight: float = 4.0,
+    base_weight: float = 1.0,
+) -> list[float]:
+    """Box-value top-k weights, replaced on games an HV board actually covers.
+
+    A game is covered when it is in ``covered_game_ids`` or any
+    ``(player_id, game_id)`` key of ``hv_weights``. Covered games use the
+    board weight (missing players stay at ``base_weight``) and do not also
+    up-weight raw box-score leaders. Uncovered games keep
+    ``sample_weights_for_history`` (ladder rung 2).
+    """
+
+    covered = {int(game_id) for game_id in covered_game_ids}
+    covered.update(int(game_id) for _player_id, game_id in hv_weights)
+    box = sample_weights_for_history(
+        rows, top_k=top_k, high_weight=high_weight, base_weight=base_weight
+    )
+    if not covered:
+        return box
+    out: list[float] = []
+    for row, box_weight in zip(rows, box, strict=True):
+        game_id = int(row.game_id)
+        if game_id not in covered:
+            out.append(box_weight)
+            continue
+        out.append(float(hv_weights.get((int(row.player_id), game_id), base_weight)))
+    return out
 
 
 def _season_game_counts_from_catalog(path: Path) -> dict[int, int]:

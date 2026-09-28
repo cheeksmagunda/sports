@@ -27,8 +27,8 @@ Pointer only. This index does not restate the sections below and does not
 re-check Railway.
 
 - Code contract (EB serve default, T-40 `job2` lead, connector ids, knob
-  Field defaults including `OPTIMIZER_OBJECTIVE_MODE=payout` vs expected
-  `total_draft_value`): `README.md` (Win stack).
+  Field default `OPTIMIZER_OBJECTIVE_MODE=total_draft_value`, rollback
+  `payout`): `README.md` (Win stack).
 - Live knobs and freeze readiness: Win-draft knobs and Overnight freeze
   readiness below.
 - Ollama is not a WNBA serve primary. It notes on the same HV/TDV boards

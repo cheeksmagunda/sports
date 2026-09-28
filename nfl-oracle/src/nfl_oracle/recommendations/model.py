@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from datetime import datetime
 from statistics import mean, pstdev
 from typing import Any, Literal, cast
@@ -13,7 +13,10 @@ from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
 from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES
-from nfl_oracle.recommendations.high_tv import sample_weights_for_history
+from nfl_oracle.recommendations.high_tv import (
+    sample_weights_for_history,
+    sample_weights_with_hv_boards,
+)
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
     Finite,
@@ -444,11 +447,66 @@ def _design(
     return x, y, w
 
 
+def _covered_game_ids(
+    hv_weights: Mapping[tuple[int, int], float] | None,
+    hv_covered_game_ids: Collection[int] | None,
+) -> set[int]:
+    if hv_weights is None:
+        return set()
+    covered = {int(game_id) for _player_id, game_id in hv_weights}
+    if hv_covered_game_ids is not None:
+        covered.update(int(game_id) for game_id in hv_covered_game_ids)
+    return covered
+
+
+def _hv_board_game_count(
+    rows: Sequence[HistoricalPerformance],
+    hv_weights: Mapping[tuple[int, int], float] | None,
+    hv_covered_game_ids: Collection[int] | None,
+) -> int:
+    covered = _covered_game_ids(hv_weights, hv_covered_game_ids)
+    if not covered:
+        return 0
+    return len({int(row.game_id) for row in rows} & covered)
+
+
+def _hv_weighted_row_count(
+    rows: Sequence[HistoricalPerformance],
+    weights: Sequence[float],
+    hv_weights: Mapping[tuple[int, int], float] | None,
+    hv_covered_game_ids: Collection[int] | None,
+) -> int:
+    covered = _covered_game_ids(hv_weights, hv_covered_game_ids)
+    if not covered:
+        return 0
+    return sum(
+        1
+        for row, weight in zip(rows, weights, strict=True)
+        if int(row.game_id) in covered and weight > 1.0
+    )
+
+
+def _row_sample_weights(
+    rows: Sequence[HistoricalPerformance],
+    hv_weights: Mapping[tuple[int, int], float] | None,
+    hv_covered_game_ids: Collection[int] | None,
+) -> list[float]:
+    if hv_weights is None:
+        return sample_weights_for_history(rows)
+    return sample_weights_with_hv_boards(
+        rows,
+        hv_weights,
+        covered_game_ids=() if hv_covered_game_ids is None else hv_covered_game_ids,
+    )
+
+
 def fit_model(
     rows: Sequence[HistoricalPerformance],
     *,
     trained_at: datetime,
     fit_config: FitConfig | None = None,
+    hv_weights: Mapping[tuple[int, int], float] | None = None,
+    hv_covered_game_ids: Collection[int] | None = None,
 ) -> RatingModel:
     now = utc(trained_at)
     cfg = fit_config or FitConfig()
@@ -474,7 +532,7 @@ def fit_model(
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
     names = _context_feature_names(train)
-    train_weight_list = sample_weights_for_history(train)
+    train_weight_list = _row_sample_weights(train, hv_weights, hv_covered_game_ids)
     train_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(train, train_weight_list, strict=True)
@@ -552,7 +610,7 @@ def fit_model(
     # position_mean / global_mean also zero context coefficients; only ridge
     # preserves pace/defense/matchup/depth for v2 TNF.
     selected_estimator: EstimatorName = "ridge" if names else holdout_winner
-    ordered_weight_list = sample_weights_for_history(ordered)
+    ordered_weight_list = _row_sample_weights(ordered, hv_weights, hv_covered_game_ids)
     ordered_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(ordered, ordered_weight_list, strict=True)
@@ -630,8 +688,17 @@ def fit_model(
             "holdout_winner": holdout_winner,
             "holdout_winner_mae": candidates_mae[holdout_winner],
             "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
-            "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
+            "high_tv_sample_weighting": (
+                "hv_board_rank_when_game_linked_else_per_game_top5_box_value"
+                if hv_weights is not None
+                else "per_game_top5_value_rank_full_archive"
+            ),
             "training_target": "high_total_value_full_archive_not_win_chalk",
+            "label_ladder": "high_total_value_board,raw_highest_score_pre_boost",
+            "hv_board_games": _hv_board_game_count(ordered, hv_weights, hv_covered_game_ids),
+            "hv_board_weighted_rows": _hv_weighted_row_count(
+                ordered, ordered_weight_list, hv_weights, hv_covered_game_ids
+            ),
             "context_evidence_disclosure": (
                 "retrospective_reconstructed_context_included"
                 if retrospective_rows

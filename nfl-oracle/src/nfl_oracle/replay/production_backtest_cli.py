@@ -18,6 +18,7 @@ from typing import Any
 
 from nfl_oracle.recommendations.context import enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
+from nfl_oracle.recommendations.hv_train import overlay_for_replay
 from nfl_oracle.recommendations.model import FitConfig, HistoricalPerformance, attach_enrichment
 from nfl_oracle.recommendations.optimizer import OptimizerConfig
 from nfl_oracle.recommendations.sources import ContextSnapshot
@@ -117,6 +118,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Keep full residual sample vectors in the optimizer (slow; same lineup).",
     )
     add_fit_config_args(parser)
+    parser.add_argument(
+        "--corpus-c-root",
+        type=Path,
+        default=None,
+        help="Corpus C root for HV board weights (default: sibling of --history-root).",
+    )
+    parser.add_argument(
+        "--hv-export-root",
+        type=Path,
+        default=None,
+        help="Exported total_value_leaderboard.json tree (default: data/export/hv_boards).",
+    )
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
     return parser
 
@@ -136,6 +149,11 @@ def main(argv: list[str] | None = None) -> int:
 
     started = datetime.now(UTC)
     fit_config = fit_config_from_args(args)
+    hv_overlay = overlay_for_replay(
+        args.history_root,
+        corpus_c_root=args.corpus_c_root,
+        export_root=args.hv_export_root,
+    )
     results, excluded = backtest_production_pipeline(
         inputs.enriched,
         grouping=args.grouping,
@@ -144,6 +162,8 @@ def main(argv: list[str] | None = None) -> int:
         optimizer_config=OptimizerConfig(simulations=args.simulations),
         fit_config=fit_config,
         compact_samples=not args.full_samples,
+        hv_weights=hv_overlay.weights,
+        hv_covered_game_ids=hv_overlay.covered_game_ids,
         progress=progress,
     )
     summary = summarize(results, excluded)
@@ -153,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         "grouping": args.grouping,
         "retrain": args.retrain,
         "fit_config": fit_config.model_dump(mode="json"),
+        "hv_train": hv_overlay.to_dict(),
         "history_rows": len(inputs.rows),
         "history_excluded": inputs.history_excluded,
         "context_rows": inputs.context_rows,

@@ -217,7 +217,15 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
     # sees must be the same filtered set, or the training fingerprint the
     # model records will not match the history this bundle persists.
     enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
-    model = fit_model(enriched, trained_at=now)
+    from nfl_oracle.recommendations.hv_train import load_hv_train_overlay
+
+    hv_overlay = load_hv_train_overlay(project)
+    model = fit_model(
+        enriched,
+        trained_at=now,
+        hv_weights=hv_overlay.weights,
+        hv_covered_game_ids=hv_overlay.covered_game_ids,
+    )
     return ModelBundle(
         model=model,
         history=tuple(enriched),
@@ -230,6 +238,7 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
             "context_excluded": enrichment.excluded,
             "context_evidence_mode": enrichment.evidence_mode,
             "contest_entry": False,
+            "hv_train": hv_overlay.to_dict(),
             **identity_audit,
         },
     )
@@ -717,6 +726,10 @@ def _train(*, force: bool = False) -> int:
                 "selected_estimator": model.selected_estimator,
                 "training_rows": model.training_rows,
                 "holdout_rows": model.evaluation.get("holdout_rows"),
+                "high_tv_sample_weighting": model.evaluation.get("high_tv_sample_weighting"),
+                "label_ladder": model.evaluation.get("label_ladder"),
+                "hv_board_games": model.evaluation.get("hv_board_games"),
+                "hv_board_weighted_rows": model.evaluation.get("hv_board_weighted_rows"),
                 "contest_entry": False,
             }
         )
