@@ -26,9 +26,12 @@ that was supplied, not a claim about players the archive did not reveal.
 
 The train label window is wider than that five. ``LABEL_WINDOW`` (10) is the
 set of HV/TDV display-ranked players whose realized base values take the
-high sample weight. Capture for that window is the best five inside it,
-scored with the same law, divided by the full-pool ceiling. Draft count
-can be reported beside it. It is not a member of the window.
+high sample weight. Every other HV-board player stays in the sample at the
+base weight. Capture for that window is the best five inside it, scored
+with the same law, divided by the full-pool ceiling. The window profile
+also reports mean base value, mean card boost, and id overlap against the
+draft-count top 10. Draft count can be reported beside it. It is not a
+member of the window.
 
 Draft counts must not be passed into :func:`contest_display_rank_weights`.
 """
@@ -250,6 +253,30 @@ def _unique_players(ids: Sequence[int], by_id: Mapping[int, ContestPlayer]) -> l
     return chosen
 
 
+def _window_means(
+    ids: Sequence[int],
+    by_id: Mapping[int, ContestPlayer],
+) -> tuple[float | None, float | None]:
+    """Mean base value and mean card boost inside one rank window."""
+
+    players = _unique_players(ids, by_id)
+    if not players:
+        return None, None
+    count = len(players)
+    mean_value = round(sum(player.value for player in players) / count, 6)
+    mean_boost = round(sum(player.card_boost for player in players) / count, 6)
+    return mean_value, mean_boost
+
+
+def _window_id_overlap(left: Sequence[int], right: Sequence[int]) -> float | None:
+    """Share of ``left`` that also sits in ``right``. Empty left stays unknown."""
+
+    left_ids = set(left)
+    if not left_ids:
+        return None
+    return round(len(left_ids & set(right)) / len(left_ids), 6)
+
+
 def _window_capture(
     ids: Sequence[int],
     by_id: Mapping[int, ContestPlayer],
@@ -377,6 +404,8 @@ def compare_board(
     )
     if display_window_capture is None or raw_window_capture is None or chalk_window_capture is None:
         return None
+    display_mean_value, display_mean_boost = _window_means(display_window_ids, by_id)
+    chalk_mean_value, chalk_mean_boost = _window_means(chalk_window_ids, by_id)
 
     regime = slate_regime(list(by_id.values()))
     return {
@@ -412,6 +441,11 @@ def compare_board(
         "hv_display_window_recall": display_window_recall,
         "hv_raw_window_recall": raw_window_recall,
         "chalk_window_recall": chalk_window_recall,
+        "hv_display_window_mean_value": display_mean_value,
+        "hv_display_window_mean_boost": display_mean_boost,
+        "chalk_window_mean_value": chalk_mean_value,
+        "chalk_window_mean_boost": chalk_mean_boost,
+        "display_vs_chalk_window_overlap": _window_id_overlap(display_window_ids, chalk_window_ids),
         "draft_count_is_label": False,
     }
 
@@ -437,6 +471,11 @@ def _slice_means(boards: Sequence[Mapping[str, Any]], key: str) -> dict[str, Any
             "hv_display_window_capture": _mean_key(rows, "hv_display_window_capture"),
             "hv_raw_window_capture": _mean_key(rows, "hv_raw_window_capture"),
             "chalk_window_capture": _mean_key(rows, "chalk_window_capture"),
+            "hv_display_window_mean_value": _mean_key(rows, "hv_display_window_mean_value"),
+            "hv_display_window_mean_boost": _mean_key(rows, "hv_display_window_mean_boost"),
+            "chalk_window_mean_value": _mean_key(rows, "chalk_window_mean_value"),
+            "chalk_window_mean_boost": _mean_key(rows, "chalk_window_mean_boost"),
+            "display_vs_chalk_window_overlap": _mean_key(rows, "display_vs_chalk_window_overlap"),
         }
     return out
 
@@ -474,6 +513,11 @@ def summarize_boards(boards: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "hv_display_window_recall": _mean_key(boards, "hv_display_window_recall"),
         "hv_raw_window_recall": _mean_key(boards, "hv_raw_window_recall"),
         "chalk_window_recall": _mean_key(boards, "chalk_window_recall"),
+        "hv_display_window_mean_value": _mean_key(boards, "hv_display_window_mean_value"),
+        "hv_display_window_mean_boost": _mean_key(boards, "hv_display_window_mean_boost"),
+        "chalk_window_mean_value": _mean_key(boards, "chalk_window_mean_value"),
+        "chalk_window_mean_boost": _mean_key(boards, "chalk_window_mean_boost"),
+        "display_vs_chalk_window_overlap": _mean_key(boards, "display_vs_chalk_window_overlap"),
         "by_sport": _slice_means(boards, "sport"),
         "by_regime": _slice_means(boards, "regime"),
         "by_position_mix": _slice_means(boards, "position_mix"),

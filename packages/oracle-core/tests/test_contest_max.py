@@ -182,6 +182,29 @@ def test_label_window_covers_ceiling_players_outside_the_display_five() -> None:
     assert "draft_count" not in observation["measuredProperty"]["name"]
 
 
+def test_display_window_profile_separates_hv_top_10_from_chalk() -> None:
+    """High draft counts stay on the board and outside the display window."""
+
+    players = [_player(pid, 5.0, 3.0, drafts=1, position="RB") for pid in range(1, 11)]
+    players.append(_player(11, 8.0, 0.0, drafts=100, position="RB"))
+    players.append(_player(12, 8.0, 0.0, drafts=90, position="WR"))
+    board = compare_board(tuple(players), sport="nfl", slate_id="profile", slate_date="2024-09-08")
+    assert board is not None
+    assert board["hv_section_size"] == 12
+    assert list(board["hv_display_window_ids"]) == list(range(1, 11))
+    assert 11 in board["chalk_window_ids"]
+    assert 11 not in board["hv_display_window_ids"]
+    assert board["hv_display_window_mean_value"] == 5.0
+    assert board["hv_display_window_mean_boost"] == 3.0
+    assert board["chalk_window_mean_value"] == 5.6
+    assert board["chalk_window_mean_boost"] == 2.4
+    assert board["display_vs_chalk_window_overlap"] == 0.8
+    summary = summarize_boards([board])
+    assert summary["hv_display_window_mean_boost"] == 3.0
+    assert summary["display_vs_chalk_window_overlap"] == 0.8
+    assert summary["draft_count_is_label"] is False
+
+
 def test_summarize_slices_by_sport_and_regime() -> None:
     one = compare_board(
         tuple(_player(i, 10 - i, team="A", game_id="only") for i in range(1, 7)),

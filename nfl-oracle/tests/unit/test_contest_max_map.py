@@ -69,6 +69,30 @@ def test_default_display_window_is_top_10_of_the_slate_not_each_game() -> None:
     assert chalkiest.player_id not in high
 
 
+def test_full_hv_board_stays_in_sample_outside_the_display_top_10() -> None:
+    """Draft-count leaders remain rows. Only the display window takes the high weight."""
+
+    kickoff = datetime(2024, 9, 8, 17, 0, tzinfo=UTC)
+    rows = []
+    boosts = {}
+    for player_id in range(1, 13):
+        rows.append(
+            SimpleNamespace(
+                player_id=player_id,
+                game_id=9,
+                value=5.0 if player_id <= 10 else 8.0,
+                did_not_play=False,
+                kickoff_at=kickoff,
+                draft_count=1 if player_id <= 10 else 1000 - player_id,
+            )
+        )
+        boosts[(player_id, 9)] = 3.0 if player_id <= 10 else 0.0
+    weights = sample_weights_contest_display(rows, boosts=boosts, high_weight=4.0)
+    assert len(weights) == len(rows)
+    assert weights.count(4.0) == DISPLAY_TOP_K
+    assert weights[-2:] == [1.0, 1.0]
+
+
 def test_missing_boost_map_keeps_raw_top_five() -> None:
     rows = [
         SimpleNamespace(player_id=pid, game_id=9, value=float(pid), did_not_play=False)

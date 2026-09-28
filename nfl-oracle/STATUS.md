@@ -1,8 +1,8 @@
 # Status
 
-Last verified: 2026-09-28T04:31:21Z
+Last verified: 2026-09-28T04:44:57Z
 
-## MNF pregate (#599)  -  2026-09-28T04:31:21Z
+## MNF pregate (#599)  -  2026-09-28T04:44:57Z
 
 Public read of `nfl-api` (`/health` and `/slate/2026-09-28`). No Railway
 variable was read or changed. Blend, upside, and field weights were left
@@ -10,13 +10,13 @@ as they are.
 
 | Fact | Value |
 |---|---|
-| `/health` | `status=ok`, `recommendation_database=ok` at `2026-09-28T04:31:20Z` |
+| `/health` | `status=ok`, `recommendation_database=ok` at `2026-09-28T04:44:57Z` |
 | Slate run | `waiting`, `detail_code=waiting_for_t40` |
 | Games | `[]` |
 | `next_freeze` | `2026-09-28T23:35:00+00:00` |
 | `cutoff_at` | `2026-09-29T00:15:00+00:00` (20:15 ET, PHI at CHI) |
-| Disk | `ok`, 21.8% of 4,838,498,304 bytes, free 3,766,673,408 |
-| Worker SUCCESS deployment | `c20462a8-46d8-4d9e-9552-959c0ee12250` commit `7f9455c` (list-deployments, created `2026-09-28T04:22:37Z`) |
+| Disk | `ok`, 21.7% of 4,838,498,304 bytes, free 3,771,101,184 |
+| Worker SUCCESS deployment | `28065269-927c-4fb9-ad61-2be2d14ecb46` commit `a57aff4` (list-deployments, created `2026-09-28T04:37:24Z`) |
 
 `games: []` with `waiting_for_t40` is the pre-freeze wait, not an unarmed
 Monday. Do not run `nfl-pipeline train --force` at or after `next_freeze`.
@@ -69,7 +69,7 @@ Code inventory only. No Railway read and no serving-knob change.
 `seasonAverages.*` is unused on the NFL freeze path. The matrix does not
 flip optimizer or picker env.
 
-## HV/TDV top-10 display-rank weights (#644) - 2026-09-28T04:31Z
+## HV/TDV top-10 display-rank weights (#644) - 2026-09-28T04:44Z
 
 Sample-weight window only. No Railway variable write, no deploy, no
 contest entry. `NFL_TRAIN_DISPLAY_TOP_K` is read by `nfl-pipeline train`
@@ -105,23 +105,89 @@ chalk 0.166812. NFL display 1.0, raw 0.9, chalk 0.5. Chalk is the comparison
 only. Older seasons are not in these two CSVs, so a multi-year fit on the
 worker volume is unverified until `train` prints `fit_seasons`.
 
-Sunday 2026-09-27's four-defender card is the operator report on #644 (4 DEF
-plus a Washington RB, each `card_boost` 3.0). This session did not re-read
-that freeze. `max_value` scores the whole five as `value * (slot + boost)`.
-It does not fill skill slots and then a residual. Shared boost 3.0 is a
-max-boost surface. The 1 DEF cap landed in code on 2026-09-28, after that
-Sunday freeze, so the image that locked Sunday did not have it. Top-10
-labels widen the HV sample past the display five (the table's remaining
-gap closes). They do not replace the defender cap.
+Same boards, display top-10 versus draft-count top-10. Overlap is the share
+of the display window that is also in the chalk window. Mean value is the
+realized base. Mean boost is the pre-lock card boost.
+
+| Sport | Year | Boards | Display mean value | Display mean boost | Chalk mean value | Chalk mean boost | Overlap |
+|---|---|---:|---:|---:|---:|---:|---:|
+| WNBA | 2025 | 116 | 3.675116 | 1.418966 | 2.41551 | 0.748276 | 0.25431 |
+| WNBA | 2026 | 113 | 3.906981 | 1.506637 | 2.406706 | 0.693186 | 0.135398 |
+| WNBA | all | 229 | 3.78953 | 1.462227 | 2.411166 | 0.721092 | 0.195633 |
+| NFL | 2026 | 4 | 4.343146 | 2.0275 | 3.230272 | 1.135 | 0.425 |
+
+The display window is a higher-value, higher-boost set than the chalk
+window, and most of it is not the chalk set. Every HV-board player stays
+a training row. Players outside this window keep the base weight.
+
+`nfl-pipeline train` writes `hv_feature_emphasis` on the audit. Live
+FeatureSpec roles that can move an HV-board row:
+
+| Role | FeatureSpec names |
+|---|---|
+| usage | `player_prior_mean`, `player_prior_median`, `position_prior_mean`, `position_prior_median`, `team_prior_mean`, `prior_n_games`, `prior_fallback_level`, `prior_started`, `prior_minutes`, `prior_did_not_play` |
+| matchup | `opponent_adjusted_prior`, `opp_def_value_allowed_prior`, `home_away`, `opponent_team`, `is_divisional`, `team_moneyline`, `opponent_moneyline`, `last_ten_wins` |
+| role | `position`, `team_id` |
+| pace | `team_pace_prior`, `opponent_pace_prior` |
+| slate | `overall_rank`, `kickoff_slot`, `days_rest` |
+| injury | `injury_status`, `injury_status_available`, `injury_body_part` |
+
+Ridge core slots that multiply a coefficient: `player_mean_shrunk`,
+`recent_mean_shrunk`, `position_mean`, `prior_stddev`, `opportunity_trend`.
+Ridge context slots in the same roles add `is_home`, `moneyline_available`,
+`kickoff_slot_early`, `kickoff_slot_late`, `kickoff_slot_snf`,
+`kickoff_slot_mnf`, `kickoff_slot_other`, `injury_body_part_hash`,
+`injury_body_part_available`, and the `injury_<category>` one-hots
+(`active`, `questionable`, `doubtful`, `out`, `inactive`, `ir`,
+`suspended`, `limited`, `dnp`, `full`, `unknown`) beside the usage,
+matchup, and pace names above. Weather (`weather_temp_f`,
+`weather_wind_mph`, `weather_precip_prob`, `weather_available`) is live
+context and is not in this emphasis set. Chalk channels stay off:
+`prior_log_count` (coefficient forced to 0), draft count, winning drafts.
+Card boost is the rank key `value * (2 + card_boost)` and the optimizer
+score `value * (slot + card_boost)`. It is not a ridge coefficient.
+`card_boost_post_settlement` stays `live_ok` false.
+
+Public `GET /lineup/2026-09-27` at `2026-09-28T04:42:07Z` is `locked`,
+`frozen_at` `2026-09-27T19:36:23Z`, `construction_profile` `max_value`,
+`candidate_count` 661, `boost_max` 3.0. The five, all `card_boost` 3.0,
+shared `uncertainty` 2.7659111675365993, `ownership_source`
+`estimated_projection_softmax`:
+
+| Slot | Player | Id | Pos | Team | Proj value | Ownership |
+|---|---|---:|---|---|---:|---:|
+| 1 | Wesley Bailey | 28429 | LB | LAR | 4.568866 | 0.175 |
+| 2 | Jacob Thomas | 28240 | DB | MIN | 4.383282 | 0.144 |
+| 3 | Jaden Dugger | 28190 | LB | SF | 3.690180 | 0.055 |
+| 4 | Caleb Banks | 28058 | DL | MIN | 3.497374 | 0.070 |
+| 5 | Mike Washington Jr. | 26932 | RB | LV | 3.583068 | 0.074 |
+
+Washington is the only non-defender. Game 19499, team id 25, opponent NO,
+slot multiplier 1.2, projected score 15.048885. His projected value is
+above Banks. Slot 5 is the Sunday image, which predates slot-by-mean.
+Ownership is the projection softmax, not a draft count. `max_value` scores
+the whole five as `value * (slot + boost)`. Shared boost 3.0 is a max-boost
+surface. The 1 DEF cap landed in code on 2026-09-28, after that freeze, so
+the image that locked Sunday did not have it. Top-10 labels widen the HV
+sample past the display five. They do not replace the defender cap.
+
+The public payload has no `why_this_pick` and no `feature_contributions`.
+Backup `player_results.csv` ends 2026-09-24 and has no row for player id
+26932, so the other RBs on that slate's HV board are not in these files.
+Worker volume `nfl-oracle-worker-volume` is mounted at
+`/app/nfl-oracle/data`. This host has no `railway` CLI, so the freeze
+SQLite on that volume was not opened. Washington's coefficient vector is
+unverified.
 
 `nfl-pipeline train --force` activates a model. It is outside the freeze
 until `2026-09-28T23:35:00Z`. It is not safe on the current worker image:
-SUCCESS deployment `c20462a8` is commit `7f9455c`, which does not contain
+SUCCESS deployment `28065269` is commit `a57aff4`, which does not contain
 this window. Running it there would activate a top-5-window model before
 the Monday freeze. After this commit is the worker SUCCESS image, run it
 before 23:35Z if the freeze should serve the new weights. Rollback is
-redeploy `c20462a8-46d8-4d9e-9552-959c0ee12250`; `activate_model` keeps the
-previous artifact. Do not run it at or after 23:35Z.
+redeploy `28065269-927c-4fb9-ad61-2be2d14ecb46` (commit `a57aff4`);
+`activate_model` keeps the previous artifact. Do not run it at or after
+23:35Z.
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 

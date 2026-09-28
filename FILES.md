@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1143 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1145 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -332,6 +332,7 @@ Generated from `git ls-files`. 1143 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
+- nfl-oracle/src/nfl_oracle/recommendations/hv_emphasis.py -- Live features that can put an HV-board row in the display top 10.
 - nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Keep only HV/TDV leaderboard rows as the NFL train target.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/ollama_engine.py -- Ollama JSON utilities over optimizer candidate lineups.
@@ -494,6 +495,7 @@ Generated from `git ls-files`. 1143 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
 - nfl-oracle/tests/unit/test_hv_board_replay.py -- HV-rank five, draft-count chalk, and hindsight ceiling use the draft-image law.
+- nfl-oracle/tests/unit/test_hv_emphasis.py -- HV top-10 emphasis names stay on live features and off chalk channels.
 - nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV leaderboard rows are the only train labels. Box rows are excluded.
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).

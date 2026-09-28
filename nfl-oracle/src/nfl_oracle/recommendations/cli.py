@@ -251,6 +251,9 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         "contest_entry": False,
         **identity_audit,
     }
+    from nfl_oracle.recommendations.hv_emphasis import hv_feature_emphasis
+
+    audit["hv_feature_emphasis"] = hv_feature_emphasis()
     try:
         from nfl_oracle.recommendations.high_tv import report_nfl_archive_season_depth
 
@@ -784,6 +787,9 @@ def _train(*, force: bool = False) -> int:
         bundle = pipeline.active_model()[1]
         report["history_rows"] = bundle.audit.get("history_rows")
         report["hv_overlay"] = bundle.audit.get("hv_overlay")
+        from nfl_oracle.recommendations.hv_emphasis import hv_feature_emphasis_names
+
+        report["hv_feature_emphasis"] = hv_feature_emphasis_names()
     print(json.dumps(report))
     return 0
 
