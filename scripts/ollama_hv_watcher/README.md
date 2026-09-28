@@ -125,6 +125,9 @@ Weight 0 never opens the file. Positive weight fail-closes if the path is
 missing or the tick lacks an exact five-player card. Do not arm on a live
 freeze window without an explicit operator decision.
 
+`client.generate_json` posts `/api/generate` with `format=json` and returns
+one object. NFL candidate scoring loads that module from
+`nfl_oracle.recommendations.ollama_engine`. Lineup rules stay in nfl-oracle.
 
 ## Training-data inventory
 
