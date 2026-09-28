@@ -1,8 +1,61 @@
 # Status
 
-Last verified: 2026-09-28T04:59Z
+Last verified: 2026-09-28T17:15Z
 
+## HV/TDV board backtest by slate regime (#603)  -  2026-09-28T17:15Z
 
+Offline research only. Primary metric is Highest-value / Total-value board
+capture (top-5 hits and share of that board's displayed Value), not win
+frequency. Sunday multi-game and one-night (TNF/SNF/MNF) stay separate.
+Report and exact command: `nfl-oracle/reports/hv_regime_backtest.md` (JSON
+sibling). No Railway variable, deploy, or restart from this issue. **Do not
+flip live `NFL_PICKER_BOOST_RANK_BLEND` to 0.75** (live stays `0`; see Live
+train / #637).
+
+The two screenshot boards (2026-09-20, 2026-09-27) are `sunday_multi`. Pool
+is the visible Highest value section, not the full roster. Displayed value
+matches `base * (slot + boost)` within 0.20.
+
+Perfect-base optimizer, mean of the two Sundays:
+
+| policy | HV/TDV hit rate | board Value note |
+|--------|-----------------|------------------|
+| identity uncapped | 90.0% | Sep 20: 4/5 (two K); Sep 27: 5/5 (two DEF) |
+| `boost_0.75` uncapped | 10.0% | captures ~8.9% of board Value mean (see report) |
+| `boost_0.75` + max 1 DEF + max 1 K | 20.0% | captures ~20.2% of board Value mean |
+
+One-night boards scored: 0. Corpus C was empty on the worker volume at the
+campaign inventory, so production ridge walk-forward was not replayed.
+Harness flags for the next hydrate: `--max-defenders`, `--max-kickers`,
+`--slot-by-mean` / `--no-slot-by-mean`, `--pool-scope visible|contest_games`,
+plus `scripts/hv_tdv_campaign.py` and `scripts/hv_regime_backtest.py`.
+Campaign contract: `nfl-oracle/reports/hv_tdv_campaign.md`.
+
+Cold-start chalk: `--pool-scope contest_games` scores every Corpus G
+participant on the contest's games against that roster's own ceiling;
+`visible` uses the draft-stats pool. Those two denominators were not scored
+on a full Corpus C grid this session.
+
+Serving code defaults for slot-by-mean / max K / max defenders already landed
+via #616/#617. This PR does not change live Railway knobs.
+
+## HV/TDV knob campaign inventory (#603)  -  2026-09-28T03:15Z
+
+Read-only volume list on `nfl-oracle-worker` (`sports-oracle` /
+`nfl-production`, mount `/app/nfl-oracle/data`). No Railway mutation.
+
+| Path | Verified listing |
+|------|------------------|
+| `data/raw/corpus_c` | **0 entries** (not truncated) |
+| `data/raw/corpus_g/2024` and `/2025` | game-id directories, listing truncated at 200 per season |
+| `data/artifacts/context` | two ContextSnapshot JSON files, about 197 MB each |
+| `data/artifacts/production_backtest_2026-09-27.json` | 426,216 bytes; mean capture unverified (truncated read) |
+| `data/export/hv_boards` | `coverage_manifest.json`, `scaffold.json` only |
+
+The contest-pool grid did not run (empty Corpus C). The 2026-09-25 shared-fit
+sweep (91 contests, diversified floor) remains the ridge mixture reference:
+identity mean capture 51.7%, `boost_0.75` 57.9%. That grid was not remeasured
+under `max_value` and was not stored per slate regime.
 
 ## Live train after #650 day-scope (Refs #647)  -  2026-09-28T04:59Z
 

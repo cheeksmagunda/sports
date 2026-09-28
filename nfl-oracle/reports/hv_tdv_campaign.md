@@ -1,6 +1,11 @@
 # NFL Highest-value / Total-value campaign (#603)
 
-Generated 2026-09-28. The grid did not execute. Worker volume
+Generated 2026-09-28. The grid did not execute. When it does, capture is
+reported separately for `sunday_multi`, `one_night_tnf`, `one_night_snf`,
+and `one_night_mnf`. The screenshot measurement that did run, with that
+split, is `reports/hv_regime_backtest.md`.
+
+Worker volume
 `data/raw/corpus_c` listed 0 entries (not truncated) at about 03:15Z, and
 this checkout has no local Corpus C or Corpus G payloads. Capture tables
 below are the command contract for the next run that has both trees and a

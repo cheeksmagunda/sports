@@ -76,6 +76,7 @@ from nfl_oracle.replay.production_backtest import (
     naive_ewma_projections,
     rows_before,
 )
+from nfl_oracle.replay.slate_regime import regime_from_kickoffs
 
 EASTERN = ZoneInfo("America/New_York")
 # Corpus C and Corpus G can disagree by float noise on a shared player; count
@@ -138,6 +139,9 @@ class ContestPoolResult:
     mean_pick_prior_games: float | None = None
     cold_start_picks: int = 0
     cold_start_candidates: int = 0
+    # sunday_multi, one_night_tnf / one_night_snf / one_night_mnf, or other.
+    # Sunday chalk and a one-night slate are not one sample.
+    slate_regime: str = "unclassified"
 
 
 @dataclass(frozen=True)
@@ -473,6 +477,7 @@ def _run_contest(
         mean_pick_prior_games=(mean(pick_priors) if pick_priors else None),
         cold_start_picks=sum(count == 0 for count in pick_priors),
         cold_start_candidates=sum(count == 0 for count in candidate_priors),
+        slate_regime=regime_from_kickoffs(tuple(row.kickoff_at for row in pool.rows)),
     )
 
 

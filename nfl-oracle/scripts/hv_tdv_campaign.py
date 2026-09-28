@@ -30,6 +30,7 @@ from nfl_oracle.replay.production_backtest_cli import (
     fit_config_from_args,
     load_backtest_inputs,
 )
+from nfl_oracle.replay.slate_regime import OPERATOR_REGIMES
 
 
 def _pct(value: float | None) -> str:
@@ -318,6 +319,51 @@ def render_report(payload: dict[str, object]) -> str:
                 "",
             ]
         )
+    regimes = visible.get("regimes") if isinstance(visible, dict) else None
+    if isinstance(regimes, dict):
+        lines.extend(
+            [
+                "## Split by slate regime",
+                "",
+                "Sunday multi-game is not pooled with TNF, SNF, or MNF.",
+                "A regime with n=0 was not scored. Do not copy another",
+                "regime's capture into it.",
+                "",
+            ]
+        )
+        split_headers = ["regime", "setting", "n", "HV/TDV mean", "cold-start picks"]
+        split_rows: list[list[str]] = []
+        focus_regimes = (
+            "sunday_multi",
+            "one_night_tnf",
+            "one_night_snf",
+            "one_night_mnf",
+        )
+        focus_settings = (
+            "identity_defany_kany_slotjoint",
+            "boost_0.75_defany_kany_slotjoint",
+            "boost_0.75_def1_k1_slotjoint",
+        )
+        for regime in focus_regimes:
+            arms = regimes.get(regime)
+            if not isinstance(arms, list):
+                continue
+            by_name = {str(arm["name"]): arm for arm in arms if isinstance(arm, dict)}
+            for setting in focus_settings:
+                arm = by_name.get(setting)
+                if not isinstance(arm, dict):
+                    continue
+                split_rows.append(
+                    [
+                        regime,
+                        setting,
+                        str(arm["n"]),
+                        _pct(arm["mean_capture"]),  # type: ignore[arg-type]
+                        _num(arm["mean_cold_start_picks"]),  # type: ignore[arg-type]
+                    ]
+                )
+        lines.append(_markdown_table(split_headers, split_rows))
+        lines.append("")
     lines.append(f"Contests with field evidence loaded: {payload['contests_with_field_evidence']}.")
     lines.append("")
     return "\n".join(lines)
@@ -352,7 +398,15 @@ def _run_scope(
         results, reasons = swept[setting.name]
         arms.append(_arm_row(setting.name, results))
         excluded[setting.name] = reasons
-    return {"scope": name, "arms": arms, "excluded": excluded}
+    regimes: dict[str, list[dict[str, object]]] = {}
+    for regime in OPERATOR_REGIMES:
+        regime_arms = []
+        for setting in settings:
+            results, _reasons = swept[setting.name]
+            subset = tuple(result for result in results if result.slate_regime == regime)
+            regime_arms.append(_arm_row(setting.name, subset))
+        regimes[regime] = regime_arms
+    return {"scope": name, "arms": arms, "excluded": excluded, "regimes": regimes}
 
 
 def main(argv: list[str] | None = None) -> int:

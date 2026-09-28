@@ -350,6 +350,19 @@ uv run --package nfl-oracle python scripts/hv_tdv_campaign.py \
   --report reports/hv_tdv_campaign.md
 ```
 
+That grid reports Sunday multi-game and one-night (TNF, SNF, MNF) as
+separate capture tables. They are not one sample.
+
+Screenshot Highest-value boards versus chalk, same split, no Corpus C
+required:
+
+```sh
+cd nfl-oracle
+uv run --package nfl-oracle python scripts/hv_regime_backtest.py \
+  --out reports/hv_regime_backtest.json \
+  --report reports/hv_regime_backtest.md
+```
+
 Nightly day-close writes Corpus C field rows as parquet under
 `data/race/dayclose/<season>/` and `scripts/build_race_corpus.py` aggregates
 them for offline Actions. `scripts/resolve_context_snapshot.py` locates the
