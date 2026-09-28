@@ -31,7 +31,10 @@ The public package includes:
   Real Sports history corpus layout in `oracle_core.realsports_corpus`
   (`{sport}/{season}/{slate_or_game_id}/{artifact}.json` + coverage
   manifest) and HV board helpers in `oracle_core.hv_board_corpus`
-  (sibling repo `sports-realsports-corpus`; issue #526).
+  (sibling repo `sports-realsports-corpus`; issue #526);
+- slate advice document (`oracle_core.slate_advice`): freshness and clamped
+  per-player multipliers for an optional app influence path (issue #574).
+  Apps stay identity unless their own env flag is on.
 
 Applications retain ownership of their settings extensions, database schema,
 migrations, routes, jobs, schedules, provider adapters, and domain behavior.

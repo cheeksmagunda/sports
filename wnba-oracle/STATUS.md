@@ -1,6 +1,15 @@
 # Status
 
-Last verified: 2026-09-28T02:58:00Z
+Last verified: 2026-09-28T04:20:00Z
+
+## Ollama advice influence (#574, 2026-09-28)
+
+Code contract only. `WNBA_OLLAMA_INFLUENCE` stays default off.
+`scheduler/ollama_influence.py` multiplies job2 scores from
+`WNBA_OLLAMA_ADVICE_PATH` only when that flag is on. The helper writes
+`advice.json` on the T-40 to close path; it does not freeze the lineup.
+This change does not set the Railway flag. A production redeploy is
+unverified.
 
 ## EB F-cohort serve fallback (#592)  -  2026-09-28T02:55:47Z
 

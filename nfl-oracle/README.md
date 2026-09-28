@@ -19,8 +19,12 @@ Inline contract for this app. Live Railway values stay in `STATUS.md`.
 (`highestBoostedValuePlayers` or a reconstructed value ranking from Corpus
 C). Own model is valuelaw plus feature ridge (`features.own_model_map`,
 `recommendations.model`). No LightGBM primary. Ollama
-(`scripts/ollama_hv_watcher`) notes on those same boards. It does not
-replace the ridge serve path and it does not publish the freeze.
+(`scripts/ollama_hv_watcher`) notes on those same boards and can write
+`advice.json` during the T-40 to close window. It does not replace the
+ridge serve path and it does not publish the freeze.
+`NFL_OLLAMA_INFLUENCE` (default off) multiplies projections from a fresh
+advice file after picker knobs. `NFL_PICKER_BOOST_RANK_BLEND` code default
+stays 0.
 
 **T-40 runner.** The worker publishes. `recommendations/pipeline.py` sets
 due at contest cutoff minus 40 minutes. `recommendations/cli.py` waits with

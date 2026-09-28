@@ -1,6 +1,15 @@
 # Status
 
-Last verified: 2026-09-28T02:59:00Z
+Last verified: 2026-09-28T04:20:00Z
+
+## Ollama advice influence (#574, 2026-09-28)
+
+Code contract only. `NFL_OLLAMA_INFLUENCE` stays default off. A fresh
+`advice.json` (`NFL_OLLAMA_ADVICE_PATH`) can multiply projections after
+picker knobs when that flag is on. Missing or stale advice is identity.
+`NFL_PICKER_BOOST_RANK_BLEND` code default stays 0.0. This change does not
+write Railway influence or blend variables. Production image is unchanged
+until a later deploy; that deploy is unverified.
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
