@@ -48,6 +48,67 @@ def test_eb_predict_one_known_player() -> None:
     assert _eb_predict_one(art, 100, "C") == pytest.approx(2.5)
 
 
+def test_eb_predict_one_missing_cohort_uses_trained_f_mean() -> None:
+    """F-only artifacts must not zero out guards and centers.
+
+    read_label_corpus hardcodes position F, so the shipped artifact trains
+    only the F cohort. A real G or C lookup used to add 0.0 and then hit
+    the 0.5 floor (forwards-only chalk on 2026-09-27).
+    """
+    eb = EBHierarchicalBaseline(
+        cohort_means={"F": 2.26},
+        player_alpha={7: 0.04, 11: 0.50, 12: -0.10},
+        pace_beta=0.0,
+        league_pace=0.0,
+    )
+    art = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        eb_baseline=eb,
+        training_rows=1,
+    )
+    # Guard: 2.26 + 0.04 = 2.30, not the 0.5 floor from a missing G mean.
+    assert _eb_predict_one(art, 7, "G") == pytest.approx(2.30)
+    assert _eb_predict_one(art, 7, "G-F") == pytest.approx(2.30)
+    # Center: 2.26 + 0.50 = 2.76.
+    assert _eb_predict_one(art, 11, "C") == pytest.approx(2.76)
+    # Forward still reads the F key directly: 2.26 - 0.10 = 2.16.
+    assert _eb_predict_one(art, 12, "F") == pytest.approx(2.16)
+
+    trained = EBHierarchicalBaseline(
+        cohort_means={"F": 2.26, "G": 3.10, "C": 0.0},
+        player_alpha={7: 0.04, 11: 0.50},
+        pace_beta=0.0,
+        league_pace=0.0,
+    )
+    trained_art = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        eb_baseline=trained,
+        training_rows=1,
+    )
+    # A present key wins, including a stored 0.0 (0.0 + 0.50 floors at 0.5,
+    # which is not the F mean 2.76).
+    assert _eb_predict_one(trained_art, 7, "G") == pytest.approx(3.14)
+    assert _eb_predict_one(trained_art, 11, "C") == pytest.approx(0.5)
+
+    no_f = EBHierarchicalBaseline(
+        cohort_means={"G": 3.10},
+        player_alpha={11: 0.50},
+        pace_beta=0.0,
+        league_pace=0.0,
+    )
+    no_f_art = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        eb_baseline=no_f,
+        training_rows=1,
+    )
+    # No trained F mean: a missing C stays on the 0.0 path. G itself is used.
+    assert _eb_predict_one(no_f_art, 11, "C") == pytest.approx(0.5)
+    assert _eb_predict_one(no_f_art, 11, "G") == pytest.approx(3.60)
+
+
 def test_eb_predict_one_unknown_player_returns_none() -> None:
     art = _make_artifact()
     assert _eb_predict_one(art, 999, "F") is None  # not in player_alpha

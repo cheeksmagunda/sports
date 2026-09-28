@@ -2,6 +2,27 @@
 
 Last verified: 2026-09-27T05:31:49Z
 
+## EB cohort fallback (code); retrain still open
+
+`db/reads.py` `read_label_corpus` still selects `'F' AS position`. The
+repository artifact `models/picker_95264ce9_1788339935.manifest.json` lists
+`cohorts_trained: ["F"]` only. Serve used `0.0` for a missing G or C mean
+and then the 0.5 floor. That is the mechanism behind the reported
+2026-09-27 forwards-only chalk. The live lineup for that slate was not
+re-queried in this change.
+
+`modeling/artifact.py` `eb_predict_one` now uses the trained F mean when
+the requested cohort key is absent. A key that is present is unchanged.
+This does not retrain and does not change the stored artifact.
+
+Follow-up: carry each player's real position into the label corpus and
+retrain so G and C have their own means. Until that retrain, guards and
+centers share the pooled F base and differ by player alpha plus the
+serve-time pace, vegas, and boost terms.
+
+Deploy of this serve change is unverified. Rollback: redeploy the previous
+`wnba-api` and `wnba-cron-job2` images. No environment knob.
+
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
 | Check | Result |

@@ -29,6 +29,10 @@ def read_label_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
     ``leaderboard_lineup`` rows and popularity sections are excluded.
     """
     eng = engine or get_engine()
+    # Position is fixed to F: slate_labels has no trusted position column, so
+    # the EB artifact trains a single F cohort. Serve
+    # (modeling.artifact.eb_predict_one) borrows that F mean when a real G or
+    # C key is missing. Real positions here require a retrain.
     q = text(
         "SELECT slate_date, platform_player_id AS player_id, display_name, "
         "team_key AS team, card_boost, real_score, 'F' AS position "

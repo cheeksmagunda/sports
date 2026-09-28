@@ -45,6 +45,22 @@ class PickerArtifactLike(Protocol):
     def eb_baseline(self) -> EBBaselineLike | None: ...
 
 
+def _cohort_mean_for_serve(means: Mapping[str, float], cohort: str) -> float:
+    """Return the EB intercept for one serve-time cohort.
+
+    The label corpus stamps every row as position F, so a live artifact
+    often stores only that cohort. A missing G or C key must use the
+    trained F mean. A key that is present, including a stored 0.0, is
+    used as stored.
+    """
+    if cohort in means:
+        return float(means[cohort])
+    pooled = means.get("F")
+    if pooled is None:
+        return 0.0
+    return float(pooled)
+
+
 def eb_predict_one(
     artifact: PickerArtifactLike | None,
     player_id: int,
@@ -69,7 +85,9 @@ def eb_predict_one(
     if int(player_id) not in baseline.player_alpha:
         return None
     cohort = cohort_for_position(position)
-    prediction = baseline.cohort_means.get(cohort, 0.0) + baseline.player_alpha[int(player_id)]
+    prediction = _cohort_mean_for_serve(baseline.cohort_means, cohort) + baseline.player_alpha[
+        int(player_id)
+    ]
     pace_beta = float(getattr(baseline, "pace_beta", 0.0) or 0.0)
     league_pace = float(getattr(baseline, "league_pace", 0.0) or 0.0)
     if team_pace is not None and pace_beta:
