@@ -12,6 +12,47 @@ picker can read it when `NFL_OLLAMA_TICK_TILT_WEIGHT>0` and
 on the Railway volume by default. Related inbound app→Ollama helper: PR #582
 merged 2026-09-28 (`578566d`).
 
+## Slot order, one kicker, one defender (#596) - 2026-09-28
+
+Code defaults on the freeze path (`optimizer_config_from_env` /
+`picker_knobs_from_env`). This change does not deploy and does not set
+Railway variables. Live values of the new knobs are unverified. Corpus C
+contest-pool replay was not re-run in this change; do not read a capture
+delta from this note.
+
+| Knob | Default | Rollback |
+|------|---------|----------|
+| `NFL_OPTIMIZER_SLOT_BY_MEAN` | on (`1`): slot 1 is the highest projected mean | `0` keeps search slot order |
+| `NFL_OPTIMIZER_MAX_KICKERS` | `1` provider `K` | `0`, or any integer above 5, disables |
+| `NFL_OPTIMIZER_MAX_DEFENDERS` | `1` LB/DB/DL (and the chart codes in that family) every contest day | `0`, or any integer above 5, disables |
+| `NFL_PICKER_BOOST_TIEBREAK` | `projection`: inside one boost tier, higher own conditional mean keeps the higher aligned value | `player_id` |
+
+Invalid values fail closed. `player_id` remains only the last key when boost
+and own projection both tie. The caps are hard: a pool that cannot fill five
+cards raises `optimizer_no_feasible_lineup` instead of relaxing the cap.
+`NFL_PICKER_BOOST_RANK_BLEND` is unchanged (last verified live value `0.75`).
+The serving image stays the previously verified worker until a later deploy.
+
+### Slate size (same rules both shapes)
+
+Caps and the boost tie-break do not scale with the pool and do not switch
+on Sunday vs a night game. They are properties of the committed five and of
+each boost tier. `slate_regime` on the frozen lineup is `one_game` or
+`multi_game`; `slate_pool` is the eligible pool the optimizer saw.
+`candidate_count` is that same pool. The label does not change the caps.
+
+| Shape | Games | Pool (order of magnitude) | Example | What the knobs do |
+|-------|-------|---------------------------|---------|-------------------|
+| `one_game` | 1 | about 150 | MNF 2026-09-29 PHI at CHI | at most one K, at most one LB/DB/DL, slot 1 is the highest projected mean, boost ties follow own projection |
+| `multi_game` | many | about 600-800 | full Sunday slate | the same four rules |
+
+Live pool counts for those days are unverified. The unit tests build a
+150-player one-game pool and a 700-player 14-game pool, including more
+defenders than the beam width on the Sunday shape. `max_value` still allows
+a one-game stack inside a Sunday pool; that is the diversity floor, not a
+weaker cap. A Sunday-only cap would leave PHI at CHI uncapped. This change
+does not do that.
+
 ## Win stack index (#594)
 
 Pointer only. This index does not restate the sections below and does not
@@ -376,7 +417,6 @@ No train `--force`. No env mutation; authorized picker knobs already matched
   path is healthy via storage_state.
 - Post-T-40 live freeze outcome still to confirm on Sunday (freeze once,
   publish, no re-freeze).
-
 
 
 ## Scheduled NFL jobs report through their Actions runs, not issues (2026-09-26, issue #442)
@@ -1428,7 +1468,6 @@ Provenance + manifests carry `event_time`, `source_available_at`, `captured_at`,
 and `decision_at` (null on historical backfill). See README train/live section.
 
 
-
 ## Data / strategy / feature scaffolds (2026-09-06 CT)
 
 Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest entry):
@@ -1458,7 +1497,6 @@ Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Rai
 - Research: `GET /research/provider/status`
 - Box auth still missing; status expected `auth_missing`
 - GitHub push/MCP write still 403; see `/workspace/codex-nfl/HANDOFF.md`
-
 
 
 ## Research service path (2026-09-06 CT)

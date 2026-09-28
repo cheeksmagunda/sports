@@ -13,11 +13,15 @@ from nfl_oracle.recommendations.model import (
     predict,
 )
 from nfl_oracle.recommendations.optimizer import (
+    DEFENDER_POSITIONS,
     FieldObservation,
     OptimizerConfig,
     ScoringPolicy,
     optimize,
+    optimizer_config_from_env,
+    slate_regime_name,
 )
+from nfl_oracle.recommendations.picker_knobs import PickerKnobs, apply_picker_knobs
 from nfl_oracle.recommendations.schema import (
     Candidate,
     Contest,
@@ -531,3 +535,451 @@ def test_tournament_field_slots_use_p90_not_mean() -> None:
     )
     assert len(result.picks) == 5
     assert result.construction_profile == "max_value"
+
+
+def _lineup_slate(specs: list[tuple[int, str, float]]) -> Slate:
+    """One-game slate. ``specs`` is ``(player_id, position, card_boost)``."""
+    decision = BASE + timedelta(days=8)
+    clock = EvidenceClock(source_available_at=decision, captured_at=decision)
+    game = Game(
+        game_id=200,
+        season=2025,
+        kickoff_at=decision + timedelta(hours=4),
+        home_team_id=10,
+        away_team_id=11,
+        home_team="A",
+        away_team="B",
+        status="scheduled",
+    )
+    candidates = tuple(
+        Candidate(
+            player_id=pid,
+            game_id=200,
+            team_id=10 if index % 2 == 0 else 11,
+            name=f"P{pid}",
+            position=position,
+            team="A" if index % 2 == 0 else "B",
+            opponent="B" if index % 2 == 0 else "A",
+            injury_status="Active",
+            card_boost=boost,
+            clock=clock,
+        )
+        for index, (pid, position, boost) in enumerate(specs)
+    )
+    return Slate(
+        contest=Contest(
+            contest_id=901,
+            day=decision.date(),
+            end_day=decision.date(),
+            slot_multipliers=(2, 1.8, 1.6, 1.4, 1.2),
+            is_locked=False,
+            is_finalized=False,
+            clock=clock,
+            evidence_sha256="c" * 64,
+        ),
+        games=(game,),
+        candidates=candidates,
+        captured_at=decision,
+        source_hashes=("d" * 64,),
+        pool_roster_count=len(candidates),
+        pool_search_matched_count=len(candidates),
+    )
+
+
+def _mean_projections(
+    target: Slate,
+    means: dict[int, float],
+    samples: dict[int, tuple[float, ...]] | None = None,
+):
+    samples = samples or {}
+    return tuple(
+        _projection(
+            candidate.player_id,
+            mean=means[candidate.player_id],
+            samples=samples.get(
+                candidate.player_id,
+                (means[candidate.player_id], means[candidate.player_id]),
+            ),
+        )
+        for candidate in target.candidates
+    )
+
+
+def _search_config(
+    *,
+    slot_by_mean: bool = True,
+    max_kickers: int = 1,
+    max_defenders: int = 1,
+    upside_weight: float = 0.0,
+    field_weight: float = 0.0,
+) -> OptimizerConfig:
+    return OptimizerConfig(
+        simulations=100,
+        upside_weight=upside_weight,
+        field_weight=field_weight,
+        min_distinct_teams=1,
+        min_distinct_games=1,
+        profile="max_value",
+        seed=1,
+        slot_by_mean=slot_by_mean,
+        max_kickers=max_kickers,
+        max_defenders=max_defenders,
+    )
+
+
+def test_committed_slots_follow_descending_mean() -> None:
+    target = _lineup_slate([(pid, "WR", 0.0) for pid in range(1, 6)])
+    means = {1: 10.0, 2: 8.0, 3: 6.0, 4: 4.0, 5: 1.0}
+    projs = _mean_projections(target, means, samples={5: (20.0, 20.0)})
+    ordered = optimize(
+        target,
+        projs,
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(slot_by_mean=True),
+    )
+    assert [pick.player_id for pick in ordered.picks] == [1, 2, 3, 4, 5]
+    assert [pick.projected_value for pick in ordered.picks] == [10.0, 8.0, 6.0, 4.0, 1.0]
+    assert ordered.picks[0].slot == 1
+    assert ordered.picks[0].slot_multiplier == 2.0
+    assert "committed_slots_follow_descending_projected_mean" in ordered.assumptions
+
+    search_order = optimize(
+        target,
+        projs,
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(slot_by_mean=False),
+    )
+    assert search_order.picks[0].player_id == 5
+    assert "committed_slots_follow_search_order" in search_order.assumptions
+
+
+def test_committed_slots_follow_mean_on_the_beam_path() -> None:
+    target = _lineup_slate([(pid, "WR", 0.0) for pid in range(1, 6)])
+    means = {1: 10.0, 2: 8.0, 3: 6.0, 4: 4.0, 5: 1.0}
+    projs = _mean_projections(target, means, samples={5: (20.0, 20.0)})
+    ordered = optimize(
+        target,
+        projs,
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(slot_by_mean=True, upside_weight=0.15, field_weight=0.1),
+    )
+    assert [pick.projected_value for pick in ordered.picks] == [10.0, 8.0, 6.0, 4.0, 1.0]
+
+
+def test_equal_means_break_slot_ties_by_player_id() -> None:
+    target = _lineup_slate(
+        [(4, "WR", 0.0), (2, "WR", 0.0), (1, "RB", 0.0), (3, "TE", 0.0), (5, "QB", 0.0)]
+    )
+    means = {4: 9.0, 2: 9.0, 1: 3.0, 3: 2.0, 5: 1.0}
+    result = optimize(
+        target,
+        _mean_projections(target, means),
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(),
+    )
+    assert [pick.player_id for pick in result.picks[:2]] == [2, 4]
+
+
+def test_max_one_kicker_and_kill_switch() -> None:
+    specs = [
+        (1, "K", 0.0),
+        (2, "K", 0.0),
+        (3, "WR", 0.0),
+        (4, "WR", 0.0),
+        (5, "RB", 0.0),
+        (6, "TE", 0.0),
+    ]
+    target = _lineup_slate(specs)
+    means = {1: 30.0, 2: 29.0, 3: 10.0, 4: 9.0, 5: 8.0, 6: 7.0}
+    projs = _mean_projections(target, means)
+    capped = optimize(
+        target,
+        projs,
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(max_kickers=1),
+    )
+    assert sum(pick.position == "K" for pick in capped.picks) == 1
+    assert capped.picks[0].player_id == 1
+    assert "max_kickers=1" in capped.assumptions
+
+    open_cap = optimize(
+        target,
+        projs,
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(max_kickers=0),
+    )
+    assert sum(pick.position == "K" for pick in open_cap.picks) == 2
+
+
+def test_max_one_kicker_on_the_beam_path() -> None:
+    target = _lineup_slate(
+        [
+            (1, "K", 0.0),
+            (2, "K", 0.0),
+            (3, "WR", 0.0),
+            (4, "WR", 0.0),
+            (5, "RB", 0.0),
+            (6, "TE", 0.0),
+        ]
+    )
+    means = {1: 30.0, 2: 29.0, 3: 10.0, 4: 9.0, 5: 8.0, 6: 7.0}
+    result = optimize(
+        target,
+        _mean_projections(target, means),
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(max_kickers=1, upside_weight=0.15, field_weight=0.1),
+    )
+    assert sum(pick.position == "K" for pick in result.picks) == 1
+
+
+def test_max_one_defender_includes_chart_codes() -> None:
+    target = _lineup_slate(
+        [
+            (1, "LB", 0.0),
+            (2, "DB", 0.0),
+            (3, "DL", 0.0),
+            (4, "CB", 0.0),
+            (5, "WR", 0.0),
+            (6, "WR", 0.0),
+            (7, "RB", 0.0),
+            (8, "TE", 0.0),
+        ]
+    )
+    means = {1: 40.0, 2: 39.0, 3: 38.0, 4: 37.0, 5: 10.0, 6: 9.0, 7: 8.0, 8: 7.0}
+    result = optimize(
+        target,
+        _mean_projections(target, means),
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(max_defenders=1),
+    )
+    defenders = [pick for pick in result.picks if pick.position in {"LB", "DB", "DL", "CB"}]
+    assert len(defenders) == 1
+    assert defenders[0].player_id == 1
+    assert "max_defenders=1" in result.assumptions
+
+
+def test_kicker_and_defender_caps_are_independent() -> None:
+    target = _lineup_slate(
+        [
+            (1, "K", 0.0),
+            (2, "LB", 0.0),
+            (3, "WR", 0.0),
+            (4, "WR", 0.0),
+            (5, "RB", 0.0),
+            (6, "TE", 0.0),
+        ]
+    )
+    means = {1: 30.0, 2: 29.0, 3: 10.0, 4: 9.0, 5: 8.0, 6: 7.0}
+    result = optimize(
+        target,
+        _mean_projections(target, means),
+        decision_at=target.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=_search_config(),
+    )
+    positions = [pick.position for pick in result.picks]
+    assert positions.count("K") == 1
+    assert positions.count("LB") == 1
+
+
+def _contest_day_slate(
+    *,
+    games: int,
+    pool: int,
+    defenders: int,
+    kickers: int,
+    studs: int = 8,
+) -> tuple[Slate, dict[int, float], dict[int, float], dict[str, list[int]]]:
+    """One-game night or multi-game Sunday pool.
+
+    Highest player ids are defenders, then kickers, all sharing boost 3.0
+    with the studs. Own means rank studs first. ``distorted_means`` flips
+    that so defenders and kickers are the top projections and the caps bind.
+    """
+    if studs + defenders + kickers >= pool:
+        raise ValueError("regime_pool_too_small")
+    decision = BASE + timedelta(days=8)
+    clock = EvidenceClock(source_available_at=decision, captured_at=decision)
+    built_games = tuple(
+        Game(
+            game_id=4000 + index,
+            season=2025,
+            kickoff_at=decision + timedelta(hours=4 + index),
+            home_team_id=1000 + index * 2,
+            away_team_id=1001 + index * 2,
+            home_team=f"H{index}",
+            away_team=f"A{index}",
+            status="scheduled",
+        )
+        for index in range(games)
+    )
+    ids = list(range(1, pool + 1))
+    groups = {
+        "stud": ids[:studs],
+        "defender": ids[-defenders:],
+        "kicker": ids[-(defenders + kickers) : -defenders],
+        "filler": ids[studs : -(defenders + kickers)],
+    }
+    own_means: dict[int, float] = {}
+    distorted_means: dict[int, float] = {}
+    for rank, pid in enumerate(groups["stud"]):
+        own_means[pid] = 20.0 - rank
+        distorted_means[pid] = 12.0 - rank * 0.1
+    for pid in groups["filler"]:
+        own_means[pid] = 6.0
+        distorted_means[pid] = 3.0
+    for rank, pid in enumerate(groups["kicker"]):
+        own_means[pid] = 2.0
+        distorted_means[pid] = 25.0 + rank
+    for rank, pid in enumerate(groups["defender"]):
+        own_means[pid] = 1.0
+        distorted_means[pid] = 40.0 + rank
+    defense_cycle = ("LB", "DB", "DL", "CB")
+    skill_cycle = ("QB", "RB", "WR", "TE")
+    candidates = []
+    for pid in ids:
+        if pid in groups["defender"]:
+            position = defense_cycle[pid % len(defense_cycle)]
+            boost = 3.0
+        elif pid in groups["kicker"]:
+            position = "K"
+            boost = 3.0
+        elif pid in groups["stud"]:
+            position = skill_cycle[pid % len(skill_cycle)]
+            boost = 3.0
+        else:
+            position = skill_cycle[pid % len(skill_cycle)]
+            boost = 0.0
+        game = built_games[(pid - 1) % games]
+        home = ((pid - 1) // games) % 2 == 0
+        candidates.append(
+            Candidate(
+                player_id=pid,
+                game_id=game.game_id,
+                team_id=game.home_team_id if home else game.away_team_id,
+                name=f"P{pid}",
+                position=position,
+                team=game.home_team if home else game.away_team,
+                opponent=game.away_team if home else game.home_team,
+                injury_status="Active",
+                card_boost=boost,
+                clock=clock,
+            )
+        )
+    slate = Slate(
+        contest=Contest(
+            contest_id=902,
+            day=decision.date(),
+            end_day=decision.date(),
+            slot_multipliers=(2, 1.8, 1.6, 1.4, 1.2),
+            is_locked=False,
+            is_finalized=False,
+            clock=clock,
+            evidence_sha256="e" * 64,
+        ),
+        games=built_games,
+        candidates=tuple(candidates),
+        captured_at=decision,
+        source_hashes=("f" * 64,),
+        pool_roster_count=pool,
+        pool_search_matched_count=pool,
+    )
+    return slate, own_means, distorted_means, groups
+
+
+def test_slate_regime_label_does_not_change_caps() -> None:
+    assert slate_regime_name(1) == "one_game"
+    assert slate_regime_name(14) == "multi_game"
+    with pytest.raises(ValueError, match="slate_games_required"):
+        slate_regime_name(0)
+    cfg = optimizer_config_from_env({})
+    assert cfg.max_kickers == 1
+    assert cfg.max_defenders == 1
+    assert cfg.slot_by_mean is True
+
+
+@pytest.mark.parametrize(
+    ("games", "pool", "defenders", "kickers", "regime"),
+    [
+        (1, 150, 40, 12, "one_game"),
+        (14, 700, 200, 40, "multi_game"),
+    ],
+)
+def test_caps_and_tie_break_on_one_game_and_sunday_pools(
+    games: int,
+    pool: int,
+    defenders: int,
+    kickers: int,
+    regime: str,
+) -> None:
+    slate, own_means, distorted_means, groups = _contest_day_slate(
+        games=games,
+        pool=pool,
+        defenders=defenders,
+        kickers=kickers,
+    )
+    assert len(slate.games) == games
+    assert len(slate.candidates) == pool
+    own = _mean_projections(slate, own_means)
+    kept = apply_picker_knobs(
+        own,
+        slate,
+        knobs=PickerKnobs(boost_rank_blend=1.0, profile="regime", boost_tie_break="projection"),
+    )
+    legacy = apply_picker_knobs(
+        own,
+        slate,
+        knobs=PickerKnobs(boost_rank_blend=1.0, profile="legacy", boost_tie_break="player_id"),
+    )
+    kept_by = {projection.player_id: projection.conditional_mean for projection in kept}
+    legacy_by = {projection.player_id: projection.conditional_mean for projection in legacy}
+    stud_ids = groups["stud"]
+    defender_ids = groups["defender"]
+    assert min(kept_by[pid] for pid in stud_ids) > max(kept_by[pid] for pid in defender_ids)
+    assert max(legacy_by[pid] for pid in defender_ids) > max(legacy_by[pid] for pid in stud_ids)
+
+    result = optimize(
+        slate,
+        _mean_projections(slate, distorted_means),
+        decision_at=slate.captured_at,
+        scoring_policy=ScoringPolicy(),
+        config=optimizer_config_from_env({}).model_copy(
+            update={"simulations": 100, "field_weight": 0.0, "upside_weight": 0.15}
+        ),
+    )
+    picked_defenders = [pick for pick in result.picks if pick.position in DEFENDER_POSITIONS]
+    picked_kickers = [pick for pick in result.picks if pick.position == "K"]
+    assert len(result.picks) == 5
+    assert len(picked_defenders) == 1
+    assert len(picked_kickers) == 1
+    assert picked_defenders[0].player_id == defender_ids[-1]
+    assert picked_kickers[0].player_id == groups["kicker"][-1]
+    assert [pick.player_id for pick in result.picks[2:]] == stud_ids[:3]
+    values = [pick.projected_value for pick in result.picks]
+    assert values == sorted(values, reverse=True)
+    assert result.picks[0].slot_multiplier == 2.0
+    assert f"slate_regime={regime}" in result.assumptions
+    assert f"slate_pool={pool}" in result.assumptions
+    assert "max_kickers=1" in result.assumptions
+    assert "max_defenders=1" in result.assumptions
+
+
+def test_kicker_cap_fails_closed_when_five_cards_are_impossible() -> None:
+    target = _lineup_slate([(pid, "K", 0.0) for pid in range(1, 6)])
+    means = {pid: float(pid) for pid in range(1, 6)}
+    with pytest.raises(ValueError, match="optimizer_no_feasible_lineup"):
+        optimize(
+            target,
+            _mean_projections(target, means),
+            decision_at=target.captured_at,
+            scoring_policy=ScoringPolicy(),
+            config=_search_config(max_kickers=1),
+        )
