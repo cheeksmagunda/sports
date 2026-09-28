@@ -8,8 +8,10 @@ The label is that board's ``value`` (``label_kind=hv_tdv_leaderboard``).
 
 Corpus G box ``value`` is not y. Draft counts, popularity sections, winning
 drafts, and reconstructed boards (``nfl_draft_stats_reconstructed``, including
-a boosts-present fallback) are excluded. A board with no game id is skipped
-so a player id cannot retarget every other game.
+a boosts-present fallback) are excluded. A board with no game id is
+skipped so a player id cannot retarget every other game, unless Corpus G
+supplies game ids for the contest slate day (#647 live Corpus C
+gameId-null fallback).
 """
 
 from __future__ import annotations
@@ -17,8 +19,10 @@ from __future__ import annotations
 import json
 import math
 import os
+from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -210,10 +214,27 @@ def _players_from_hv_rows(rows: Sequence[Mapping[str, Any]]) -> list[tuple[int, 
     return out
 
 
-def _index_corpus_c(index: _LabelIndex, root: Path) -> None:
+def _game_ids_by_day(
+    rows: Sequence[HistoricalPerformance],
+) -> dict[date, set[int]]:
+    """Map each Corpus G kickoff date to the game ids played that day."""
+
+    by_day: dict[date, set[int]] = defaultdict(set)
+    for row in rows:
+        by_day[row.kickoff_at.date()].add(int(row.game_id))
+    return by_day
+
+
+def _index_corpus_c(
+    index: _LabelIndex,
+    root: Path,
+    *,
+    game_ids_by_day: Mapping[date, set[int]] | None = None,
+) -> None:
     if not root.is_dir():
         return
     store = ContestStore(root)
+    day_map = game_ids_by_day or {}
     for contest_id in store.collected_ids():
         try:
             parsed = load_contest(store, contest_id)
@@ -241,7 +262,12 @@ def _index_corpus_c(index: _LabelIndex, root: Path) -> None:
         draftinfo = store.read_route(contest_id, "draftinfo")
         stats = store.read_route(contest_id, "stats")
         links = extract_matchup_links(parsed=parsed, draftinfo=draftinfo, stats=stats)
-        game_ids = links.get("game_ids") or ()
+        game_ids = list(links.get("game_ids") or ())
+        # Live Corpus C often has contest.gameId=null and no draftinfo.games
+        # (fixtures carry games). Scope HV players to Corpus G games on the
+        # contest slate day so train can keep highestBoostedValuePlayers rows.
+        if not any(int(game_id) > 0 for game_id in game_ids) and parsed.contest.day is not None:
+            game_ids = sorted(day_map.get(parsed.contest.day, ()))
         players = _ladder_scores(values, game_ids)
         if not players:
             index.skipped_boards += 1
@@ -360,7 +386,7 @@ def apply_hv_tdv_labels(
     export = export_root or default_export
     hv_corpus = hv_corpus_root or default_hv
     index = _LabelIndex()
-    _index_corpus_c(index, corpus_c)
+    _index_corpus_c(index, corpus_c, game_ids_by_day=_game_ids_by_day(rows))
     _index_tree(index, export, "total_value_leaderboard.json")
     _index_tree(index, hv_corpus, "hv_board.json")
 

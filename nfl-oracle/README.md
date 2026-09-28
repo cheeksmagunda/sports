@@ -16,11 +16,15 @@ Contest submission and live contest entry remain hard-forbidden by policy.
 Inline contract for this app. Live Railway values stay in `STATUS.md`.
 
 **Model path.** Train toward Highest value / Total Value boards
-(`highestBoostedValuePlayers` or a reconstructed value ranking from Corpus
-C). Own model is valuelaw plus feature ridge (`features.own_model_map`,
-`recommendations.model`). No LightGBM primary. Ollama
-(`scripts/ollama_hv_watcher`) notes on those same boards. It does not
-replace the ridge serve path and it does not publish the freeze.
+(`highestBoostedValuePlayers`). Own model is valuelaw plus feature ridge
+(`features.own_model_map`, `recommendations.model`). No LightGBM primary.
+Shape-and-condition campaign: fit maps pre-game features onto post-game
+HV/TDV leaderboard shapes (top-10+ over history), not cash/median and not
+prior winners as y. Ollama (`scripts/ollama_hv_watcher`,
+`ollama_tick_tilt`, optional candidate engine) is the internal LLM
+learn/tilt layer **on top of** existing schemas and the optimizer. LLM-internal
+runs-on-shape. It does not replace ridge/math/valuelaw, sport schemas, or
+serve primaries, and it does not publish the freeze.
 
 **T-40 runner.** The worker publishes. `recommendations/pipeline.py` sets
 due at contest cutoff minus 40 minutes. `recommendations/cli.py` waits with
