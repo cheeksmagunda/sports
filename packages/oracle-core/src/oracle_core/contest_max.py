@@ -253,7 +253,15 @@ def compare_board(
         "hv_raw": _score_ids(raw_ids, by_id, slot_multipliers=slots),
         "chalk": _score_ids(chalk_ids, by_id, slot_multipliers=slots),
     }
-    if any(score is None for score in scores.values()) or ceiling_score <= 0:
+    hv_display_score = scores["hv_display"]
+    hv_raw_score = scores["hv_raw"]
+    chalk_score = scores["chalk"]
+    if (
+        hv_display_score is None
+        or hv_raw_score is None
+        or chalk_score is None
+        or ceiling_score <= 0
+    ):
         return None
 
     def _share(score: float) -> float:
@@ -277,12 +285,12 @@ def compare_board(
         "hv_display_ids": list(display_ids),
         "hv_raw_ids": list(raw_ids),
         "chalk_ids": list(chalk_ids),
-        "hv_display_score": round(float(scores["hv_display"]), 6),
-        "hv_raw_score": round(float(scores["hv_raw"]), 6),
-        "chalk_score": round(float(scores["chalk"]), 6),
-        "hv_display_capture": _share(float(scores["hv_display"])),
-        "hv_raw_capture": _share(float(scores["hv_raw"])),
-        "chalk_capture": _share(float(scores["chalk"])),
+        "hv_display_score": round(hv_display_score, 6),
+        "hv_raw_score": round(hv_raw_score, 6),
+        "chalk_score": round(chalk_score, 6),
+        "hv_display_capture": _share(hv_display_score),
+        "hv_raw_capture": _share(hv_raw_score),
+        "chalk_capture": _share(chalk_score),
         "hv_display_overlap": _overlap(display_ids),
         "hv_raw_overlap": _overlap(raw_ids),
         "chalk_overlap": _overlap(chalk_ids),
