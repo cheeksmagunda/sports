@@ -19,6 +19,11 @@ Pointer only. Not a new live check.
   `freeze_ready=false` stay in the sections below. This note does not
   open a hosted freeze and does not lift the zero-boost gate.
 
+## T-40 hook map (#604)  -  2026-09-28
+
+Stable chain, including the hosted-freeze gap: `CONNECTORS.md`. Staging
+facts below were not re-queried for that doc. No serving flip.
+
 ## Highest Total Value train + backtest path (#535 / #453 / #526)  -  2026-09-27
 
 - **Train/backtest target:** Real Sports Highest value / Total Value board

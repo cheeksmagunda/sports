@@ -2,6 +2,15 @@
 
 Last verified: 2026-09-28T17:26Z
 
+## T-40 hook map (#604)  -  2026-09-28
+
+Stable chain and the MNF required-ON contract: `CONNECTORS.md`
+(`ENABLED=1`, `max_value`, blend / upside / field `0`; do not restore
+`0.75`). This session did not re-query Railway. Live knob and
+`next_freeze=2026-09-28T23:35:00Z` facts at the top of this file (including
+#653 / #654 on main) remain the last verified process state. No serving
+flip and no Railway env write in this change.
+
 ## Full HV retrain (operator)  -  2026-09-28T17:25:11Z
 
 Outside MNF T-40. `nfl-pipeline train --force` on `nfl-oracle-worker`.

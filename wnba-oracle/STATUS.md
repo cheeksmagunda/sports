@@ -2,6 +2,11 @@
 
 Last verified: 2026-09-28T17:20:00Z
 
+## T-40 hook map (#604)  -  2026-09-28
+
+Stable chain: `CONNECTORS.md`. Live knobs below were not re-queried for
+that doc. No serving flip.
+
 ## Live watchdog (#599)  -  2026-09-28T03:17:46Z
 
 Public `https://wnba-api-wnba-production.up.railway.app`. No Railway
