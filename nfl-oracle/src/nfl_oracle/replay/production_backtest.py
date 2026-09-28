@@ -361,6 +361,32 @@ def _production_fit(
     return fit_model(rows, trained_at=trained_at, fit_config=fit_config)
 
 
+def bind_contest_boost_fitter(
+    fitter: Fitter,
+    contest_boosts: Mapping[tuple[int, int], float] | None,
+) -> Fitter:
+    """Pass HV board card boosts into ``fit_model`` sample weights (#620 / #644).
+
+    A caller-supplied fitter is left alone so tests can still stub failures.
+    ``contest_boosts is None`` keeps the raw-value top-5 weight path.
+    """
+
+    if not contest_boosts or fitter is not _production_fit:
+        return fitter
+
+    def _bound(
+        rows: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
+        return fit_model(
+            rows,
+            trained_at=trained_at,
+            fit_config=fit_config,
+            contest_boosts=contest_boosts,
+        )
+
+    return _bound
+
+
 def _default_fold(spec: _SlateSpec) -> str:
     return spec.key
 
@@ -376,6 +402,7 @@ def backtest_production_pipeline(
     fit_config: FitConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
+    contest_boosts: Mapping[tuple[int, int], float] | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> tuple[tuple[SlateBacktestResult, ...], dict[str, int]]:
     """Walk-forward replay of fit/predict/optimize over enriched history rows.
@@ -385,10 +412,13 @@ def backtest_production_pipeline(
     retrain; the fold's model is trained on rows final before the fold's
     earliest slate cutoff, while each slate's prior bank uses every row final
     before that slate's own cutoff. The default is one retrain per slate.
+    Optional ``contest_boosts`` applies the same HV display-rank sample
+    weights as ``nfl-pipeline train`` (#644).
     """
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
     model_fit_config = fit_config or FitConfig()
+    fitter = bind_contest_boost_fitter(fitter, contest_boosts)
     fold_key = fold_of or _default_fold
     specs = group_slates(rows, grouping)
     folds: dict[Hashable, list[_SlateSpec]] = defaultdict(list)

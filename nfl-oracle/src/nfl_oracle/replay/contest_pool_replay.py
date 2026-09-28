@@ -71,6 +71,7 @@ from nfl_oracle.replay.production_backtest import (
     LeakageError,
     _production_fit,
     assert_no_leakage,
+    bind_contest_boost_fitter,
     build_slate,
     compact_projections,
     naive_ewma_projections,
@@ -220,6 +221,7 @@ def replay_contest_pools(
     fit_config: FitConfig | None = None,
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
+    contest_boosts: Mapping[tuple[int, int], float] | None = None,
     picker: PickerKnobs | None = None,
     progress: Callable[[str], None] | None = None,
 ) -> tuple[tuple[ContestPoolResult, ...], dict[str, int]]:
@@ -229,10 +231,13 @@ def replay_contest_pools(
     output) over all of Corpus G, not only pool players. ``fold_of`` groups
     contests that share one retrain, trained on rows final before the fold's
     earliest cutoff; each contest's prior bank uses rows final before its own.
+    Optional ``contest_boosts`` applies the same HV display-rank sample
+    weights as ``nfl-pipeline train`` (#620 / #644).
     """
     clock_now = utc(now or datetime.now(UTC))
     cfg = optimizer_config or OptimizerConfig(simulations=100)
     model_fit_config = fit_config or FitConfig()
+    fitter = bind_contest_boost_fitter(fitter, contest_boosts)
     knobs = picker or PickerKnobs()
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)

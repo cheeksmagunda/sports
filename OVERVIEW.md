@@ -52,6 +52,20 @@ train record is a schema.org FeatureSpec and condition Observation. Do
 not restore NFL blend 0.75. Near-term slate facts stay in each app
 `STATUS.md`.
 
+### Model map (#620, reconciled with #597 / #644 / #654)
+
+| Piece | State |
+|---|---|
+| NFL HV/TDV train labels (`hv_labels`) | connected; Corpus G rows without a linked board are excluded under the #599 operator lock |
+| Display-rank sample weights (`display_rank_weights`) | connected; boost map present → top-k (default 10); no map → raw-value top 5 |
+| Shape/condition train record (`hv_emphasis`) | connected |
+| Production replay HV labels + boosts | connected (`replay.hv_train_inputs`) |
+| Ollama TDV sim per learn tick (`ollama_hv_watcher.sim`) | connected; does not publish a freeze |
+| NHL sim boost in the Ollama helper | 0 unless a future board path explicitly allows boosts |
+| Live NFL blend / upside / field | stay at 0 (live values in `nfl-oracle/STATUS.md`) |
+| Boost-rank blend `0.75` | not restored |
+| Cross-sport imports | forbidden |
+
 1. **Label.** Real Sports Highest value / Total Value boards
    (`highestBoostedValuePlayers`). Prior users' winning drafts are a
    reference bar, not the fit target.

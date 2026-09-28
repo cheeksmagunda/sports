@@ -14,6 +14,14 @@ boards); MNF daemon armed for `next_freeze` 2026-09-28T23:35:00Z.
 {"status": "trained", "retrained": true, "model_sha256": "5869025a79ae2ff86a50cf6bca6e85f0a4563b1e142de7a9512cba9a441694c1", "trained_at": "2026-09-28T17:25:11.344279+00:00", "selected_estimator": "ridge", "training_rows": 824, "holdout_rows": 203, "training_target": "hv_tdv_leaderboards", "contest_entry": false, "history_rows": 824, "hv_overlay": {"boards": 72, "rows_overlaid": 824, "rows_raw": 0, "rows_excluded": 36886, "conflicts": 0, "skipped_unscoped": 19, "skipped_boards": 20, "training_target": "hv_tdv_leaderboards", "label_section": "highestBoostedValuePlayers", "operator_lock": "hv_tdv_only", "raw_box_used_as_target": false, "fit_seasons": [2024, 2025], "draft_count_is_label": false, "winning_drafts_are_label": false}}
 ```
 
+## Replay HV train weights after #671 (#620 follow-up)
+
+Production replay CLIs now apply the same HV/TDV label filter and display-rank
+contest boosts as `nfl-pipeline train` when boards are linked
+(`replay.hv_train_inputs`). Unlinked archives keep raw-value top-5 weights.
+Ollama TDV sim already landed in #671. Live blend / upside / field stay at 0.
+Do not restore boost-rank blend 0.75. No Railway knob flip in this change.
+
 ## Full HV/TDV retrain + Ollama arm (#620 / #574)  -  2026-09-28T17:21Z
 
 | Fact | Value |
