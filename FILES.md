@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1121 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -329,6 +329,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
+- nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Overlay Highest-value / Total Value board labels onto Corpus G history.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
 - nfl-oracle/src/nfl_oracle/recommendations/picker_knobs.py -- Evidence-backed projection knobs applied after predict, before optimize (#280).
@@ -346,6 +347,8 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay.py -- Replay the production pipeline on the pool each Corpus C contest showed (#280).
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay_cli.py -- CLI: production pipeline replayed on each Corpus C contest's visible pool (#280).
 - nfl-oracle/src/nfl_oracle/replay/harness.py -- Replay the saved Corpus C archive against the verified scoring law.
+- nfl-oracle/src/nfl_oracle/replay/hv_board_replay.py -- Score HV boards: HV-rank five vs draft-count chalk vs hindsight ceiling.
+- nfl-oracle/src/nfl_oracle/replay/hv_board_replay_cli.py -- CLI: score saved HV boards (HV five vs chalk five vs hindsight).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest.py -- Walk-forward backtest of the actual production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest_cli.py -- CLI: walk-forward backtest of the production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/racer.py -- NFL evaluate hook for the portfolio race engine (#339).
@@ -483,6 +486,8 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_feature_value_model.py -- Leakage-safe feature_ridge value model + strategy wiring.
 - nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
+- nfl-oracle/tests/unit/test_hv_board_replay.py -- HV-rank five, draft-count chalk, and hindsight ceiling use the draft-image law.
+- nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV board values replace box labels only when the HV section scopes the game.
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
