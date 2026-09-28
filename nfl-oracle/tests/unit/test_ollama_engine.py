@@ -74,8 +74,9 @@ def test_json_utility_can_select_a_different_candidate() -> None:
     def client(prompt: str, *, timeout_s: float) -> dict[str, Any]:
         document = json.loads(prompt)
         assert document["simulations"] >= MIN_SIMULATIONS
+        classic_set = set(classic_ids)
         alternatives = [
-            row["players"] for row in document["lineups"] if row["players"] != classic_ids
+            row["players"] for row in document["lineups"] if set(row["players"]) != classic_set
         ]
         assert alternatives
         chosen = alternatives[0]
@@ -100,7 +101,11 @@ def test_json_utility_can_select_a_different_candidate() -> None:
         config=OptimizerConfig(ollama_engine=True, simulations=100),
         ollama_client=client,
     )
-    assert _ids(result) == seen["chosen"]
+    # The engine chooses the five. Slot-by-mean then commits descending
+    # projected mean, so the frozen order can differ from the beam order.
+    means = {row.player_id: row.mean for row in projections(target)}
+    assert set(_ids(result)) == set(seen["chosen"])
+    assert list(_ids(result)) == sorted(_ids(result), key=lambda pid: (-means[pid], pid))
     assert _ids(result) != classic_ids
     assert "ollama_engine_selected_by_json_utility" in result.assumptions
     assert seen["simulations"] >= MIN_SIMULATIONS
