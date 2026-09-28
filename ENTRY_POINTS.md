@@ -596,6 +596,13 @@ not mint this token. Auth for scrapes remains the portfolio
 corpus work. **Ollama training** is FORBIDDEN until `coverage_manifest.json` reports
 complete historical capture (binary install + watcher: #574).
 
+## T-40 hook map (#604)
+
+Before a slate window, read the owning app's `CONNECTORS.md` for the
+required-ON contract and that app's `STATUS.md` for the last verified knob
+values. NFL Monday night uses `nfl-oracle/CONNECTORS.md`. The helper in the
+next section does not publish the freeze.
+
 ## Ollama HV watcher (#574)
 
 Portfolio Codespace helper inside the HV/TDV model path (issue #574). It

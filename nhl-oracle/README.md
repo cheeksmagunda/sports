@@ -2,7 +2,8 @@
 
 NHL Oracle application scaffold.
 
-Portfolio product goal: root `../README.md` (Product goal). Current NHL serve
+Portfolio product goal: root `../README.md` (Product goal). The hook graph,
+including the hosted-freeze gap, is in `CONNECTORS.md`. Current NHL serve
 knobs and readiness facts are in `STATUS.md`.
 
 Current scope (verified facts in `STATUS.md`): Week 2 live read-only Real

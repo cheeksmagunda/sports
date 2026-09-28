@@ -370,6 +370,13 @@ Host `NFL_OLLAMA_HOST` defaults to `http://127.0.0.1:11434`. Model
 structurally valid utilities selects the lineup; that live path is unverified
 on Railway.
 
+## T-40 hook map (#604)  -  2026-09-28
+
+Stable chain and the MNF required-ON contract: `CONNECTORS.md`.
+This session did not re-query Railway. The live knob table under
+"Live serve flip" (2026-09-27) is still the last verified process state.
+No serving flip in this change.
+
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 
 Early window failed (`future_forecast` then `stale_player`). Harden landed so

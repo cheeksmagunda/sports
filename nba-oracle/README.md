@@ -7,6 +7,7 @@ for Railway mono staging, NBA season/coverage helpers, a public history
 loader, and a Corpus G backfill gate that does not call the network.
 Domain contests, provider HTTP ingest, models, T-40 freeze, and serve knobs
 are not implemented. Structural outline: root `../OVERVIEW.md`.
+The explicit not-hooked map is `CONNECTORS.md`.
 
 ## Win stack
 
