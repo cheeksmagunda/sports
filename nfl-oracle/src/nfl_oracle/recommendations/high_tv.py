@@ -174,7 +174,7 @@ def player_high_tv_weights_from_draft_stats(
 
 
 def sample_weights_for_train_target(
-    rows: Sequence[object],
+    rows: Sequence[Any],
     *,
     top_k: int = 5,
     high_weight: float = 4.0,
@@ -197,8 +197,8 @@ def sample_weights_for_train_target(
         value = getattr(row, "value", None)
         if value is None:
             continue
-        game_id = int(getattr(row, "game_id"))
-        player_id = int(getattr(row, "player_id"))
+        game_id = int(row.game_id)
+        player_id = int(row.player_id)
         raw_values.setdefault(game_id, {})[player_id] = float(value)
         if getattr(row, "label_kind", "raw_box") == "hv_tdv_leaderboard":
             board_values.setdefault(game_id, {})[player_id] = float(value)
@@ -214,7 +214,7 @@ def sample_weights_for_train_target(
 
     out: list[float] = []
     for row in rows:
-        key = (int(getattr(row, "game_id")), int(getattr(row, "player_id")))
+        key = (int(row.game_id), int(row.player_id))
         out.append(weight_by_game_player.get(key, base_weight))
     return out
 
