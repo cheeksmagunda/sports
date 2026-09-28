@@ -58,6 +58,15 @@ is off, so job1 does not write the field. EB still ignores a present
 moneyline when `moneyline_beta` is 0. Rollback is leave the flag unset.
 
 
+## Ollama advice influence (#574, 2026-09-28)
+
+Code contract only. `WNBA_OLLAMA_INFLUENCE` stays default off.
+`scheduler/ollama_influence.py` multiplies job2 scores from
+`WNBA_OLLAMA_ADVICE_PATH` only when that flag is on. The helper writes
+`advice.json` on the T-40 to close path; it does not freeze the lineup.
+This change does not set the Railway flag. Do not enable influence for
+MNF tonight. A production redeploy is unverified.
+
 ## EB F-cohort fallback and 2026-09-27 loss (#592 / #623)  -  2026-09-28T03:38:08Z
 
 Verified from the live dossier and frozen lineup for slate `2026-09-27`

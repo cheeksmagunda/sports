@@ -69,6 +69,10 @@ from wnba_oracle.picker.payout import PayoutCurve, default_curve_for_regime, loa
 from wnba_oracle.picker.popularity import ContrarianConfig, apply_contrarian_adjustment
 from wnba_oracle.picker.sample import PlayerSamplingSpec
 from wnba_oracle.predict.base import player_volatility
+from wnba_oracle.scheduler.ollama_influence import (
+    apply_ollama_influence,
+    load_tilt_map,
+)
 from wnba_oracle.train.pipeline import PickerArtifact
 
 log = get_logger("oracle.job2")
@@ -428,6 +432,13 @@ def _build_specs(
         adjusted = apply_contrarian_adjustment(
             preds.pred_real_scores, popularity_scores, contrarian_cfg
         )
+
+    # Optional Codespace advice (#574). Default OFF. Stale or missing advice
+    # is identity and does not change the classic freeze scores above.
+    adjusted = apply_ollama_influence(
+        adjusted,
+        tilts=load_tilt_map(slate_id=slate_date, sport="wnba"),
+    )
 
     # Per-player sampling sigma from volatility (D52/D55). A flat sigma priced
     # every player the same; ceiling plays (high game-to-game variance) should

@@ -29,10 +29,6 @@ Model map (connected): Corpus G + Corpus C HV boards → `hv_labels` / train ove
 
 
 
-Last verified: 2026-09-28T04:59Z
-
-
-
 ## Live train after #650 day-scope (Refs #647)  -  2026-09-28T04:59Z
 
 Outside MNF T-40. Slate status `waiting`, `next_freeze` `2026-09-28T23:35:00Z`.
@@ -168,6 +164,18 @@ Near-term NFL target, public read `2026-09-28T05:09:26Z`: `/slate/2026-09-28`
 is `waiting_for_t40`, `next_freeze` `2026-09-28T23:35:00Z`, `cutoff_at`
 `2026-09-29T00:15:00Z`, `games` `[]`. That is the MNF commit. Monday WNBA
 and Tuesday NHL reads are in those apps' `STATUS.md`.
+
+
+## Ollama advice influence (#574, 2026-09-28)
+
+Code contract only. `NFL_OLLAMA_INFLUENCE` stays default off. A fresh
+`advice.json` (`NFL_OLLAMA_ADVICE_PATH`) can multiply projections after
+picker knobs when that flag is on. Missing or stale advice is identity.
+`NFL_PICKER_BOOST_RANK_BLEND` code default stays 0.0. This change does not
+write Railway influence or blend variables. Do not enable influence for
+MNF tonight. Production image is unchanged until a later deploy; that
+deploy is unverified.
+
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 

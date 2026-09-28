@@ -25,9 +25,13 @@ prior winners as y. Ollama (`scripts/ollama_hv_watcher`,
 learn/tilt layer **on top of** existing schemas and the optimizer.
 LLM-internal runs-on-shape: learn ticks and tilt go into that optimizer.
 It never replaces ridge, math, valuelaw, sport schemas, or serve
-primaries, and it does not publish the freeze. The campaign sentence is
-in root `../OVERVIEW.md` (Win stack, #653). HV/TDV display top 10 stays
-the history-train window when a boost map is present.
+primaries, and it does not publish the freeze. The helper can write
+`advice.json` during the T-40 to close window.
+`NFL_OLLAMA_INFLUENCE` (default off) multiplies projections from a fresh
+advice file after picker knobs. `NFL_PICKER_BOOST_RANK_BLEND` code default
+stays 0. The campaign sentence is in root `../OVERVIEW.md` (Win stack,
+#653). HV/TDV display top 10 stays the history-train window when a boost
+map is present.
 
 **T-40 runner.** The worker publishes. `recommendations/pipeline.py` sets
 due at contest cutoff minus 40 minutes. `recommendations/cli.py` waits with

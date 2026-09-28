@@ -22,6 +22,7 @@ from ollama_hv_watcher.client import DEFAULT_HOST, DEFAULT_MODEL, generate
 from ollama_hv_watcher.gate import ensure_ollama_training_allowed
 from ollama_hv_watcher.pick import (
     APP_FROZEN_SECTION,
+    CHALK_VS_MULTIPLIER_PRINCIPLE,
     FIVE_PLAYER_LINEUP_SIZE,
     lineup_for_summary,
     lineup_prompt_block,
@@ -79,6 +80,7 @@ def build_learn_prompt(
         f"{FIVE_PLAYER_LINEUP_SIZE} distinct players in slot order "
         f"1..{FIVE_PLAYER_LINEUP_SIZE}. Never propose fewer. Never propose "
         "more. Never reorder after freeze.\n"
+        f"CORE PRINCIPLE: {CHALK_VS_MULTIPLIER_PRINCIPLE}\n"
     )
     if summary.section == APP_FROZEN_SECTION:
         tasks = (
@@ -236,5 +238,85 @@ def run_learn(
         gate_reason=reason,
         dry_run=False,
         lineup=card,
+        extra=extra,
+    )
+
+
+def run_advice(
+    summary: BoardSummary,
+    *,
+    data_root: Path,
+    manifest: CoverageManifest,
+    host: str = DEFAULT_HOST,
+    model: str = DEFAULT_MODEL,
+    dry_run: bool = False,
+    environ: dict[str, str] | None = None,
+    record_on_failure: bool = False,
+    extra: dict[str, Any] | None = None,
+) -> Path:
+    """Write ``advice.json`` for the same pregame board a learn tick uses.
+
+    Default callers pass ``dry_run=True``. ``record_on_failure=True`` writes
+    rank-fallback tilts when Ollama is down so a learn tick is never dropped
+    because advice failed. Apps ignore the file unless their influence env
+    is on.
+    """
+
+    from ollama_hv_watcher.advice import (
+        build_advice_prompt,
+        tilts_from_ollama_notes,
+        write_advice,
+    )
+
+    prompt = build_advice_prompt(summary)
+    if dry_run:
+        return write_advice(
+            data_root,
+            summary,
+            tilts=tilts_from_ollama_notes("", summary),
+            model=model,
+            gate_reason="dry_run",
+            dry_run=True,
+            extra={**(extra or {}), "prompt_prepared": True},
+        )
+    try:
+        reason = ensure_ollama_training_allowed(manifest, environ=environ)
+    except OllamaForbiddenError as exc:
+        if not record_on_failure:
+            raise
+        return write_advice(
+            data_root,
+            summary,
+            tilts=tilts_from_ollama_notes("", summary),
+            model=model,
+            gate_reason="forbidden",
+            dry_run=False,
+            extra={**(extra or {}), "ollama_error": str(exc)[:500]},
+        )
+    try:
+        notes = generate(prompt, host=host, model=model)
+    except (RuntimeError, OSError, TimeoutError) as exc:
+        if not record_on_failure:
+            raise
+        return write_advice(
+            data_root,
+            summary,
+            tilts=tilts_from_ollama_notes("", summary),
+            model=model,
+            gate_reason=reason,
+            dry_run=False,
+            extra={
+                **(extra or {}),
+                "ollama_error": str(exc)[:500],
+                "fallback": "rank_tilt",
+            },
+        )
+    return write_advice(
+        data_root,
+        summary,
+        tilts=tilts_from_ollama_notes(notes, summary),
+        model=model,
+        gate_reason=reason,
+        dry_run=False,
         extra=extra,
     )

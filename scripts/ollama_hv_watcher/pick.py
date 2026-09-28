@@ -19,6 +19,21 @@ from ollama_hv_watcher.sim import total_value_lineup
 # Hard contest size: five players every day, every sport.
 FIVE_PLAYER_LINEUP_SIZE = 5
 APP_FROZEN_SECTION = "app_frozen_lineup"
+
+# Observed Real Sports default slot multipliers (slot 1..5).
+OBSERVED_SLOT_MULTIPLIERS: tuple[float, float, float, float, float] = (
+    2.0,
+    1.8,
+    1.6,
+    1.4,
+    1.2,
+)
+
+CHALK_VS_MULTIPLIER_PRINCIPLE = (
+    "chalk_vs_multiplier: put true HV/TDV (max_value / top_1) into high "
+    "multiplier slots even when chalk (high drafts); fade soft chalk that "
+    "lacks HV; never chase ownership alone."
+)
 _CARD_EXTRA_KEYS = ("position", "opponent", "card_boost", "slot_multiplier")
 
 
@@ -123,7 +138,15 @@ def lineup_prompt_block(lineup: tuple[dict[str, Any], ...]) -> str:
         (
             f"DAILY CONTEST CARD (exactly {FIVE_PLAYER_LINEUP_SIZE} players, "
             "ordered slots 1..5; never fewer, never more):"
-        )
+        ),
+        (
+            "Slot multipliers: "
+            + ", ".join(
+                f"slot{i}={m}x"
+                for i, m in enumerate(OBSERVED_SLOT_MULTIPLIERS, start=1)
+            )
+        ),
+        f"PRINCIPLE: {CHALK_VS_MULTIPLIER_PRINCIPLE}",
     ]
     for row in lineup:
         line = (

@@ -133,6 +133,27 @@ freeze window without an explicit operator decision.
 one object. NFL candidate scoring loads that module from
 `nfl_oracle.recommendations.ollama_engine`. Lineup rules stay in nfl-oracle.
 
+## Slate advice influence (default off)
+
+During the same T-40 to close window the helper can write
+`data/ollama_hv/<sport>/<slate>/advice.json` (`--advice --board`, and from
+the watcher / app daemon after a pregame board exists). The file is a
+bounded per-player multiplier list. Sport apps read it only when their own
+flag is on:
+
+```sh
+NFL_OLLAMA_INFLUENCE=1
+NFL_OLLAMA_ADVICE_PATH=/path/to/advice.json
+# WNBA_OLLAMA_INFLUENCE=1
+# WNBA_OLLAMA_ADVICE_PATH=/path/to/advice.json
+```
+
+Both flags default off, so classic freeze is unchanged. Stale, wrong-slate,
+or missing advice is identity. This does not change `NFL_PICKER_BOOST_RANK_BLEND`.
+Do not enable these flags for a live MNF freeze window without an explicit
+operator decision.
+
+
 ## Training-data inventory
 
 Machine-readable board roots + gate pointers live in

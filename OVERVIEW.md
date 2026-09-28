@@ -131,6 +131,7 @@ inline list; this table is the outline.
 | `draft_stats_catalog.py`, `hv_board_corpus.py` | Draft Stats section inventory; HV board document helper (#526) |
 | `realsports_corpus/` | Sibling-repo layout, coverage manifest, store |
 | `corpus_matchup.py` | Idempotent `{sport}/{season}/{game_id}/` matchup + stats append |
+| `slate_advice.py` | Freshness and clamped tilt map for optional app influence (#574) |
 
 ## wnba-oracle
 
@@ -142,7 +143,7 @@ Postgres, Redis. Service list and live knobs: `STATUS.md`. Stable contract:
 
 | Subpackage | Files | Purpose |
 |---|---|---|
-| `scheduler/` | 26 | Jobs, including T-40 freeze in `job2` |
+| `scheduler/` | 27 | Jobs, including T-40 freeze in `job2` |
 | `features/` | 13 | Feature engineering, including `rs_field_map` |
 | `ingest/` | 11 | Provider ingest |
 | `eval/` | 10 | Evaluation, including highest-value grading |
