@@ -16,6 +16,10 @@ that slate's Real Sports **Highest value / Total Value Daily Leaderboard**
 to beat, not the fit target. Cash and median construction are not the
 objective. Current serve knobs live in each sport application's `STATUS.md`.
 
+The learning campaign is LLM-internal (#653, sentence in `OVERVIEW.md`,
+Win stack). Ollama (`scripts/ollama_hv_watcher`) drives runs on shape with
+learn ticks and tilt. It is not a chatbot and not a serve primary.
+
 ## Development surfaces
 
 The repository is designed to behave the same on a local checkout, in GitHub

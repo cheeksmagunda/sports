@@ -12,8 +12,12 @@ Pointer only. Not a new live check.
   export stub exit 78): `README.md` (Win stack).
 - Staging health URLs and the corpus gap: sections below.
 - Ollama is not an NHL model and there is still no hosted freeze publish.
+  It is the internal LLM layer (learn ticks and tilt), not a chatbot.
   Role and shape-and-condition campaign (#653): root `../OVERVIEW.md`
   (Win stack).
+- Tuesday 2026-09-29 is the campaign target. Opening-cluster facts and
+  `freeze_ready=false` stay in the sections below. This note does not
+  open a hosted freeze and does not lift the zero-boost gate.
 
 ## Highest Total Value train + backtest path (#535 / #453 / #526)  -  2026-09-27
 

@@ -94,8 +94,9 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     assert report["shape_condition_objective"] == (
         "Learn the shapes of every HV/TDV board appearance over history, "
         "learn the slate conditions that produced each shape, and at T-40 "
-        "match shape and condition together to commit the 5-player lineup "
-        "that maximizes capture of that slate's Highest value / Total Value board."
+        "have Ollama drive runs on shape with learn ticks and tilt to commit "
+        "the 5-player lineup that maximizes capture of that slate's Highest "
+        "value / Total Value board."
     )
     assert report["boost_interaction"]["ridge_feature"] is False
     assert report["boost_interaction"]["card_boost_post_settlement_live_ok"] is False

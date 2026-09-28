@@ -44,8 +44,9 @@ HV_CAPTURE_OBJECTIVE = "5-player lineup maximizing capture of highestBoostedValu
 SHAPE_CONDITION_OBJECTIVE = (
     "Learn the shapes of every HV/TDV board appearance over history, "
     "learn the slate conditions that produced each shape, and at T-40 "
-    "match shape and condition together to commit the 5-player lineup "
-    "that maximizes capture of that slate's Highest value / Total Value board."
+    "have Ollama drive runs on shape with learn ticks and tilt to commit "
+    "the 5-player lineup that maximizes capture of that slate's Highest "
+    "value / Total Value board."
 )
 
 

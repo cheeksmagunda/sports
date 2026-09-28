@@ -22,9 +22,11 @@ Shape-and-condition campaign: fit maps pre-game features onto post-game
 HV/TDV leaderboard shapes (top-10+ over history), not cash/median and not
 prior winners as y. Ollama (`scripts/ollama_hv_watcher`,
 `ollama_tick_tilt`, optional candidate engine) is the internal LLM
-learn/tilt layer **on top of** existing schemas and the optimizer. LLM-internal
-runs-on-shape. It does not replace ridge/math/valuelaw, sport schemas, or
-serve primaries, and it does not publish the freeze.
+learn/tilt layer **on top of** existing schemas and the optimizer. It
+drives runs on shape. It is not a chatbot. It does not replace
+ridge/math/valuelaw, sport schemas, or serve primaries, and it does not
+publish the freeze. The campaign sentence is in root `../OVERVIEW.md`
+(Win stack, #653).
 
 **T-40 runner.** The worker publishes. `recommendations/pipeline.py` sets
 due at contest cutoff minus 40 minutes. `recommendations/cli.py` waits with

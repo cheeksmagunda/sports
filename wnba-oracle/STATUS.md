@@ -87,9 +87,16 @@ re-check Railway.
   `total_draft_value`): `README.md` (Win stack).
 - Live knobs and freeze readiness: Win-draft knobs and Overnight freeze
   readiness below.
-- Ollama is not a WNBA serve primary. It notes on the same HV/TDV boards
-  from the Codespace. Role and shape-and-condition campaign (#653): root
-  `../OVERVIEW.md` (Win stack).
+- Ollama is not a WNBA serve primary. It is the internal LLM layer
+  (learn ticks and tilt) on the same HV/TDV boards, not a chatbot. Role
+  and shape-and-condition campaign (#653): root `../OVERVIEW.md` (Win stack).
+
+## Monday slate check (#653)  -  2026-09-28T05:09Z
+
+Public `GET /slate/2026-09-28` returned 200 with `first_tip_utc`
+`2026-09-27T18:00:00Z` and `freeze_target_utc` `2026-09-27T17:20:00Z`.
+That freeze is already past. `GET /slate/2026-09-29` returned 404. No
+upcoming Monday WNBA slate. No Railway variable was changed.
 
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 

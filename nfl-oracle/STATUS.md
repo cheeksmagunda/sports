@@ -107,12 +107,19 @@ back only on a later explicit train. This checkout has no
 
 ## Shape-and-condition campaign (#653)
 
-The objective sentence is in root `../OVERVIEW.md` (Win stack). `nfl-pipeline
-train` writes `hv_feature_emphasis`: every live pre-game FeatureSpec,
-partitioned into player profile, slate conditions, and external pre-game.
-A missing live spec fails closed. `card_boost_post_settlement` stays off
-the live clock. Blend, upside, and field stay 0. Do not restore `0.75`.
-No Railway variable write from this change.
+The objective sentence is in root `../OVERVIEW.md` (Win stack). Ollama
+drives runs on shape with learn ticks and tilt. It is not a chatbot and
+it does not publish the freeze. `nfl-pipeline train` writes
+`hv_feature_emphasis`: every live pre-game FeatureSpec, partitioned into
+player profile, slate conditions, and external pre-game. A missing live
+spec fails closed. `card_boost_post_settlement` stays off the live clock.
+Blend, upside, and field stay 0. Do not restore `0.75`. Production tilt
+weight stays 0. No Railway variable write from this change.
+
+Near-term NFL target, public read `2026-09-28T05:09:26Z`: `/slate/2026-09-28`
+is `waiting_for_t40`, `next_freeze` `2026-09-28T23:35:00Z`, `cutoff_at`
+`2026-09-29T00:15:00Z`, `games` `[]`. That is the MNF commit. Monday WNBA
+and Tuesday NHL reads are in those apps' `STATUS.md`.
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
