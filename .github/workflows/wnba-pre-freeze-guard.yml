@@ -27,7 +27,7 @@ permissions:
   contents: read
 
 env:
-  WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WNBA_API_BASE: https://wnba-api-wnba-production.up.railway.app
   WNBA_RAILWAY_PROJECT_ID: ab83f44c-0bbc-4a58-931c-37d9fbfda73a
   WNBA_RAILWAY_ENVIRONMENT_ID: d57a759e-e189-439b-a612-bd220ef59c39
   WNBA_RAILWAY_API_SERVICE_ID: f4750eda-fd6c-432b-b6f5-34254013c271

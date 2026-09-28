@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WNBA_API_BASE: https://wnba-api-wnba-production.up.railway.app
   WNBA_FRONTEND_URL: https://frontend-production-a739.up.railway.app
   WATCHDOG_HEARTBEAT_URL: ${{ secrets.WATCHDOG_HEARTBEAT_URL }}
 
