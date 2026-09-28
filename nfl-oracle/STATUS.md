@@ -66,7 +66,7 @@ re-check Railway.
 - Ollama is not the NFL ridge/valuelaw serve path and does not publish the
   freeze. Role: root `../OVERVIEW.md`.
 
-## HV/TDV train target (#597, lock #599)  -  2026-09-28T03:18Z
+## HV/TDV train target (#597, lock #599)  -  2026-09-28T03:22Z
 
 Train objective is HV + TDV leaderboards only: Real Sports Highest value /
 Total Value Daily Leaderboard (`draftStats.highestBoostedValuePlayers`).
