@@ -453,9 +453,12 @@ loads finalized games under `NFL_HISTORY_ROOT` (default
 the #185 ladder (`high_tv_board_from_draft_stats`, `select_label_kind`,
 `build_high_potential_labels`). A row stays in the design matrix only when
 `(player_id, game_id)` is on that section and the board source is
-`nfl_highestBoostedValuePlayers`. The label is that board's `value`. The
-top five on the board take the high sample weight. Draft counts,
-popularity sections, winning drafts, and reconstructed boards are excluded.
+`nfl_highestBoostedValuePlayers`. The label is that board's `value`. When
+an HV boost map joins those rows, the high sample weight is the top 10
+display ranks (`value * (2 + card_boost)`). `NFL_HV_DISPLAY_TOP_K` overrides
+that window. With no boost map the high weight stays the raw-value top
+five, and that env is ignored. Draft counts, popularity sections, winning
+drafts, and reconstructed boards are excluded.
 Corpus G box `value` is not y. Fewer than 30 leaderboard rows fails with
 `hv_tdv_training_rows_insufficient`. The JSON report includes
 `training_target`, `archive_depth`, and `hv_overlay` (`boards`,
@@ -470,6 +473,7 @@ Label roots (missing directories add no boards, so those games stay out of the f
 | `NFL_CORPUS_C_ROOT` | `data/raw/corpus_c` |
 | `NFL_HV_EXPORT_ROOT` | `data/export/hv_boards` |
 | `NFL_HV_CORPUS_ROOT` | `data/raw/realsports_corpus` |
+| `NFL_HV_DISPLAY_TOP_K` | `10` when a boost map joins; unset keeps 10. No map stays at raw top 5 |
 
 `railway ssh` runs the **deployed image**. The overlay is absent until this
 commit is the worker's SUCCESS deployment. Exact project-scoped commands are

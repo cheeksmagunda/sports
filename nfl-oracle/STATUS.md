@@ -69,6 +69,27 @@ Code inventory only. No Railway read and no serving-knob change.
 `seasonAverages.*` is unused on the NFL freeze path. The matrix does not
 flip optimizer or picker env.
 
+## HV display top-10 weights (#644) - 2026-09-28
+
+Train sample weights only. No Railway variable write, no deploy, no
+`nfl-pipeline train --force`. `NFL_PICKER_BOOST_RANK_BLEND`,
+`NFL_OPTIMIZER_UPSIDE_WEIGHT`, and `NFL_OPTIMIZER_FIELD_WEIGHT` stay at the
+live values recorded under #596 (blend 0, upside 0, field 0). Do not
+restore 0.75 / 0.15 / 0.10.
+
+`NFL_HV_DISPLAY_TOP_K` is read by the train bundle when an HV boost map
+joins history rows. The default is 10. A missing map keeps the raw-value
+top five and ignores that env. The train audit field is
+`contest_display_top_k`. Rollback is revert this commit, or set the env
+back only on a later explicit train. This checkout has no
+`player_results.csv`, so a top-10 capture table was not recomputed.
+
+| Comparison | Status |
+|---|---|
+| Display-five vs raw vs chalk vs ceiling, 4 NFL contests | Verified on #633 (means display 0.999305, raw 0.900582, chalk 0.648299). That table is the lineup five, not this top-10 weight window |
+| Top-10 HV/TDV display capture vs raw vs chalk vs ceiling | unverified |
+| WNBA backup slate_labels top-10 capture | unverified |
+| Worker `train --force` after this commit | Not run. Hold it until after the MNF freeze. Public slate read #599: `next_freeze` null until the 23:15Z live check, cutoff 2026-09-29T00:15:00Z |
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
@@ -145,8 +166,8 @@ Total Value Daily Leaderboard (`draftStats.highestBoostedValuePlayers`).
 `select_label_kind`, `build_high_potential_labels`) and keeps a Corpus G row
 only when `(player_id, game_id)` is on that section and the board source is
 `nfl_highestBoostedValuePlayers`. The label is that board's `value`
-(`label_kind=hv_tdv_leaderboard`). Sample weights then give the high weight
-to the top five on that board. Draft counts, popularity sections, winning
+(`label_kind=hv_tdv_leaderboard`). The high-weight window is the #644
+contract in the README train section. Draft counts, popularity sections, winning
 drafts, and reconstructed boards (`nfl_draft_stats_reconstructed`, including
 a boosts-present fallback) are excluded. Corpus G box `playerBoxScores[].value`
 is not the train target. Two boards that disagree drop the key. A fit with

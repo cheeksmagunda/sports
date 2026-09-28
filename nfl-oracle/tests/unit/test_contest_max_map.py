@@ -5,9 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
+import pytest
+
 from nfl_oracle.recommendations.display_rank_weights import (
+    DISPLAY_TOP_K_ENV,
     boosts_for_history_rows,
     contest_display_top_ids,
+    resolve_contest_display_top_k,
     sample_weights_contest_display,
 )
 from nfl_oracle.replay.contest_max_map_cli import build_report, collect_boards
@@ -33,6 +37,66 @@ def test_boost_map_promotes_the_contest_display_player() -> None:
         rows, boosts={(2, 9): 3.0, (1, 9): 0.0}, top_k=1, high_weight=4.0
     )
     assert weights == [1.0, 4.0]
+
+
+def _twelve_game_rows() -> list[SimpleNamespace]:
+    # player 1 is the raw leader. player 12 is the raw trailer.
+    return [
+        SimpleNamespace(
+            player_id=player_id,
+            game_id=9,
+            value=float(30 - player_id),
+            did_not_play=False,
+            draft_count=99_999 if player_id == 11 else 1,
+            winning_draft=player_id == 11,
+        )
+        for player_id in range(1, 13)
+    ]
+
+
+def _display_boosts() -> dict[tuple[int, int], float]:
+    # Boost 3.0 lifts player 12 above the raw leader on value * (2 + boost).
+    return {(player_id, 9): (3.0 if player_id == 12 else 0.0) for player_id in range(1, 13)}
+
+
+def test_boost_map_defaults_to_display_top_10_and_ignores_drafts() -> None:
+    rows = _twelve_game_rows()
+    bare = [
+        SimpleNamespace(player_id=row.player_id, game_id=row.game_id, value=row.value)
+        for row in rows
+    ]
+    weights = sample_weights_contest_display(rows, boosts=_display_boosts(), high_weight=4.0)
+    bare_weights = sample_weights_contest_display(bare, boosts=_display_boosts(), high_weight=4.0)
+    assert weights == bare_weights
+    assert weights.count(4.0) == 10
+    assert weights[11] == 4.0  # player 12, display rank 1
+    assert weights[9] == 1.0  # player 10, raw top-10, display rank 11
+    assert weights[10] == 1.0  # player 11, huge draft count, outside the display ten
+
+
+def test_missing_boost_map_stays_at_raw_top_five() -> None:
+    weights = sample_weights_contest_display(_twelve_game_rows(), boosts=None, high_weight=4.0)
+    assert weights.count(4.0) == 5
+    assert weights[:5] == [4.0, 4.0, 4.0, 4.0, 4.0]
+    assert weights[5:] == [1.0] * 7
+
+
+def test_display_top_k_env_needs_a_boost_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(DISPLAY_TOP_K_ENV, "3")
+    boosted = sample_weights_contest_display(
+        _twelve_game_rows(), boosts=_display_boosts(), high_weight=4.0
+    )
+    raw = sample_weights_contest_display(_twelve_game_rows(), boosts=None, high_weight=4.0)
+    assert boosted.count(4.0) == 3
+    assert boosted[11] == 4.0
+    assert raw.count(4.0) == 5
+    assert resolve_contest_display_top_k(boosts_present=True, top_k=1) == 1
+
+
+def test_display_top_k_env_rejects_non_integers(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(DISPLAY_TOP_K_ENV, "nope")
+    with pytest.raises(ValueError, match=DISPLAY_TOP_K_ENV):
+        resolve_contest_display_top_k(boosts_present=True)
 
 
 def test_history_join_uses_eastern_kickoff_date() -> None:
