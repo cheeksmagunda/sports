@@ -82,6 +82,53 @@ def test_eb_predict_one_applies_pace_when_provided() -> None:
     assert _eb_predict_one(art, 42, "F") == pytest.approx(4.0)
 
 
+
+def test_eb_predict_one_f_only_artifact_falls_back_for_g_and_c() -> None:
+    """#592: F-only trained artifact must use F mean for G/C positions.
+
+    Missing G/C keys must not become 0.0 then the 0.5 floor (forwards chalk).
+    """
+    eb = EBHierarchicalBaseline(
+        cohort_means={"F": 2.5},
+        player_alpha={42: 1.5, 43: 0.5, 44: -0.2},
+        pace_beta=0.0,
+        league_pace=0.0,
+    )
+    art = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        eb_baseline=eb,
+        training_rows=1,
+        low_data_mode=False,
+    )
+    # F mean 2.5 + alpha -> same for F/G/C when only F is trained
+    assert _eb_predict_one(art, 42, "F") == pytest.approx(4.0)
+    assert _eb_predict_one(art, 42, "G") == pytest.approx(4.0)
+    assert _eb_predict_one(art, 43, "C") == pytest.approx(3.0)
+    assert _eb_predict_one(art, 44, "G-F") == pytest.approx(2.3)
+
+
+def test_eb_predict_one_present_g_c_means_still_used() -> None:
+    """#592: when G/C means exist, use them (including an explicit 0.0)."""
+    eb = EBHierarchicalBaseline(
+        cohort_means={"F": 2.5, "G": 0.0, "C": 3.1},
+        player_alpha={10: 1.0, 11: 0.4},
+        pace_beta=0.0,
+        league_pace=0.0,
+    )
+    art = PickerArtifact(
+        feature_module_sha="test",
+        config={},
+        eb_baseline=eb,
+        training_rows=1,
+        low_data_mode=False,
+    )
+    # G mean stored as 0.0 + alpha 1.0 = 1.0 (must not fall back to F=2.5)
+    assert _eb_predict_one(art, 10, "G") == pytest.approx(1.0)
+    assert _eb_predict_one(art, 11, "C") == pytest.approx(3.5)
+    assert _eb_predict_one(art, 10, "F") == pytest.approx(3.5)
+
+
 def test_eb_predict_one_floored_at_half() -> None:
     """A deeply negative alpha shouldn't produce a near-zero prediction
     that would explode the log-scale sampling."""

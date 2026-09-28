@@ -69,7 +69,17 @@ def eb_predict_one(
     if int(player_id) not in baseline.player_alpha:
         return None
     cohort = cohort_for_position(position)
-    prediction = baseline.cohort_means.get(cohort, 0.0) + baseline.player_alpha[int(player_id)]
+    # F-only artifacts (#592): label corpus stamps every row as F, so G/C keys
+    # are absent. Missing cohort must fall back to trained F mean + alpha, not
+    # 0.0 (which then hits the 0.5 floor and chalks forwards-only).
+    means = baseline.cohort_means
+    if cohort in means:
+        cohort_mean = float(means[cohort])
+    elif "F" in means:
+        cohort_mean = float(means["F"])
+    else:
+        cohort_mean = 0.0
+    prediction = cohort_mean + baseline.player_alpha[int(player_id)]
     pace_beta = float(getattr(baseline, "pace_beta", 0.0) or 0.0)
     league_pace = float(getattr(baseline, "league_pace", 0.0) or 0.0)
     if team_pace is not None and pace_beta:
