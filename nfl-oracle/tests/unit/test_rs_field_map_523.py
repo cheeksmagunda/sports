@@ -30,6 +30,8 @@ def test_rs_field_matrix_has_required_columns() -> None:
     assert mapped_rs_field_count() >= 6
     assert any(r["status"] == "label" for r in rows)
     assert any(r["status"] == "leakage-blocked" for r in rows)
+    season = next(r for r in rows if "seasonAverages" in r["rs_field"])
+    assert season["status"] == "unused"
 
 
 def test_dump_exposed_keys_walks_fixture() -> None:

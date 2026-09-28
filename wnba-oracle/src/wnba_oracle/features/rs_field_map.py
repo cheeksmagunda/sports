@@ -69,17 +69,17 @@ RS_FIELD_MATRIX: tuple[tuple[str, str, str, str, RsStatus], ...] = (
     ),
     (
         "overallRank / injuryBodyPart / moneylines / lastTenWins",
-        "job1 pool + odds → head_features fuse",
+        "fuse kwargs; job1 passes h2h only when WNBA_FUSE_MONEYLINE=1",
         "head_features + EB rank/moneyline terms",
-        "EBHierarchicalBaseline + fuse_slate_enrichment",
-        "mapped",
+        "default off; EB moneyline_beta still no-ops at 0",
+        "unused",
     ),
     (
         "seasonAverages.*",
         "feed / pool when present",
-        "head_features season_avg_*",
-        "optional head_features",
-        "mapped",
+        "extract_season_averages (not called on job1)",
+        "UNUSED_GOLD; fuse accepts season_averages kwargs",
+        "unused",
     ),
     (
         "baseBoostedValue / draftStats score/rank (same slate)",

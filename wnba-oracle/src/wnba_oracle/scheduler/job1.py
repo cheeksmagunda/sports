@@ -31,6 +31,8 @@ from wnba_oracle.features.serving_features import (
     build_opp_dvp_lookup,
     build_team_pace_lookup,
     fuse_slate_enrichment_into_head_features,
+    moneyline_fuse_enabled,
+    moneyline_pair,
 )
 from wnba_oracle.features.serving_features import lookup as head_feature_lookup
 from wnba_oracle.ingest.identity import build_resolver
@@ -397,6 +399,8 @@ def _build_enrichment_rows(
             is_starter=int(is_starter),
             starter_slot=int(starter_slot),
             rotowire_confirmed=int(confirmed),
+            team_moneyline=vegas.get("team_moneyline"),
+            opponent_moneyline=vegas.get("opponent_moneyline"),
         )
 
         normalized_name = player.display_name.lower().strip()
@@ -518,6 +522,7 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
 
     team_to_opp: dict[str, str] = {}
     team_to_vegas: dict[str, dict[str, float]] = {}
+    fuse_moneyline = moneyline_fuse_enabled()
     for g in odds:
         h_key = team_key_from_full_name(g.home_team)
         a_key = team_key_from_full_name(g.away_team)
@@ -526,8 +531,26 @@ def run(slate_date: str | None = None, *, dry_run: bool = False) -> Job1Result:
         total = float(g.total_point) if g.total_point is not None else 0.0
         home_spread = float(g.spread_home_point) if g.spread_home_point is not None else 0.0
         away_spread = float(g.spread_away_point) if g.spread_away_point is not None else 0.0
-        team_to_vegas[h_key] = {"vegas_total": total, "vegas_spread": home_spread, "is_home": 1.0}
-        team_to_vegas[a_key] = {"vegas_total": total, "vegas_spread": away_spread, "is_home": 0.0}
+        team_to_vegas[h_key] = {
+            "vegas_total": total,
+            "vegas_spread": home_spread,
+            "is_home": 1.0,
+            **moneyline_pair(
+                team=g.h2h_home,
+                opponent=g.h2h_away,
+                enabled=fuse_moneyline,
+            ),
+        }
+        team_to_vegas[a_key] = {
+            "vegas_total": total,
+            "vegas_spread": away_spread,
+            "is_home": 0.0,
+            **moneyline_pair(
+                team=g.h2h_away,
+                opponent=g.h2h_home,
+                enabled=fuse_moneyline,
+            ),
+        }
 
     # Build the RotoWire injury index once so the per-player loop stays
     # O(n) and joins by (team, normalized_name). RotoWire is the
