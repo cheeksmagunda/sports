@@ -20,8 +20,7 @@ def test_production_container_is_role_split_and_secret_free() -> None:
     ]
     assert "alembic upgrade" not in dockerfile
     client_copy = (
-        "COPY scripts/ollama_hv_watcher/client.py "
-        "/app/scripts/ollama_hv_watcher/client.py"
+        "COPY scripts/ollama_hv_watcher/client.py /app/scripts/ollama_hv_watcher/client.py"
     )
     assert client_copy in dockerfile
 
