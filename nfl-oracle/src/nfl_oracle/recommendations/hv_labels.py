@@ -1,15 +1,14 @@
-"""Overlay Highest-value / Total Value board labels onto Corpus G history.
+"""Overlay HV + TDV leaderboard labels onto Corpus G history.
 
-Issue #597. ``nfl-pipeline train`` fits ridge on these labels:
+Issue #597. The train objective is the Real Sports Highest value / Total
+Value Daily Leaderboard (``draftStats.highestBoostedValuePlayers``), including
+exported boards from that section. Draft counts, popularity sections,
+winning drafts, and reconstructed boards are not the label.
 
-* rung 1: ``draftStats.highestBoostedValuePlayers`` ``value`` (and exported
-  HV/TDV boards that came from that section);
-* rung 2: the raw postgame box ``playerBoxScores[].value`` when no board
-  scopes that player-game.
-
-Draft counts, popularity sections, and reconstructed boards are never the
-label. A board with no game id is skipped so a player id cannot retarget
-every other game in the archive.
+When a board scopes ``(player_id, game_id)``, ``value`` becomes that
+leaderboard value and ``label_kind`` is ``hv_tdv_leaderboard``. Otherwise the
+row keeps its raw postgame box value (``label_kind=raw_box``). A board with
+no game id is skipped so a player id cannot retarget every other game.
 """
 
 from __future__ import annotations
@@ -43,7 +42,9 @@ class HvOverlayAudit:
     corpus_c_root: str
     export_root: str
     hv_corpus_root: str
-    training_target: str = "hv_tdv_board_value_else_raw_box_not_draft_count"
+    training_target: str = "hv_tdv_leaderboards"
+    label_section: str = "highestBoostedValuePlayers"
+    fallback: str = "raw_box_when_game_has_no_leaderboard"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -57,7 +58,10 @@ class HvOverlayAudit:
             "export_root": self.export_root,
             "hv_corpus_root": self.hv_corpus_root,
             "training_target": self.training_target,
+            "label_section": self.label_section,
+            "fallback": self.fallback,
             "draft_count_is_label": False,
+            "winning_drafts_are_label": False,
             "contest_entry": False,
         }
 
@@ -301,10 +305,10 @@ def apply_hv_tdv_labels(
             updated.append(row)
             continue
         overlaid += 1
-        if abs(row.value - value) <= _VALUE_TOLERANCE:
-            updated.append(row)
-        else:
-            updated.append(row.model_copy(update={"value": value}))
+        update: dict[str, Any] = {"label_kind": "hv_tdv_leaderboard"}
+        if abs(row.value - value) > _VALUE_TOLERANCE:
+            update["value"] = value
+        updated.append(row.model_copy(update=update))
     audit = HvOverlayAudit(
         boards=index.boards,
         rows_overlaid=overlaid,

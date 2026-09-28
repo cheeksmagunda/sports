@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from nfl_oracle.recommendations.high_tv import sample_weights_for_train_target
 from nfl_oracle.recommendations.hv_labels import apply_hv_tdv_labels
 from nfl_oracle.recommendations.model import HistoricalPerformance
 
@@ -43,6 +44,8 @@ def test_corpus_c_hv_section_overlays_scoped_game_only() -> None:
     by_key = {(row.player_id, row.game_id): row.value for row in updated}
     # Fixture HV value is 5.0. Draft count 20 must not become the label.
     assert by_key[(401, 19457)] == 5.0
+    assert updated[0].label_kind == "hv_tdv_leaderboard"
+    assert updated[1].label_kind == "raw_box"
     assert by_key[(401, 99999)] == 9.0
     # mostDraftedPlayers is not the train target.
     assert by_key[(501, 19457)] == 3.2
@@ -50,7 +53,11 @@ def test_corpus_c_hv_section_overlays_scoped_game_only() -> None:
     assert audit.rows_overlaid == 1
     assert audit.rows_raw == 3
     assert audit.boards >= 1
-    assert audit.to_dict()["draft_count_is_label"] is False
+    audit_doc = audit.to_dict()
+    assert audit_doc["draft_count_is_label"] is False
+    assert audit_doc["winning_drafts_are_label"] is False
+    assert audit_doc["training_target"] == "hv_tdv_leaderboards"
+    assert audit_doc["label_section"] == "highestBoostedValuePlayers"
 
 
 def test_missing_hv_section_keeps_raw_box_value(tmp_path: Path) -> None:
@@ -147,5 +154,22 @@ def test_conflicting_hv_values_leave_the_raw_box(tmp_path: Path) -> None:
         hv_corpus_root=corpus,
     )
     assert updated[0].value == 1.5
+    assert updated[0].label_kind == "raw_box"
     assert audit.rows_overlaid == 0
     assert audit.conflicts == 1
+
+
+def test_leaderboard_weight_beats_a_larger_raw_box_in_the_same_game() -> None:
+    board = _row(player_id=1, game_id=10, value=5.0).model_copy(
+        update={"label_kind": "hv_tdv_leaderboard"}
+    )
+    raw = _row(player_id=2, game_id=10, value=80.0)
+    weights = sample_weights_for_train_target([board, raw], top_k=1, high_weight=4.0)
+    assert weights == [4.0, 1.0]
+
+
+def test_games_without_a_leaderboard_still_upweight_raw_top_value() -> None:
+    low = _row(player_id=1, game_id=11, value=1.0)
+    high = _row(player_id=2, game_id=11, value=9.0)
+    weights = sample_weights_for_train_target([low, high], top_k=1, high_weight=4.0)
+    assert weights == [1.0, 4.0]
