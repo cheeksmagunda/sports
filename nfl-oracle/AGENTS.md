@@ -72,11 +72,13 @@ here. NFL does not import WNBA code.
 - Endpoints: `/games/{id}/sport/nfl/stats`, `/players`, `/feed?version=2&view=all&viewFrame=default`
 - Persist redacted JSON with sha256 + provenance; resume by season cursor
 - Primary Real label field: `playerBoxScores[].value`
-- Train objective: HV + TDV leaderboards
-  (`draftStats.highestBoostedValuePlayers`). Draft counts, popularity
-  sections, and prior users' winning drafts are not the fit target. A game
-  with no leaderboard keeps the raw box value. Command and roots: this
-  app's `README.md` (Forced model retrain).
+- Train objective: HV + TDV leaderboards only
+  (`draftStats.highestBoostedValuePlayers`). `nfl-pipeline train` calls the
+  #185 ladder and keeps a row only when the board source is
+  `nfl_highestBoostedValuePlayers`. Reconstructed boards, draft counts,
+  popularity sections, and prior users' winning drafts are excluded.
+  Corpus G box `value` is not the train target (audit #599). Command and
+  roots: this app's `README.md` (Forced model retrain).
 - Corpus C contest data and the five-card policy are implemented for read-only
   research and freeze/grade workflows; contest submission and live entry remain
   hard-forbidden by the provider boundary.

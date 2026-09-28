@@ -184,8 +184,9 @@ def sample_weights_for_train_target(
 
     When a game has any ``label_kind == hv_tdv_leaderboard`` row, only those
     leaderboard rows compete for the top-k weight. A larger raw box score in
-    the same game cannot outrank the board. Games with no leaderboard keep
-    the raw-value top-k ladder.
+    the same game cannot outrank the board. ``nfl-pipeline train`` never
+    passes raw-box rows (operator lock). This raw top-k branch is only for
+    direct callers that still hold mixed rows.
     """
 
     board_values: dict[int, dict[int, float]] = {}

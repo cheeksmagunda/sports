@@ -437,18 +437,23 @@ scripts/codespace-railway-env -- railway ssh --service nfl-oracle-worker -- \
 ```
 
 `train --force` is the max-depth fit for the HV + TDV leaderboards
-(issue #597): Real Sports Highest value / Total Value Daily Leaderboard,
-section `highestBoostedValuePlayers`. It loads every finalized game under
-`NFL_HISTORY_ROOT` (default `/app/nfl-oracle/data/raw/corpus_g` on the
-worker; no year cap). Where a board scopes `(player_id, game_id)`, that
-leaderboard `value` is the label and the top five on the board take the
-high sample weight. A larger raw box score in the same game does not.
-Draft counts, popularity sections, and winning drafts are not labels. A
-game with no leaderboard keeps the raw box `value` and the raw top-five
-weight. The JSON report includes `training_target` and `hv_overlay`
-(`boards`, `rows_overlaid`, `rows_raw`, `conflicts`).
+(issue #597, operator lock from audit #599): Real Sports Highest value /
+Total Value Daily Leaderboard, section `highestBoostedValuePlayers`. It
+loads finalized games under `NFL_HISTORY_ROOT` (default
+`/app/nfl-oracle/data/raw/corpus_g` on the worker; no year cap) and calls
+the #185 ladder (`high_tv_board_from_draft_stats`, `select_label_kind`,
+`build_high_potential_labels`). A row stays in the design matrix only when
+`(player_id, game_id)` is on that section and the board source is
+`nfl_highestBoostedValuePlayers`. The label is that board's `value`. The
+top five on the board take the high sample weight. Draft counts,
+popularity sections, winning drafts, and reconstructed boards are excluded.
+Corpus G box `value` is not y. Fewer than 30 leaderboard rows fails with
+`hv_tdv_training_rows_insufficient`. The JSON report includes
+`training_target`, `archive_depth`, and `hv_overlay` (`boards`,
+`rows_overlaid`, `rows_excluded`, `rows_raw` is 0, `conflicts`,
+`fit_seasons`, `operator_lock`).
 
-Label roots (all optional; missing directories are a no-op overlay):
+Label roots (missing directories add no boards, so those games stay out of the fit):
 
 | Env | Default under the project root |
 |---|---|
