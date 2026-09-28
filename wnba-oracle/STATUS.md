@@ -2,6 +2,19 @@
 
 Last verified: 2026-09-27T05:31:49Z
 
+## Win stack index (#594)
+
+Pointer only. This index does not restate the sections below and does not
+re-check Railway.
+
+- Code contract (EB serve default, T-40 `job2` lead, connector ids, knob
+  Field defaults including `OPTIMIZER_OBJECTIVE_MODE=payout` vs expected
+  `total_draft_value`): `README.md` (Win stack).
+- Live knobs and freeze readiness: Win-draft knobs and Overnight freeze
+  readiness below.
+- Ollama is not a WNBA serve primary. It notes on the same HV/TDV boards
+  from the Codespace. Role: root `../OVERVIEW.md`.
+
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
 | Check | Result |

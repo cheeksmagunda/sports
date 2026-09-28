@@ -2,10 +2,25 @@
 
 NBA Oracle application scaffold.
 
-Current scope is pre-product: package wiring, boundary-safe layout, a
-health-only FastAPI process for Railway mono staging, NBA season/coverage
-helpers, and an auth-blocked Corpus G backfill gate. Domain contests,
-provider HTTP ingest, models, and serving strategies are not implemented.
+Current scope is pre-product: package wiring, a health-only FastAPI process
+for Railway mono staging, NBA season/coverage helpers, a public history
+loader, and a Corpus G backfill gate that does not call the network.
+Domain contests, provider HTTP ingest, models, T-40 freeze, and serve knobs
+are not implemented. Structural outline: root `../OVERVIEW.md`.
+
+## Win stack
+
+This app is not on the freeze path.
+
+| Piece | State in code |
+|---|---|
+| Model / serve knobs | None. `GET /health` only |
+| T-40 runner | None |
+| Ollama | Portfolio helper only (`../OVERVIEW.md`). Not an NBA model |
+| HV board export | `scripts/export_hv_board.py` exits 78 (fail closed) |
+| Game-stats append | `scripts/append_game_stats_matchup.py` uses `oracle_core.corpus_matchup` |
+| Public history connector | `nba-history-load` / `history_loader.py` (`data.nba.com`). Observation only. Counts: `STATUS.md` |
+| Real Sports connector | `nba-corpus-g-backfill` writes a blocked coverage matrix and exits non-zero when the process has no portfolio `REALSPORTS_*` material. It does not mint a session |
 
 ## Connection surfaces
 
@@ -54,11 +69,10 @@ uv run --package nba-oracle nba-corpus-g-backfill --dry-run
   new start-year label; January-June stay on the prior label.
 - `NEXT_REGULAR_SEASON_OPEN` is `2026-10-20` (NBA.com public calendar fact).
 - Tracked seasons for Corpus G planning: `2002` through the current Eastern
-  season label. Until Real Sports auth is present on an authorized surface,
-  every season is recorded as `blocked` in the coverage matrix.
-- `nba-corpus-g-backfill` writes that matrix and exits non-zero when
-  portfolio `REALSPORTS_*` material is absent. It does not mint credentials
-  and does not claim historical rows loaded.
+  season label. The gate records every season as `blocked` and exits
+  non-zero when portfolio `REALSPORTS_*` material is absent from that
+  process. That is the gate's fail-closed behavior. It does not mint
+  credentials and it does not claim historical rows loaded.
 
 ## Public history loader
 

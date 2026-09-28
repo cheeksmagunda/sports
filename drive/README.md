@@ -16,3 +16,4 @@ Because the repository on `main` is the single source of truth for all access po
 - **Handoffs & Working Files**: Name clearly (e.g., `YYYY-MM-DD-inventory.md` or `feature-x-handoff.md`).
 - **Cleanup**: Delete or archive files when the task is complete or the handoff is no longer needed. Do not leave stale state here.
 - **No Secrets**: Never store credentials, API keys, or Real Sports sessions in this directory.
+- **Not the win-stack source of truth**: layout, T-40 runners, Ollama's place in the HV/TDV model path, and knob ownership live in root `OVERVIEW.md`. Live Railway values live in each app `STATUS.md`. A brief here may point at those files. It must not copy them.
