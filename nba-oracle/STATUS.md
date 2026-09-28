@@ -1,5 +1,14 @@
 # Status
 
+## Win stack index (#594)
+
+Pointer only. Not a new live check.
+
+- Code contract: no model, no T-40 runner, no serve knobs, HV export stub
+  exits 78, history loader is observation-only. See `README.md` (Win stack).
+- Partial `nba_history_*` counts and Railway shell: sections below.
+- Ollama is not an NBA model. Role: root `../OVERVIEW.md`.
+
 ## History corpus gap (#453 / #489)  -  2026-09-27
 
 ## Total Value HV leaderboard corpus (#526)  -  2026-09-27

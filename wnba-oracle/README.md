@@ -7,7 +7,56 @@ read-only slate and lineup data.
 
 Portfolio product goal: root `../README.md` (Product goal). Current WNBA serve
 knobs and training-target detail are in `STATUS.md` and must be reverified
-before production work.
+before production work. Structural outline: root `../OVERVIEW.md`.
+
+## Win stack
+
+Inline contract for this app. Live Railway values stay in `STATUS.md`.
+
+**Model path.** Train and grade on `highestBoostedValuePlayers` only.
+`WNBA_SERVE_PRIMARY` code default is `eb` (`EBHierarchicalBaseline`).
+`heads` restores LightGBM quantile heads and is the rollback, not the
+primary. Minutes blend and heuristics are cold-start only. Ollama
+(`scripts/ollama_hv_watcher`) writes five-player notes on the same HV/TDV
+boards from the Codespace. It is not this app's serve model and it does not
+freeze a lineup.
+
+**T-40 runner.** `scheduler/job2.py` skips fires before
+`first_tip - FREEZE_LEAD_MINUTES` and freezes once at or after that instant.
+Code default lead is 40 (`common/settings.py`). `api/slate.py` exposes
+`freeze_target_utc`. Guard: `.github/workflows/wnba-pre-freeze-guard.yml`
+and `scripts/pre_freeze_guard.py`. Cron schedules are mutable; see
+`STATUS.md`.
+
+**Connectors.** Stable, value-free catalog:
+`wnba_oracle.assurance.connectors` (`CONNECTORS`). Ids: `realsports`,
+`rotowire`, `the_odds_api`, `wnba_stats`, `postgres`, `redis`,
+`model_artifact`, `identity_override_file`, `payout_archive`, `wnba_api`,
+`frontend`, `espn`, `github_actions`, `railway`, `watchdog_alert_sink`,
+`watchdog_heartbeat_sink`, `realsports_session_recovery`. A freeze records
+connector ids, not credential values.
+
+### Env knobs (code contract)
+
+`EXPECTED_PROD_CONFIG` in `common/settings.py` is what the watchdog compares
+to the live process. A wiped cron env falls back to the Field default, then
+`config_drift` warns when that differs from the expected row. Live process
+values: `STATUS.md` (Win-draft knobs).
+
+| Env | Field default | `EXPECTED_PROD_CONFIG` |
+|---|---|---|
+| `PAYOUT_REGIME` | `top_1` | `top_1` |
+| `OPTIMIZER_OBJECTIVE_MODE` | `payout` | `total_draft_value` |
+| `OPTIMIZER_MAX_VALUE_OWNERSHIP_FADE` | `0.001` | `0.001` |
+| `WNBA_SERVE_PRIMARY` | `eb` | not in that dict (code default applies when unset) |
+| `FREEZE_LEAD_MINUTES` | `40` | not in that dict |
+| `LIVE_OWNERSHIP_CAPTURE_ENABLED` | `false` | not in that dict |
+
+Rollback for the objective flip is `OPTIMIZER_OBJECTIVE_MODE=payout`.
+Rollback for the regime flip is `PAYOUT_REGIME=top_20`. Rollback for EB
+primary is `WNBA_SERVE_PRIMARY=heads` plus a real cron redeploy. The rest of
+`EXPECTED_PROD_CONFIG` (stacking, fade, samples) stays in `settings.py`; do
+not copy it here.
 
 ## Connection surfaces
 

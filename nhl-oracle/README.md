@@ -5,18 +5,33 @@ NHL Oracle application scaffold.
 Portfolio product goal: root `../README.md` (Product goal). Current NHL serve
 knobs and readiness facts are in `STATUS.md`.
 
-Current scope (see `STATUS.md` for verified facts): Week 2 live read-only
-Real Sports contract audit, corpus seed, and contest-range discovery are done; Week 3 chronological
-baseline + prediction skeleton (`labels/`, `baselines/`) is started on
-synthetic labels only. Package wiring includes contest contract and audit
-gates (`contract/`), redacted ingest/provenance (`ingest/`), identity map
-(`identity/`), and freeze-cycle job skeleton (`scheduler/`). No Real-corpus
-baseline fit, contest-law optimizer, hosted API, or contest entry exists
-yet. A lean Vite+React frontend scaffold lives at `frontend/` (#462).
-Staging container shell (#482): root `Dockerfile` + `railway.toml` and
-`nhl-pipeline serve` / `nhl-pipeline worker` (health + stub routes; idle
-worker heartbeat). sports-oracle `nhl-staging` hosts `nhl-api` /
-`nhl-worker` / `nhl-frontend` as non-contest staging only.
+Current scope (verified facts in `STATUS.md`): Week 2 live read-only Real
+Sports contract audit, corpus seed, and contest-range discovery are done.
+Week 3 chronological baselines (`labels/`, `baselines/`) run on synthetic
+labels; HV train/backtest wiring prefers HV-tagged rows when present and
+reports a corpus gap when they are not. Contest algebra and a T-40 coherence
+check exist in code. There is no Real-corpus fit, no contest-law optimizer,
+and no contest entry. Staging is a health/stub shell, not a freeze
+publisher: `nhl-pipeline serve` / `nhl-pipeline worker` on sports-oracle
+`nhl-staging` (`nhl-api`, `nhl-worker`, `nhl-frontend`). Frontend scaffold:
+`frontend/` (#462). Structural outline: root `../OVERVIEW.md`.
+
+## Win stack
+
+Inline contract. Live staging facts stay in `STATUS.md`. The roadmap below
+keeps the contest-law detail; this table is the map.
+
+| Piece | Code |
+|---|---|
+| HV label | `labels.hv` / `TRAINING_LABEL_SECTION` = `highestBoostedValuePlayers`. `report_hv_corpus_gap` when durable boards are missing |
+| Contest score | `nhl_oracle.contest`: ordered five, slots `(2.0, 1.8, 1.6, 1.4, 1.2)`, `value * (slot_multiplier + effective_card_boost)` |
+| Boost | `contract.boost_gate`: multiplier 0 until every club has at least 1 GP |
+| T-40 runner | `scheduler.t40` opens at `lock_at - 40m`. `run_freeze_cycle(..., ensure_t40_coherent=)` fails closed. No hosted publish |
+| Own model | `features.own_model_map` routes pre-slate history to priors / ridge-valuelaw. No LightGBM primary |
+| Ollama | Portfolio helper on the same boards (`../OVERVIEW.md`). Not an NHL serve model |
+| Serve knobs | None. No `OPTIMIZER_*` / profile env contract |
+| HV export | `scripts/export_hv_board.py` exits 78 |
+| Connectors | Real Sports read-only audit client (`ingest/realsports.py`); public NHL API via `history_loader.py` and `nhl-history-nightly.yml`; Railway staging shell in `STATUS.md` |
 
 ## Connection surfaces
 

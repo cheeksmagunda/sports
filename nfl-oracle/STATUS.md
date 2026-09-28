@@ -12,6 +12,19 @@ picker can read it when `NFL_OLLAMA_TICK_TILT_WEIGHT>0` and
 on the Railway volume by default. Related inbound app→Ollama helper: PR #582
 merged 2026-09-28 (`578566d`).
 
+## Win stack index (#594)
+
+Pointer only. This index does not restate the sections below and does not
+re-check Railway.
+
+- Code contract (max_value env default vs bare diversified `OptimizerConfig`,
+  picker identity defaults, worker T-40 publish vs watchdog alert):
+  `README.md` (Win stack).
+- Live worker knobs, Corpus G volume, and the 2026-09-27 harden: sections
+  below, starting with Win-draft harden.
+- Ollama is not the NFL ridge/valuelaw serve path and does not publish the
+  freeze. Role: root `../OVERVIEW.md`.
+
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 
 Early window failed (`future_forecast` then `stale_player`). Harden landed so

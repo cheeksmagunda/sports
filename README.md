@@ -180,11 +180,16 @@ wnba-oracle/            WNBA application and all WNBA-owned behavior
 nfl-oracle/             NFL application and all NFL-owned behavior
 nba-oracle/             NBA application and all NBA-owned behavior
 nhl-oracle/             NHL application and all NHL-owned behavior
-scripts/                Portfolio operations, secret injection, boundary checks
+scripts/                Portfolio operations, corpus helpers, Ollama HV watcher
+drive/                  Scratch briefs only (see drive/README.md)
 ```
 
 The dependency direction is application to core. Core cannot import an
 application, and applications cannot import one another.
+
+The structural map (what lives in root vs `oracle-core` vs each app, the
+T-40 runner map, and Ollama's place in the HV/TDV model path) is
+`OVERVIEW.md`. Live Railway values stay in each app `STATUS.md`.
 
 ## Repository and deployment model
 
