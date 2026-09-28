@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import random
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from datetime import datetime
@@ -66,6 +67,13 @@ class OptimizerConfig(Record):
     # Serving reads NFL_OPTIMIZER_PROFILE via optimizer_config_from_env
     # (default max_value / win-draft). Bare OptimizerConfig() stays diversified.
     profile: str = "diversified"
+    # Commit slot 1 (2.0x) to the highest projected mean, then descending.
+    # NFL_OPTIMIZER_SLOT_BY_MEAN=0 keeps the search assignment.
+    slot_by_mean: bool = True
+    # Hard caps on the committed five. 0 disables. Defaults are one kicker
+    # (provider K) and one defender (LB/DB/DL family).
+    max_kickers: int = Field(default=1, ge=0, le=5)
+    max_defenders: int = Field(default=1, ge=0, le=5)
 
 
 # Production default: three distinct teams, two distinct games. The optimizer
@@ -87,6 +95,87 @@ OPTIMIZER_PROFILE_PRESETS: dict[str, tuple[int, int]] = {
     "max_value": (MAX_VALUE_MIN_DISTINCT_TEAMS, MAX_VALUE_MIN_DISTINCT_GAMES),
 }
 
+# Provider cards use LB/DB/DL. Finer chart codes count as the same defender so
+# a CB plus an LB cannot slip the one-defender cap. DST is not a card. The
+# sets match recommendations.context.POSITION_FAMILIES for DB, DL, and LB.
+DEFENDER_POSITIONS = frozenset(
+    {
+        "DB",
+        "CB",
+        "FS",
+        "SS",
+        "S",
+        "SAFETY",
+        "DL",
+        "DE",
+        "DT",
+        "NT",
+        "LDE",
+        "RDE",
+        "EDGE",
+        "LB",
+        "ILB",
+        "MLB",
+        "OLB",
+        "LOLB",
+        "ROLB",
+    }
+)
+KICKER_POSITIONS = frozenset({"K"})
+
+
+def _position_code(position: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", position.upper())
+
+
+def _is_kicker(position: str) -> bool:
+    return _position_code(position) in KICKER_POSITIONS
+
+
+def _is_defender(position: str) -> bool:
+    return _position_code(position) in DEFENDER_POSITIONS
+
+
+def _lineup_exceeds_caps(
+    ids: Sequence[int],
+    candidates: Mapping[int, Candidate],
+    *,
+    max_kickers: int,
+    max_defenders: int,
+) -> bool:
+    """True when ``ids`` already holds more kickers or defenders than allowed."""
+    if max_kickers <= 0 and max_defenders <= 0:
+        return False
+    kickers = 0
+    defenders = 0
+    for pid in ids:
+        position = candidates[pid].position
+        if max_kickers > 0 and _is_kicker(position):
+            kickers += 1
+            if kickers > max_kickers:
+                return True
+        if max_defenders > 0 and _is_defender(position):
+            defenders += 1
+            if defenders > max_defenders:
+                return True
+    return False
+
+
+def _commit_slot_order(
+    ids: tuple[int, ...],
+    by_id: Mapping[int, Projection],
+    *,
+    enabled: bool,
+) -> tuple[int, ...]:
+    """Put the highest projected mean in slot 1 when ``enabled``.
+
+    Equal means keep the lower ``player_id`` in the better slot so the commit
+    is deterministic. Disabled leaves the search order unchanged.
+    """
+    if not enabled:
+        return ids
+    return tuple(sorted(ids, key=lambda pid: (-by_id[pid].mean, pid)))
+
 
 def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> OptimizerConfig:
     """Build an :class:`OptimizerConfig` from the process environment.
@@ -107,6 +196,12 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
     - ``NFL_OPTIMIZER_UPSIDE_WEIGHT`` / ``NFL_OPTIMIZER_FIELD_WEIGHT``: floats
       (0..2) that tune the contest-utility re-rank (right-tail p90 lift and
       field-beat leverage). Unset keeps the production defaults.
+    - ``NFL_OPTIMIZER_SLOT_BY_MEAN``: default on. ``0`` keeps the search slot
+      assignment instead of descending projected mean.
+    - ``NFL_OPTIMIZER_MAX_KICKERS`` / ``NFL_OPTIMIZER_MAX_DEFENDERS``: integers.
+      Default ``1``. ``0`` disables that cap. An integer above 5 also disables
+      it (a five-card lineup cannot hold more). Negative or non-integer values
+      raise.
     """
 
     env = environ if environ is not None else os.environ
@@ -125,6 +220,9 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
         upside_weight=upside,
         field_weight=field,
         profile=profile,
+        slot_by_mean=_env_flag(env, "NFL_OPTIMIZER_SLOT_BY_MEAN", True),
+        max_kickers=_env_lineup_cap(env, "NFL_OPTIMIZER_MAX_KICKERS", defaults.max_kickers),
+        max_defenders=_env_lineup_cap(env, "NFL_OPTIMIZER_MAX_DEFENDERS", defaults.max_defenders),
     )
 
 
@@ -138,6 +236,33 @@ def _env_diversity_int(env: Mapping[str, str], key: str, default: int) -> int:
         raise ValueError(f"{key}_invalid") from error
     if not 1 <= value <= 5:
         raise ValueError(f"{key}_out_of_range")
+    return value
+
+
+def _env_flag(env: Mapping[str, str], key: str, default: bool) -> bool:
+    raw = (env.get(key) or "").strip().lower()
+    if not raw:
+        return default
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{key}_invalid")
+
+
+def _env_lineup_cap(env: Mapping[str, str], key: str, default: int) -> int:
+    """Read a 0..5 cap. ``0`` disables. Values above 5 disable as well."""
+    raw = (env.get(key) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError(f"{key}_invalid") from error
+    if value < 0:
+        raise ValueError(f"{key}_out_of_range")
+    if value > 5:
+        return 0
     return value
 
 
@@ -225,6 +350,8 @@ def _exact_search(
     *,
     teams_required: int,
     games_required: int,
+    max_kickers: int,
+    max_defenders: int,
 ) -> list[tuple[float, tuple[int, ...]]]:
     """Solve the five-slot assignment exactly when scipy is available."""
     if (
@@ -307,6 +434,24 @@ def _exact_search(
     add_constraint(
         [(game_offset + number, 1.0) for number in range(len(game_ids))], games_required, np.inf
     )
+
+    def add_group_cap(player_indexes: Sequence[int], limit: int) -> None:
+        if limit <= 0 or not player_indexes:
+            return
+        add_constraint(
+            [(x_index(player, slot), 1.0) for player in player_indexes for slot in range(5)],
+            0,
+            float(limit),
+        )
+
+    kicker_indexes = [
+        player for player, pid in enumerate(player_ids) if _is_kicker(candidates[pid].position)
+    ]
+    defender_indexes = [
+        player for player, pid in enumerate(player_ids) if _is_defender(candidates[pid].position)
+    ]
+    add_group_cap(kicker_indexes, max_kickers)
+    add_group_cap(defender_indexes, max_defenders)
     matrix = coo_matrix((data, (rows, cols)), shape=(len(lower), variable_count)).tocsr()
     objective = np.zeros(variable_count)
     for player, pid in enumerate(player_ids):
@@ -459,6 +604,8 @@ def optimize(
                 scores,
                 teams_required=teams,
                 games_required=games,
+                max_kickers=cfg.max_kickers,
+                max_defenders=cfg.max_defenders,
             )
             if exact:
                 return exact
@@ -470,6 +617,13 @@ def optimize(
                     if p.player_id in ids:
                         continue
                     new = (*ids, p.player_id)
+                    if _lineup_exceeds_caps(
+                        new,
+                        candidates,
+                        max_kickers=cfg.max_kickers,
+                        max_defenders=cfg.max_defenders,
+                    ):
+                        continue
                     remaining = 4 - slot
                     if len({candidates[i].team_id for i in new}) + remaining < teams:
                         continue
@@ -602,6 +756,11 @@ def optimize(
         ranked.append((contest_utility(expected, p90, wins), expected, ids, p90, wins))
     ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
     _utility, expected, ids, p90, wins = ranked[0]
+    ordered = _commit_slot_order(ids, by_id, enabled=cfg.slot_by_mean)
+    if ordered != ids:
+        ids = ordered
+        expected = sum(scores[pid][slot] for slot, pid in enumerate(ids))
+        p90, wins = evaluate(ids)
     return Recommendation(
         picks=tuple(
             Pick(
@@ -649,5 +808,12 @@ def optimize(
             "field_win_rate_against_simulated_opponent_not_payout_probability",
             "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
             "lineup_selected_by_contest_utility_over_expected_score_beam",
+            (
+                "committed_slots_follow_descending_projected_mean"
+                if cfg.slot_by_mean
+                else "committed_slots_follow_search_order"
+            ),
+            f"max_kickers={cfg.max_kickers}",
+            f"max_defenders={cfg.max_defenders}",
         ),
     )

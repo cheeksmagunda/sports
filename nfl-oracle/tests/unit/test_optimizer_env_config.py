@@ -27,6 +27,9 @@ def test_empty_env_reproduces_production_defaults() -> None:
     assert cfg.upside_weight == default.upside_weight
     assert cfg.field_weight == default.field_weight
     assert cfg.objective == "total_value"
+    assert cfg.slot_by_mean is True
+    assert cfg.max_kickers == 1
+    assert cfg.max_defenders == 1
 
 
 def test_max_value_profile_drops_diversity_floor_to_one() -> None:
@@ -68,11 +71,28 @@ def test_weight_knobs_are_read_and_range_checked() -> None:
         {"NFL_OPTIMIZER_UPSIDE_WEIGHT": "9"},
         {"NFL_OPTIMIZER_FIELD_WEIGHT": "-1"},
         {"NFL_OPTIMIZER_UPSIDE_WEIGHT": "abc"},
+        {"NFL_OPTIMIZER_SLOT_BY_MEAN": "maybe"},
+        {"NFL_OPTIMIZER_MAX_KICKERS": "-1"},
+        {"NFL_OPTIMIZER_MAX_KICKERS": "nope"},
+        {"NFL_OPTIMIZER_MAX_DEFENDERS": "-3"},
     ],
 )
 def test_invalid_env_fails_closed(env: dict[str, str]) -> None:
     with pytest.raises(ValueError):
         optimizer_config_from_env(env)
+
+
+def test_slot_and_cap_kill_switches() -> None:
+    off = optimizer_config_from_env(
+        {
+            "NFL_OPTIMIZER_SLOT_BY_MEAN": "0",
+            "NFL_OPTIMIZER_MAX_KICKERS": "0",
+            "NFL_OPTIMIZER_MAX_DEFENDERS": "9",
+        }
+    )
+    assert off.slot_by_mean is False
+    assert off.max_kickers == 0
+    assert off.max_defenders == 0
 
 
 def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
