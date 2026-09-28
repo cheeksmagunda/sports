@@ -2,6 +2,11 @@
 
 Last verified: 2026-09-27T14:30Z
 
+## T-40 hook map (#604)  -  2026-09-28
+
+Stable chain: `CONNECTORS.md`. Live knobs below were not re-queried for
+that doc. No serving flip.
+
 ## Wipe-safe TDV Settings default (#584)  -  2026-09-27T14:30Z
 
 PR branch `feat/584-tdv-default-wipe-safe` only. **HOLD merge until after

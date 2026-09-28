@@ -6,6 +6,7 @@ Current scope is pre-product: package wiring, boundary-safe layout, a
 health-only FastAPI process for Railway mono staging, NBA season/coverage
 helpers, and an auth-blocked Corpus G backfill gate. Domain contests,
 provider HTTP ingest, models, and serving strategies are not implemented.
+The explicit not-hooked map is `CONNECTORS.md`.
 
 ## Connection surfaces
 

@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1121 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -117,6 +117,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nba-oracle/.env.example
 - nba-oracle/AGENTS.md -- NBA Oracle agent instructions
 - nba-oracle/CLAUDE.md -- NBA Oracle agent instructions
+- nba-oracle/CONNECTORS.md -- NBA connector map
 - nba-oracle/Dockerfile
 - nba-oracle/Makefile -- Build/test/lint entrypoints
 - nba-oracle/README.md -- nba-oracle
@@ -164,6 +165,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/AGENTS.md -- NFL Oracle agent instructions
 - nfl-oracle/BUILD_HANDOFF.md -- NFL Oracle build handoff
 - nfl-oracle/CLAUDE.md -- NFL Oracle agent instructions
+- nfl-oracle/CONNECTORS.md -- NFL T-40 connector map
 - nfl-oracle/DATA_ATTRIBUTION.md -- Data attribution (nfl-oracle)
 - nfl-oracle/Dockerfile
 - nfl-oracle/Dockerfile.production
@@ -466,6 +468,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_calendar_derived_defaults.py
 - nfl-oracle/tests/unit/test_capture_storage_state_paths.py -- capture_storage_state must write under volume-aware scraper_dir.
 - nfl-oracle/tests/unit/test_clocks.py -- Tests for train/live Corpus G clock helpers.
+- nfl-oracle/tests/unit/test_connector_map.py -- The NFL connector map stays aligned with the serving feature contract (#604).
 - nfl-oracle/tests/unit/test_contest_algebra_and_gates.py -- Contest scoring algebra + entry gates (observation only).
 - nfl-oracle/tests/unit/test_contest_corpus.py -- Corpus C: scoring-law verification, boost recovery, and censoring honesty.
 - nfl-oracle/tests/unit/test_contest_dry_run.py -- Offline contest dry-run: five-card shadow slate + hard-deny submit.
@@ -551,6 +554,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/.gitignore
 - nhl-oracle/AGENTS.md -- NHL Oracle agent instructions
 - nhl-oracle/CLAUDE.md -- NHL Oracle agent instructions
+- nhl-oracle/CONNECTORS.md -- NHL connector map
 - nhl-oracle/Dockerfile
 - nhl-oracle/Makefile -- Build/test/lint entrypoints
 - nhl-oracle/README.md -- nhl-oracle
@@ -877,6 +881,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/CLAUDE.md -- WNBA Oracle Instructions
 - wnba-oracle/COMMUNITY_STRATEGY_FINDINGS.md -- Community Strategy Findings (issue #37), 2026-09-24
 - wnba-oracle/COMMUNITY_STRATEGY_TASK.md -- Community/Field Strategy Calibration — Copilot Task
+- wnba-oracle/CONNECTORS.md -- WNBA T-40 connector map
 - wnba-oracle/Dockerfile
 - wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md -- Model Pick Postmortem — 2026-08-28 Slate
 - wnba-oracle/Makefile -- Build/test/lint entrypoints

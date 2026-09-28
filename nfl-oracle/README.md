@@ -3,7 +3,8 @@
 Real Sports NFL research application. Current track: Corpus G (historical
 games/box/play archive with Real `value` labels) and honest coverage audits.
 
-Portfolio product goal: root `../README.md` (Product goal). Current NFL serve
+Portfolio product goal: root `../README.md` (Product goal). The T-40 hook
+graph and the required-ON contract are in `CONNECTORS.md`. Current NFL serve
 knobs and training-target detail are in `STATUS.md` and must be reverified
 before production work.
 

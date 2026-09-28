@@ -3,6 +3,11 @@
 Last verified: 2026-09-27 CT (#535 HV train/backtest wiring; continues #453/#526;
 #501 zero-boost gate; #482 nhl-staging Docker live smoke)
 
+## T-40 hook map (#604)  -  2026-09-28
+
+Stable chain, including the hosted-freeze gap: `CONNECTORS.md`. Staging
+facts below were not re-queried for that doc. No serving flip.
+
 ## Highest Total Value train + backtest path (#535 / #453 / #526)  -  2026-09-27
 
 - **Train/backtest target:** Real Sports Highest value / Total Value board

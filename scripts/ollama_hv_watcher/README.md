@@ -9,8 +9,9 @@ Product goal: the root `README.md` **Product goal** (maximize capture of
 the slate's Real Sports `highestBoostedValuePlayers` board; beat the crowd).
 
 Each sport app (`nfl-oracle`, `wnba-oracle`) fires its own T-40 freeze and
-publishes its frozen five-player lineup on its own API and frontend. This
-helper is only an annotator on top of that:
+publishes its frozen five-player lineup on its own API and frontend. The
+required-ON contract for that freeze is the app's `CONNECTORS.md`, not this
+helper. This helper is only an annotator on top of that:
 
 - It only READS each app's public API (`adapters/app_api.py`, stdlib
   `urllib`, bounded timeout and retry, no credentials).

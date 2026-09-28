@@ -1,5 +1,10 @@
 # Status
 
+## T-40 hook map (#604)  -  2026-09-28
+
+NBA is not on the five-card freeze path. The gap list is `CONNECTORS.md`.
+Staging facts below were not re-queried for that doc. No serving flip.
+
 ## History corpus gap (#453 / #489)  -  2026-09-27
 
 ## Total Value HV leaderboard corpus (#526)  -  2026-09-27

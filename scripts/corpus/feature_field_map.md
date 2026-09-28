@@ -1,5 +1,8 @@
 # Corpus field → own-model FeatureSpec map (#526 → #523)
 
+Serving hop graph (what must be ON for a freeze): each app's `CONNECTORS.md`.
+NFL Monday night: `nfl-oracle/CONNECTORS.md`.
+
 Total Value leaderboard is the label. Corpus artifacts feed the existing own
 learner surfaces (NFL ridge / valuelaw / context; WNBA EB + serving features).
 Do not invent a parallel model stack.

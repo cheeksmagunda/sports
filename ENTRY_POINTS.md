@@ -586,18 +586,19 @@ not mint this token. Auth for scrapes remains the portfolio
 corpus work. **Ollama training** is FORBIDDEN until `coverage_manifest.json` reports
 complete historical capture (binary install + watcher: #574).
 
+## T-40 hook map (#604)
+
+Before a slate window, read the owning app's `CONNECTORS.md` for the
+required-ON contract and that app's `STATUS.md` for the last verified knob
+values. NFL Monday night uses `nfl-oracle/CONNECTORS.md`. The helper in the
+next section does not publish the freeze.
+
 ## Ollama HV watcher (#574)
 
-Portfolio Codespace helper (not per-app serving). Arms at the earliest slate
-T-40 across sports and stays open until the latest slate `close_at`. Default
-model `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`. Training /
-`ollama generate` requires `coverage_manifest` complete (#526) or
-`SPORTS_OLLAMA_UNLOCK=1`. Commands: `scripts/ollama_hv_watcher/README.md`.
-
-```sh
-bash scripts/ollama_hv_watcher/install_codespace.sh
-PYTHONPATH=scripts python -m ollama_hv_watcher --status
-PYTHONPATH=scripts python -m ollama_hv_watcher --once
-PYTHONPATH=scripts python -m ollama_hv_watcher --daemon
-```
+Codespace annotator on each app's already-frozen five. It reads the public
+API and writes a note. It does not replace, reorder, or delay the freeze.
+Default model `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`.
+`ollama generate` still requires `coverage_manifest` complete (#526) or
+`SPORTS_OLLAMA_UNLOCK=1`. Commands, app URL env, and the pregame leak stop:
+`scripts/ollama_hv_watcher/README.md`.
 
