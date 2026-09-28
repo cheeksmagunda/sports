@@ -1,5 +1,22 @@
 # Status
 
+Last verified: 2026-09-28T17:22Z
+
+## Full HV/TDV retrain + Ollama arm (#620 / #574)  -  2026-09-28T17:21Z
+
+| Fact | Value |
+|------|-------|
+| `nfl-pipeline train --force` | SUCCESS @ 17:19:47Z |
+| Active model | `8be320057538f8933a5cb21183db58c801437031c1348d893897c1729a4945eb` activated 17:20:36Z |
+| HV overlay | boards=72, rows_overlaid=824, rows_excluded_raw=36886, fit_seasons=[2024,2025] |
+| Training target | `hv_tdv_leaderboards` / `highestBoostedValuePlayers` only |
+| Ollama | serve ok (`llama3.2:3b`+`llama3.1:8b`); daemon armed for NFL T-40 **23:35Z** + WNBA 21:50Z Tue; influence stays **OFF** |
+| Live windows | from app APIs (`--windows-from-apps`); NFL arm 23:35Z close 04:15Z |
+
+Model map (connected): Corpus G + Corpus C HV boards → `hv_labels` / train overlay → ridge → prepare/publish T-40 → public API. Ollama learns on app-frozen fives (LLM-internal runs-on-shape). Off for MNF: boost-rank blend 0.75, Ollama influence weight, contest entry.
+
+
+
 Last verified: 2026-09-28T04:59Z
 
 
