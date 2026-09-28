@@ -1,18 +1,23 @@
 # Status
 
-Last verified: 2026-09-28T03:10Z
+Last verified: 2026-09-28T03:18Z
 
-## HV/TDV train target (#597)  -  2026-09-28T03:20Z
+## HV/TDV train target (#597, lock #599)  -  2026-09-28T03:18Z
 
-Train objective is the HV + TDV leaderboards: Real Sports Highest value /
+Train objective is HV + TDV leaderboards only: Real Sports Highest value /
 Total Value Daily Leaderboard (`draftStats.highestBoostedValuePlayers`).
-`nfl-pipeline train` writes that section's `value` onto the matching Corpus
-G row and sets `label_kind=hv_tdv_leaderboard`. Sample weights then give the
-high weight to the top five on that board. A larger raw box score in the
-same game does not. Draft counts, popularity sections, and winning drafts
-are not the label. A game with no leaderboard, or two boards that disagree,
-keeps `label_kind=raw_box`. `nfl-hv-board-replay` scores each board: HV-rank
-five vs draft-count chalk five vs the hindsight ceiling, under
+`nfl-pipeline train` calls the #185 ladder (`high_tv_board_from_draft_stats`,
+`select_label_kind`, `build_high_potential_labels`) and keeps a Corpus G row
+only when `(player_id, game_id)` is on that section and the board source is
+`nfl_highestBoostedValuePlayers`. The label is that board's `value`
+(`label_kind=hv_tdv_leaderboard`). Sample weights then give the high weight
+to the top five on that board. Draft counts, popularity sections, winning
+drafts, and reconstructed boards (`nfl_draft_stats_reconstructed`, including
+a boosts-present fallback) are excluded. Corpus G box `playerBoxScores[].value`
+is not the train target. Two boards that disagree drop the key. A fit with
+fewer than 30 leaderboard rows raises `hv_tdv_training_rows_insufficient`.
+`rows_raw` in `hv_overlay` is 0. `nfl-hv-board-replay` scores each board:
+HV-rank five vs draft-count chalk five vs the hindsight ceiling, under
 `value * (slot_multiplier + card_boost)`.
 
 ### Live train
@@ -49,8 +54,9 @@ scripts/codespace-railway-env -- railway ssh \
   bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
 ```
 
-Paste the JSON (`training_rows`, `hv_overlay`, `model_sha256`) back into
-this section. Read-only board score on the same image:
+Paste the JSON (`training_rows`, `hv_overlay` with `rows_raw` 0,
+`archive_depth.fit_seasons`, `model_sha256`) back into this section.
+Read-only board score on the same image:
 
 ```bash
 scripts/codespace-railway-env -- railway ssh \
