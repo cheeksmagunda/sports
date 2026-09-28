@@ -13,7 +13,7 @@ from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
 from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES
-from nfl_oracle.recommendations.high_tv import sample_weights_for_history
+from nfl_oracle.recommendations.high_tv import sample_weights_for_train_target
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
     Finite,
@@ -50,6 +50,9 @@ class HistoricalPerformance(Record):
     opponent_team_id: PositiveId | None = None
     role: str | None = None
     did_not_play: bool = False
+    # hv_tdv_leaderboard: y came from highestBoostedValuePlayers (HV + TDV).
+    # raw_box: no leaderboard scoped this player-game (ladder fallback).
+    label_kind: Literal["hv_tdv_leaderboard", "raw_box"] = "raw_box"
     context_features: dict[str, Finite] = Field(default_factory=dict)
     context_clock: EvidenceClock | None = None
     context_evidence_mode: Literal["prospective", "retrospective_reconstructed"] = "prospective"
@@ -474,7 +477,7 @@ def fit_model(
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
     names = _context_feature_names(train)
-    train_weight_list = sample_weights_for_history(train)
+    train_weight_list = sample_weights_for_train_target(train)
     train_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(train, train_weight_list, strict=True)
@@ -552,7 +555,7 @@ def fit_model(
     # position_mean / global_mean also zero context coefficients; only ridge
     # preserves pace/defense/matchup/depth for v2 TNF.
     selected_estimator: EstimatorName = "ridge" if names else holdout_winner
-    ordered_weight_list = sample_weights_for_history(ordered)
+    ordered_weight_list = sample_weights_for_train_target(ordered)
     ordered_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(ordered, ordered_weight_list, strict=True)
@@ -590,6 +593,8 @@ def fit_model(
     position_bias = {
         position: mean(values) for position, values in residuals_by_position.items() if values
     }
+    leaderboard_rows = sum(row.label_kind == "hv_tdv_leaderboard" for row in ordered)
+    raw_rows = sum(row.label_kind == "raw_box" for row in ordered)
     return RatingModel(
         trained_at=now,
         fit_config=cfg,
@@ -598,6 +603,11 @@ def fit_model(
         training_fingerprint=fingerprint([r.model_dump(mode="json") for r in ordered]),
         coefficients=selected_coefficients,
         residuals=tuple(selected_errors),
+        label_provenance=(
+            "hv_tdv_leaderboard_highestBoostedValuePlayers"
+            if leaderboard_rows
+            else "real_value_postgame_finalized"
+        ),
         selected_estimator=selected_estimator,
         feature_coverage=feature_coverage,
         position_residual_bias=position_bias,
@@ -630,8 +640,15 @@ def fit_model(
             "holdout_winner": holdout_winner,
             "holdout_winner_mae": candidates_mae[holdout_winner],
             "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
-            "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
-            "training_target": "hv_tdv_board_value_else_raw_box_not_draft_count",
+            "high_tv_sample_weighting": "hv_tdv_leaderboard_top5_else_raw_box_top5",
+            "training_target": (
+                "hv_tdv_leaderboards"
+                if leaderboard_rows
+                else "raw_box_fallback_no_hv_tdv_leaderboard"
+            ),
+            "training_target_section": "highestBoostedValuePlayers",
+            "leaderboard_label_rows": leaderboard_rows,
+            "raw_box_label_rows": raw_rows,
             "context_evidence_disclosure": (
                 "retrospective_reconstructed_context_included"
                 if retrospective_rows
