@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1159 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -207,6 +207,9 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/frontend/style.css
 
 ## nfl-oracle/reports/
+- nfl-oracle/reports/hv_regime_backtest.json
+- nfl-oracle/reports/hv_regime_backtest.md -- HV/TDV board backtest, split by slate regime (#603)
+- nfl-oracle/reports/hv_tdv_campaign.md -- NFL Highest-value / Total-value campaign (#603)
 - nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.json
 - nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.md -- HV top-10 train note: Washington 26932 (2026-09-27)
 
@@ -221,6 +224,8 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/scripts/daily_shadow.py -- Minimal daily-shadow scaffold (observation only; no contest entry).
 - nfl-oracle/scripts/export_hv_board.py -- NFL HV board export scaffold (issue #526).
 - nfl-oracle/scripts/full_pool_draft.py -- Rank the complete eligible pool for the remaining games of a slate, and
+- nfl-oracle/scripts/hv_regime_backtest.py -- Score lineups against HV/TDV boards, split by Sunday and one-night.
+- nfl-oracle/scripts/hv_tdv_campaign.py -- Shared-fit Highest-value / Total-value campaign on Corpus C (#603).
 - nfl-oracle/scripts/hydrate_identity_fixtures.py -- Offline: build an IdentityMap summary from Corpus G / value_labels fixtures.
 - nfl-oracle/scripts/nfl_corpus_backup_common.py -- Integrity helpers shared by the NFL corpus backup and restore entry points.
 - nfl-oracle/scripts/nfl_dayclose_gate.py -- Session-free gate: is there an NFL slate inside the day-close sweep window?
@@ -358,11 +363,13 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay.py -- Replay the production pipeline on the pool each Corpus C contest showed (#280).
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay_cli.py -- CLI: production pipeline replayed on each Corpus C contest's visible pool (#280).
 - nfl-oracle/src/nfl_oracle/replay/harness.py -- Replay the saved Corpus C archive against the verified scoring law.
+- nfl-oracle/src/nfl_oracle/replay/hv_board_overlap.py -- Score lineups only against a Highest-value / Total-value board.
 - nfl-oracle/src/nfl_oracle/replay/hv_board_replay.py -- Score HV boards: HV-rank five vs draft-count chalk vs hindsight ceiling.
 - nfl-oracle/src/nfl_oracle/replay/hv_board_replay_cli.py -- CLI: score saved HV boards (HV five vs chalk five vs hindsight).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest.py -- Walk-forward backtest of the actual production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest_cli.py -- CLI: walk-forward backtest of the production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/racer.py -- NFL evaluate hook for the portfolio race engine (#339).
+- nfl-oracle/src/nfl_oracle/replay/slate_regime.py -- Split a contest day into Sunday multi-game vs one-night.
 
 ## nfl-oracle/src/nfl_oracle/service/
 - nfl-oracle/src/nfl_oracle/service/__init__.py -- Read-only nfl-oracle research service scaffold.
@@ -428,6 +435,10 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 ## nfl-oracle/tests/fixtures/coverage/
 - nfl-oracle/tests/fixtures/coverage/dense_catalog.json -- (test fixture data)
 - nfl-oracle/tests/fixtures/coverage/dense_matrix.json -- (test fixture data)
+
+## nfl-oracle/tests/fixtures/hv_screenshot_boards/
+- nfl-oracle/tests/fixtures/hv_screenshot_boards/2026-09-20.json -- (test fixture data)
+- nfl-oracle/tests/fixtures/hv_screenshot_boards/2026-09-27.json -- (test fixture data)
 
 ## nfl-oracle/tests/fixtures/identity/
 - nfl-oracle/tests/fixtures/identity/dense_players.json -- (test fixture data)
@@ -498,6 +509,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_feature_value_model.py -- Leakage-safe feature_ridge value model + strategy wiring.
 - nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
+- nfl-oracle/tests/unit/test_hv_board_overlap.py -- Screenshot HV/TDV boards: law, board capture, and regime isolation.
 - nfl-oracle/tests/unit/test_hv_board_replay.py -- HV-rank five, draft-count chalk, and hindsight ceiling use the draft-image law.
 - nfl-oracle/tests/unit/test_hv_emphasis.py -- HV top-10 emphasis names stay on live features and off chalk channels.
 - nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV leaderboard rows are the only train labels. Box rows are excluded.
@@ -512,6 +524,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_ollama_engine.py -- Ollama candidate scoring sits on the classic optimizer (#595).
 - nfl-oracle/tests/unit/test_ollama_tick_tilt.py -- Ollama tick tilt contract for NFL picker (#574).
 - nfl-oracle/tests/unit/test_optimizer_env_config.py -- Env-driven optimizer construction config (max-value / race mode) for #453.
+- nfl-oracle/tests/unit/test_optimizer_position_caps.py -- Position caps and slot-by-mean ordering for research arms (#603).
 - nfl-oracle/tests/unit/test_own_model_feature_map_523.py -- Phase-1 (#523): own-model ridge consumes safe live_ok slate context.
 - nfl-oracle/tests/unit/test_picker_knobs.py -- Unit tests for boost-aware / position-calibration picker knobs (#280).
 - nfl-oracle/tests/unit/test_player_mean_and_coverage_matrix.py -- player_mean baseline + coverage matrix document helpers.
@@ -553,6 +566,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_schedule_slate_resolve.py -- Week/slate resolution helpers over dense offline schedules.
 - nfl-oracle/tests/unit/test_service_app.py -- Research service scaffold smoke tests.
 - nfl-oracle/tests/unit/test_service_shadow_edges.py -- Research service edge cases for shadow/gates/status (observation only).
+- nfl-oracle/tests/unit/test_slate_regime.py -- Sunday multi-game and one-night must not share a label.
 - nfl-oracle/tests/unit/test_strategy_scaffold.py -- Strategy scaffold: clocks, five-card legality, snapshots.
 - nfl-oracle/tests/unit/test_train_force_flag.py -- train --force must rebuild even when the active model is still young.
 - nfl-oracle/tests/unit/test_value_baselines.py -- Tests for walk-forward Real value baselines (offline).

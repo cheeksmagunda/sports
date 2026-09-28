@@ -326,29 +326,24 @@ def _knobs_markdown(aggregate: dict[str, dict[str, object]]) -> str:
             f"{_pct(blend['mean_hv_board_capture'])} of the board Value. "  # type: ignore[arg-type]
             "Max-1 defender and max-1 kicker on the blend captures "
             f"{_pct(capped['mean_hv_board_capture'])}.",  # type: ignore[arg-type]
-            "- Leave the live ridge blend at `NFL_PICKER_BOOST_RANK_BLEND=0.75` "
-            "until a regime-split refit replaces it. The 2026-09-25 sweep "
-            "(identity 51.7%, boost 0.75 57.9%, 91 contests) is that ridge on "
-            "a mixture of regimes. It is not this table and it is not MNF.",
+            "- **Do not flip live `NFL_PICKER_BOOST_RANK_BLEND` to 0.75.** "
+            "Live stays `0` (#637 / Live train). Offline arms still compare "
+            "identity vs `0.75`. The 2026-09-25 sweep (identity 51.7%, "
+            "boost 0.75 57.9%, 91 contests) is ridge hindsight capture on a "
+            "mixture of regimes, not this HV/TDV board metric.",
             "",
-            "### one_night_mnf (tonight), and TNF / SNF",
+            "### one_night (TNF / SNF / MNF)",
             "",
-            "- Tonight is one game, PHI at CHI. Keep "
-            "`NFL_OPTIMIZER_PROFILE=max_value` (floor 1/1). A two-game floor "
-            "is the Sunday shape.",
-            "- Keep `NFL_PICKER_BOOST_RANK_BLEND=0.75` as the live ridge "
-            "setting. Do not flip it to identity because the Sunday "
-            "perfect-base table prefers identity. That table is Sunday, and "
-            "it assumes the base is already known. No one-night board was "
-            "scored (n=0).",
-            "- Do not add a defender cap or a kicker cap. Nothing one-night "
-            "was measured, and the Sunday identity lineups use two kickers "
-            "or two defenders. Do not copy that mix onto MNF as a quota.",
-            "- Do not use the week-1 zero-boost both-quarterback archetype. "
-            "Those four contests mix Thursday, Friday, Sunday, and Monday, "
-            "and the boost table was all zeros. Tonight is week 3. Sunday's "
-            "board already shows boosts up to +3.0x.",
-            "- Slot-by-mean stays off.",
+            "- Keep `NFL_OPTIMIZER_PROFILE=max_value` (floor 1/1) for one-game "
+            "nights. A two-game floor is the Sunday shape.",
+            "- **Do not flip live blend to 0.75.** No one-night HV/TDV board "
+            "was scored (n=0). Do not copy Sunday perfect-base identity "
+            "preferences onto a night slate as a live flip.",
+            "- Serving code already defaults to max 1 defender, max 1 kicker, "
+            "and slot-by-mean (#616/#617). This offline table does not authorize "
+            "a Railway change. Sunday identity lineups used two kickers or two "
+            "defenders; do not treat that mix as a night-slate quota.",
+            "- Do not use the week-1 zero-boost both-quarterback archetype.",
             "- The probe has zero standalone SNF contest days. SNF that "
             "shares a Sunday date is inside `sunday_multi`.",
             "",

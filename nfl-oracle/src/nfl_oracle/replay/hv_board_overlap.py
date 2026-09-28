@@ -24,13 +24,27 @@ from nfl_oracle.recommendations.optimizer import (
     ScoringPolicy,
     _is_defender,
     _is_kicker,
-    _within_position_caps,
 )
 from nfl_oracle.recommendations.picker_knobs import _boost_aligned_means
 
 SLOT_MULTIPLIERS: tuple[float, ...] = (2.0, 1.8, 1.6, 1.4, 1.2)
 SLOT_BY_LABEL = {"1st": 1, "2nd": 2, "3rd": 3, "4th": 4, "5th": 5}
 POLICY = ScoringPolicy()
+
+def _within_position_caps(
+    positions: Sequence[str],
+    *,
+    max_defenders: int = 0,
+    max_kickers: int = 0,
+) -> bool:
+    """Research caps: ``0`` disables. Matches optimizer ``max_*=0`` semantics."""
+
+    if max_kickers > 0 and sum(_is_kicker(position) for position in positions) > max_kickers:
+        return False
+    if max_defenders > 0 and sum(_is_defender(position) for position in positions) > max_defenders:
+        return False
+    return True
+
 
 
 @dataclass(frozen=True)
@@ -148,8 +162,8 @@ def best_lineup(
     rows: Sequence[BoardRow],
     means: dict[int, float],
     *,
-    max_defenders: int | None = None,
-    max_kickers: int | None = None,
+    max_defenders: int = 0,
+    max_kickers: int = 0,
 ) -> tuple[BoardRow, ...]:
     best: tuple[BoardRow, ...] | None = None
     best_score = float("-inf")
@@ -207,11 +221,11 @@ def score_board(rows: Sequence[BoardRow], *, regime: str) -> dict[str, object]:
     residuals = [abs(law_value(row) - row.displayed_value) for row in rows]
     identity_means = projected_means(rows, blend=0.0)
     blend_means = projected_means(rows, blend=0.75)
-    policies: list[tuple[str, dict[int, float], int | None, int | None]] = [
-        ("identity_uncapped", identity_means, None, None),
-        ("boost_0.75_uncapped", blend_means, None, None),
-        ("boost_0.75_def1", blend_means, 1, None),
-        ("boost_0.75_k1", blend_means, None, 1),
+    policies: list[tuple[str, dict[int, float], int, int]] = [
+        ("identity_uncapped", identity_means, 0, 0),
+        ("boost_0.75_uncapped", blend_means, 0, 0),
+        ("boost_0.75_def1", blend_means, 1, 0),
+        ("boost_0.75_k1", blend_means, 0, 1),
         ("boost_0.75_def1_k1", blend_means, 1, 1),
     ]
     by_id = {row.player_id: row for row in rows}

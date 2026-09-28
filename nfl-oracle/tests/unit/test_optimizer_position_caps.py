@@ -179,5 +179,5 @@ def test_slot_by_mean_orders_descending_projected_mean() -> None:
     means = [pick.projected_value for pick in ordered.picks]
     assert means == sorted(means, reverse=True)
     assert ordered.picks[0].projected_value == max(pick.projected_value for pick in ordered.picks)
-    assert "slots_assigned_by_descending_projected_mean" in ordered.assumptions
+    assert "committed_slots_follow_descending_projected_mean" in ordered.assumptions
     assert [pick.player_id for pick in joint.picks] != [pick.player_id for pick in ordered.picks]

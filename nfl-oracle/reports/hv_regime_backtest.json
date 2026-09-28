@@ -22,26 +22,26 @@
           "name": "identity_uncapped"
         },
         {
-          "mean_hv_board_capture": 0.0887412040656763,
-          "mean_hv_top5_rate": 0.1,
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
           "n_boards": 2,
           "name": "boost_0.75_uncapped"
         },
         {
-          "mean_hv_board_capture": 0.20866584612496963,
-          "mean_hv_top5_rate": 0.2,
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
           "n_boards": 2,
           "name": "boost_0.75_def1"
         },
         {
-          "mean_hv_board_capture": 0.0887412040656763,
-          "mean_hv_top5_rate": 0.1,
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
           "n_boards": 2,
           "name": "boost_0.75_k1"
         },
         {
-          "mean_hv_board_capture": 0.20162909866601733,
-          "mean_hv_top5_rate": 0.2,
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
           "n_boards": 2,
           "name": "boost_0.75_def1_k1"
         }
@@ -81,59 +81,59 @@
           ]
         },
         {
-          "defenders": 3,
-          "hv_board_capture": 0.0,
-          "hv_top5_hits": 0,
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
           "kickers": 1,
           "name": "boost_0.75_uncapped",
           "picks": [
-            "Zaven Collins",
-            "Dee Winters",
-            "Bobby Okereke",
-            "Andre Szmyt",
-            "Dalton Schultz"
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
+            "Dalton Schultz",
+            "Ja'Marr Chase"
           ]
         },
         {
-          "defenders": 1,
-          "hv_board_capture": 0.19059205190592052,
-          "hv_top5_hits": 1,
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
           "kickers": 1,
           "name": "boost_0.75_def1",
           "picks": [
-            "Zaven Collins",
-            "Andre Szmyt",
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
             "Dalton Schultz",
-            "Ja'Marr Chase",
-            "Jaylen Waddle"
+            "Ja'Marr Chase"
           ]
         },
         {
-          "defenders": 3,
-          "hv_board_capture": 0.0,
-          "hv_top5_hits": 0,
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
           "kickers": 1,
           "name": "boost_0.75_k1",
           "picks": [
-            "Zaven Collins",
-            "Dee Winters",
-            "Bobby Okereke",
-            "Andre Szmyt",
-            "Dalton Schultz"
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
+            "Dalton Schultz",
+            "Ja'Marr Chase"
           ]
         },
         {
-          "defenders": 1,
-          "hv_board_capture": 0.19059205190592052,
-          "hv_top5_hits": 1,
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
           "kickers": 1,
           "name": "boost_0.75_def1_k1",
           "picks": [
-            "Zaven Collins",
-            "Andre Szmyt",
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
             "Dalton Schultz",
-            "Ja'Marr Chase",
-            "Jaylen Waddle"
+            "Ja'Marr Chase"
           ]
         }
       ],
@@ -175,59 +175,59 @@
           ]
         },
         {
-          "defenders": 3,
-          "hv_board_capture": 0.1774824081313526,
-          "hv_top5_hits": 1,
+          "defenders": 2,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
           "kickers": 1,
           "name": "boost_0.75_uncapped",
           "picks": [
-            "Kyle Van Noy",
-            "Harrison Mevis",
-            "Jordan Addison",
-            "Jacob Rodriguez",
-            "Genesis Smith"
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Jacob Rodriguez"
           ]
         },
         {
           "defenders": 1,
-          "hv_board_capture": 0.22673964034401875,
-          "hv_top5_hits": 1,
-          "kickers": 2,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
+          "kickers": 1,
           "name": "boost_0.75_def1",
           "picks": [
-            "Kyle Van Noy",
-            "Harrison Mevis",
-            "Jordan Addison",
-            "Kenyon Sadiq",
-            "Chris Boswell"
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Kenyon Sadiq"
           ]
         },
         {
-          "defenders": 3,
-          "hv_board_capture": 0.1774824081313526,
-          "hv_top5_hits": 1,
+          "defenders": 2,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
           "kickers": 1,
           "name": "boost_0.75_k1",
           "picks": [
-            "Kyle Van Noy",
-            "Harrison Mevis",
-            "Jordan Addison",
-            "Jacob Rodriguez",
-            "Genesis Smith"
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Jacob Rodriguez"
           ]
         },
         {
           "defenders": 1,
-          "hv_board_capture": 0.21266614542611414,
-          "hv_top5_hits": 1,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
           "kickers": 1,
           "name": "boost_0.75_def1_k1",
           "picks": [
-            "Kyle Van Noy",
-            "Harrison Mevis",
-            "Jordan Addison",
-            "Kenyon Sadiq",
-            "Sam Darnold"
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Kenyon Sadiq"
           ]
         }
       ],
@@ -240,7 +240,7 @@
   ],
   "command": "scripts/hv_regime_backtest.py --out reports/hv_regime_backtest.json --report reports/hv_regime_backtest.md",
   "contest_entry": false,
-  "finished_at": "2026-09-28T03:33:20+00:00",
+  "finished_at": "2026-09-28T12:16:32-05:00",
   "inventory": {
     "counts": {
       "multi_other": 8,
@@ -253,7 +253,7 @@
   },
   "issue": 603,
   "kind": "hv_regime_backtest",
-  "knobs_markdown": "### sunday_multi\n\n- `NFL_OPTIMIZER_PROFILE=max_value`.\n- No defender cap and no kicker cap. Slot order stays joint.\n- On these two boards, perfect-base identity (the optimizer when the base is already known, n=2) hits the HV/TDV top 5 at 90.0% and captures 90.7% of that top 5's Value. Sep 20's identity five includes two kickers. Sep 27's includes two defenders.\n- `boost_0.75` on that same perfect base hits the board at 10.0% and captures 8.9% of the board Value. Max-1 defender and max-1 kicker on the blend captures 20.2%.\n- Leave the live ridge blend at `NFL_PICKER_BOOST_RANK_BLEND=0.75` until a regime-split refit replaces it. The 2026-09-25 sweep (identity 51.7%, boost 0.75 57.9%, 91 contests) is that ridge on a mixture of regimes. It is not this table and it is not MNF.\n\n### one_night_mnf (tonight), and TNF / SNF\n\n- Tonight is one game, PHI at CHI. Keep `NFL_OPTIMIZER_PROFILE=max_value` (floor 1/1). A two-game floor is the Sunday shape.\n- Keep `NFL_PICKER_BOOST_RANK_BLEND=0.75` as the live ridge setting. Do not flip it to identity because the Sunday perfect-base table prefers identity. That table is Sunday, and it assumes the base is already known. No one-night board was scored (n=0).\n- Do not add a defender cap or a kicker cap. Nothing one-night was measured, and the Sunday identity lineups use two kickers or two defenders. Do not copy that mix onto MNF as a quota.\n- Do not use the week-1 zero-boost both-quarterback archetype. Those four contests mix Thursday, Friday, Sunday, and Monday, and the boost table was all zeros. Tonight is week 3. Sunday's board already shows boosts up to +3.0x.\n- Slot-by-mean stays off.\n- The probe has zero standalone SNF contest days. SNF that shares a Sunday date is inside `sunday_multi`.\n",
+  "knobs_markdown": "### sunday_multi\n\n- `NFL_OPTIMIZER_PROFILE=max_value`.\n- No defender cap and no kicker cap. Slot order stays joint.\n- On these two boards, perfect-base identity (the optimizer when the base is already known, n=2) hits the HV/TDV top 5 at 90.0% and captures 90.7% of that top 5's Value. Sep 20's identity five includes two kickers. Sep 27's includes two defenders.\n- `boost_0.75` on that same perfect base hits the board at 70.0% and captures 70.5% of the board Value. Max-1 defender and max-1 kicker on the blend captures 70.5%.\n- **Do not flip live `NFL_PICKER_BOOST_RANK_BLEND` to 0.75.** Live stays `0` (#637 / Live train). Offline arms still compare identity vs `0.75`. The 2026-09-25 sweep (identity 51.7%, boost 0.75 57.9%, 91 contests) is ridge hindsight capture on a mixture of regimes, not this HV/TDV board metric.\n\n### one_night (TNF / SNF / MNF)\n\n- Keep `NFL_OPTIMIZER_PROFILE=max_value` (floor 1/1) for one-game nights. A two-game floor is the Sunday shape.\n- **Do not flip live blend to 0.75.** No one-night HV/TDV board was scored (n=0). Do not copy Sunday perfect-base identity preferences onto a night slate as a live flip.\n- Serving code already defaults to max 1 defender, max 1 kicker, and slot-by-mean (#616/#617). This offline table does not authorize a Railway change. Sunday identity lineups used two kickers or two defenders; do not treat that mix as a night-slate quota.\n- Do not use the week-1 zero-boost both-quarterback archetype.\n- The probe has zero standalone SNF contest days. SNF that shares a Sunday date is inside `sunday_multi`.\n",
   "mnf_t40": {
     "game_count": 1,
     "gametime": "20:15",

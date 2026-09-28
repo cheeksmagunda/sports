@@ -21,9 +21,10 @@ Perfect-base optimizer (realized base, no blend), mean of the two Sundays:
 HV/TDV top-5 hit rate 90.0%, board Value capture 90.7%. Sep 20 identity
 hits 4 of 5 (81.3% of board Value) and includes two kickers. Sep 27
 identity hits 5 of 5 (100% of board Value) and includes two defenders.
-`boost_0.75` on that same correct base hits the board at 10.0% and captures
-8.9% of board Value. Max-1 defender and max-1 kicker on the blend captures
-20.2%.
+`boost_0.75` on that same correct base hits the board at 70.0% and captures
+70.5% of board Value. Max-1 defender and max-1 kicker on the blend also
+captures 70.5% on these two boards (caps did not move the mean Value
+capture vs uncapped blend).
 
 One-night boards scored: 0 for TNF, SNF, and MNF. Corpus C was empty on the
 worker volume inventory, so production ridge walk-forward was not replayed.
