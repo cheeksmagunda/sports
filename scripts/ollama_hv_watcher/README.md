@@ -5,18 +5,22 @@ Portfolio Codespace helper tracked by
 
 ## What it is (and is not)
 
-Product goal: the root `README.md` **Product goal** (maximize capture of
-the slate's Real Sports `highestBoostedValuePlayers` board; beat the crowd).
+Sports Oracle is LLM-internal runs-on-shape. This package learns and
+tilts on top of the sport-owned schemas, optimizer, and serve. It never
+replaces ridge, math, valuelaw, or a sport-owned model. It is not a
+chatbot and not decoration. The campaign sentence is in `OVERVIEW.md`
+(Win stack, #653). Product goal: root `README.md` **Product goal**.
 
-Each sport app (`nfl-oracle`, `wnba-oracle`) fires its own T-40 freeze and
-publishes its frozen five-player lineup on its own API and frontend. This
-helper is only an annotator on top of that:
+Each sport app fires its own T-40 freeze and publishes its five-player
+lineup. Ollama does not publish that freeze.
 
 - It only READS each app's public API (`adapters/app_api.py`, stdlib
   `urllib`, bounded timeout and retry, no credentials).
-- Every tick's `five_player_lineup` is exactly the app's five in the app's
-  slot order (`lineup_source=app_frozen_lineup`). Ollama writes notes; it
-  never replaces, reorders, blocks, or delays the app's freeze or serving.
+- Every learn tick's `five_player_lineup` is exactly the app's five in the
+  app's slot order (`lineup_source=app_frozen_lineup`). The tick records
+  that shape. It does not replace, reorder, block, or delay the freeze.
+- Tilt is the armed path into the NFL picker (`NFL_OLLAMA_TICK_TILT_WEIGHT`,
+  default 0, identity). Weight 0 does not open the tick file.
 - If Ollama is down or times out the tick is still written with
   `notes="ollama_unavailable"` (or `ollama_gate_forbidden` when the gate is
   closed), so the app's five are always recorded.
@@ -113,8 +117,8 @@ Each learn tick also refreshes `latest_tick.json` in the same slate directory
 ## NFL picker tilt (default off)
 
 Live freeze authority stays Corpus G → ridge → `max_value` → freeze →
-frontend. Ollama is a Codespace satellite unless an operator mounts a tick
-onto the worker and arms:
+frontend. Tilt is how an armed tick drives a run on that shape. Ollama
+does not publish the freeze. Mount a tick onto the worker and arm it:
 
 ```sh
 NFL_OLLAMA_TICK_TILT_WEIGHT=0.15   # 0 = identity (production default)

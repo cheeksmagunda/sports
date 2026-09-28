@@ -120,6 +120,26 @@ back only on a later explicit train. This checkout has no
 | WNBA backup slate_labels top-10 capture | unverified |
 | Worker `train --force` after this commit | Not run. Hold it until after the MNF freeze. Public slate read #599: `next_freeze` null until the 23:15Z live check, cutoff 2026-09-29T00:15:00Z |
 
+## Shape-and-condition campaign (#653)
+
+The objective sentence is in root `../OVERVIEW.md` (Win stack).
+LLM-internal runs-on-shape: Ollama learns and tilts into the existing
+optimizer. It never replaces ridge, math, or valuelaw, and it does not
+publish the freeze. T-40 prepare records that contract
+(`serve_shape_contract`) after the same live-feature check the train
+audit uses. The history-train window stays HV/TDV display top 10 when a
+boost map is present. `nfl-pipeline train` writes
+`hv_feature_emphasis`: every live pre-game FeatureSpec, partitioned into
+player profile, slate conditions, and external pre-game. A missing live
+spec fails closed. `card_boost_post_settlement` stays off the live clock.
+Blend, upside, and field stay 0. Do not restore `0.75`. Production tilt
+weight stays 0. No Railway variable write from this change.
+
+Near-term NFL target, public read `2026-09-28T05:09:26Z`: `/slate/2026-09-28`
+is `waiting_for_t40`, `next_freeze` `2026-09-28T23:35:00Z`, `cutoff_at`
+`2026-09-29T00:15:00Z`, `games` `[]`. That is the MNF commit. Monday WNBA
+and Tuesday NHL reads are in those apps' `STATUS.md`.
+
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
 Ollama is the internal LLM learn/tilt layer **on top of** existing sport
@@ -191,7 +211,8 @@ re-check Railway.
 - Live worker knobs, Corpus G volume, and the 2026-09-27 harden: sections
   below, starting with Win-draft harden.
 - Ollama is not the NFL ridge/valuelaw serve path and does not publish the
-  freeze. Role: root `../OVERVIEW.md`.
+  freeze. Role: root `../OVERVIEW.md`. Shape-and-condition campaign: that
+  same Win stack section (#653).
 
 ## HV/TDV train target (#597, lock #599)  -  2026-09-28T03:22Z
 

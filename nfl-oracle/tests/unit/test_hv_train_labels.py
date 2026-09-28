@@ -58,6 +58,10 @@ def test_corpus_c_hv_section_overlays_scoped_game_only() -> None:
     audit_doc = audit.to_dict()
     assert audit_doc["draft_count_is_label"] is False
     assert audit_doc["winning_drafts_are_label"] is False
+    assert audit_doc["cash_is_objective"] is False
+    assert audit_doc["median_is_objective"] is False
+    assert "shape_condition_objective" in audit_doc
+    assert "T-40" in audit_doc["shape_condition_objective"]
     assert audit_doc["training_target"] == "hv_tdv_leaderboards"
     assert audit_doc["label_section"] == "highestBoostedValuePlayers"
     assert audit_doc["ladder"] == "oracle_core.high_tv.select_label_kind"

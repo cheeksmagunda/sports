@@ -17,6 +17,7 @@ from pydantic import Field, field_validator, model_validator
 from nfl_oracle.calendar import ScheduledGame, games_in_week, season_week_for_date
 from nfl_oracle.recommendations.context import ContextBundle
 from nfl_oracle.recommendations.display_rank_weights import contest_display_top_ids
+from nfl_oracle.recommendations.hv_emphasis import serve_shape_contract
 from nfl_oracle.recommendations.model import (
     ContextAdjustment,
     HistoricalPerformance,
@@ -247,6 +248,7 @@ class RecommendationPipeline:
             field=field,
         )
         display_top = contest_display_top_ids(projections, slate.candidates)
+        shape = serve_shape_contract()
         prepared = PreparedDecision(
             slate=slate,
             recommendation=lineup,
@@ -269,6 +271,11 @@ class RecommendationPipeline:
                 "contest_display_top5": list(display_top),
                 "contest_display_rank": "value_times_top_slot_plus_boost",
                 "draft_count_is_label": False,
+                "llm_internal": shape["llm_internal"],
+                "ollama_layer": shape["ollama_layer"],
+                "replaces_sport_model": shape["replaces_sport_model"],
+                "commit_path": shape["commit_path"],
+                "shape_feature_count": shape["feature_count"],
             },
         )
         return prepared

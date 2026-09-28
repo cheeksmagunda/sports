@@ -39,6 +39,19 @@ Apps do not import each other. `oracle-core` does not import an app.
 
 Product goal (one statement): root `README.md`. The stack that pursues it:
 
+Shape-and-condition campaign (#653). Learn the shapes of every HV/TDV
+board appearance over history, learn the slate conditions that produced
+each shape, and at T-40 match shape and condition with the sport-owned
+model to commit the 5-player lineup that maximizes capture of that
+slate's Highest value / Total Value board, with Ollama on top as
+LLM-internal runs-on-shape. Ollama learns and tilts into the existing
+optimizer and serve. It never replaces ridge, math, valuelaw, or a
+sport-owned model. Models stay in the sport app. `oracle-core` stays
+domain-free. Same-slate settlement features stay off the live clock. The
+train record is a schema.org FeatureSpec and condition Observation. Do
+not restore NFL blend 0.75. Near-term slate facts stay in each app
+`STATUS.md`.
+
 1. **Label.** Real Sports Highest value / Total Value boards
    (`highestBoostedValuePlayers`). Prior users' winning drafts are a
    reference bar, not the fit target.
@@ -47,10 +60,12 @@ Product goal (one statement): root `README.md`. The stack that pursues it:
    plus feature ridge. NHL priors / ridge-valuelaw path is in-app and not
    a hosted freeze. LightGBM is not the primary. No new model stack lives
    in `oracle-core`.
-3. **Ollama, inside that model path.** `scripts/ollama_hv_watcher` notes
-   on the same HV/TDV boards and writes a five-player learn tick. It is
-   not a serve primary and it does not publish a freeze. Gate and commands:
-   `ENTRY_POINTS.md` and `scripts/ollama_hv_watcher/README.md`.
+3. **Ollama, on top of that model path.** `scripts/ollama_hv_watcher` is
+   LLM-internal runs-on-shape. Learn ticks and, when armed, tilt go into
+   the existing optimizer and serve. It never replaces ridge, math,
+   valuelaw, or a sport-owned model. It is not a serve primary and it does
+   not publish a freeze. Gate and commands: `ENTRY_POINTS.md` and
+   `scripts/ollama_hv_watcher/README.md`.
 4. **T-40 runner, per sport.** Table below. Portfolio Ollama arms at the
    earliest supplied T-40; that arm is a learn window, not a freeze.
 5. **Knobs.** Code defaults live in each app `README.md`. Live Railway

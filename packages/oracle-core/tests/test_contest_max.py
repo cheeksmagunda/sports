@@ -5,11 +5,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from oracle_core.contest_max import (
+    SHAPE_CONDITION_OBJECTIVE,
     ContestPlayer,
     boards_from_csv,
     compare_board,
     contest_display_rank_weights,
     display_contest_value,
+    hv_objective_flags,
     summarize_boards,
 )
 from oracle_core.high_tv import sample_weights_for_labeled_rows
@@ -161,3 +163,18 @@ def test_summarize_slices_by_sport_and_regime() -> None:
     assert summary["by_regime"]["multi_game"]["boards"] == 1
     assert set(summary["by_sport"]) == {"nfl", "wnba"}
     assert summary["draft_count_is_label"] is False
+
+
+def test_shape_condition_objective_is_the_campaign_sentence() -> None:
+    flags = hv_objective_flags()
+    assert flags["shape_condition_objective"] == SHAPE_CONDITION_OBJECTIVE
+    assert "T-40" in flags["shape_condition_objective"]
+    assert "LLM-internal runs-on-shape" in flags["shape_condition_objective"]
+    assert flags["llm_internal"] == "runs-on-shape"
+    assert flags["replaces_ridge"] is False
+    assert flags["replaces_sport_model"] is False
+    assert flags["commit_path"] == "sport_owned_model_t40"
+    assert flags["cash_is_objective"] is False
+    assert flags["median_is_objective"] is False
+    assert flags["winning_drafts_are_reference_bar"] is True
+    assert flags["lineup_size"] == 5
