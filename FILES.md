@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -330,6 +330,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
+- nfl-oracle/src/nfl_oracle/recommendations/ollama_tick_tilt.py -- Env-gated Ollama tick tilt for NFL picker projections (#574).
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
 - nfl-oracle/src/nfl_oracle/recommendations/picker_knobs.py -- Evidence-backed projection knobs applied after predict, before optimize (#280).
 - nfl-oracle/src/nfl_oracle/recommendations/pipeline.py -- NFL prepare, publish, and lock lifecycle on the shared durable store.
@@ -491,6 +492,7 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_live_ok_context_features.py -- Canonical live_ok injury/weather context features stay wired (#418).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
 - nfl-oracle/tests/unit/test_multi_contest_day.py -- Multi-contest day selection for the NFL worker and NFLReader.collect.
+- nfl-oracle/tests/unit/test_ollama_tick_tilt.py -- Ollama tick tilt contract for NFL picker (#574).
 - nfl-oracle/tests/unit/test_optimizer_env_config.py -- Env-driven optimizer construction config (max-value / race mode) for #453.
 - nfl-oracle/tests/unit/test_own_model_feature_map_523.py -- Phase-1 (#523): own-model ridge consumes safe live_ok slate context.
 - nfl-oracle/tests/unit/test_picker_knobs.py -- Unit tests for boost-aware / position-calibration picker knobs (#280).
