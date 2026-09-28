@@ -34,6 +34,9 @@ class FitConfig(Record):
     min_unique_kickoffs: int = Field(default=5, ge=2)
     min_training_rows: int = Field(default=30, ge=1)
     min_design_rows: int = Field(default=10, ge=1)
+    # Display-rank window when a card-boost map is present. Raw fallback
+    # stays top 5 inside sample_weights_contest_display.
+    display_top_k: int = Field(default=10, ge=1)
 
 
 class HistoricalPerformance(Record):
@@ -479,7 +482,9 @@ def fit_model(
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
     names = _context_feature_names(train)
-    train_weight_list = sample_weights_contest_display(train, boosts=contest_boosts)
+    train_weight_list = sample_weights_contest_display(
+        train, boosts=contest_boosts, display_top_k=cfg.display_top_k
+    )
     train_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(train, train_weight_list, strict=True)
@@ -557,7 +562,9 @@ def fit_model(
     # position_mean / global_mean also zero context coefficients; only ridge
     # preserves pace/defense/matchup/depth for v2 TNF.
     selected_estimator: EstimatorName = "ridge" if names else holdout_winner
-    ordered_weight_list = sample_weights_contest_display(ordered, boosts=contest_boosts)
+    ordered_weight_list = sample_weights_contest_display(
+        ordered, boosts=contest_boosts, display_top_k=cfg.display_top_k
+    )
     ordered_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(ordered, ordered_weight_list, strict=True)
@@ -642,7 +649,11 @@ def fit_model(
             "holdout_winner": holdout_winner,
             "holdout_winner_mae": candidates_mae[holdout_winner],
             "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
-            "high_tv_sample_weighting": "hv_tdv_leaderboard_top5_else_raw_box_top5",
+            "high_tv_sample_weighting": (
+                f"hv_tdv_display_top{cfg.display_top_k}" if contest_boosts else "raw_value_top5"
+            ),
+            "display_top_k": cfg.display_top_k,
+            "sample_weight_top_k": cfg.display_top_k if contest_boosts else 5,
             "training_target": (
                 "hv_tdv_leaderboards"
                 if leaderboard_rows

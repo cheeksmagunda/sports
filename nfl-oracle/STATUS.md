@@ -1,8 +1,8 @@
 # Status
 
-Last verified: 2026-09-28T03:17:45Z
+Last verified: 2026-09-28T04:31:21Z
 
-## MNF pregate (#599)  -  2026-09-28T03:17:45Z
+## MNF pregate (#599)  -  2026-09-28T04:31:21Z
 
 Public read of `nfl-api` (`/health` and `/slate/2026-09-28`). No Railway
 variable was read or changed. Blend, upside, and field weights were left
@@ -10,16 +10,16 @@ as they are.
 
 | Fact | Value |
 |---|---|
-| `/health` | `status=ok`, `recommendation_database=ok` |
-| Slate run | `waiting`, `detail_code=waiting_offline_pregate` |
-| Games | `[]`. Live collect has not run. |
-| `next_live_check_by` | `2026-09-28T23:15:00+00:00` |
+| `/health` | `status=ok`, `recommendation_database=ok` at `2026-09-28T04:31:20Z` |
+| Slate run | `waiting`, `detail_code=waiting_for_t40` |
+| Games | `[]` |
+| `next_freeze` | `2026-09-28T23:35:00+00:00` |
 | `cutoff_at` | `2026-09-29T00:15:00+00:00` (20:15 ET, PHI at CHI) |
-| `next_freeze` | `null` until that live check |
-| Disk | `ok`, 21.4% of 4,838,498,304 bytes, free 3,784,351,744 |
+| Disk | `ok`, 21.8% of 4,838,498,304 bytes, free 3,766,673,408 |
+| Worker SUCCESS deployment | `c20462a8-46d8-4d9e-9552-959c0ee12250` commit `7f9455c` (list-deployments, created `2026-09-28T04:22:37Z`) |
 
-The offline pregate skips Real Sports until 20 minutes before the next
-kickoff. `games: []` before 23:15Z is that skip, not an unarmed Monday.
+`games: []` with `waiting_for_t40` is the pre-freeze wait, not an unarmed
+Monday. Do not run `nfl-pipeline train --force` at or after `next_freeze`.
 Worker failure rows for an unrequested day now use the Eastern slate date.
 An `OSError` detail code keeps the errno and drops the path. The weekly
 Saturday T-40 cron starts at hour 16 UTC so an EDT 1pm ET window (T-40
@@ -36,9 +36,9 @@ session could read names only. Do not revert the operator's live blend=0,
 upside=0, field=0. Code defaults from #616 (slot by mean, one kicker, one
 defender) stay.
 
-Scorer: `oracle_core.contest_max`. CLI: `nfl-contest-max-map`. Train weights
-use display rank `value * (2 + card_boost)` only when an HV boost map is on
-disk; otherwise raw-value top-k, same as before. Serve `prepare` records
+Scorer: `oracle_core.contest_max`. CLI: `nfl-contest-max-map`. The train
+window on that rank key is the top-10 section below (#644). The table in
+this section is still the display five. Serve `prepare` records
 `contest_display_top5` and does not replace the committed lineup. Draft
 count is not a label. Inventory and backlog:
 `../drive/2026-09-28-contest-max-history-map.md`.
@@ -69,6 +69,59 @@ Code inventory only. No Railway read and no serving-knob change.
 `seasonAverages.*` is unused on the NFL freeze path. The matrix does not
 flip optimizer or picker env.
 
+## HV/TDV top-10 display-rank weights (#644) - 2026-09-28T04:31Z
+
+Sample-weight window only. No Railway variable write, no deploy, no
+contest entry. `NFL_TRAIN_DISPLAY_TOP_K` is read by `nfl-pipeline train`
+when set; unset means 10. It is not set on Railway from this session.
+Invalid values fail closed. It does not change
+`NFL_PICKER_BOOST_RANK_BLEND`, `NFL_OPTIMIZER_UPSIDE_WEIGHT`, or
+`NFL_OPTIMIZER_FIELD_WEIGHT`. Leave those at blend `0`, upside `0`, field
+`0`. Do not restore `0.75`. Max 1 DEF and max 1 K stay the code defaults
+from #616.
+
+When a card-boost map is present, each contest board (one Eastern slate)
+high-weights its top 10 by `value * (2 + card_boost)`. The regression
+label stays the board's base value. No boost map keeps the per-game
+raw-value top 5. Draft count and winning drafts are not labels. There is
+no year cap; a season without an HV boost map stays on the raw rung.
+
+The best five inside that top-10 window, scored with
+`value * (slot + card_boost)`, against the full visible-board ceiling.
+Source: `origin/backups` `wnba-oracle/data/backups/slate_labels.csv` (229
+contests, 2025-05-16 through 2026-09-24) and
+`nfl-oracle/data/backups/player_results.csv` (4 contests, all 2026). Same
+visible-pool caveat as the display-five table above. Not the freeze roster.
+
+| Sport | Year | Boards | Display five | Display top-10 | Raw top-10 | Chalk top-10 |
+|---|---|---:|---:|---:|---:|---:|
+| WNBA | 2025 | 116 | 0.996946 | 1.0 | 0.969267 | 0.614742 |
+| WNBA | 2026 | 113 | 0.996239 | 0.99999 | 0.95806 | 0.551124 |
+| WNBA | all | 229 | 0.996597 | 0.999995 | 0.963737 | 0.583349 |
+| NFL | 2026 | 4 | 0.999305 | 1.0 | 0.994775 | 0.81109 |
+
+Ceiling-five recall inside the window: WNBA display 0.999127, raw 0.772052,
+chalk 0.166812. NFL display 1.0, raw 0.9, chalk 0.5. Chalk is the comparison
+only. Older seasons are not in these two CSVs, so a multi-year fit on the
+worker volume is unverified until `train` prints `fit_seasons`.
+
+Sunday 2026-09-27's four-defender card is the operator report on #644 (4 DEF
+plus a Washington RB, each `card_boost` 3.0). This session did not re-read
+that freeze. `max_value` scores the whole five as `value * (slot + boost)`.
+It does not fill skill slots and then a residual. Shared boost 3.0 is a
+max-boost surface. The 1 DEF cap landed in code on 2026-09-28, after that
+Sunday freeze, so the image that locked Sunday did not have it. Top-10
+labels widen the HV sample past the display five (the table's remaining
+gap closes). They do not replace the defender cap.
+
+`nfl-pipeline train --force` activates a model. It is outside the freeze
+until `2026-09-28T23:35:00Z`. It is not safe on the current worker image:
+SUCCESS deployment `c20462a8` is commit `7f9455c`, which does not contain
+this window. Running it there would activate a top-5-window model before
+the Monday freeze. After this commit is the worker SUCCESS image, run it
+before 23:35Z if the freeze should serve the new weights. Rollback is
+redeploy `c20462a8-46d8-4d9e-9552-959c0ee12250`; `activate_model` keeps the
+previous artifact. Do not run it at or after 23:35Z.
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
@@ -145,8 +198,8 @@ Total Value Daily Leaderboard (`draftStats.highestBoostedValuePlayers`).
 `select_label_kind`, `build_high_potential_labels`) and keeps a Corpus G row
 only when `(player_id, game_id)` is on that section and the board source is
 `nfl_highestBoostedValuePlayers`. The label is that board's `value`
-(`label_kind=hv_tdv_leaderboard`). Sample weights then give the high weight
-to the top five on that board. Draft counts, popularity sections, winning
+(`label_kind=hv_tdv_leaderboard`). The high sample weight is the top-10
+display-rank window in the #644 section above. Draft counts, popularity sections, winning
 drafts, and reconstructed boards (`nfl_draft_stats_reconstructed`, including
 a boosts-present fallback) are excluded. Corpus G box `playerBoxScores[].value`
 is not the train target. Two boards that disagree drop the key. A fit with
@@ -1150,8 +1203,8 @@ SportsEvent). NFL wiring is ``nfl_oracle.recommendations.high_tv``.
 ### Changes landed
 - Neutralize appearance-count features (vector always 0; predict zeros legacy
   ``prior_log_count`` coefficients).
-- High-TV / high-potential sample weights in ``fit_model`` (per-game top-5
-  value rank; no draft_count).
+- High-TV / high-potential sample weights in ``fit_model``. Current window:
+  the #644 section above. Draft count is not a weight.
 - Label ladder: high_total_value_board else raw_highest_score_pre_boost.
 - Valuelaw shrunk EWMA for low-n histories.
 - Enabled already-wired ``team_pace_prior`` / ``opponent_pace_prior`` (cleared

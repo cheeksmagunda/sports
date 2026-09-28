@@ -24,6 +24,12 @@ The hindsight ceiling is the exact five under the same law (dynamic program
 over players sorted by descending base). It is an upper bound on the pool
 that was supplied, not a claim about players the archive did not reveal.
 
+The train label window is wider than that five. ``LABEL_WINDOW`` (10) is the
+set of HV/TDV display-ranked players whose realized base values take the
+high sample weight. Capture for that window is the best five inside it,
+scored with the same law, divided by the full-pool ceiling. Draft count
+can be reported beside it. It is not a member of the window.
+
 Draft counts must not be passed into :func:`contest_display_rank_weights`.
 """
 
@@ -36,9 +42,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from oracle_core.schemaorg import (
+    observation,
+    property_value,
+    sports_event,
+    with_context,
+)
+
 DEFAULT_SLOT_MULTIPLIERS: tuple[float, ...] = (2.0, 1.8, 1.6, 1.4, 1.2)
 TOP_SLOT_MULTIPLIER: float = DEFAULT_SLOT_MULTIPLIERS[0]
 LINEUP_SIZE: int = 5
+# Sample-weight window on one contest board. Distinct from the scored five.
+LABEL_WINDOW: int = 10
 
 _DEFENDER_CODES = frozenset(
     {
@@ -225,6 +240,70 @@ def position_mix_label(ids: Sequence[int], by_id: Mapping[int, ContestPlayer]) -
     return "+".join(parts) if parts else "position_unknown"
 
 
+def _unique_players(ids: Sequence[int], by_id: Mapping[int, ContestPlayer]) -> list[ContestPlayer]:
+    chosen: list[ContestPlayer] = []
+    seen: set[int] = set()
+    for pid in ids:
+        if pid in by_id and pid not in seen:
+            chosen.append(by_id[pid])
+            seen.add(pid)
+    return chosen
+
+
+def _window_capture(
+    ids: Sequence[int],
+    by_id: Mapping[int, ContestPlayer],
+    *,
+    slots: Sequence[float],
+    ceiling_score: float,
+    ceiling_ids: Sequence[int],
+) -> tuple[float | None, float | None]:
+    """Best five inside ``ids``, as a share of the full-pool ceiling.
+
+    The second value is how much of the ceiling five sits inside the window.
+    """
+
+    lineup = hindsight_lineup(_unique_players(ids, by_id), slot_multipliers=slots)
+    if lineup is None or ceiling_score <= 0:
+        return None, None
+    score, _lineup_ids = lineup
+    recall = len(set(ids) & set(ceiling_ids)) / len(ceiling_ids)
+    return round(score / ceiling_score, 6), round(recall, 6)
+
+
+def label_window_observation(
+    *,
+    slate_id: str,
+    capture: float,
+    top_k: int = LABEL_WINDOW,
+    rank_key: str = "value * (top_slot + card_boost)",
+) -> dict[str, Any]:
+    """schema.org Observation for one contest board's display-rank window.
+
+    The measured value is capture of the ceiling by the best five inside
+    the window. Draft count is recorded as not a label. Winning drafts are
+    not subjects of the observation.
+    """
+
+    node = observation(
+        about=sports_event(identifier=slate_id, name="HV/TDV contest board"),
+        measured_property=property_value(name="HV display-rank window capture"),
+        value=capture,
+        unit_text="capture",
+        additional_properties=[
+            property_value(name="label window", value=top_k),
+            property_value(name="rank key", value=rank_key),
+            property_value(
+                name="score law",
+                value="value * (slot_multiplier + card_boost)",
+            ),
+            property_value(name="draft count is label", value=False),
+            property_value(name="winning drafts are label", value=False),
+        ],
+    )
+    return with_context(node)
+
+
 def compare_board(
     players: Sequence[ContestPlayer],
     *,
@@ -232,6 +311,7 @@ def compare_board(
     slate_id: str,
     slate_date: str = "",
     slot_multipliers: Sequence[float] = DEFAULT_SLOT_MULTIPLIERS,
+    label_window: int = LABEL_WINDOW,
 ) -> dict[str, Any] | None:
     """Score one board. Returns None when the HV section has fewer than five."""
 
@@ -270,6 +350,34 @@ def compare_board(
     def _overlap(ids: Sequence[int]) -> float:
         return round(len(set(ids) & set(ceiling_ids)) / k, 6)
 
+    window = max(k, label_window)
+    display_window_ids = _top_ids(hv_rows, lambda player: player.display_value(slots[0]), n=window)
+    raw_window_ids = _top_ids(hv_rows, lambda player: player.value, n=window)
+    chalk_window_ids = _top_ids(list(by_id.values()), lambda player: player.draft_count, n=window)
+    display_window_capture, display_window_recall = _window_capture(
+        display_window_ids,
+        by_id,
+        slots=slots,
+        ceiling_score=ceiling_score,
+        ceiling_ids=ceiling_ids,
+    )
+    raw_window_capture, raw_window_recall = _window_capture(
+        raw_window_ids,
+        by_id,
+        slots=slots,
+        ceiling_score=ceiling_score,
+        ceiling_ids=ceiling_ids,
+    )
+    chalk_window_capture, chalk_window_recall = _window_capture(
+        chalk_window_ids,
+        by_id,
+        slots=slots,
+        ceiling_score=ceiling_score,
+        ceiling_ids=ceiling_ids,
+    )
+    if display_window_capture is None or raw_window_capture is None or chalk_window_capture is None:
+        return None
+
     regime = slate_regime(list(by_id.values()))
     return {
         "sport": sport,
@@ -294,6 +402,16 @@ def compare_board(
         "hv_display_overlap": _overlap(display_ids),
         "hv_raw_overlap": _overlap(raw_ids),
         "chalk_overlap": _overlap(chalk_ids),
+        "label_window": window,
+        "hv_display_window_ids": list(display_window_ids),
+        "hv_raw_window_ids": list(raw_window_ids),
+        "chalk_window_ids": list(chalk_window_ids),
+        "hv_display_window_capture": display_window_capture,
+        "hv_raw_window_capture": raw_window_capture,
+        "chalk_window_capture": chalk_window_capture,
+        "hv_display_window_recall": display_window_recall,
+        "hv_raw_window_recall": raw_window_recall,
+        "chalk_window_recall": chalk_window_recall,
         "draft_count_is_label": False,
     }
 
@@ -316,13 +434,31 @@ def _slice_means(boards: Sequence[Mapping[str, Any]], key: str) -> dict[str, Any
             "hv_display_capture": _mean([float(row["hv_display_capture"]) for row in rows]),
             "hv_raw_capture": _mean([float(row["hv_raw_capture"]) for row in rows]),
             "chalk_capture": _mean([float(row["chalk_capture"]) for row in rows]),
+            "hv_display_window_capture": _mean_key(rows, "hv_display_window_capture"),
+            "hv_raw_window_capture": _mean_key(rows, "hv_raw_window_capture"),
+            "chalk_window_capture": _mean_key(rows, "chalk_window_capture"),
         }
     return out
+
+
+def _mean_key(rows: Sequence[Mapping[str, Any]], key: str) -> float | None:
+    values = [float(row[key]) for row in rows if row.get(key) is not None]
+    return _mean(values)
+
+
+def _boards_with_year(boards: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    dated: list[dict[str, Any]] = []
+    for board in boards:
+        slate_date = str(board.get("slate_date") or "")
+        year = slate_date[:4] if len(slate_date) >= 4 and slate_date[:4].isdigit() else "undated"
+        dated.append({**board, "year": year})
+    return dated
 
 
 def summarize_boards(boards: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Means of capture ratios. Empty input stays an honest zero."""
 
+    dated = _boards_with_year(boards)
     return {
         "boards_scored": len(boards),
         "hv_display_capture": _mean([float(row["hv_display_capture"]) for row in boards]),
@@ -331,12 +467,21 @@ def summarize_boards(boards: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "hv_display_overlap": _mean([float(row["hv_display_overlap"]) for row in boards]),
         "hv_raw_overlap": _mean([float(row["hv_raw_overlap"]) for row in boards]),
         "chalk_overlap": _mean([float(row["chalk_overlap"]) for row in boards]),
+        "label_window": LABEL_WINDOW,
+        "hv_display_window_capture": _mean_key(boards, "hv_display_window_capture"),
+        "hv_raw_window_capture": _mean_key(boards, "hv_raw_window_capture"),
+        "chalk_window_capture": _mean_key(boards, "chalk_window_capture"),
+        "hv_display_window_recall": _mean_key(boards, "hv_display_window_recall"),
+        "hv_raw_window_recall": _mean_key(boards, "hv_raw_window_recall"),
+        "chalk_window_recall": _mean_key(boards, "chalk_window_recall"),
         "by_sport": _slice_means(boards, "sport"),
         "by_regime": _slice_means(boards, "regime"),
         "by_position_mix": _slice_means(boards, "position_mix"),
+        "by_year": _slice_means(dated, "year"),
         "draft_count_is_label": False,
         "score_law": "value * (slot_multiplier + card_boost)",
         "hv_rank_key": "value * (top_slot + card_boost)",
+        "label_window_rank_key": "value * (top_slot + card_boost)",
     }
 
 
