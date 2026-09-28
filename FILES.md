@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1123 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -151,8 +151,15 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nba-oracle/src/nba_oracle/ingest/auth.py -- Presence-only Real Sports auth checks for NBA ingest (never print values).
 - nba-oracle/src/nba_oracle/ingest/backfill.py -- Observation-only NBA Corpus G backfill gate.
 
+## nba-oracle/src/nba_oracle/scheduler/
+- nba-oracle/src/nba_oracle/scheduler/__init__.py -- Observation-only NBA T-40 freeze gate.
+- nba-oracle/src/nba_oracle/scheduler/freeze.py -- NBA freeze cycle.
+- nba-oracle/src/nba_oracle/scheduler/pool.py -- Draftable-only player pool for the NBA freeze gate.
+- nba-oracle/src/nba_oracle/scheduler/t40.py -- T-40 publication window for the next still-draftable NBA tip.
+
 ## nba-oracle/tests/
 - nba-oracle/tests/test_calendar_and_ingest_gate.py
+- nba-oracle/tests/test_freeze_path.py -- NBA T-40 freeze gate: draftable pool, clock order, same-tick epoch.
 - nba-oracle/tests/test_health_api.py
 - nba-oracle/tests/test_history_loader.py
 - nba-oracle/tests/test_import.py
