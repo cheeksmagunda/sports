@@ -5,11 +5,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from oracle_core.contest_max import (
+    LABEL_WINDOW,
     ContestPlayer,
     boards_from_csv,
     compare_board,
     contest_display_rank_weights,
     display_contest_value,
+    label_window_observation,
     summarize_boards,
 )
 from oracle_core.high_tv import sample_weights_for_labeled_rows
@@ -141,6 +143,43 @@ def test_csv_keeps_hv_membership_and_drops_submitted_lineups() -> None:
     assert 9 not in board["ceiling_ids"]
     assert 8 in board["chalk_ids"]
     assert board["pool_size"] == 6
+
+
+def test_label_window_covers_ceiling_players_outside_the_display_five() -> None:
+    """Ranks 6-10 by display can still belong in the hindsight five."""
+
+    # Five boosted defenders outrank one skill player on the top-slot key.
+    # The hindsight five still wants that skill player, who sits inside the
+    # top-10 window and outside the display five.
+    players = (
+        _player(1, 4.0, 2.5, drafts=1, position="DB"),
+        _player(2, 4.0, 2.5, drafts=1, position="DB"),
+        _player(3, 4.0, 2.5, drafts=1, position="DB"),
+        _player(4, 4.0, 2.5, drafts=1, position="LB"),
+        _player(5, 4.0, 2.5, drafts=1, position="LB"),
+        _player(6, 10.0, 0.0, drafts=1, position="QB"),
+        _player(7, 9.5, 0.0, drafts=1, position="RB"),
+    )
+    board = compare_board(players, sport="nfl", slate_id="window", slate_date="2024-09-08")
+    assert board is not None
+    assert board["label_window"] == LABEL_WINDOW
+    assert board["hv_display_capture"] < 1.0
+    assert board["hv_display_window_capture"] == 1.0
+    assert board["hv_display_window_recall"] == 1.0
+    assert set(board["ceiling_ids"]) <= set(board["hv_display_window_ids"])
+    assert not set(board["ceiling_ids"]) <= set(board["hv_display_ids"])
+    assert board["chalk_window_capture"] <= board["hv_display_window_capture"]
+    observation = label_window_observation(
+        slate_id="window",
+        capture=board["hv_display_window_capture"],
+    )
+    assert observation["@type"] == "Observation"
+    assert observation["value"]["value"] == 1.0
+    flags = {item["name"]: item["value"] for item in observation["additionalProperty"]}
+    assert flags["draft count is label"] is False
+    assert flags["winning drafts are label"] is False
+    assert flags["label window"] == LABEL_WINDOW
+    assert "draft_count" not in observation["measuredProperty"]["name"]
 
 
 def test_summarize_slices_by_sport_and_regime() -> None:

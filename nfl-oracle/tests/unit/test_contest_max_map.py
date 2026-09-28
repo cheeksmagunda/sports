@@ -6,8 +6,11 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from nfl_oracle.recommendations.display_rank_weights import (
+    DISPLAY_TOP_K,
+    RAW_TOP_K,
     boosts_for_history_rows,
     contest_display_top_ids,
+    display_top_k_from_env,
     sample_weights_contest_display,
 )
 from nfl_oracle.replay.contest_max_map_cli import build_report, collect_boards
@@ -33,6 +36,54 @@ def test_boost_map_promotes_the_contest_display_player() -> None:
         rows, boosts={(2, 9): 3.0, (1, 9): 0.0}, top_k=1, high_weight=4.0
     )
     assert weights == [1.0, 4.0]
+
+
+def test_default_display_window_is_top_10_of_the_slate_not_each_game() -> None:
+    """Eight players per game would all be top-10 inside the game. The slate is one board."""
+
+    kickoff = datetime(2024, 9, 8, 17, 0, tzinfo=UTC)
+    rows = []
+    boosts = {}
+    for game_id, start in ((9, 30), (10, 22)):
+        for offset in range(8):
+            player_id = start - offset
+            rows.append(
+                SimpleNamespace(
+                    player_id=player_id,
+                    game_id=game_id,
+                    value=float(player_id),
+                    did_not_play=False,
+                    kickoff_at=kickoff,
+                    draft_count=10_000 - player_id,
+                )
+            )
+            boosts[(player_id, game_id)] = 0.0
+    weights = sample_weights_contest_display(rows, boosts=boosts, high_weight=4.0)
+    assert weights.count(4.0) == DISPLAY_TOP_K
+    assert weights.count(1.0) == len(rows) - DISPLAY_TOP_K
+    # Highest raw values are also the display order when every boost is 0.
+    high = {row.player_id for row, weight in zip(rows, weights, strict=True) if weight == 4.0}
+    assert high == set(range(21, 31))
+    # Highest draft_count is the lowest player id. It is not in the window.
+    chalkiest = min(rows, key=lambda row: row.player_id)
+    assert chalkiest.player_id not in high
+
+
+def test_missing_boost_map_keeps_raw_top_five() -> None:
+    rows = [
+        SimpleNamespace(player_id=pid, game_id=9, value=float(pid), did_not_play=False)
+        for pid in range(1, 8)
+    ]
+    weights = sample_weights_contest_display(rows, boosts=None, high_weight=4.0)
+    assert weights.count(4.0) == RAW_TOP_K
+    assert display_top_k_from_env({}) == DISPLAY_TOP_K
+    assert display_top_k_from_env({"NFL_TRAIN_DISPLAY_TOP_K": "12"}) == 12
+    try:
+        display_top_k_from_env({"NFL_TRAIN_DISPLAY_TOP_K": "nope"})
+    except ValueError as exc:
+        assert str(exc) == "nfl_train_display_top_k_invalid"
+    else:
+        raise AssertionError("invalid display top-k must fail closed")
 
 
 def test_history_join_uses_eastern_kickoff_date() -> None:

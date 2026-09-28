@@ -205,8 +205,12 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         raise RuntimeError("hv_tdv_training_rows_insufficient")
     metadata = load_history_metadata(root, rows)
     enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
-    from nfl_oracle.recommendations.display_rank_weights import load_contest_boosts
+    from nfl_oracle.recommendations.display_rank_weights import (
+        display_top_k_from_env,
+        load_contest_boosts,
+    )
     from nfl_oracle.recommendations.model import (
+        FitConfig,
         attach_enrichment,
         drop_ambiguous_identity_rows,
         fit_model,
@@ -222,7 +226,13 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
     # model records will not match the history this bundle persists.
     enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
     contest_boosts = load_contest_boosts(project, enriched)
-    model = fit_model(enriched, trained_at=now, contest_boosts=contest_boosts)
+    display_top_k = display_top_k_from_env()
+    model = fit_model(
+        enriched,
+        trained_at=now,
+        contest_boosts=contest_boosts,
+        fit_config=FitConfig(display_top_k=display_top_k),
+    )
     audit: dict[str, Any] = {
         "history_root": str(root),
         "history_rows": len(rows),
@@ -235,6 +245,7 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
         "contest_display_rank": (
             "value_times_top_slot_plus_boost" if contest_boosts else "raw_value_no_boost_map"
         ),
+        "contest_display_top_k": display_top_k if contest_boosts else 5,
         "contest_display_boost_keys": 0 if not contest_boosts else len(contest_boosts),
         "draft_count_is_label": False,
         "contest_entry": False,

@@ -31,8 +31,9 @@ The public package includes:
   SportsTeam, SportsOrganization, SportsEvent, Place, OrganizationRole,
   identifier/PropertyValue, sameAs, Observation, QuantitativeValue, ItemList,
   plus optional PROV-O attribution; high-TV boards in `oracle_core.high_tv`;
-  five-card contest display rank, chalk comparison, and hindsight ceiling
-  in `oracle_core.contest_max` (issue #633);
+  five-card contest display rank, the top-10 HV/TDV label window, chalk
+  comparison, and hindsight ceiling in `oracle_core.contest_max`
+  (issues #633, #644);
   Real Sports history corpus layout in `oracle_core.realsports_corpus`
   (`{sport}/{season}/{slate_or_game_id}/{artifact}.json` + coverage
   manifest) and HV board helpers in `oracle_core.hv_board_corpus`
