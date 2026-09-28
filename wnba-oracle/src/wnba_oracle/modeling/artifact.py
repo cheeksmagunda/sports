@@ -85,9 +85,10 @@ def eb_predict_one(
     if int(player_id) not in baseline.player_alpha:
         return None
     cohort = cohort_for_position(position)
-    prediction = _cohort_mean_for_serve(baseline.cohort_means, cohort) + baseline.player_alpha[
-        int(player_id)
-    ]
+    prediction = (
+        _cohort_mean_for_serve(baseline.cohort_means, cohort)
+        + baseline.player_alpha[int(player_id)]
+    )
     pace_beta = float(getattr(baseline, "pace_beta", 0.0) or 0.0)
     league_pace = float(getattr(baseline, "league_pace", 0.0) or 0.0)
     if team_pace is not None and pace_beta:
