@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1122 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -282,6 +282,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/features/__init__.py -- Feature schema scaffolding for nfl-oracle.
 - nfl-oracle/src/nfl_oracle/features/live.py -- Map captured pre-lock evidence onto FeatureSpec names.
 - nfl-oracle/src/nfl_oracle/features/matchup.py -- Static NFL division membership for the ``is_divisional`` FeatureSpec.
+- nfl-oracle/src/nfl_oracle/features/matrix_wire.py -- Apply portfolio FEATURE_MATRIX serve-on keys to an NFL context vector (#583).
 - nfl-oracle/src/nfl_oracle/features/opponent_defense.py -- Walk-forward Real-value-allowed priors for the opponent defense.
 - nfl-oracle/src/nfl_oracle/features/own_model_map.py -- Own-model feature consumption map for NFL (#523).
 - nfl-oracle/src/nfl_oracle/features/rows.py -- Build observation-only feature rows from walk-forward priors.
@@ -491,6 +492,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_label_depth.py -- Max-season label-kind depth across the catalog (issue #189).
 - nfl-oracle/tests/unit/test_live_ok_context_features.py -- Canonical live_ok injury/weather context features stay wired (#418).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
+- nfl-oracle/tests/unit/test_matrix_wire_583.py -- FEATURE_MATRIX serve-on copy into NFL context vectors (#583).
 - nfl-oracle/tests/unit/test_multi_contest_day.py -- Multi-contest day selection for the NFL worker and NFLReader.collect.
 - nfl-oracle/tests/unit/test_ollama_tick_tilt.py -- Ollama tick tilt contract for NFL picker (#574).
 - nfl-oracle/tests/unit/test_optimizer_env_config.py -- Env-driven optimizer construction config (max-value / race mode) for #453.
@@ -716,6 +718,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
 - packages/oracle-core/src/oracle_core/draft_stats_catalog.py -- Daily Draft Stats / draftStats section inventory (issue #526).
+- packages/oracle-core/src/oracle_core/feature_matrix.py -- Portfolio FEATURE_MATRIX: available | wired | serving (#583).
 - packages/oracle-core/src/oracle_core/fitness.py -- Domain-free WIN/CLOSE fitness helpers for the portfolio backtest race.
 - packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
@@ -745,6 +748,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/tests/test_dayclose.py
 - packages/oracle-core/tests/test_dossier.py
 - packages/oracle-core/tests/test_draft_stats_catalog.py -- Tests for the portfolio draftStats section catalog (#526).
+- packages/oracle-core/tests/test_feature_matrix.py -- Portfolio FEATURE_MATRIX vocabulary and freeze wiring (#583).
 - packages/oracle-core/tests/test_fitness.py
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
