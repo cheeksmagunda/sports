@@ -220,3 +220,52 @@ def test_games_without_a_leaderboard_still_upweight_raw_top_value() -> None:
     high = _row(player_id=2, game_id=11, value=9.0)
     weights = sample_weights_for_train_target([low, high], top_k=1, high_weight=4.0)
     assert weights == [1.0, 4.0]
+
+
+def test_null_game_id_scopes_via_corpus_g_slate_day(tmp_path: Path) -> None:
+    """Live Corpus C: HV section present, gameId null, no draftinfo.games (#647)."""
+
+    corpus = tmp_path / "corpus_c" / "7001"
+    corpus.mkdir(parents=True)
+    source = FIXTURES / "9001"
+    stats = json.loads((source / "stats.json").read_text(encoding="utf-8"))
+    if isinstance(stats.get("contest"), dict):
+        stats["contest"]["gameId"] = None
+        stats["contest"]["day"] = "2025-09-15"
+        stats["contest"]["season"] = 2025
+    (corpus / "stats.json").write_text(json.dumps(stats), encoding="utf-8")
+    (corpus / "draftinfo.json").write_text(
+        json.dumps({"info": {"day": "2025-09-15", "gameId": None, "sport": "nfl"}}),
+        encoding="utf-8",
+    )
+    for name in ("meta.json", "payoutinfo.json", "entries.json"):
+        (corpus / name).write_text((source / name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    on_slate = _row(player_id=401, game_id=19457, value=1.0)
+    other_day = _row(player_id=401, game_id=99999, value=9.0).model_copy(
+        update={
+            "kickoff_at": datetime(2025, 9, 16, 17, tzinfo=UTC),
+            "available_at": datetime(2025, 9, 16, 21, tzinfo=UTC),
+            "captured_at": datetime(2025, 9, 16, 21, tzinfo=UTC),
+        }
+    )
+    rows = [
+        on_slate,
+        other_day,
+        _row(player_id=999, game_id=19457, value=2.0),
+    ]
+    updated, audit = apply_hv_tdv_labels(
+        Path("nfl-oracle"),
+        rows,
+        corpus_c_root=tmp_path / "corpus_c",
+        export_root=tmp_path / "export",
+        hv_corpus_root=tmp_path / "hv",
+    )
+    assert len(updated) == 1
+    assert updated[0].player_id == 401
+    assert updated[0].game_id == 19457
+    assert updated[0].value == 5.0
+    assert updated[0].label_kind == "hv_tdv_leaderboard"
+    assert audit.boards >= 1
+    assert audit.rows_overlaid == 1
+    assert audit.skipped_unscoped == 0

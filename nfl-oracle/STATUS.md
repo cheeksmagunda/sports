@@ -1,6 +1,20 @@
 # Status
 
-Last verified: 2026-09-28T03:17:45Z
+Last verified: 2026-09-28T04:46Z
+
+
+## Washington HV signal evidence (Refs #647 / #644 / #597)  -  2026-09-28T04:45Z
+
+Operator evidence files (not a knob flip; live blend stays 0):
+
+- `nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.md`
+- `nfl-oracle/reports/hv_top10_washington_26932_2026-09-27.json`
+
+Mike Washington Jr. (player_id 26932, RB, LV@NO 2026-09-27) is the anti-chalk
+RB case for HV/TDV top-10 train wiring: freeze card boost 3.0, ownership ~7.4%,
+slot 5 / multiplier 1.2. Train target remains HV/TDV boards, not draft chalk.
+LLM-internal Ollama learn/tilt stays on top of existing schemas (runs-on-shape).
+No serving-path flip in the freeze window. Max 1 DEF / blend=0 unchanged.
 
 ## MNF pregate (#599)  -  2026-09-28T03:17:45Z
 
@@ -93,6 +107,12 @@ back only on a later explicit train. This checkout has no
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
+Ollama is the internal LLM learn/tilt layer **on top of** existing sport
+schemas, schema.org contracts, ridge/valuelaw, and the optimizer. It does
+**not** replace serve primaries, sport-owned features/strategy, or picker
+contracts. LLM-internal runs-on-shape: ticks describe HV/TDV board shape;
+`ollama_tick_tilt` only tilts into the existing optimizer when armed.
+
 Code contract only; **production tilt weight stays 0** (identity). Live money
 path remains Corpus G → ridge → max_value → freeze → `/lineup` → frontend.
 Ollama learn writes `data/ollama_hv/<sport>/<slate>/latest_tick.json`; NFL
@@ -176,11 +196,31 @@ fewer than 30 leaderboard rows raises `hv_tdv_training_rows_insufficient`.
 HV-rank five vs draft-count chalk five vs the hindsight ceiling, under
 `value * (slot_multiplier + card_boost)`.
 
+### Unscoped HV boards / day fallback (#647) - 2026-09-28T04:35Z CT
+
+Standing law: maximize HV/TDV board capture (`highestBoostedValuePlayers`)
+every day. Prior winners are the bar to beat, not the fit target. Shape and
+condition over history; map pre-game features onto post-game HV/TDV boards
+with leakage clocks. Ollama remains learn/tilt on top of that stack.
+
+Root cause of live `hv_tdv_training_rows_insufficient` on worker SUCCESS
+`c20462a8` commit `7f9455c` (#643): Corpus C has 91 contests with the HV
+section, but every contest has `contest.gameId=null` and `draftinfo` has no
+`games` list (fixtures do). `extract_matchup_links` returned empty
+`game_ids`; boards were skipped as unscoped; kept rows were 0. Export and
+`realsports_corpus` HV trees on the volume were empty. Prototype scoping
+HV players to Corpus G game ids on `contest.day` kept about 824 rows across
+72 boards (gate is 30).
+
+Fix: `_index_corpus_c` falls back to Corpus G games for the contest slate
+day when payload matchups are missing. Explicit `draftinfo.games` still
+wins. Blend/upside/field stay 0. `NFL_SLATE_DATE=2026-09-28` held through
+MNF freeze.
+
 ### Live train
 
-Not executed from this agent. No `training_rows`, `hv_overlay`, or model
-sha from the worker volume. Those fields stay unverified until the command
-below runs on an image that contains this commit.
+Not executed from this agent until the #647 image is worker SUCCESS. No
+`training_rows`, `hv_overlay`, or model sha from the worker volume yet.
 
 | Fact | Verified |
 |---|---|
@@ -224,6 +264,10 @@ scripts/codespace-railway-env -- railway ssh \
 ```
 
 ## Ollama candidate engine (#595, 2026-09-28)
+
+Layer on top only: ranks optimizer candidates via JSON utility; classic
+contest utility remains the fallback. Does not rewrite sport schemas or
+replace ridge/valuelaw serve. LLM-internal runs-on-shape.
 
 Code only. Railway variables and deployments were not changed. Whether the
 live worker process has `NFL_OLLAMA_ENGINE` set is unverified. This change
