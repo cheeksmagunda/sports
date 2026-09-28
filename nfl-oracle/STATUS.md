@@ -119,16 +119,17 @@ below runs on an image that contains this commit.
 | Railway account (MCP `whoami`) | Cheeks Magunda |
 | Project / env | `sports-oracle` `cca6b03f-8a84-4fb5-aaa5-decb3830392d` / `nfl-production` `766868da-e124-4c62-86bf-fb515c38e4fe` |
 | Worker service | `nfl-oracle-worker` `a5520eb7-e8e0-4f74-afeb-8919cb52c358` |
-| Worker SUCCESS deployment | `1f424a71-57b1-4dd3-937f-eda5c09f4509` commit `578566d` (ollama T-40 helper, not this overlay) |
+| Worker SUCCESS deployment | `666dd019-b0b1-465e-b2a0-81b80d0bd939` commit `4ca64ed` (Railway list-deployments, 2026-09-28T03:22Z). Not this HV/TDV lock. A newer deploy `cb93bb2d-9c9d-4f56-9880-eb4129bfdc00` commit `3f1b0ef` was BUILDING at the same read |
+| Prior deployment `1f424a71-57b1-4dd3-937f-eda5c09f4509` | REMOVED (commit `578566d`) |
 | This checkout corpora | `nfl-oracle/data` is catalog/schedule only (about 380K). No `data/raw/corpus_g` tree to fit |
 | `make write-path-check` | Failed on this host: `gh codespace list` HTTP 403 (integration token). Not a Codespace. Code push is direct `git push` |
 | Next slate in `data/schedule/schedules.csv` | 2026-09-28 week 3 `2026_03_PHI_CHI` gametime `20:15` |
 
 Hold `train --force` inside that game's T-40 window. The command activates
 a model in the recommendation store (serving path). Rollback: redeploy
-worker deployment `1f424a71-57b1-4dd3-937f-eda5c09f4509`; previous model
-artifacts stay in the store (`activate_model` retains them). No Railway env
-knob was changed here.
+worker deployment `666dd019-b0b1-465e-b2a0-81b80d0bd939` (the SUCCESS image
+at this read); previous model artifacts stay in the store
+(`activate_model` retains them). No Railway env knob was changed here.
 
 Operator command, from Codespace `fluffy-zebra-g4gqq746477q2jg`, after this
 commit is the worker SUCCESS image:
