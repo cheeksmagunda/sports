@@ -6,7 +6,8 @@ Current scope is pre-product: package wiring, a health-only FastAPI process
 for Railway mono staging, NBA season/coverage helpers, a public history
 loader, and a Corpus G backfill gate that does not call the network.
 Domain contests, provider HTTP ingest, models, T-40 freeze, and serve knobs
-are not implemented. Structural outline: root `../OVERVIEW.md`.
+are not implemented. The explicit not-hooked map is `CONNECTORS.md`.
+Structural outline: root `../OVERVIEW.md`.
 
 ## Win stack
 

@@ -4,6 +4,15 @@ Last verified: 2026-09-28T04:59Z
 
 
 
+## T-40 hook map (#604)  -  2026-09-28
+
+Stable chain and the MNF required-ON contract: `CONNECTORS.md`
+(`ENABLED=1`, `max_value`, blend / upside / field `0`; do not restore
+`0.75`). This session did not re-query Railway. Live knob and
+`next_freeze=2026-09-28T23:35:00Z` facts at the top of this file (including
+#653 / #654 on main) remain the last verified process state. No serving
+flip and no Railway env write in this change.
+
 ## Live train after #650 day-scope (Refs #647)  -  2026-09-28T04:59Z
 
 Outside MNF T-40. Slate status `waiting`, `next_freeze` `2026-09-28T23:35:00Z`.
@@ -369,6 +378,7 @@ Host `NFL_OLLAMA_HOST` defaults to `http://127.0.0.1:11434`. Model
 `NFL_OLLAMA_TIMEOUT_S` defaults to 8 seconds. A reachable model that returns
 structurally valid utilities selects the lineup; that live path is unverified
 on Railway.
+
 
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 

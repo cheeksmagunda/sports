@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1168 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,8 +17,14 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- ENTRY_POINTS.md -- Entry Points Reference
+- ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
+- OVERVIEW.md -- Sports Oracle: Portfolio Overview
+- OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - README.md -- Sports Oracle
 - pyproject.toml -- Package/tool configuration
@@ -119,9 +125,14 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nba-oracle/.env.example
 - nba-oracle/AGENTS.md -- NBA Oracle agent instructions
 - nba-oracle/CLAUDE.md -- NBA Oracle agent instructions
+- nba-oracle/CONNECTORS.md -- NBA connector map
 - nba-oracle/Dockerfile
 - nba-oracle/Makefile -- Build/test/lint entrypoints
 - nba-oracle/README.md -- nba-oracle
+- nba-oracle/README.md -- nba-oracle
+- nba-oracle/README.md -- nba-oracle
+- nba-oracle/STATUS.md -- Status
+- nba-oracle/STATUS.md -- Status
 - nba-oracle/STATUS.md -- Status
 - nba-oracle/pyproject.toml -- Package/tool configuration
 - nba-oracle/railway.toml -- Package/tool configuration
@@ -166,6 +177,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/AGENTS.md -- NFL Oracle agent instructions
 - nfl-oracle/BUILD_HANDOFF.md -- NFL Oracle build handoff
 - nfl-oracle/CLAUDE.md -- NFL Oracle agent instructions
+- nfl-oracle/CONNECTORS.md -- NFL T-40 connector map
 - nfl-oracle/DATA_ATTRIBUTION.md -- Data attribution (nfl-oracle)
 - nfl-oracle/Dockerfile
 - nfl-oracle/Dockerfile.production
@@ -480,6 +492,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_calendar_derived_defaults.py
 - nfl-oracle/tests/unit/test_capture_storage_state_paths.py -- capture_storage_state must write under volume-aware scraper_dir.
 - nfl-oracle/tests/unit/test_clocks.py -- Tests for train/live Corpus G clock helpers.
+- nfl-oracle/tests/unit/test_connector_map.py -- The NFL connector map stays aligned with the serving feature contract (#604).
 - nfl-oracle/tests/unit/test_contest_algebra_and_gates.py -- Contest scoring algebra + entry gates (observation only).
 - nfl-oracle/tests/unit/test_contest_corpus.py -- Corpus C: scoring-law verification, boost recovery, and censoring honesty.
 - nfl-oracle/tests/unit/test_contest_dry_run.py -- Offline contest dry-run: five-card shadow slate + hard-deny submit.
@@ -572,6 +585,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/.gitignore
 - nhl-oracle/AGENTS.md -- NHL Oracle agent instructions
 - nhl-oracle/CLAUDE.md -- NHL Oracle agent instructions
+- nhl-oracle/CONNECTORS.md -- NHL connector map
 - nhl-oracle/Dockerfile
 - nhl-oracle/Makefile -- Build/test/lint entrypoints
 - nhl-oracle/README.md -- nhl-oracle
@@ -818,6 +832,8 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 
 ## scripts/ollama_hv_watcher/
 - scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV helper on each sport app's daily picks
+- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV helper on each sport app's daily picks
+- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV helper on each sport app's daily picks
 - scripts/ollama_hv_watcher/__init__.py -- Codespace Ollama HV/TDV self-learning slate watcher (#574).
 - scripts/ollama_hv_watcher/__main__.py -- python -m ollama_hv_watcher → CLI (#574).
 - scripts/ollama_hv_watcher/app_daemon.py -- App-driven T-40 helper daemon (#574).
@@ -909,10 +925,15 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/CLAUDE.md -- WNBA Oracle Instructions
 - wnba-oracle/COMMUNITY_STRATEGY_FINDINGS.md -- Community Strategy Findings (issue #37), 2026-09-24
 - wnba-oracle/COMMUNITY_STRATEGY_TASK.md -- Community/Field Strategy Calibration — Copilot Task
+- wnba-oracle/CONNECTORS.md -- WNBA T-40 connector map
 - wnba-oracle/Dockerfile
 - wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md -- Model Pick Postmortem — 2026-08-28 Slate
 - wnba-oracle/Makefile -- Build/test/lint entrypoints
 - wnba-oracle/README.md -- WNBA Oracle
+- wnba-oracle/README.md -- WNBA Oracle
+- wnba-oracle/README.md -- WNBA Oracle
+- wnba-oracle/STATUS.md -- Status
+- wnba-oracle/STATUS.md -- Status
 - wnba-oracle/STATUS.md -- Status
 - wnba-oracle/alembic.ini
 - wnba-oracle/pyproject.toml -- Package/tool configuration

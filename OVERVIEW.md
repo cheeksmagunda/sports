@@ -21,6 +21,17 @@ The portfolio product goal is stated once in root `README.md` (Product goal).
 Do not restate it here; each sport `README.md` points at that section and at
 its own `STATUS.md` for current serve knobs.
 
+## T-40 five-card hook
+
+Each sport owns its hook graph in `<app>/CONNECTORS.md`. The shared shape
+is corpora, then that sport's features, then its own model, then picker or
+optimizer knobs, then a T-40 freeze, then that sport's Railway services,
+then its frontend. NFL is the live five-card path (`nfl-oracle/CONNECTORS.md`
+holds the MNF required-ON list). WNBA is the live five-player path with its
+own tip-relative freeze. NHL has the policy in code and no hosted freeze.
+NBA is not hooked. The Ollama helper reads a published five and writes a
+note. It is not the freeze. Serve knobs stay in each `STATUS.md`.
+
 ## Monorepo layout
 
 Three layers. Dependency direction is sport application to `oracle-core`.
@@ -154,8 +165,9 @@ Postgres, Redis. Service list and live knobs: `STATUS.md`. Stable contract:
 | `audit/`, `schemas/` | 2 each | Audit trail; schema definitions |
 | `monitoring/`, `ops/` | 1 each | Monitoring hooks; ops helpers |
 
-## nfl-oracle
+## nfl-oracle: live five-card path
 
+Hook graph and the required-ON contract: `nfl-oracle/CONNECTORS.md`.
 Railway API + worker are in production use for read-only research and
 freeze/grade. Contest entry stays forbidden. Live facts: `STATUS.md`.
 Frontend is a static `index.html` (no build pipeline).
