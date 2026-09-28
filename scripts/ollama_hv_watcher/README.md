@@ -11,29 +11,19 @@ replaces ridge, math, valuelaw, or a sport-owned model. It is not a
 chatbot and not decoration. The campaign sentence is in `OVERVIEW.md`
 (Win stack, #653). Product goal: root `README.md` **Product goal**.
 
-Each sport app (`nfl-oracle`, `wnba-oracle`) fires its own T-40 freeze and
-publishes its frozen five-player lineup on its own API and frontend. The
-required-ON contract for that freeze is the app's `CONNECTORS.md`, not this
-helper. Ollama does not publish that freeze. This helper is only an
-annotator on top of that:
+Each sport app fires its own T-40 freeze and publishes its five-player
+lineup. Ollama does not publish that freeze.
 
 - It only READS each app's public API (`adapters/app_api.py`, stdlib
   `urllib`, bounded timeout and retry, no credentials).
-- When the board is the app's frozen five (`lineup_source=app_frozen_lineup`),
-  the tick keeps that five in that slot order. The `sim` block scores it
-  under `value * (slot_multiplier + card_boost)`. Notes annotate; they do
-  not replace, reorder, block, or delay the freeze.
-- When the board is not an app freeze, the tick's `five_player_lineup` is
-  the total-draft-value sim (`lineup_source=total_draft_value_sim`, via
-  `lineup_for_summary` / `sim.py`). `card_boost` stays on board summaries
-  so the sim can prefer a high-boost player the raw board rank would drop.
-  NHL boosts in this helper stay 0 (the helper cannot see whether every
-  club has played).
+- Every learn tick's `five_player_lineup` is exactly the app's five in the
+  app's slot order (`lineup_source=app_frozen_lineup`). The tick records
+  that shape. It does not replace, reorder, block, or delay the freeze.
 - Tilt is the armed path into the NFL picker (`NFL_OLLAMA_TICK_TILT_WEIGHT`,
   default 0, identity). Weight 0 does not open the tick file.
 - If Ollama is down or times out the tick is still written with
   `notes="ollama_unavailable"` (or `ollama_gate_forbidden` when the gate is
-  closed) and a `sim` block, so the five and the score are always recorded.
+  closed), so the app's five are always recorded.
 
 ## Pre-game only (leak stop)
 
@@ -142,6 +132,27 @@ freeze window without an explicit operator decision.
 `client.generate_json` posts `/api/generate` with `format=json` and returns
 one object. NFL candidate scoring loads that module from
 `nfl_oracle.recommendations.ollama_engine`. Lineup rules stay in nfl-oracle.
+
+## Slate advice influence (default off)
+
+During the same T-40 to close window the helper can write
+`data/ollama_hv/<sport>/<slate>/advice.json` (`--advice --board`, and from
+the watcher / app daemon after a pregame board exists). The file is a
+bounded per-player multiplier list. Sport apps read it only when their own
+flag is on:
+
+```sh
+NFL_OLLAMA_INFLUENCE=1
+NFL_OLLAMA_ADVICE_PATH=/path/to/advice.json
+# WNBA_OLLAMA_INFLUENCE=1
+# WNBA_OLLAMA_ADVICE_PATH=/path/to/advice.json
+```
+
+Both flags default off, so classic freeze is unchanged. Stale, wrong-slate,
+or missing advice is identity. This does not change `NFL_PICKER_BOOST_RANK_BLEND`.
+Do not enable these flags for a live MNF freeze window without an explicit
+operator decision.
+
 
 ## Training-data inventory
 

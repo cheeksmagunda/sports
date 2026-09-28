@@ -8,6 +8,7 @@ Modes (mutually exclusive)::
         --day YYYY-MM-DD --sports nfl,wnba
     PYTHONPATH=scripts python -m ollama_hv_watcher --daemon \\
         --day YYYY-MM-DD --sports nfl,wnba
+    PYTHONPATH=scripts python -m ollama_hv_watcher --advice --board path/hv_board.json
 
 ``--daemon`` polls each sport app for every armed slate and writes one
 advisory tick per app freeze whose five equals the app's five. The helper
@@ -47,7 +48,7 @@ from ollama_hv_watcher.gate import (
     load_manifest_or_empty,
     operator_unlock_enabled,
 )
-from ollama_hv_watcher.learn import atomic_write_json, run_learn
+from ollama_hv_watcher.learn import atomic_write_json, run_advice, run_learn
 from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
@@ -282,6 +283,49 @@ def cmd_learn(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_advice(args: argparse.Namespace) -> int:
+    """Write advice.json from one explicit pregame board. Never history."""
+
+    if not args.board:
+        _print_json(
+            {"error": "LIVE_DATA_REQUIRED", "detail": "--advice requires --board"}
+        )
+        return 4
+    manifest = load_manifest_or_empty(Path(args.manifest) if args.manifest else None)
+    data_root = Path(args.data_root)
+    try:
+        summary = load_pregame_board_summary(Path(args.board))
+    except LiveDataRequiredError as exc:
+        _print_json({"error": "LIVE_DATA_REQUIRED", "detail": str(exc)})
+        return 4
+    dry_run = not args.execute
+    try:
+        out = run_advice(
+            summary,
+            data_root=data_root,
+            manifest=manifest,
+            host=args.host,
+            model=args.model,
+            dry_run=dry_run,
+        )
+    except OllamaForbiddenError as exc:
+        _print_json(
+            {
+                "dry_run": dry_run,
+                "blocked": str(exc),
+                "hint": (
+                    f"Set {UNLOCK_ENV}=1 for Codespace helper override, or wait for "
+                    "coverage_manifest.historical_capture_complete (#526)."
+                ),
+            }
+        )
+        return 3
+    _print_json(
+        {"dry_run": dry_run, "written": str(out), "slate_id": summary.slate_key}
+    )
+    return 0
+
+
 def cmd_windows_from_apps(args: argparse.Namespace) -> int:
     """Write data_root/windows/<day>.json from each sport app's API."""
 
@@ -364,6 +408,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write data_root/windows/<day>.json from the sport app APIs",
     )
+    mode.add_argument(
+        "--advice",
+        action="store_true",
+        help="Write advice.json from an explicit pregame --board (default dry-run)",
+    )
     parser.add_argument("--day", default="", help="Slate day YYYY-MM-DD (ET today)")
     parser.add_argument("--sports", default="", help="Comma list, e.g. nfl,wnba")
     parser.add_argument("--max-iterations", type=int, default=None)
@@ -426,8 +475,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.daemon:
         args.once = False
         return cmd_daemon(args)
+    if args.advice:
+        return cmd_advice(args)
     parser.error(
-        "one of --status / --once / --daemon / --windows-from-apps is required"
+        "one of --status / --once / --daemon / --windows-from-apps / --advice is required"
     )
     return 2
 

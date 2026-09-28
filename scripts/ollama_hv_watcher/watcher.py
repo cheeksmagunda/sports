@@ -22,7 +22,7 @@ from ollama_hv_watcher.gate import (
     ensure_ollama_training_allowed,
     load_manifest_or_empty,
 )
-from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.learn import run_advice, run_learn
 from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.pick import FIVE_PLAYER_LINEUP_SIZE
 from ollama_hv_watcher.serve import (
@@ -131,6 +131,21 @@ def _learn_once(
                 dry_run=cfg.dry_run,
             )
             written.append(str(out))
+            try:
+                advice = run_advice(
+                    summary,
+                    data_root=cfg.data_root,
+                    manifest=manifest,
+                    host=cfg.host,
+                    model=cfg.model,
+                    dry_run=cfg.dry_run,
+                    record_on_failure=True,
+                )
+                written.append(str(advice))
+            except (OSError, RuntimeError, ValueError) as exc:
+                err_path = cfg.data_root / "watcher_errors.log"
+                with err_path.open("a", encoding="utf-8") as fh:
+                    fh.write(f"board={path} advice_error={exc}\n")
         except ValueError as exc:
             # Fail closed on short boards (<5 players) without killing the day.
             err_path = cfg.data_root / "watcher_errors.log"

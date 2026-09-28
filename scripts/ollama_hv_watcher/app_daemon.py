@@ -23,7 +23,7 @@ from ollama_hv_watcher.adapters import app_api
 from ollama_hv_watcher.boards import LIVE_BOARD_FILENAME, load_pregame_board_summary
 from ollama_hv_watcher.client import DEFAULT_MODEL
 from ollama_hv_watcher.gate import load_manifest_or_empty
-from ollama_hv_watcher.learn import run_learn
+from ollama_hv_watcher.learn import run_advice, run_learn
 from ollama_hv_watcher.live import LiveDataRequiredError
 from ollama_hv_watcher.serve import DEFAULT_HOST
 from ollama_hv_watcher.windows import SlateWindow, load_windows_payload
@@ -65,6 +65,8 @@ class AppDaemonConfig:
 class AppDaemonState:
     ticked: dict[str, str] = field(default_factory=dict)
     ticks: list[str] = field(default_factory=list)
+    advised: dict[str, str] = field(default_factory=dict)
+    advice: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     iterations: int = 0
 
@@ -118,6 +120,7 @@ def _tick_slate(
         return
     if board is None:
         emit({"event": "waiting_for_app_freeze", "session": session})
+        _advise_slate(cfg, state, slate, marker="waiting", emit=emit)
         return
     frozen_at = str(board.get("frozen_at") or "")
     if state.ticked.get(session) == frozen_at:
@@ -154,6 +157,7 @@ def _tick_slate(
             "five": [p.get("name") for p in board.get("players", [])],
         }
     )
+    _advise_slate(cfg, state, slate, marker=frozen_at or "frozen", emit=emit)
 
 
 def run_app_daemon(
@@ -206,6 +210,58 @@ def run_app_daemon(
         "iterations": state.iterations,
         "ticks": state.ticks,
         "ticked_sessions": dict(state.ticked),
+        "advice": state.advice,
         "errors": state.errors,
         "windows": [w.to_dict() for w in windows],
     }
+
+
+def _advise_slate(
+    cfg: AppDaemonConfig,
+    state: AppDaemonState,
+    slate: SlateWindow,
+    *,
+    marker: str,
+    emit: EmitFn,
+) -> None:
+    """Best-effort ``advice.json``. Never drops a learn tick on failure.
+
+    A pregame board already on disk can be advised before the app freeze so
+    a later prepare can read it when influence env is on. After freeze the
+    same writer refreshes advice for the rest of the window. Default app
+    flags stay off, so classic freeze scoring is unchanged.
+    """
+
+    session = slate.session_id
+    if state.advised.get(session) == marker:
+        return
+    board_path = cfg.data_root / slate.sport / slate.slate_id / LIVE_BOARD_FILENAME
+    if not board_path.is_file():
+        return
+    try:
+        summary = load_pregame_board_summary(board_path)
+        path = run_advice(
+            summary,
+            data_root=cfg.data_root,
+            manifest=load_manifest_or_empty(cfg.coverage_manifest),
+            host=cfg.host,
+            model=cfg.model,
+            dry_run=not cfg.execute,
+            environ=dict(cfg.environ) if cfg.environ is not None else None,
+            record_on_failure=True,
+            extra={"session_id": session, "advice_marker": marker},
+        )
+    except (LiveDataRequiredError, ValueError, OSError, RuntimeError) as exc:
+        _log_error(cfg, state, f"advice session={session} error={exc}")
+        state.advised[session] = marker
+        return
+    state.advised[session] = marker
+    state.advice.append(str(path))
+    emit(
+        {
+            "event": "advice_written",
+            "session": session,
+            "advice": str(path),
+            "marker": marker,
+        }
+    )

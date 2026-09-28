@@ -5,7 +5,7 @@ available pool and pre-tip signals, builds WNBA-owned features, predicts player
 distributions, optimizes a five-player lineup, freezes the result, and serves
 read-only slate and lineup data.
 
-Portfolio product goal: root `../README.md` (Product goal). The T-40 hook graph is in `CONNECTORS.md` (machine catalog: `src/wnba_oracle/assurance/connectors.py`). Current WNBA serve
+Portfolio product goal: root `../README.md` (Product goal). Current WNBA serve
 knobs and training-target detail are in `STATUS.md` and must be reverified
 before production work. Structural outline: root `../OVERVIEW.md`.
 
@@ -17,9 +17,12 @@ Inline contract for this app. Live Railway values stay in `STATUS.md`.
 `WNBA_SERVE_PRIMARY` code default is `eb` (`EBHierarchicalBaseline`).
 `heads` restores LightGBM quantile heads and is the rollback, not the
 primary. Minutes blend and heuristics are cold-start only. Ollama
-(`scripts/ollama_hv_watcher`) writes five-player notes on the same HV/TDV
-boards from the Codespace. It is not this app's serve model and it does not
-freeze a lineup.
+(`scripts/ollama_hv_watcher`) writes five-player notes and optional
+`advice.json` on the same HV/TDV boards from the Codespace. It is not this
+app's serve model and it does not freeze a lineup.
+`WNBA_OLLAMA_INFLUENCE` (default off) multiplies job2 scores from a fresh
+advice file after the TDV or contrarian step. Unset, classic freeze scores
+stay as they were.
 
 **T-40 runner.** `scheduler/job2.py` skips fires before
 `first_tip - FREEZE_LEAD_MINUTES` and freezes once at or after that instant.
@@ -34,7 +37,7 @@ and `scripts/pre_freeze_guard.py`. Cron schedules are mutable; see
 `model_artifact`, `identity_override_file`, `payout_archive`, `wnba_api`,
 `frontend`, `espn`, `github_actions`, `railway`, `watchdog_alert_sink`,
 `watchdog_heartbeat_sink`, `realsports_session_recovery`. A freeze records
-connector ids, not credential values. Narrative hook map: `CONNECTORS.md`.
+connector ids, not credential values.
 
 ### Env knobs (code contract)
 
