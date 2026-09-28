@@ -1,7 +1,8 @@
 # Status
 
-Last verified: 2026-09-28 UTC (#601 T-40 win-freeze readiness; continues #535
-HV train/backtest wiring, #501 zero-boost gate, #482 nhl-staging image)
+Last verified: 2026-09-28T03:35:50Z (#630 staging readiness probe; continues #601
+T-40 win-freeze readiness, #535 HV train/backtest wiring, #501 zero-boost
+gate, #482 nhl-staging image)
 
 ## Win stack index (#594)
 
@@ -84,7 +85,9 @@ Pointer only. Not a new live check.
   freeze fails the run (`alert`). Lock time is the earliest regular-season
   puck drop on the US/Eastern slate date, a proxy until a contest lock is
   captured. Railway `nhl-worker` is still the idle heartbeat; it does not
-  collect the pool.
+  collect the pool. The heartbeat JSON includes `message` so the idle line
+  is visible in Railway logs. Staging `GET /readiness` is live and
+  fail-closed; deployment IDs are in the Railway section below.
 - **Pool:** `gate_pool_completeness` still accepts a roster-sized fixture
   when no slate denominator is set (Week 2 audit shape). A win freeze sets
   `expected_pool_size` above 5 and `games_scheduled` / `games_captured`,
@@ -116,31 +119,49 @@ Pointer only. Not a new live check.
   2026-09-30T00:00Z, VAN@EDM 2026-09-30T02:00Z, CHI@VGK 2026-09-30T02:30Z.
   Ten clubs. Not every franchise.
 
-## Railway nhl-staging (#482 / #601)  -  2026-09-28
+## Railway nhl-staging (#482 / #601 / #630)  -  2026-09-28
 
 - Source: `nhl-oracle/Dockerfile` + `railway.toml`. `dockerfilePath` on
   `nhl-api` / `nhl-worker` is `nhl-oracle/Dockerfile`. `nhl-frontend` uses
   its own `Dockerfile` and `rootDirectory=nhl-oracle/frontend`.
-- **Build blocker, verified:** commit `7f390cd` (#497) deleted the #494
-  `nhl-oracle` allowlist from root `.dockerignore`. Subsequent main builds
-  fail with `/nhl-oracle/src: not found`. Example: `nhl-api` deployment
-  `9abecece-0fbe-435b-863d-27f1ad2c29a0` FAILED at build
-  (2026-09-28T02:57Z, commit `e636040`). This change restores the allowlist.
-  The image is not redeployed until this lands on `main`.
-- Last SUCCESS still serving (verified 2026-09-28T03:00Z):
-  - `GET https://nhl-api-nhl-staging.up.railway.app/health` returned
-    `status=ok`, `observation_only=true`, `contest_entry=false`
-    (`checked_at=2026-09-28T03:00:10Z`). Deployment
-    `317c244d-c43c-4bf7-a905-e27524ffab60`, commit `4c6a225`
-    (2026-09-27T02:44Z). That image does not yet serve `/readiness`.
-  - `nhl-worker` SUCCESS `f2431eed-e07f-4f2d-ad2e-cea684f872c2`, commit
-    `cf532a9` (2026-09-27T02:54Z). Idle heartbeat; no Real Sports loop.
-  - `nhl-frontend` SUCCESS `e5aa846c-67f4-4f2a-9e6f-2fc9792f6592`. Not part
-    of this change.
-- Rollback if a post-merge `nhl-api` or `nhl-worker` deploy fails: api
-  `317c244d-c43c-4bf7-a905-e27524ffab60`, worker
-  `f2431eed-e07f-4f2d-ad2e-cea684f872c2`. Do not redeploy `nhl-frontend`
-  for this change.
+- **Build:** commit `7f390cd` (#497) deleted the #494 `nhl-oracle` allowlist
+  from root `.dockerignore`. Builds after that failed with
+  `/nhl-oracle/src: not found` (example `nhl-api`
+  `9abecece-0fbe-435b-863d-27f1ad2c29a0`, 2026-09-28T02:57Z, commit
+  `e636040`). #601 restored the allowlist on `main` as `41b14e7`. The next
+  main images built.
+- **Live probe 2026-09-28T03:35:50Z** against
+  `https://nhl-api-nhl-staging.up.railway.app`:
+  - `GET /health` HTTP 200, `status=ok`, `observation_only=true`,
+    `contest_entry=false`, `checked_at=2026-09-28T03:35:50.974322+00:00`.
+  - `GET /readiness` HTTP 200, `freeze_ready=false`,
+    `blocked_reasons=["no_live_slate_snapshot"]`, `pool_complete=false`,
+    `zero_boost_active=true`, `boost_multiplier=0.0`,
+    `boost_detail` reports `observed=0_of_32`, `pick_player_ids=null`,
+    `contest_entry=false`, `status=no_live_slate`. No five was invented.
+- **Serving SUCCESS at that probe** (commit `32d297b`, which contains
+  `41b14e7`):
+  - `nhl-api` `eaa68181-e33d-4b97-953d-a1aaefdfdad4` (created
+    2026-09-28T03:30:52Z).
+  - `nhl-worker` `d5360d12-99c9-4eff-9f65-26b39c6e6b4c` (created
+    2026-09-28T03:30:52Z). Start command `nhl-pipeline worker`. It does not
+    collect a slate, so `freeze_ready` stays false.
+  - First readiness SUCCESS, then removed when `32d297b` rolled forward:
+    api `0d6e3900-2748-4b4d-9e0a-e596055de5b5`, worker
+    `9714f313-7d0a-41d4-a4c7-9579e7ccbf38`, commit `41b14e7`.
+  - `nhl-frontend` was not redeployed:
+    `e5aa846c-67f4-4f2a-9e6f-2fc9792f6592`.
+- At the probe, the next main commit `aae11d7` was still QUEUED (`nhl-api`
+  `87b3ad0a-b350-4642-8abb-6b29140e33b9`, `nhl-worker`
+  `2a0abd7e-cbaf-416d-b898-abdb4aa1c333`, created 2026-09-28T03:34:05Z).
+  Auto-deploy on later `main` pushes can replace the IDs above. Hosted
+  freeze publish stays unverified until a complete live slate is injected.
+- Rollback if a later `nhl-api` or `nhl-worker` deploy fails: api
+  `eaa68181-e33d-4b97-953d-a1aaefdfdad4`, worker
+  `d5360d12-99c9-4eff-9f65-26b39c6e6b4c`. Pre-readiness images, which do
+  not serve `/readiness`: api `317c244d-c43c-4bf7-a905-e27524ffab60`,
+  worker `f2431eed-e07f-4f2d-ad2e-cea684f872c2`. Do not redeploy
+  `nhl-frontend` for this change.
 - No migrate-on-startup. No secrets in the image. **No contest entry.
   Staging only.**
 
@@ -229,9 +250,9 @@ Pointer only. Not a new live check.
 - Frontend scaffold (#462): `nhl-oracle/frontend` Vite+React+TS shell with
   NHL dark-ice branding, `/health` client stub, slate placeholder page,
   Dockerfile + `railway.toml` matching the WNBA frontend deploy shape.
-- Staging container shell (#482 / #601): `nhl-pipeline serve`, `worker`, and
-  `readiness`. Live deploy IDs and the dockerignore build blocker are in
-  the Railway section above. No hosted freeze publisher yet.
+- Staging container shell (#482 / #601 / #630): `nhl-pipeline serve`,
+  `worker`, and `readiness`. Live deploy IDs are in the Railway section
+  above. No hosted freeze publisher yet.
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
   optimizer, production NHL serving / contest entry. Any future
   picker/backtest must assume zero boosts until every NHL team has played

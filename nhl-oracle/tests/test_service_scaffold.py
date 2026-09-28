@@ -56,6 +56,8 @@ def test_worker_once_emits_idle_heartbeat(capsys: pytest.CaptureFixture[str]) ->
     assert payload["contest_entry"] is False
     assert payload["observation_only"] is True
     assert payload["freeze_ready"] is False
+    assert payload["message"] == payload["detail"]
+    assert "freeze_ready stays false" in payload["message"]
     assert payload["readiness"]["pick_player_ids"] is None
     assert "no_live_slate_snapshot" in payload["readiness"]["blocked_reasons"]
 
