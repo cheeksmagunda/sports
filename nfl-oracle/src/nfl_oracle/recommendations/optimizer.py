@@ -784,26 +784,12 @@ def optimize(
         ranked.append((contest_utility(expected, p90, wins), expected, ids, p90, wins))
     ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
     _utility, expected, ids, p90, wins = ranked[0]
-    ordered = _commit_slot_order(ids, by_id, enabled=cfg.slot_by_mean)
-    if ordered != ids:
-        ids = ordered
-        expected = sum(scores[pid][slot] for slot, pid in enumerate(ids))
-        p90, wins = evaluate(ids)
     assumptions: tuple[str, ...] = (
         "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
         "game_correlation_is_configured_sensitivity_not_fitted",
         "field_win_rate_against_simulated_opponent_not_payout_probability",
         "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
         "lineup_selected_by_contest_utility_over_expected_score_beam",
-        (
-            "committed_slots_follow_descending_projected_mean"
-            if cfg.slot_by_mean
-            else "committed_slots_follow_search_order"
-        ),
-        f"max_kickers={cfg.max_kickers}",
-        f"max_defenders={cfg.max_defenders}",
-        f"slate_regime={slate_regime_name(len(slate.games))}",
-        f"slate_pool={len(eligible)}",
     )
     if cfg.ollama_engine:
         selection = score_candidates(
@@ -831,6 +817,11 @@ def optimize(
             p90 = selection.simulated_p90
             wins = selection.simulated_field_win_rate
             assumptions = (*assumptions, "ollama_engine_selected_by_json_utility")
+    ordered = _commit_slot_order(ids, by_id, enabled=cfg.slot_by_mean)
+    if ordered != ids:
+        ids = ordered
+        expected = sum(scores[pid][slot] for slot, pid in enumerate(ids))
+        p90, wins = evaluate(ids)
     return Recommendation(
         picks=tuple(
             Pick(
@@ -872,5 +863,16 @@ def optimize(
         boost_nonzero_count=slate.boost_nonzero_count,
         boost_max=slate.boost_max,
         construction_profile=cfg.profile,
-        assumptions=assumptions,
+        assumptions=(
+            *assumptions,
+            (
+                "committed_slots_follow_descending_projected_mean"
+                if cfg.slot_by_mean
+                else "committed_slots_follow_search_order"
+            ),
+            f"max_kickers={cfg.max_kickers}",
+            f"max_defenders={cfg.max_defenders}",
+            f"slate_regime={slate_regime_name(len(slate.games))}",
+            f"slate_pool={len(eligible)}",
+        ),
     )
