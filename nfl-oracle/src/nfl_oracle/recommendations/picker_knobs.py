@@ -24,6 +24,7 @@ import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from statistics import mean, pstdev
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -40,6 +41,9 @@ class PickerKnobs(Record):
     ollama_tick_tilt_weight: float = Field(default=0.0, ge=0.0, le=1.0)
     ollama_tick_tilt_path: str = ""
     profile: str = "identity"
+    # Inside one boost tier, assign higher aligned means to higher own
+    # projections. ``player_id`` restores the previous tie-break.
+    boost_tie_break: Literal["projection", "player_id"] = "projection"
 
     @field_validator("profile")
     @classmethod
@@ -54,7 +58,10 @@ class PickerKnobs(Record):
 def picker_knobs_from_env(environ: Mapping[str, str] | None = None) -> PickerKnobs:
     """Read picker env knobs including optional Ollama tick tilt (#574).
 
-    Missing or empty values keep the identity defaults. Invalid floats raise
+    ``NFL_PICKER_BOOST_RANK_BLEND`` and ``NFL_PICKER_POSITION_CALIBRATION``
+    missing or empty keep the identity defaults. ``NFL_PICKER_BOOST_TIEBREAK``
+    defaults to ``projection`` (own conditional mean inside a boost tier);
+    ``player_id`` restores the previous tie-break. Invalid values raise
     ``ValueError`` so a mis-set Railway knob fails closed rather than silently
     ignoring the override. ``NFL_OLLAMA_TICK_TILT_WEIGHT`` default 0 never
     opens a tick file (today's freeze unchanged unless explicitly armed).
@@ -77,7 +84,17 @@ def picker_knobs_from_env(environ: Mapping[str, str] | None = None) -> PickerKno
         ollama_tick_tilt_weight=ollama_weight,
         ollama_tick_tilt_path=str(ollama_path) if ollama_path is not None else "",
         profile=profile,
+        boost_tie_break=_env_boost_tie_break(env),
     )
+
+
+def _env_boost_tie_break(env: Mapping[str, str]) -> Literal["projection", "player_id"]:
+    raw = (env.get("NFL_PICKER_BOOST_TIEBREAK") or "").strip().lower()
+    if not raw or raw == "projection":
+        return "projection"
+    if raw == "player_id":
+        return "player_id"
+    raise ValueError("NFL_PICKER_BOOST_TIEBREAK_invalid")
 
 
 def _env_unit_float(env: Mapping[str, str], key: str, default: float) -> float:
@@ -147,7 +164,9 @@ def apply_picker_knobs(
     if knobs.boost_rank_blend == 0.0 and knobs.position_calibration == 0.0:
         adjusted_tuple: tuple[Projection, ...] = tuple(projections)
     else:
-        aligned = _boost_aligned_means(projections, boost_of)
+        aligned = _boost_aligned_means(
+            projections, boost_of, tie_break=knobs.boost_tie_break
+        )
         bias = position_bias or {}
         adjusted: list[Projection] = []
         for projection in projections:
@@ -161,6 +180,7 @@ def apply_picker_knobs(
             probability = projection.availability_probability
             new_samples = tuple(sample + delta for sample in projection.samples)
             sample_center = mean(new_samples) if new_samples else calibrated
+            # Keep mean = conditional * availability, matching predict().
             new_mean = sample_center * probability
             provenance = projection.provenance + (
                 f"picker:{knobs.profile}",
@@ -181,7 +201,6 @@ def apply_picker_knobs(
                 )
             )
         adjusted_tuple = tuple(adjusted)
-
     if knobs.ollama_tick_tilt_weight == 0.0:
         return adjusted_tuple
     if not knobs.ollama_tick_tilt_path.strip():
@@ -196,20 +215,31 @@ def apply_picker_knobs(
 def _boost_aligned_means(
     projections: Sequence[Projection],
     boost_of: Mapping[int, float],
+    *,
+    tie_break: Literal["projection", "player_id"] = "projection",
 ) -> dict[int, float]:
     """Reassign projected conditional means in ascending boost order.
 
-    Ties in boost break by player_id so the map is deterministic. The multiset
-    of values is preserved; only the assignment to players changes. When every
-    boost in the pool is equal (zero-boost or uniform-boost regime), return the
-    original conditional means unchanged so player_id tie-breaks cannot shuffle
-    projections.
+    The multiset of values is preserved; only the assignment to players
+    changes. Inside one boost tier, ``projection`` gives the higher own
+    conditional mean the higher aligned value. ``player_id`` is the previous
+    tie-break and stays the last key when own projections also tie, so the
+    map stays deterministic. When every boost in the pool is equal (zero-boost
+    or uniform-boost regime), return the original conditional means unchanged.
     """
+    if tie_break not in {"projection", "player_id"}:
+        raise ValueError("boost_tie_break_invalid")
     boost_values = {float(boost_of[p.player_id]) for p in projections}
     if len(boost_values) <= 1:
         return {p.player_id: p.conditional_mean for p in projections}
     ordered_values = sorted(p.conditional_mean for p in projections)
-    by_boost = sorted(projections, key=lambda p: (boost_of[p.player_id], p.player_id))
+    if tie_break == "projection":
+        by_boost = sorted(
+            projections,
+            key=lambda p: (boost_of[p.player_id], p.conditional_mean, p.player_id),
+        )
+    else:
+        by_boost = sorted(projections, key=lambda p: (boost_of[p.player_id], p.player_id))
     return {
         projection.player_id: value
         for projection, value in zip(by_boost, ordered_values, strict=True)

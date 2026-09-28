@@ -204,3 +204,42 @@ def test_boost_aligned_means_equal_boosts_return_original_means() -> None:
     projections = (_proj(3, 1.0), _proj(1, 9.0), _proj(2, 5.0))
     aligned = _boost_aligned_means(projections, {1: 0.0, 2: 0.0, 3: 0.0})
     assert aligned == {3: 1.0, 1: 9.0, 2: 5.0}
+
+
+def test_tied_boost_keeps_higher_own_projection_over_player_id() -> None:
+    """A later player_id must not steal a stud's mean inside the same boost."""
+    slate = _make_slate({1: 0.0, 10: 3.0, 100: 3.0})
+    projections = (_proj(1, 5.0), _proj(10, 9.0), _proj(100, 1.0))
+    out = apply_picker_knobs(
+        projections,
+        slate,
+        knobs=PickerKnobs(boost_rank_blend=1.0, profile="tied_boost", boost_tie_break="projection"),
+    )
+    by_id = {p.player_id: p.conditional_mean for p in out}
+    assert by_id[10] == pytest.approx(9.0)
+    assert by_id[100] == pytest.approx(5.0)
+    assert by_id[1] == pytest.approx(1.0)
+
+
+def test_player_id_boost_tie_break_can_be_restored() -> None:
+    slate = _make_slate({1: 0.0, 10: 3.0, 100: 3.0})
+    projections = (_proj(1, 5.0), _proj(10, 9.0), _proj(100, 1.0))
+    out = apply_picker_knobs(
+        projections,
+        slate,
+        knobs=PickerKnobs(boost_rank_blend=1.0, profile="legacy_tie", boost_tie_break="player_id"),
+    )
+    by_id = {p.player_id: p.conditional_mean for p in out}
+    assert by_id[100] == pytest.approx(9.0)
+    assert by_id[10] == pytest.approx(5.0)
+    assert by_id[1] == pytest.approx(1.0)
+
+
+def test_picker_knobs_from_env_boost_tie_break() -> None:
+    assert picker_knobs_from_env({}).boost_tie_break == "projection"
+    assert (
+        picker_knobs_from_env({"NFL_PICKER_BOOST_TIEBREAK": "player_id"}).boost_tie_break
+        == "player_id"
+    )
+    with pytest.raises(ValueError, match="NFL_PICKER_BOOST_TIEBREAK_invalid"):
+        picker_knobs_from_env({"NFL_PICKER_BOOST_TIEBREAK": "name"})

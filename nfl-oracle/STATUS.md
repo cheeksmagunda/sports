@@ -12,6 +12,27 @@ picker can read it when `NFL_OLLAMA_TICK_TILT_WEIGHT>0` and
 on the Railway volume by default. Related inbound app→Ollama helper: PR #582
 merged 2026-09-28 (`578566d`).
 
+## Slot order, one kicker, one defender (#596) - 2026-09-28
+
+Code defaults on the freeze path (`optimizer_config_from_env` /
+`picker_knobs_from_env`). This change does not deploy and does not set
+Railway variables. Live values of the new knobs are unverified. Corpus C
+contest-pool replay was not re-run in this change; do not read a capture
+delta from this note.
+
+| Knob | Default | Rollback |
+|------|---------|----------|
+| `NFL_OPTIMIZER_SLOT_BY_MEAN` | on (`1`): slot 1 is the highest projected mean | `0` keeps search slot order |
+| `NFL_OPTIMIZER_MAX_KICKERS` | `1` provider `K` | `0`, or any integer above 5, disables |
+| `NFL_OPTIMIZER_MAX_DEFENDERS` | `1` LB/DB/DL (and the chart codes in that family) every contest day | `0`, or any integer above 5, disables |
+| `NFL_PICKER_BOOST_TIEBREAK` | `projection`: inside one boost tier, higher own conditional mean keeps the higher aligned value | `player_id` |
+
+Invalid values fail closed. `player_id` remains only the last key when boost
+and own projection both tie. The caps are hard: a pool that cannot fill five
+cards raises `optimizer_no_feasible_lineup` instead of relaxing the cap.
+`NFL_PICKER_BOOST_RANK_BLEND` is unchanged (last verified live value `0.75`).
+The serving image stays the previously verified worker until a later deploy.
+
 ## Win stack index (#594)
 
 Pointer only. This index does not restate the sections below and does not

@@ -303,6 +303,10 @@ make -C nfl-oracle picker-knob-sweep CONTEXT_SNAPSHOT=/path/to/context.json \
 
 Production defaults stay identity. Measured Railway flips use
 `NFL_PICKER_BOOST_RANK_BLEND` / `NFL_PICKER_PROFILE` (see STATUS.md, Refs #280).
+Slot order, the one-kicker and one-defender caps, and the boost-rank tie-break
+(`NFL_OPTIMIZER_SLOT_BY_MEAN`, `NFL_OPTIMIZER_MAX_KICKERS`,
+`NFL_OPTIMIZER_MAX_DEFENDERS`, `NFL_PICKER_BOOST_TIEBREAK`) are recorded in
+STATUS.md (issue #596).
 Replay CLIs accept optional `--fit-*` knobs so a race can vary the shared
 ridge `FitConfig` without editing code. Knob-sweep `excluded` reasons are
 isolated per profile (shared pool skips stay on every profile).

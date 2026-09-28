@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from nfl_oracle.recommendations.model import HistoricalPerformance, fit_model, predict
-from nfl_oracle.recommendations.optimizer import optimize
+from nfl_oracle.recommendations.optimizer import OptimizerConfig, optimize
 from nfl_oracle.recommendations.pipeline import ScoringPolicy
 from nfl_oracle.recommendations.schema import Candidate, Contest, EvidenceClock, Game, Slate
 
@@ -117,11 +117,11 @@ def test_defense_candidates_remain_in_projection_pool() -> None:
 
 
 def test_defense_selected_when_projected_value_dominates() -> None:
-    """If defense EV dominates, optimize must be willing to pick defenders.
+    """Defenders stay eligible, and the default cap keeps one of them.
 
-    Under total_value with no position quota, an all-defense five-card lineup
-    is a legal outcome when those players clear the value bar. A regression
-    that silently drops DL/LB/DB from eligibility would fail this assert.
+    #596 caps the committed five at one LB/DB/DL. Turning that cap off must
+    still return an all-defense five when defense history dominates, so a
+    regression that drops DL/LB/DB from eligibility still fails.
     """
 
     decision = BASE + timedelta(days=8)
@@ -129,16 +129,22 @@ def test_defense_selected_when_projected_value_dominates() -> None:
     history = _history(len(slate.candidates), defense_value=9.0, other_value=1.5)
     model = fit_model(history, trained_at=decision)
     projections = predict(slate, model, history, decision_at=decision)
-    recommendation = optimize(
+    capped = optimize(
         slate,
         projections,
         decision_at=decision,
         scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(simulations=100),
+    )
+    uncapped = optimize(
+        slate,
+        projections,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=OptimizerConfig(simulations=100, max_defenders=0),
     )
 
-    assert len(recommendation.picks) == 5
-    defense_picks = [p for p in recommendation.picks if p.position in DEFENSE]
-    assert len(defense_picks) == 5, (
-        "expected all five picks to be defense when defense history dominates; "
-        f"got {[p.position for p in recommendation.picks]}"
-    )
+    assert len(capped.picks) == 5
+    assert sum(pick.position in DEFENSE for pick in capped.picks) == 1
+    assert len(uncapped.picks) == 5
+    assert all(pick.position in DEFENSE for pick in uncapped.picks)
