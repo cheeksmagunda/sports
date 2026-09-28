@@ -44,6 +44,8 @@ COPY --from=builder /opt/venv /opt/venv
 # Layout keeps resolve_project_root discoverable via cwd (src/nfl_oracle present).
 WORKDIR /app/nfl-oracle
 COPY nfl-oracle/src/ ./src/
+# HTTP client only. NFL lineup rules stay in nfl_oracle.recommendations.
+COPY scripts/ollama_hv_watcher/client.py /app/scripts/ollama_hv_watcher/client.py
 COPY nfl-oracle/data/catalog/ ./data/catalog/
 COPY nfl-oracle/data/schedule/ ./data/schedule/
 COPY nfl-oracle/data/raw/.gitkeep ./data/raw/.gitkeep

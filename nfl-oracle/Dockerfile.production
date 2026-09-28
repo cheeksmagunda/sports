@@ -80,6 +80,8 @@ COPY nfl-oracle/data/schedule/README.md /opt/nfl-oracle/bootstrap/schedule/READM
 
 WORKDIR /app/nfl-oracle
 COPY nfl-oracle/src/ ./src/
+# HTTP client only. NFL lineup rules stay in nfl_oracle.recommendations.
+COPY scripts/ollama_hv_watcher/client.py /app/scripts/ollama_hv_watcher/client.py
 
 RUN useradd --create-home --uid 10001 oracle \
     && mkdir -p /app/nfl-oracle \
