@@ -44,9 +44,9 @@ HV_CAPTURE_OBJECTIVE = "5-player lineup maximizing capture of highestBoostedValu
 SHAPE_CONDITION_OBJECTIVE = (
     "Learn the shapes of every HV/TDV board appearance over history, "
     "learn the slate conditions that produced each shape, and at T-40 "
-    "have Ollama drive runs on shape with learn ticks and tilt to commit "
-    "the 5-player lineup that maximizes capture of that slate's Highest "
-    "value / Total Value board."
+    "match shape and condition with the sport-owned model to commit the "
+    "5-player lineup that maximizes capture of that slate's Highest value "
+    "/ Total Value board, with Ollama on top as LLM-internal runs-on-shape."
 )
 
 
@@ -65,6 +65,13 @@ def hv_objective_flags() -> dict[str, Any]:
         "winning_drafts_are_label": False,
         "cash_is_objective": False,
         "median_is_objective": False,
+        "llm_internal": "runs-on-shape",
+        "ollama_layer": "on_top_of_existing_schemas",
+        "ollama_mode": "learn_and_tilt",
+        "replaces_ridge": False,
+        "replaces_valuelaw": False,
+        "replaces_sport_model": False,
+        "commit_path": "sport_owned_model_t40",
     }
 
 

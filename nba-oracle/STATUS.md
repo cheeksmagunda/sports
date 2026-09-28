@@ -7,9 +7,10 @@ Pointer only. Not a new live check.
 - Code contract: no model, no T-40 runner, no serve knobs, HV export stub
   exits 78, history loader is observation-only. See `README.md` (Win stack).
 - Partial `nba_history_*` counts and Railway shell: sections below.
-- Ollama is not an NBA model. It is the portfolio internal LLM layer,
-  not a chatbot. Role and shape-and-condition campaign (#653): root
-  `../OVERVIEW.md` (Win stack). NBA has no train path yet.
+- Ollama is not an NBA model. LLM-internal runs-on-shape sits on top of
+  a sport model and never replaces one. Role and shape-and-condition
+  campaign (#653): root `../OVERVIEW.md` (Win stack). NBA has no train
+  path yet.
 
 ## History corpus gap (#453 / #489)  -  2026-09-27
 

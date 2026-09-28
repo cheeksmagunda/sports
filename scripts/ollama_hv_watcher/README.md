@@ -5,11 +5,11 @@ Portfolio Codespace helper tracked by
 
 ## What it is (and is not)
 
-Sports Oracle is LLM-internal. This package is the internal LLM layer that
-drives runs on shape: learn ticks, and tilt when a sport app arms it. It
-is not a chatbot and not decoration. The one-sentence objective is in root
-`README.md`'s pointer to `OVERVIEW.md` (Win stack, #653). Product goal:
-root `README.md` **Product goal**.
+Sports Oracle is LLM-internal runs-on-shape. This package learns and
+tilts on top of the sport-owned schemas, optimizer, and serve. It never
+replaces ridge, math, valuelaw, or a sport-owned model. It is not a
+chatbot and not decoration. The campaign sentence is in `OVERVIEW.md`
+(Win stack, #653). Product goal: root `README.md` **Product goal**.
 
 Each sport app fires its own T-40 freeze and publishes its five-player
 lineup. Ollama does not publish that freeze.

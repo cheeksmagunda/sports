@@ -155,6 +155,28 @@ def hv_feature_emphasis() -> dict[str, Any]:
     return report
 
 
+def serve_shape_contract() -> dict[str, Any]:
+    """T-40 bar. The sport model commits. Ollama learns and tilts on top.
+
+    Building the emphasis catalog fails closed when a live pre-game spec
+    is missing. That check is the same one ``nfl-pipeline train`` writes.
+    """
+
+    full = hv_feature_emphasis()
+    return {
+        "llm_internal": full["llm_internal"],
+        "ollama_layer": full["ollama_layer"],
+        "ollama_mode": full["ollama_mode"],
+        "replaces_ridge": full["replaces_ridge"],
+        "replaces_valuelaw": full["replaces_valuelaw"],
+        "replaces_sport_model": full["replaces_sport_model"],
+        "commit_path": full["commit_path"],
+        "feature_count": len(full["feature_spec"]),
+        "condition_roles": sorted({str(row["role"]) for row in full["conditions"]}),
+        "display_weight": "top_10_when_boost_map_present",
+    }
+
+
 def hv_feature_emphasis_names() -> dict[str, Any]:
     """Compact name lists for the train JSON report."""
 
@@ -177,6 +199,12 @@ def hv_feature_emphasis_names() -> dict[str, Any]:
         "boost_is_ridge_feature": False,
         "objective": full["objective"],
         "shape_condition_objective": full["shape_condition_objective"],
+        "llm_internal": full["llm_internal"],
+        "ollama_layer": full["ollama_layer"],
+        "replaces_ridge": full["replaces_ridge"],
+        "replaces_valuelaw": full["replaces_valuelaw"],
+        "replaces_sport_model": full["replaces_sport_model"],
+        "commit_path": full["commit_path"],
         "lineup_size": full["lineup_size"],
         "winning_drafts_are_reference_bar": full["winning_drafts_are_reference_bar"],
         "cash_is_objective": full["cash_is_objective"],

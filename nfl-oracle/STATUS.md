@@ -107,9 +107,13 @@ back only on a later explicit train. This checkout has no
 
 ## Shape-and-condition campaign (#653)
 
-The objective sentence is in root `../OVERVIEW.md` (Win stack). Ollama
-drives runs on shape with learn ticks and tilt. It is not a chatbot and
-it does not publish the freeze. `nfl-pipeline train` writes
+The objective sentence is in root `../OVERVIEW.md` (Win stack).
+LLM-internal runs-on-shape: Ollama learns and tilts into the existing
+optimizer. It never replaces ridge, math, or valuelaw, and it does not
+publish the freeze. T-40 prepare records that contract
+(`serve_shape_contract`) after the same live-feature check the train
+audit uses. The history-train window stays HV/TDV display top 10 when a
+boost map is present. `nfl-pipeline train` writes
 `hv_feature_emphasis`: every live pre-game FeatureSpec, partitioned into
 player profile, slate conditions, and external pre-game. A missing live
 spec fails closed. `card_boost_post_settlement` stays off the live clock.

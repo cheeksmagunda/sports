@@ -16,9 +16,10 @@ that slate's Real Sports **Highest value / Total Value Daily Leaderboard**
 to beat, not the fit target. Cash and median construction are not the
 objective. Current serve knobs live in each sport application's `STATUS.md`.
 
-The learning campaign is LLM-internal (#653, sentence in `OVERVIEW.md`,
-Win stack). Ollama (`scripts/ollama_hv_watcher`) drives runs on shape with
-learn ticks and tilt. It is not a chatbot and not a serve primary.
+The learning campaign is LLM-internal runs-on-shape (#653, sentence in
+`OVERVIEW.md`, Win stack). Ollama (`scripts/ollama_hv_watcher`) learns and
+tilts on top of the sport-owned model. It never replaces ridge, math,
+valuelaw, or that model, and it is not a serve primary.
 
 ## Development surfaces
 

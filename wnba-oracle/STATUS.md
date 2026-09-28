@@ -87,9 +87,9 @@ re-check Railway.
   `total_draft_value`): `README.md` (Win stack).
 - Live knobs and freeze readiness: Win-draft knobs and Overnight freeze
   readiness below.
-- Ollama is not a WNBA serve primary. It is the internal LLM layer
-  (learn ticks and tilt) on the same HV/TDV boards, not a chatbot. Role
-  and shape-and-condition campaign (#653): root `../OVERVIEW.md` (Win stack).
+- Ollama is not a WNBA serve primary. LLM-internal runs-on-shape: learn
+  ticks and tilt sit on top of the sport model. Role and
+  shape-and-condition campaign (#653): root `../OVERVIEW.md` (Win stack).
 
 ## Monday slate check (#653)  -  2026-09-28T05:09Z
 

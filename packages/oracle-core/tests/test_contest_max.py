@@ -169,6 +169,11 @@ def test_shape_condition_objective_is_the_campaign_sentence() -> None:
     flags = hv_objective_flags()
     assert flags["shape_condition_objective"] == SHAPE_CONDITION_OBJECTIVE
     assert "T-40" in flags["shape_condition_objective"]
+    assert "LLM-internal runs-on-shape" in flags["shape_condition_objective"]
+    assert flags["llm_internal"] == "runs-on-shape"
+    assert flags["replaces_ridge"] is False
+    assert flags["replaces_sport_model"] is False
+    assert flags["commit_path"] == "sport_owned_model_t40"
     assert flags["cash_is_objective"] is False
     assert flags["median_is_objective"] is False
     assert flags["winning_drafts_are_reference_bar"] is True

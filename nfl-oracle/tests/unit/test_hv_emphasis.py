@@ -9,6 +9,7 @@ from nfl_oracle.features.schema import feature_registry
 from nfl_oracle.recommendations.hv_emphasis import (
     hv_feature_emphasis,
     hv_feature_emphasis_names,
+    serve_shape_contract,
 )
 
 
@@ -88,15 +89,22 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     assert report["cash_is_objective"] is False
     assert report["median_is_objective"] is False
     assert report["lineup_size"] == 5
+    assert report["llm_internal"] == "runs-on-shape"
+    assert report["ollama_layer"] == "on_top_of_existing_schemas"
+    assert report["ollama_mode"] == "learn_and_tilt"
+    assert report["replaces_ridge"] is False
+    assert report["replaces_valuelaw"] is False
+    assert report["replaces_sport_model"] is False
+    assert report["commit_path"] == "sport_owned_model_t40"
     assert report["objective"] == (
         "5-player lineup maximizing capture of highestBoostedValuePlayers"
     )
     assert report["shape_condition_objective"] == (
         "Learn the shapes of every HV/TDV board appearance over history, "
         "learn the slate conditions that produced each shape, and at T-40 "
-        "have Ollama drive runs on shape with learn ticks and tilt to commit "
-        "the 5-player lineup that maximizes capture of that slate's Highest "
-        "value / Total Value board."
+        "match shape and condition with the sport-owned model to commit the "
+        "5-player lineup that maximizes capture of that slate's Highest value "
+        "/ Total Value board, with Ollama on top as LLM-internal runs-on-shape."
     )
     assert report["boost_interaction"]["ridge_feature"] is False
     assert report["boost_interaction"]["card_boost_post_settlement_live_ok"] is False
@@ -141,6 +149,20 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     json.dumps(compact)
     assert compact["boost_is_ridge_feature"] is False
     assert compact["shape_condition_objective"] == report["shape_condition_objective"]
+    assert compact["llm_internal"] == "runs-on-shape"
+    assert compact["replaces_sport_model"] is False
+    contract = serve_shape_contract()
+    assert contract["llm_internal"] == "runs-on-shape"
+    assert contract["replaces_ridge"] is False
+    assert contract["replaces_valuelaw"] is False
+    assert contract["commit_path"] == "sport_owned_model_t40"
+    assert contract["feature_count"] == len(report["feature_spec"])
+    assert set(contract["condition_roles"]) == {
+        "player_profile",
+        "slate_conditions",
+        "external_pregame",
+    }
+    assert contract["display_weight"] == "top_10_when_boost_map_present"
     assert compact["winning_drafts_are_reference_bar"] is True
     assert compact["cash_is_objective"] is False
     assert compact["median_is_objective"] is False
