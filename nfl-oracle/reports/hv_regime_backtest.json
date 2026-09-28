@@ -1,0 +1,264 @@
+{
+  "aggregate": {
+    "one_night_mnf": {
+      "n_boards": 0,
+      "policies": []
+    },
+    "one_night_snf": {
+      "n_boards": 0,
+      "policies": []
+    },
+    "one_night_tnf": {
+      "n_boards": 0,
+      "policies": []
+    },
+    "sunday_multi": {
+      "n_boards": 2,
+      "policies": [
+        {
+          "mean_hv_board_capture": 0.9067315490673156,
+          "mean_hv_top5_rate": 0.9,
+          "n_boards": 2,
+          "name": "identity_uncapped"
+        },
+        {
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
+          "n_boards": 2,
+          "name": "boost_0.75_uncapped"
+        },
+        {
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
+          "n_boards": 2,
+          "name": "boost_0.75_def1"
+        },
+        {
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
+          "n_boards": 2,
+          "name": "boost_0.75_k1"
+        },
+        {
+          "mean_hv_board_capture": 0.7053183657396576,
+          "mean_hv_top5_rate": 0.7,
+          "n_boards": 2,
+          "name": "boost_0.75_def1_k1"
+        }
+      ]
+    }
+  },
+  "boards": [
+    {
+      "full_roster": false,
+      "hv_top5": [
+        "Brandon Aubrey",
+        "Spencer Shrader",
+        "Tre Tucker",
+        "Jaylen Waddle",
+        "CeeDee Lamb"
+      ],
+      "hv_top5_positions": {
+        "defenders": 0,
+        "kickers": 2,
+        "skill": 3
+      },
+      "law_max_abs_residual": 0.1999999999999993,
+      "law_mean_abs_residual": 0.08357142857142819,
+      "policies": [
+        {
+          "defenders": 0,
+          "hv_board_capture": 0.813463098134631,
+          "hv_top5_hits": 4,
+          "kickers": 2,
+          "name": "identity_uncapped",
+          "picks": [
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Spencer Shrader",
+            "Jaylen Waddle",
+            "Dalton Schultz"
+          ]
+        },
+        {
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
+          "kickers": 1,
+          "name": "boost_0.75_uncapped",
+          "picks": [
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
+            "Dalton Schultz",
+            "Ja'Marr Chase"
+          ]
+        },
+        {
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
+          "kickers": 1,
+          "name": "boost_0.75_def1",
+          "picks": [
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
+            "Dalton Schultz",
+            "Ja'Marr Chase"
+          ]
+        },
+        {
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
+          "kickers": 1,
+          "name": "boost_0.75_k1",
+          "picks": [
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
+            "Dalton Schultz",
+            "Ja'Marr Chase"
+          ]
+        },
+        {
+          "defenders": 0,
+          "hv_board_capture": 0.6131386861313868,
+          "hv_top5_hits": 3,
+          "kickers": 1,
+          "name": "boost_0.75_def1_k1",
+          "picks": [
+            "Brandon Aubrey",
+            "Tre Tucker",
+            "Jaylen Waddle",
+            "Dalton Schultz",
+            "Ja'Marr Chase"
+          ]
+        }
+      ],
+      "pool": "highest_value_section",
+      "pool_size": 14,
+      "regime": "sunday_multi",
+      "slate_date": "2026-09-20",
+      "success_metric": "hv_tdv_board_top5"
+    },
+    {
+      "full_roster": false,
+      "hv_top5": [
+        "Chris Boswell",
+        "Sam Darnold",
+        "Will Anderson Jr.",
+        "Harold Fannin Jr.",
+        "Genesis Smith"
+      ],
+      "hv_top5_positions": {
+        "defenders": 2,
+        "kickers": 1,
+        "skill": 2
+      },
+      "law_max_abs_residual": 0.1999999999999993,
+      "law_mean_abs_residual": 0.08714285714285783,
+      "policies": [
+        {
+          "defenders": 2,
+          "hv_board_capture": 1.0,
+          "hv_top5_hits": 5,
+          "kickers": 1,
+          "name": "identity_uncapped",
+          "picks": [
+            "Will Anderson Jr.",
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr."
+          ]
+        },
+        {
+          "defenders": 2,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
+          "kickers": 1,
+          "name": "boost_0.75_uncapped",
+          "picks": [
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Jacob Rodriguez"
+          ]
+        },
+        {
+          "defenders": 1,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
+          "kickers": 1,
+          "name": "boost_0.75_def1",
+          "picks": [
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Kenyon Sadiq"
+          ]
+        },
+        {
+          "defenders": 2,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
+          "kickers": 1,
+          "name": "boost_0.75_k1",
+          "picks": [
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Jacob Rodriguez"
+          ]
+        },
+        {
+          "defenders": 1,
+          "hv_board_capture": 0.7974980453479282,
+          "hv_top5_hits": 4,
+          "kickers": 1,
+          "name": "boost_0.75_def1_k1",
+          "picks": [
+            "Chris Boswell",
+            "Genesis Smith",
+            "Sam Darnold",
+            "Harold Fannin Jr.",
+            "Kenyon Sadiq"
+          ]
+        }
+      ],
+      "pool": "highest_value_section",
+      "pool_size": 14,
+      "regime": "sunday_multi",
+      "slate_date": "2026-09-27",
+      "success_metric": "hv_tdv_board_top5"
+    }
+  ],
+  "command": "scripts/hv_regime_backtest.py --out reports/hv_regime_backtest.json --report reports/hv_regime_backtest.md",
+  "contest_entry": false,
+  "finished_at": "2026-09-28T12:16:32-05:00",
+  "inventory": {
+    "counts": {
+      "multi_other": 8,
+      "one_game_other": 1,
+      "one_night_mnf": 7,
+      "one_night_tnf": 7,
+      "sunday_multi": 11
+    },
+    "path": "../drive/nfl_probe_out/merged_summary.json"
+  },
+  "issue": 603,
+  "kind": "hv_regime_backtest",
+  "knobs_markdown": "### sunday_multi\n\n- `NFL_OPTIMIZER_PROFILE=max_value`.\n- No defender cap and no kicker cap. Slot order stays joint.\n- On these two boards, perfect-base identity (the optimizer when the base is already known, n=2) hits the HV/TDV top 5 at 90.0% and captures 90.7% of that top 5's Value. Sep 20's identity five includes two kickers. Sep 27's includes two defenders.\n- `boost_0.75` on that same perfect base hits the board at 70.0% and captures 70.5% of the board Value. Max-1 defender and max-1 kicker on the blend captures 70.5%.\n- **Do not flip live `NFL_PICKER_BOOST_RANK_BLEND` to 0.75.** Live stays `0` (#637 / Live train). Offline arms still compare identity vs `0.75`. The 2026-09-25 sweep (identity 51.7%, boost 0.75 57.9%, 91 contests) is ridge hindsight capture on a mixture of regimes, not this HV/TDV board metric.\n\n### one_night (TNF / SNF / MNF)\n\n- Keep `NFL_OPTIMIZER_PROFILE=max_value` (floor 1/1) for one-game nights. A two-game floor is the Sunday shape.\n- **Do not flip live blend to 0.75.** No one-night HV/TDV board was scored (n=0). Do not copy Sunday perfect-base identity preferences onto a night slate as a live flip.\n- Serving code already defaults to max 1 defender, max 1 kicker, and slot-by-mean (#616/#617). This offline table does not authorize a Railway change. Sunday identity lineups used two kickers or two defenders; do not treat that mix as a night-slate quota.\n- Do not use the week-1 zero-boost both-quarterback archetype.\n- The probe has zero standalone SNF contest days. SNF that shares a Sunday date is inside `sunday_multi`.\n",
+  "mnf_t40": {
+    "game_count": 1,
+    "gametime": "20:15",
+    "matchup": "PHI at CHI",
+    "regime": "one_night_mnf",
+    "slate_date": "2026-09-28"
+  }
+}

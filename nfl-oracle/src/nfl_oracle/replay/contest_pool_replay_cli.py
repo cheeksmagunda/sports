@@ -27,7 +27,6 @@ from nfl_oracle.replay.contest_pool_replay import (
     replay_contest_pools,
     summarize,
 )
-from nfl_oracle.replay.hv_train_inputs import boost_audit, prepare_hv_replay_train_inputs
 from nfl_oracle.replay.production_backtest_cli import (
     add_fit_config_args,
     fit_config_from_args,
@@ -102,31 +101,45 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the profile's requested distinct-game floor (1..5).",
     )
+    parser.add_argument(
+        "--max-defenders",
+        type=int,
+        default=0,
+        help="Cap DL/LB/DB (and aliases) in the five. 0 disables (research default).",
+    )
+    parser.add_argument(
+        "--max-kickers",
+        type=int,
+        default=0,
+        help="Cap K in the five. 0 disables (research default).",
+    )
+    parser.add_argument(
+        "--slot-by-mean",
+        action="store_true",
+        help="Place the chosen five into slots by descending projected mean.",
+    )
+    parser.add_argument(
+        "--no-slot-by-mean",
+        action="store_true",
+        help="Keep joint search slot order (overrides --slot-by-mean).",
+    )
+    parser.add_argument(
+        "--pool-scope",
+        choices=("visible", "contest_games"),
+        default="visible",
+        help=(
+            "visible: contest draft-stats pool. contest_games: every Corpus G "
+            "participant on those games (cold-start chalk denominator)."
+        ),
+    )
     add_fit_config_args(parser)
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
-    parser.add_argument(
-        "--project",
-        type=Path,
-        default=Path("nfl-oracle"),
-        help="App root used to resolve Corpus C / HV export paths for train weights.",
-    )
-    parser.add_argument(
-        "--skip-hv-labels",
-        action="store_true",
-        help="Keep raw Corpus G rows; still load contest boosts when exports exist.",
-    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     inputs = load_backtest_inputs(args.history_root, args.context_snapshot)
-    hv = prepare_hv_replay_train_inputs(
-        args.project,
-        inputs.enriched,
-        corpus_c_root=args.contest_root,
-        apply_labels=not args.skip_hv_labels,
-    )
     contests = [
         contest
         for contest in iter_contests(ContestStore(args.contest_root), finalized_only=True)
@@ -159,18 +172,21 @@ def main(argv: list[str] | None = None) -> int:
             args.min_distinct_games if args.min_distinct_games is not None else preset_games
         ),
         profile=args.optimizer_profile,
+        max_defenders=args.max_defenders,
+        max_kickers=args.max_kickers,
+        slot_by_mean=(False if args.no_slot_by_mean else args.slot_by_mean),
     )
     results, excluded = replay_contest_pools(
-        hv.rows,
+        inputs.enriched,
         contests,
         fold_of=fold_of,
         team_keys=inputs.team_keys,
         optimizer_config=optimizer_config,
         fit_config=fit_config,
         compact_samples=not args.full_samples,
-        contest_boosts=hv.contest_boosts,
         picker=picker,
         progress=progress,
+        pool_scope=args.pool_scope,
     )
     summary = summarize(results, excluded)
     payload = {
@@ -180,18 +196,13 @@ def main(argv: list[str] | None = None) -> int:
         "fit_config": fit_config.model_dump(mode="json"),
         "picker": picker.model_dump(mode="json"),
         "optimizer": optimizer_config.model_dump(mode="json"),
+        "pool_scope": args.pool_scope,
         "contests_with_field_evidence": len(contests),
         "history_rows": len(inputs.rows),
         "history_excluded": inputs.history_excluded,
         "context_rows": inputs.context_rows,
         "context_excluded": inputs.context_excluded,
         "context_evidence_mode": inputs.context_evidence_mode,
-        "hv_train": {
-            "applied": hv.applied,
-            "fit_rows": len(hv.rows),
-            "hv_overlay": hv.hv_overlay,
-            **boost_audit(hv.contest_boosts),
-        },
         "started_at": started.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "summary": asdict(summary),

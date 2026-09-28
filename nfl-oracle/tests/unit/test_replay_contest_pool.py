@@ -16,13 +16,16 @@ from nfl_oracle.recommendations.model import (
     RatingModel,
     fit_model,
 )
+from nfl_oracle.recommendations.optimizer import OptimizerConfig
 from nfl_oracle.recommendations.picker_knobs import PickerKnobs
 from nfl_oracle.recommendations.schema import EvidenceClock
 from nfl_oracle.replay import contest_pool_replay as cpr
 from nfl_oracle.replay.contest_pool_replay import (
+    ReplaySetting,
     join_contest_pool,
     replay_contest_pools,
     replay_contest_pools_knob_sweep,
+    replay_contest_pools_setting_sweep,
     rows_by_eastern_day,
     summarize,
 )
@@ -379,3 +382,37 @@ def test_boost_rank_blend_changes_capture_on_boosted_contest() -> None:
     # move on this tiny fixture, but the path must complete and record profile.
     assert identity.picker_profile == "identity"
     assert blended.picker_profile == "full_boost"
+
+
+def test_setting_sweep_shares_one_fit_and_contest_games_widen_the_pool() -> None:
+    rows = _rows()
+    fits: list[int] = []
+
+    def spy(
+        train: Sequence[HistoricalPerformance], trained_at: datetime, fit_config: FitConfig
+    ) -> RatingModel:
+        fits.append(len(train))
+        return fit_model(train, trained_at=trained_at, fit_config=fit_config)
+
+    settings = (
+        ReplaySetting(name="open", picker=PickerKnobs(profile="identity")),
+        ReplaySetting(
+            name="capped",
+            picker=PickerKnobs(profile="identity"),
+            optimizer=OptimizerConfig(simulations=100, max_defenders=1, max_kickers=1),
+        ),
+    )
+    swept = replay_contest_pools_setting_sweep(
+        rows,
+        [_contest(rows)],
+        settings,
+        now=NOW,
+        fitter=spy,
+    )
+    assert len(fits) == 1
+    assert set(swept) == {"open", "capped"}
+    visible = replay_contest_pools(rows, [_contest(rows)], now=NOW, pool_scope="visible")[0][0]
+    full = replay_contest_pools(rows, [_contest(rows)], now=NOW, pool_scope="contest_games")[0][0]
+    assert full.candidate_count > visible.candidate_count
+    assert full.pool_scope == "contest_games"
+    assert visible.pool_scope == "visible"

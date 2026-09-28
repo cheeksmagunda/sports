@@ -1,0 +1,22 @@
+{
+  "slate_date": "2026-09-27",
+  "regime": "sunday_multi",
+  "source": "Daily Draft Stats Highest value screenshot",
+  "note": "Visible Highest value section only. Includes SNF kicker Harrison Mevis below the top 5, so this daily contest is the whole Sunday, not an afternoon-only pool. Not the full roster and not Monday.",
+  "rows": [
+    {"player_id": 1, "name": "Chris Boswell", "position": "K", "team": "PIT", "base": 5.8, "boost": 3.0, "slot": "1st", "drafts": 24, "value": 29.0},
+    {"player_id": 2, "name": "Sam Darnold", "position": "QB", "team": "SEA", "base": 5.4, "boost": 3.0, "slot": "1st", "drafts": 792, "value": 27.2},
+    {"player_id": 3, "name": "Will Anderson Jr.", "position": "EDGE", "team": "HOU", "base": 7.6, "boost": 1.4, "slot": "1st", "drafts": 7, "value": 25.9},
+    {"player_id": 4, "name": "Harold Fannin Jr.", "position": "TE", "team": "CLE", "base": 4.6, "boost": 3.0, "slot": "1st", "drafts": 3, "value": 23.1},
+    {"player_id": 5, "name": "Genesis Smith", "position": "S", "team": "LAC", "base": 5.4, "boost": 3.0, "slot": "5th", "drafts": 1, "value": 22.7},
+    {"player_id": 6, "name": "Kenyon Sadiq", "position": "TE", "team": "NYJ", "base": 4.4, "boost": 3.0, "slot": "1st", "drafts": 5, "value": 22.1},
+    {"player_id": 7, "name": "Jacob Rodriguez", "position": "LB", "team": "MIA", "base": 4.5, "boost": 3.0, "slot": "2nd", "drafts": 2, "value": 21.6},
+    {"player_id": 8, "name": "Jordan Addison", "position": "WR", "team": "MIN", "base": 4.1, "boost": 3.0, "slot": "1st", "drafts": 8, "value": 20.6},
+    {"player_id": 9, "name": "Jaylen Warren", "position": "RB", "team": "PIT", "base": 6.2, "boost": 1.2, "slot": "1st", "drafts": 8, "value": 19.7},
+    {"player_id": 10, "name": "Harrison Mevis", "position": "K", "team": "LA", "base": 3.8, "boost": 3.0, "slot": "1st", "drafts": 3, "value": 18.8},
+    {"player_id": 11, "name": "Dominic Zvada", "position": "K", "team": "NYG", "base": 4.5, "boost": 2.2, "slot": "1st", "drafts": 1, "value": 18.8},
+    {"player_id": 12, "name": "Jahmyr Gibbs", "position": "RB", "team": "DET", "base": 9.4, "boost": 0.0, "slot": "1st", "drafts": "1.7k", "value": 18.7},
+    {"player_id": 13, "name": "Aaron Rodgers", "position": "QB", "team": "PIT", "base": 4.6, "boost": 2.0, "slot": "1st", "drafts": 7, "value": 18.5},
+    {"player_id": 14, "name": "Kyle Van Noy", "position": "LB", "team": "BAL", "base": 3.6, "boost": 3.0, "slot": "1st", "drafts": 1, "value": 18.0}
+  ]
+}
