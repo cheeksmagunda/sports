@@ -12,6 +12,7 @@ from fastapi import APIRouter, FastAPI
 from oracle_core import ServiceMetadata, create_service
 
 from nhl_oracle import __version__
+from nhl_oracle.scheduler.readiness import empty_snapshot_readiness
 
 
 def create_app() -> FastAPI:
@@ -40,6 +41,13 @@ def create_app() -> FastAPI:
             "boost_regime": "none",
             "detail": "hosted NHL slate surface not implemented yet",
         }
+
+    @stubs.get("/readiness")
+    async def readiness() -> dict[str, object]:
+        # No live snapshot on the API process. Fail closed; do not invent a five.
+        report = empty_snapshot_readiness().to_dict()
+        report["status"] = "no_live_slate"
+        return report
 
     @stubs.get("/lineup/{slate_date}")
     async def lineup_placeholder(slate_date: str) -> dict[str, object]:

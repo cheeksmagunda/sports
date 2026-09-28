@@ -18,7 +18,11 @@ from nhl_oracle.contest.algebra import (
     LineupScore,
     score_ordered_lineup,
 )
-from nhl_oracle.contract.boost_gate import BoostEligibility
+from nhl_oracle.contract.boost_gate import (
+    BoostEligibility,
+    TeamGamesPlayed,
+    evaluate_boost_eligibility,
+)
 from nhl_oracle.contract.schema import NhlContestContract
 
 
@@ -89,4 +93,49 @@ def select_five_player_pick(
         projected_values={pid: usable[pid] for pid in ordered_ids},
         slot_multipliers=slots,
         lineup_score=score,
+    )
+
+
+def select_no_boost_five_from_full_pool(
+    projected_values: Mapping[int, float],
+    *,
+    expected_pool_size: int,
+    card_boosts: Mapping[int, float] | None = None,
+    contract: NhlContestContract | None = None,
+    team_games_played: Mapping[str, int] | Sequence[TeamGamesPlayed] | None = None,
+    slate_teams: Sequence[str] | None = None,
+    team_card_counts: Mapping[str, int] | None = None,
+) -> FivePlayerPick:
+    """Pick the ordered five from the full slate pool with the zero-boost gate.
+
+    A five-player stub is not a roster. ``expected_pool_size`` must be larger
+    than the contest five and must equal the number of projected players.
+    When ``slate_teams`` is set, every team on the slate must have at least
+    one card and those cards must sum to the pool. Card boosts are multiplied
+    by the gate: 0 until every club has a game, including when coverage is
+    missing. There is no caller boost-multiplier override.
+    """
+
+    if expected_pool_size <= ROSTER_SIZE:
+        raise ValueError("full_roster_pool_required")
+    if len(projected_values) != expected_pool_size:
+        raise ValueError(f"pool_incomplete_{len(projected_values)}_of_{expected_pool_size}")
+    if slate_teams is not None:
+        if team_card_counts is None:
+            raise ValueError("team_card_counts_required")
+        teams = tuple(slate_teams)
+        missing = [team for team in teams if int(team_card_counts.get(team, 0)) < 1]
+        if missing:
+            raise ValueError("slate_team_missing_from_pool")
+        off_slate = [team for team in team_card_counts if team not in teams]
+        if off_slate:
+            raise ValueError("pool_has_teams_off_slate")
+        if sum(int(team_card_counts[team]) for team in teams) != expected_pool_size:
+            raise ValueError("team_cards_do_not_cover_pool")
+    eligibility = evaluate_boost_eligibility(team_games_played)
+    return select_five_player_pick(
+        projected_values,
+        card_boosts=card_boosts,
+        contract=contract,
+        eligibility=eligibility,
     )
