@@ -37,10 +37,13 @@ make typecheck
 `Dockerfile` and `railway.toml` are NBA-owned deployment source for the
 health-only API scaffold on `sports-oracle` / `nba-staging`. The image serves
 `GET /health` via `uvicorn nba_oracle.api.app:app`. Do not add contest, provider,
-or domain routes to that app until a scoped milestone authorizes them. Worker
-and frontend Railway services stay source-disconnected until those packages
-exist. Prefer `DOCKERFILE` builds; never recover a RAILPACK-failed deployment
-with image-reuse redeploy (issue #279).
+or domain routes to that app until a scoped milestone authorizes them. The
+observation-only T-40 freeze gate in `scheduler/` (`run_freeze_cycle`,
+draftable pool, publication window) stays off that app. `contest_entry` stays
+false. Worker and frontend Railway services stay source-disconnected until a
+later issue authorizes a real worker and a frontend package. Prefer
+`DOCKERFILE` builds; never recover a RAILPACK-failed deployment with
+image-reuse redeploy (issue #279).
 
 ## Verification bar
 

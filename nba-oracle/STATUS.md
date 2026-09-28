@@ -30,11 +30,12 @@ Pointer only. Not a new live check.
 - **Empty / incomplete DB blocker:** full complete-season coverage for
   2021-22..2024-25 is **not** claimed. Re-run with `--concurrency 4` after
   cool-down. Do not treat health-scaffold Online as history-ready.
-- No Real Sports credential on NBA services. No contest entry.
+- Real Sports variable presence is in the Railway table below. No contest entry.
 
 
-Last verified: 2026-09-27 (public history partial load + TCP proxy verified)
-`scripts/codespace-railway-env`, issue #504 / PR #489)
+Last verified: 2026-09-28 (T-40 pool/runner/Railway audit, issue #600).
+History row counts and the public TCP proxy remain the 2026-09-27 check
+(`scripts/codespace-railway-env`, issue #504 / PR #489).
 
 This file records application state only.
 
@@ -42,7 +43,8 @@ This file records application state only.
 
 - Package: `nba-oracle` workspace member
 - Scope live now: health-only FastAPI (`GET /health`) + NBA calendar /
-  coverage vocabulary + auth-blocked `nba-corpus-g-backfill` gate
+  coverage vocabulary + auth-blocked `nba-corpus-g-backfill` gate +
+  observation-only T-40 freeze gate in `scheduler/` (not mounted, not hosted)
 - Deploy surface: `nba-oracle/Dockerfile` + `nba-oracle/railway.toml`
   (DOCKERFILE builder; health-only image lineage from #486; no Playwright in
   the serving image)
@@ -55,7 +57,8 @@ This file records application state only.
   Sports auth.
 - Public history tables (target): `nba_history_games`, `nba_history_player_games`,
   `nba_history_season_coverage`. Verified counts: games **2086**, player rows **70912** (partial; see section below).
-- Not started: schemas, modeling, scheduling, contest logic, nightly worker
+- Not started: schemas, modeling, contest entry, nightly worker. The
+  freeze gate does not submit lineups and does not run on Railway.
 
 ## Railway mono (`sports-oracle` / `nba-staging`, env `7ac1e6f8-…`)
 
@@ -63,14 +66,51 @@ Verified 2026-09-27 from Codespace. Non-serving scaffold only (#457 / #504).
 
 | Service | Source | Last observed | Notes |
 | --- | --- | --- | --- |
-| `nba-api` | `cheeksmagunda/sports` (connected) | Online | Deployment id `c35dd53b-…` Online (post-queue). No public domain. External `/health` therefore unverified from outside Railway. |
-| `nba-worker` | not shown / Failed | Failed | Leave disconnected until Real Sports auth + nightly are authorized. |
-| `nba-frontend` | not shown / Failed | Failed | No frontend package; leave disconnected. |
-| `nfl-frontend` | Offline | Offline | Stray service instance visible in `nba-staging`; not an NBA serving path. |
-| `Postgres-6eeu` | n/a | Online | Volume `postgres-volume-jmAe`. Public TCP proxy ACTIVE (`trolley.proxy.rlwy.net`). `DATABASE_PUBLIC_URL` set with `sslmode=require`. Public history present (partial): games **2086**, players **70912**. |
+| `nba-api` | `cheeksmagunda/sports` `main` (connected) | SUCCESS `c4d41d74-bb69-4af3-8a9d-415c9d1b91b1` at `e636040` (created 2026-09-28T02:57:26Z). Newer deploy `e31bf446-f7c6-4723-92a1-a9b9eebf90f8` at `578566d` still QUEUED at 2026-09-28T03:02Z. | DOCKERFILE. Public domain `https://nba-api-nba-staging.up.railway.app`. `GET /health` 200 `{"status":"ok","version":"0.1.0"}` at 2026-09-28T03:02:55Z. Health-only. |
+| `nba-worker` | no source block | Offline. Latest deployment `70f255ac-cd29-4586-b98e-9ac0c71a4aa6` FAILED (2026-09-27T02:43:25Z), builder RAILPACK. | Leave disconnected. Variable name `REALSPORTS_STORAGE_STATE_B64GZ` is defined; value not read. Offline with no source is not a live session. |
+| `nba-frontend` | no source block | Offline. Latest deployment `0e4a9020-9d79-43a6-8221-61c53cf1d9fb` FAILED (2026-09-27T01:57:38Z), builder RAILPACK. | No frontend package. Leave disconnected. |
+| `nfl-frontend` | not rechecked 2026-09-28 | unverified this session | Stray service id `57ea95df-dede-461c-8164-5cb5d3c5ebf7` is still listed on the project. Not an NBA serving path. |
+| `Postgres-6eeu` | n/a | not rechecked 2026-09-28 | Volume and partial history counts in the section below were verified 2026-09-27. This audit did not re-query row counts. |
 
-No public NBA domain. No contest features. No Real Sports credential verified on NBA services. Serving is not dual-firing for NBA: only `nba-api` is Online (queued rebuild); worker/frontend Failed/Offline.
+No contest features on the API. Serving is not dual-firing: only `nba-api` is source-connected, and it serves `GET /health`. Worker and frontend stay source-disconnected.
 
+
+## T-40 WIN readiness (#600)  -  2026-09-28
+
+No live NBA slate to freeze. `NEXT_REGULAR_SEASON_OPEN` remains `2026-10-20`.
+This issue does not redeploy, reconnect, or edit Railway variables.
+
+### Pool
+
+`nba-oracle` had no player-pool or freeze module before this change. No live
+pool was fetched. `scheduler.pool.evaluate_draftable_pool` counts only games
+whose tip is still ahead of the decision clock, so a tipped game cannot leave
+a later window permanently `incomplete_player_pool`. An unobserved player on
+a still-draftable game fails closed. Five distinct observed players are
+required (`fewer_than_five_candidates`). That size matches the portfolio
+five-card T-40 gate. Live NBA contest law is unverified, and this is not a
+provider roster claim.
+
+`run_freeze_cycle` collects, then reads `decision_at`, then stamps one
+evidence epoch for that tick so in-collect aging does not raise
+`stale_player`. Optional future feature rows are skipped by name. A required
+future row fails closed as `future_feature:<name>`. Refusal reasons are on
+the job result. `contest_entry` is false.
+
+### Runners
+
+No GitHub Actions workflow runs an NBA T-40 freeze.
+`hv-leaderboard-corpus.yml` can be dispatched with sport `nba` and then runs
+`nba-oracle/scripts/export_hv_board.py`, which exits 78. `nba_freeze_cycle`
+is role `worker` only, lease `nba:freeze_cycle`, and is not mounted on the
+health API. Nothing hosted executes it. The Ollama app helper reads NFL and
+WNBA freeze APIs only (`scripts/ollama_hv_watcher/adapters/app_api.py`); NBA
+has no freeze route for that helper to copy.
+
+### Railway and docs
+
+Service state is the table in **Railway mono** above. `README.md` describes
+the freeze-gate shape. Health image routes stay `GET /` and `GET /health`.
 
 ## Public NBA history staging load (#453 / #489)  -  2026-09-27
 
