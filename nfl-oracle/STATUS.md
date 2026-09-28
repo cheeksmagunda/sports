@@ -66,6 +66,46 @@ re-check Railway.
 - Ollama is not the NFL ridge/valuelaw serve path and does not publish the
   freeze. Role: root `../OVERVIEW.md`.
 
+## Ollama candidate engine (#595, 2026-09-28)
+
+Code only. Railway variables and deployments were not changed. Whether the
+live worker process has `NFL_OLLAMA_ENGINE` set is unverified. This change
+does not set `NFL_PICKER_BOOST_RANK_BLEND`, `NFL_OPTIMIZER_UPSIDE_WEIGHT`,
+or `NFL_OPTIMIZER_FIELD_WEIGHT`. Leave the live serving values at blend `0`,
+upside `0`, and field `0`.
+
+Winning-draft serve features stay on. The target is the Highest value / Total
+Value daily leaderboard (HV/TDV, `highestBoostedValuePlayers`), the same lock
+as the training-target section below. Prior users' winning drafts are a
+reference bar, not the fit target. `NFL_OPTIMIZER_PROFILE` stays `max_value`
+when unset. `NFL_OLLAMA_ENGINE` stays on unless set to `0`.
+
+Sunday and one-night use that same on path. A Sunday slate has many kickoffs;
+T-40 follows the next game that has not started, so a later window can still
+freeze after the early games. A one-night slate (Thursday, Sunday night, or
+Monday) has one upcoming kickoff, so T-40 is that kickoff minus 40 minutes.
+The engine does not turn off for either shape. It scores the optimizer
+candidates for the slate in front of it.
+
+The serving policy from `optimizer_config_from_env` scores optimizer beam
+candidates with `nfl_oracle.recommendations.ollama_engine` unless
+`NFL_OLLAMA_ENGINE=0` (also `false`, `off`, `no`). Invalid values fail closed.
+Bare `OptimizerConfig()` stays on classic contest utility, so replay callers
+that build a config in process do not call Ollama.
+
+When the engine is on it runs at least 1000 correlated simulations and asks
+`scripts/ollama_hv_watcher/client.py` `generate_json` for utilities. A utility
+is used only when its player ids repeat a candidate lineup in order. Timeout,
+unreachable host, invalid JSON, or an invented id falls back to the classic
+winner. Rollback is `NFL_OLLAMA_ENGINE=0` plus a worker restart. This change
+does not set that variable or restart anything.
+
+Host `NFL_OLLAMA_HOST` defaults to `http://127.0.0.1:11434`. Model
+`NFL_OLLAMA_MODEL` defaults to `llama3.2:3b`. Timeout
+`NFL_OLLAMA_TIMEOUT_S` defaults to 8 seconds. A reachable model that returns
+structurally valid utilities selects the lineup; that live path is unverified
+on Railway.
+
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 
 Early window failed (`future_forecast` then `stale_player`). Harden landed so
