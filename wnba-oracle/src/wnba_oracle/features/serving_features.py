@@ -17,6 +17,7 @@ matrix rather than living only at the features_json top level (#523).
 
 from __future__ import annotations
 
+import os
 import unicodedata
 from collections.abc import Mapping
 from datetime import date, datetime
@@ -106,6 +107,37 @@ def fuse_slate_enrichment_into_head_features(
         except (TypeError, ValueError):
             pass
     out.update(extract_season_averages(season_averages))
+    return out
+
+
+_MONEYLINE_ON = frozenset({"1", "true", "yes", "on"})
+
+
+def moneyline_fuse_enabled(raw: str | None = None) -> bool:
+    """True only when WNBA_FUSE_MONEYLINE is explicitly on (#583).
+
+    Default off. EB uses team_moneyline only when moneyline_beta is non-zero,
+    and job1 still withholds the field until this flag is set.
+    """
+    if raw is None:
+        raw = os.environ.get("WNBA_FUSE_MONEYLINE", "")
+    return raw.strip().lower() in _MONEYLINE_ON
+
+
+def moneyline_pair(
+    *,
+    team: float | None,
+    opponent: float | None,
+    enabled: bool,
+) -> dict[str, float]:
+    """Odds-API h2h fields for one team. Empty when the flag is off."""
+    if not enabled or (team is None and opponent is None):
+        return {}
+    out: dict[str, float] = {}
+    if team is not None:
+        out["team_moneyline"] = float(team)
+    if opponent is not None:
+        out["opponent_moneyline"] = float(opponent)
     return out
 
 

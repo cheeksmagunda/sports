@@ -14,3 +14,7 @@ def test_wnba_rs_field_matrix() -> None:
     assert "leakage-blocked" in statuses
     vegas = next(r for r in rows if "vegas_total" in r["rs_field"])
     assert vegas["status"] == "mapped"
+    season = next(r for r in rows if "seasonAverages" in r["rs_field"])
+    assert season["status"] == "unused"
+    moneyline = next(r for r in rows if "moneylines" in r["rs_field"])
+    assert moneyline["status"] == "unused"

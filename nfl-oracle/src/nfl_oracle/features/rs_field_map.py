@@ -72,9 +72,9 @@ RS_FIELD_MATRIX: tuple[tuple[str, str, str, str, RsStatus], ...] = (
     (
         "seasonAverages.*",
         "game feed players",
-        "context_features season_avg_*",
-        "optional context",
-        "mapped",
+        "extract_season_averages (not called on freeze context)",
+        "UNUSED_GOLD until a freeze caller passes season_averages",
+        "unused",
     ),
     (
         "baseBoostedValue / draftStats score/rank (same slate)",

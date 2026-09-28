@@ -2,6 +2,13 @@
 
 Last verified: 2026-09-28T02:59:00Z
 
+## FEATURE_MATRIX / UNUSED_GOLD (#583)
+
+Code inventory only. No Railway read and no serving-knob change.
+`oracle_core.feature_matrix` lists available, wired, and serving.
+`seasonAverages.*` is unused on the NFL freeze path. The matrix does not
+flip optimizer or picker env.
+
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
 Code contract only; **production tilt weight stays 0** (identity). Live money
