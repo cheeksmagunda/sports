@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1168 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1152 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,14 +17,8 @@ Generated from `git ls-files`. 1168 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
-- ENTRY_POINTS.md -- Entry Points Reference
-- ENTRY_POINTS.md -- Entry Points Reference
-- FILES.md -- File manifest (generated, do not hand-edit)
-- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
-- OVERVIEW.md -- Sports Oracle: Portfolio Overview
-- OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
 - README.md -- Sports Oracle
 - pyproject.toml -- Package/tool configuration
@@ -129,10 +123,6 @@ Generated from `git ls-files`. 1168 tracked files. Regenerate with `scripts/gene
 - nba-oracle/Dockerfile
 - nba-oracle/Makefile -- Build/test/lint entrypoints
 - nba-oracle/README.md -- nba-oracle
-- nba-oracle/README.md -- nba-oracle
-- nba-oracle/README.md -- nba-oracle
-- nba-oracle/STATUS.md -- Status
-- nba-oracle/STATUS.md -- Status
 - nba-oracle/STATUS.md -- Status
 - nba-oracle/pyproject.toml -- Package/tool configuration
 - nba-oracle/railway.toml -- Package/tool configuration
@@ -832,8 +822,6 @@ Generated from `git ls-files`. 1168 tracked files. Regenerate with `scripts/gene
 
 ## scripts/ollama_hv_watcher/
 - scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV helper on each sport app's daily picks
-- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV helper on each sport app's daily picks
-- scripts/ollama_hv_watcher/README.md -- Ollama HV/TDV helper on each sport app's daily picks
 - scripts/ollama_hv_watcher/__init__.py -- Codespace Ollama HV/TDV self-learning slate watcher (#574).
 - scripts/ollama_hv_watcher/__main__.py -- python -m ollama_hv_watcher → CLI (#574).
 - scripts/ollama_hv_watcher/app_daemon.py -- App-driven T-40 helper daemon (#574).
@@ -930,10 +918,6 @@ Generated from `git ls-files`. 1168 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/MODEL_PICK_POSTMORTEM_2026-08-28.md -- Model Pick Postmortem — 2026-08-28 Slate
 - wnba-oracle/Makefile -- Build/test/lint entrypoints
 - wnba-oracle/README.md -- WNBA Oracle
-- wnba-oracle/README.md -- WNBA Oracle
-- wnba-oracle/README.md -- WNBA Oracle
-- wnba-oracle/STATUS.md -- Status
-- wnba-oracle/STATUS.md -- Status
 - wnba-oracle/STATUS.md -- Status
 - wnba-oracle/alembic.ini
 - wnba-oracle/pyproject.toml -- Package/tool configuration
