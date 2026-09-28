@@ -327,14 +327,24 @@ def game_value_rank_weights(
     top_k: int = 5,
     high_weight: float = 4.0,
     base_weight: float = 1.0,
+    boosts: Mapping[int, float] | None = None,
 ) -> dict[int, float]:
-    """Up-weight the top-k values in one game/slate (Highest-value proxy)."""
+    """Up-weight the top-k values in one game/slate (Highest-value proxy).
 
-    if not game_values:
-        return {}
-    ranked = rank_player_ids_by_value(game_values)
-    top = set(ranked[: max(1, top_k)])
-    return {pid: (high_weight if pid in top else base_weight) for pid in ranked}
+    ``boosts`` switches the rank key to contest-display value
+    ``value * (top_slot + card_boost)``. Omit it to keep raw-value order.
+    Draft counts are not accepted here.
+    """
+
+    from oracle_core.contest_max import contest_display_rank_weights
+
+    return contest_display_rank_weights(
+        game_values,
+        boosts,
+        top_k=top_k,
+        high_weight=high_weight,
+        base_weight=base_weight,
+    )
 
 
 def sample_weights_for_labeled_rows(
@@ -352,6 +362,8 @@ def sample_weights_for_labeled_rows(
     """
 
     by_game: dict[int, dict[int, float]] = defaultdict(dict)
+    boosts_by_game: dict[int, dict[int, float]] = defaultdict(dict)
+    saw_boost = False
     for row in rows:
         if bool(getattr(row, "did_not_play", False)):
             continue
@@ -361,11 +373,20 @@ def sample_weights_for_labeled_rows(
         game_id = int(row.game_id)
         player_id = int(row.player_id)
         by_game[game_id][player_id] = float(value)
+        boost = getattr(row, "card_boost", None)
+        if boost is not None:
+            saw_boost = True
+            boosts_by_game[game_id][player_id] = float(boost)
 
     weight_by_game_player: dict[tuple[int, int], float] = {}
     for game_id, mapping in by_game.items():
+        boosts = boosts_by_game.get(game_id) if saw_boost else None
         for pid, weight in game_value_rank_weights(
-            mapping, top_k=top_k, high_weight=high_weight, base_weight=base_weight
+            mapping,
+            top_k=top_k,
+            high_weight=high_weight,
+            base_weight=base_weight,
+            boosts=boosts,
         ).items():
             weight_by_game_player[(game_id, pid)] = weight
 

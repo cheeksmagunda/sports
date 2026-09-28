@@ -524,3 +524,16 @@ Per contest under the export root:
 `draft_stats_all_sections.jsonl`, `matchups.json`. Root
 `coverage_manifest.json` lists gaps. Coordinate with Corpus G nightly (#512 /
 #503); do not mint Real Sports credentials.
+
+## Contest-max history map (issue #633)
+
+Offline comparison of the HV display five, the raw-value five, draft-count
+chalk, and the hindsight ceiling on files you already have. It does not
+train, does not enter a contest, and does not read draft count as a score.
+Measured tables: `STATUS.md`. Inventory and backlog:
+`../drive/2026-09-28-contest-max-history-map.md`.
+
+```sh
+uv run --package nfl-oracle nfl-contest-max-map \
+  --sport nfl --csv player_results.csv --summary-only
+```

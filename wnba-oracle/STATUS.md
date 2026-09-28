@@ -24,6 +24,30 @@ flipped in this change. Actions probes that set `WNBA_API_BASE` now use
 this mono host. Legacy `api-production-7033` still answered `/health` 200
 and is no longer the probe target.
 
+## Contest-max history map (#633) - 2026-09-28
+
+Measurement only. WNBA serve, EB primary, and live knobs are unchanged.
+Source: `origin/backups` `wnba-oracle/data/backups/slate_labels.csv` (7010
+rows, 229 contests, 2025-05-16 through 2026-09-24), scored by
+`nfl-contest-max-map`. Pool is board sections. `leaderboard_lineup` is
+excluded and is not a train target. `contest_leaderboards.csv` has user
+ids and was not scored. Regime is team count (no `game_id`). Positions are
+absent, so every mix is `position_unknown`. Ceiling is the best five on
+the rows in that file.
+
+| Slice | Boards | Display | Raw | Chalk |
+|---|---:|---:|---:|---:|
+| All | 229 | 0.996597 | 0.863336 | 0.432948 |
+| multi_game | 220 | 0.996651 | 0.860487 | 0.423029 |
+| one_game | 9 | 0.995274 | 0.932970 | 0.675422 |
+
+Overlap with the ceiling five: display 0.918777, raw 0.506550, chalk
+0.081223. Display minus raw: 0.133261. HV-section boost tail: zero_boost
+n=4 display=raw=1.0 chalk 0.527012; has_3x_tail n=219 display 0.996684 raw
+0.860048 chalk 0.431768; boosted without 3x n=6 display 0.991138 raw
+0.892250 chalk 0.413318. Method and backlog:
+`../drive/2026-09-28-contest-max-history-map.md`.
+
 ## EB F-cohort serve fallback (#592)  -  2026-09-28T02:55:47Z
 
 - Bug: `eb_predict_one` used `cohort_means.get(cohort, 0.0)` while the shipped

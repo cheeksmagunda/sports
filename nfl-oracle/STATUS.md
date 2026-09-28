@@ -26,6 +26,42 @@ Saturday T-40 cron starts at hour 16 UTC so an EDT 1pm ET window (T-40
 16:20Z) is checked. Dated November and December holiday crons stay on hour
 17 because those dates are EST (1pm ET T-40 is 17:20Z).
 
+## Contest-max history map (#633) - 2026-09-28
+
+Offline map only. No Railway variable write, no deploy, no contest entry.
+`NFL_PICKER_BOOST_RANK_BLEND`, `NFL_OPTIMIZER_UPSIDE_WEIGHT`, and
+`NFL_OPTIMIZER_FIELD_WEIGHT` are not set by this change. On 2026-09-28
+those names are present on `nfl-oracle-worker` in `nfl-production`; this
+session could read names only. Do not revert the operator's live blend=0,
+upside=0, field=0. Code defaults from #616 (slot by mean, one kicker, one
+defender) stay.
+
+Scorer: `oracle_core.contest_max`. CLI: `nfl-contest-max-map`. Train weights
+use display rank `value * (2 + card_boost)` only when an HV boost map is on
+disk; otherwise raw-value top-k, same as before. Serve `prepare` records
+`contest_display_top5` and does not replace the committed lineup. Draft
+count is not a label. Inventory and backlog:
+`../drive/2026-09-28-contest-max-history-map.md`.
+
+Source: `origin/backups` `nfl-oracle/data/backups/player_results.csv` (185
+rows, 4 contests) plus positions from the last freeze sequence. Pool is
+board sections only (`My draft` dropped). Ceiling is the best five on that
+visible pool, not the freeze roster (153, 152, 159, 159 candidates).
+
+| Date | Contest | CLI regime | Freeze games | Pool | Display | Raw | Chalk | Ceiling mix |
+|---|---|---|---:|---:|---:|---:|---:|---|
+| 2026-09-17 | 2167 | one_game | 1 | 29 | 1.0 | 0.924334 | 0.777843 | QB:2+RB:1+WR:2 |
+| 2026-09-20 | 2179 | multi_game | 1 | 38 | 0.997221 | 0.851815 | 0.351441 | K:1+unknown:4 |
+| 2026-09-21 | 2182 | one_game | 1 | 30 | 1.0 | 0.967633 | 0.763193 | DEF:2+QB:1+RB:1+WR:1 |
+| 2026-09-24 | 2196 | one_game | 1 | 31 | 1.0 | 0.858548 | 0.700719 | DEF:2+K:1+RB:1+WR:1 |
+
+Means: display 0.999305, raw 0.900582, chalk 0.648299. Overlap with the
+ceiling five: display 0.95, raw 0.60, chalk 0.35. CLI regime is team count.
+2026-09-20 has 21 team ids in the backup rows and `games: 1` on the freeze
+slate; those artifacts disagree. Two visible ceilings contain two defenders.
+That is not a reason to change `NFL_OPTIMIZER_MAX_DEFENDERS`. Corpus G 668
+and Corpus C emptiness were not re-counted in this session.
+
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 
 Code contract only; **production tilt weight stays 0** (identity). Live money

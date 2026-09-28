@@ -58,8 +58,11 @@ def test_export_fixture_contest_with_hv_section(tmp_path: Path) -> None:
     assert tv["section"] == HV_SECTION
     assert tv["source"] == f"draft_stats.{HV_SECTION}"
     assert tv["player_count"] == 6
-    assert tv["players"][0]["player_id"] == 401
+    # Display rank is value * (2 + boost), not raw base. Player 405
+    # (3.4 base, 2.0 boost) outranks raw leader 401 (5.0 base, 0 boost).
+    assert tv["players"][0]["player_id"] == 405
     assert tv["players"][0]["rank"] == 1
+    assert tv["players"][0]["value"] == 3.4 or float(tv["players"][0]["value"]) == 3.4
 
     lines = (contest_dir / DRAFT_STATS_FILENAME).read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 7  # 6 HV + 1 mostDrafted

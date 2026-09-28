@@ -29,11 +29,21 @@ from pathlib import Path
 from typing import Any, Literal
 
 from oracle_core.artifacts import atomic_write_bytes, atomic_write_json, sha256_bytes
+from oracle_core.contest_max import display_contest_value
 
 from nfl_oracle.contests.parse import ContestParseError, ParsedContest, load_contest
 from nfl_oracle.contests.schema import DraftStatRow
 from nfl_oracle.contests.store import ContestStore, corpus_c_root, project_root
 from nfl_oracle.recommendations.high_tv import high_tv_board_from_draft_stats
+
+
+def _contest_display(value: float | None, card_boost: float | None) -> float:
+    """Top-slot contest value. Missing base sorts last. Boost None is 0."""
+
+    if value is None:
+        return float("-inf")
+    return display_contest_value(float(value), 0.0 if card_boost is None else float(card_boost))
+
 
 HV_SECTION = "highestBoostedValuePlayers"
 SCHEMA_VERSION = 1
@@ -210,7 +220,7 @@ def leaderboard_from_hv_section(rows: Sequence[DraftStatRow]) -> list[Leaderboar
     ordered = sorted(
         hv,
         key=lambda r: (
-            -(r.value if r.value is not None else float("-inf")),
+            -_contest_display(r.value, r.card_boost),
             r.player_id,
         ),
     )
@@ -247,7 +257,17 @@ def leaderboard_from_reconstruction(
     players: list[LeaderboardPlayer] = []
     if board is None or not board.value_ranked_player_ids:
         return players, "unreconstructable"
-    for rank, player_id in enumerate(board.value_ranked_player_ids, start=1):
+    ranked_ids = sorted(
+        board.value_ranked_player_ids,
+        key=lambda player_id: (
+            -_contest_display(
+                values.get(player_id),
+                None if by_id.get(player_id) is None else by_id[player_id].card_boost,
+            ),
+            player_id,
+        ),
+    )
+    for rank, player_id in enumerate(ranked_ids, start=1):
         row = by_id.get(player_id)
         score = values.get(player_id)
         players.append(
