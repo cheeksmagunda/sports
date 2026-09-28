@@ -1,6 +1,18 @@
 # Status
 
-Last verified: 2026-09-28T17:22Z
+Last verified: 2026-09-28T17:26Z
+
+## Full HV retrain (operator)  -  2026-09-28T17:25:11Z
+
+Outside MNF T-40. `nfl-pipeline train --force` on `nfl-oracle-worker`.
+Active model SHA `5869025a79ae2ff86a50cf6bca6e85f0a4563b1e142de7a9512cba9a441694c1`.
+Knobs unchanged (blend/upside/field 0; influence OFF). Ollama full-history
+learn running on Codespace (`data/ollama_hv/full_history_learn.log`, 1031
+boards); MNF daemon armed for `next_freeze` 2026-09-28T23:35:00Z.
+
+```json
+{"status": "trained", "retrained": true, "model_sha256": "5869025a79ae2ff86a50cf6bca6e85f0a4563b1e142de7a9512cba9a441694c1", "trained_at": "2026-09-28T17:25:11.344279+00:00", "selected_estimator": "ridge", "training_rows": 824, "holdout_rows": 203, "training_target": "hv_tdv_leaderboards", "contest_entry": false, "history_rows": 824, "hv_overlay": {"boards": 72, "rows_overlaid": 824, "rows_raw": 0, "rows_excluded": 36886, "conflicts": 0, "skipped_unscoped": 19, "skipped_boards": 20, "training_target": "hv_tdv_leaderboards", "label_section": "highestBoostedValuePlayers", "operator_lock": "hv_tdv_only", "raw_box_used_as_target": false, "fit_seasons": [2024, 2025], "draft_count_is_label": false, "winning_drafts_are_label": false}}
+```
 
 ## Full HV/TDV retrain + Ollama arm (#620 / #574)  -  2026-09-28T17:21Z
 
