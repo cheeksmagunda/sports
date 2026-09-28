@@ -84,6 +84,13 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     assert "prior_log_count" not in names
     assert report["draft_count_is_label"] is False
     assert report["winning_drafts_are_label"] is False
+    assert report["winning_drafts_are_reference_bar"] is True
+    assert report["cash_is_objective"] is False
+    assert report["median_is_objective"] is False
+    assert report["lineup_size"] == 5
+    assert report["objective"] == (
+        "5-player lineup maximizing capture of highestBoostedValuePlayers"
+    )
     assert report["boost_interaction"]["ridge_feature"] is False
     assert report["boost_interaction"]["card_boost_post_settlement_live_ok"] is False
     observation = report["observation"]
@@ -91,6 +98,10 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     flags = {item["name"]: item["value"] for item in observation["additionalProperty"]}
     assert flags["draft count is label"] is False
     assert flags["winning drafts are label"] is False
+    assert flags["winning drafts are a reference bar"] is True
+    assert flags["cash is objective"] is False
+    assert flags["median is objective"] is False
+    assert flags["lineup size"] == 5
     assert flags["card boost is ridge feature"] is False
     prior = next(item for item in observation["additionalProperty"] if item["name"] == "prior")
     assert prior["propertyID"] == "oracle:FeatureSpec"
@@ -120,6 +131,10 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     compact = hv_feature_emphasis_names()
     json.dumps(compact)
     assert compact["boost_is_ridge_feature"] is False
+    assert compact["winning_drafts_are_reference_bar"] is True
+    assert compact["cash_is_objective"] is False
+    assert compact["median_is_objective"] is False
+    assert compact["lineup_size"] == 5
     assert "winning_drafts" in compact["chalk_off"]
     assert "weather_temp_f" in compact["conditions"]["external_pregame"]
     assert "global_prior_mean" in compact["conditions"]["player_profile"]

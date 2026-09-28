@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from oracle_core.contest_max import hv_objective_flags
 from oracle_core.high_tv import (
     HighPotentialLabelKind,
     build_high_potential_labels,
@@ -83,8 +84,8 @@ class HvOverlayAudit:
             "raw_box_used_as_target": self.raw_box_used_as_target,
             "fit_seasons": list(self.fit_seasons),
             "draft_count_is_label": False,
-            "winning_drafts_are_label": False,
             "contest_entry": False,
+            **hv_objective_flags(),
         }
 
 

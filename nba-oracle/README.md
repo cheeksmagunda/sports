@@ -2,6 +2,9 @@
 
 NBA Oracle application scaffold.
 
+Portfolio product goal: root `../README.md` (Product goal). No NBA train
+path or serve knobs yet.
+
 Current scope is pre-product: package wiring, a health-only FastAPI process
 for Railway mono staging, NBA season/coverage helpers, a public history
 loader, and a Corpus G backfill gate that does not call the network.

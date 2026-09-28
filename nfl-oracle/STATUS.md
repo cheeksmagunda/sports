@@ -84,6 +84,11 @@ from this session. Invalid values fail closed. Leave
 `NFL_OPTIMIZER_FIELD_WEIGHT` at blend `0`, upside `0`, field `0`. Do not
 restore `0.75`. Max 1 DEF and max 1 K stay the code defaults from #616.
 
+Standing objective for every sport, every day: root `../README.md`
+(Product goal). `hv_overlay` and `hv_feature_emphasis` record that
+objective (`lineup_size` 5, `winning_drafts_are_reference_bar`,
+`cash_is_objective` false, `median_is_objective` false).
+
 When a card-boost map is present, each contest board (one Eastern slate)
 high-weights its top 10 by `value * (2 + card_boost)`. The regression
 label stays the board's base value. No boost map keeps the per-game
@@ -130,8 +135,9 @@ HV/TDV board. The set is the registry where `live_ok` and `train_ok` are
 true and the group is not `label_only`. A live spec missing from that set
 fails closed. Each FeatureSpec group, and each condition, is its own
 schema.org Observation. Each feature is a PropertyValue with propertyID
-`oracle:FeatureSpec`. The parent records that draft count and winning
-drafts are not labels.
+`oracle:FeatureSpec`. The parent records the product-goal flags from
+root `../README.md`, including that draft count and winning drafts are
+not labels.
 
 | Condition | FeatureSpec names |
 |---|---|

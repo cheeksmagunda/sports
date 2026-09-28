@@ -178,6 +178,11 @@ def test_label_window_covers_ceiling_players_outside_the_display_five() -> None:
     flags = {item["name"]: item["value"] for item in observation["additionalProperty"]}
     assert flags["draft count is label"] is False
     assert flags["winning drafts are label"] is False
+    assert flags["winning drafts are a reference bar"] is True
+    assert flags["cash is objective"] is False
+    assert flags["median is objective"] is False
+    assert flags["lineup size"] == 5
+    assert flags["objective"] == "5-player lineup maximizing capture of highestBoostedValuePlayers"
     assert flags["label window"] == LABEL_WINDOW
     assert "draft_count" not in observation["measuredProperty"]["name"]
 

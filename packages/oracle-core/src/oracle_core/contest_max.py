@@ -57,6 +57,8 @@ TOP_SLOT_MULTIPLIER: float = DEFAULT_SLOT_MULTIPLIERS[0]
 LINEUP_SIZE: int = 5
 # Sample-weight window on one contest board. Distinct from the scored five.
 LABEL_WINDOW: int = 10
+# Train-audit encoding of the root README Product goal. The prose stays there.
+HV_CAPTURE_OBJECTIVE = "5-player lineup maximizing capture of highestBoostedValuePlayers"
 
 _DEFENDER_CODES = frozenset(
     {
@@ -298,6 +300,23 @@ def _window_capture(
     return round(score / ceiling_score, 6), round(recall, 6)
 
 
+def hv_objective_flags() -> dict[str, Any]:
+    """Fields a fit writes so the product goal is the recorded objective.
+
+    The sentence lives in the root README Product goal. Winning drafts are
+    a reference bar. Cash and median construction are not the objective.
+    """
+
+    return {
+        "objective": HV_CAPTURE_OBJECTIVE,
+        "lineup_size": LINEUP_SIZE,
+        "winning_drafts_are_reference_bar": True,
+        "winning_drafts_are_label": False,
+        "cash_is_objective": False,
+        "median_is_objective": False,
+    }
+
+
 def label_window_observation(
     *,
     slate_id: str,
@@ -309,9 +328,10 @@ def label_window_observation(
 
     The measured value is capture of the ceiling by the best five inside
     the window. Draft count is recorded as not a label. Winning drafts are
-    not subjects of the observation.
+    a reference bar, not the fit target.
     """
 
+    objective = hv_objective_flags()
     node = observation(
         about=sports_event(identifier=slate_id, name="HV/TDV contest board"),
         measured_property=property_value(name="HV display-rank window capture"),
@@ -324,8 +344,13 @@ def label_window_observation(
                 name="score law",
                 value="value * (slot_multiplier + card_boost)",
             ),
+            property_value(name="objective", value=objective["objective"]),
+            property_value(name="lineup size", value=objective["lineup_size"]),
             property_value(name="draft count is label", value=False),
             property_value(name="winning drafts are label", value=False),
+            property_value(name="winning drafts are a reference bar", value=True),
+            property_value(name="cash is objective", value=False),
+            property_value(name="median is objective", value=False),
         ],
     )
     return with_context(node)

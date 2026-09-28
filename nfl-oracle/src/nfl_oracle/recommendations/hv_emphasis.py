@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from oracle_core.contest_max import hv_objective_flags
 from oracle_core.schemaorg import observation, property_value, sports_event, with_context
 
 from nfl_oracle.features.live import (
@@ -137,7 +138,7 @@ def hv_feature_emphasis() -> dict[str, Any]:
         "sample": "every post-game HV/TDV leaderboard row",
         "high_weight": f"display top 10 by {_RANK_KEY}",
         "draft_count_is_label": False,
-        "winning_drafts_are_label": False,
+        **hv_objective_flags(),
         "feature_spec": feature_spec,
         "conditions": conditions,
         "ridge_core": list(ridge_core),
@@ -174,6 +175,11 @@ def hv_feature_emphasis_names() -> dict[str, Any]:
         "ridge_context": context_by_role,
         "chalk_off": list(full["chalk_off"]),
         "boost_is_ridge_feature": False,
+        "objective": full["objective"],
+        "lineup_size": full["lineup_size"],
+        "winning_drafts_are_reference_bar": full["winning_drafts_are_reference_bar"],
+        "cash_is_objective": full["cash_is_objective"],
+        "median_is_objective": full["median_is_objective"],
     }
 
 
@@ -207,8 +213,13 @@ def _observation(report: dict[str, Any]) -> dict[str, Any]:
     for row in report["feature_spec"]:
         by_role.setdefault(str(row["role"]), []).append(row)
     properties = [
+        property_value(name="objective", value=report["objective"]),
+        property_value(name="lineup size", value=report["lineup_size"]),
         property_value(name="draft count is label", value=False),
         property_value(name="winning drafts are label", value=False),
+        property_value(name="winning drafts are a reference bar", value=True),
+        property_value(name="cash is objective", value=False),
+        property_value(name="median is objective", value=False),
         property_value(name="prior_log_count coefficient", value=0),
         property_value(name="card boost is ridge feature", value=False),
         property_value(name="rank key", value=_RANK_KEY),

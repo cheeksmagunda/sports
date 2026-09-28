@@ -18,6 +18,7 @@ Pointer only. Not a new live check.
 
 - **Train/backtest target:** Real Sports Highest value / Total Value board
   (`draftStats.sectionName=highestBoostedValuePlayers`). Never winning drafts.
+  Portfolio goal: root `../README.md` (Product goal).
   Executable path: `nhl_oracle.labels.hv` → `ValueLabel` / `oracle_core.high_tv`
   board; walk-forward prefers HV-tagged rows (`baselines.walk_forward`).
 - **Contest algebra:** `nhl_oracle.contest` scores ordered five-card picks as

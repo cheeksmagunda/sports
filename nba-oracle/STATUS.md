@@ -6,6 +6,7 @@ Pointer only. Not a new live check.
 
 - Code contract: no model, no T-40 runner, no serve knobs, HV export stub
   exits 78, history loader is observation-only. See `README.md` (Win stack).
+- Portfolio goal: root `../README.md` (Product goal). No NBA train path yet.
 - Partial `nba_history_*` counts and Railway shell: sections below.
 - Ollama is not an NBA model. Role: root `../OVERVIEW.md`.
 

@@ -473,7 +473,9 @@ Corpus G box `value` is not y. Fewer than 30 leaderboard rows fails with
 `hv_tdv_training_rows_insufficient`. The JSON report includes
 `training_target`, `archive_depth`, `hv_feature_emphasis`, and `hv_overlay` (`boards`,
 `rows_overlaid`, `rows_excluded`, `rows_raw` is 0, `conflicts`,
-`fit_seasons`, `operator_lock`).
+`fit_seasons`, `operator_lock`, `objective`, `lineup_size`,
+`winning_drafts_are_reference_bar`, `cash_is_objective`,
+`median_is_objective`). Those flags encode the portfolio product goal.
 
 Label roots (missing directories add no boards, so those games stay out of the fit):
 
