@@ -90,6 +90,71 @@ re-check Railway.
 - Ollama is not the NFL ridge/valuelaw serve path and does not publish the
   freeze. Role: root `../OVERVIEW.md`.
 
+## HV/TDV train target (#597, lock #599)  -  2026-09-28T03:22Z
+
+Train objective is HV + TDV leaderboards only: Real Sports Highest value /
+Total Value Daily Leaderboard (`draftStats.highestBoostedValuePlayers`).
+`nfl-pipeline train` calls the #185 ladder (`high_tv_board_from_draft_stats`,
+`select_label_kind`, `build_high_potential_labels`) and keeps a Corpus G row
+only when `(player_id, game_id)` is on that section and the board source is
+`nfl_highestBoostedValuePlayers`. The label is that board's `value`
+(`label_kind=hv_tdv_leaderboard`). Sample weights then give the high weight
+to the top five on that board. Draft counts, popularity sections, winning
+drafts, and reconstructed boards (`nfl_draft_stats_reconstructed`, including
+a boosts-present fallback) are excluded. Corpus G box `playerBoxScores[].value`
+is not the train target. Two boards that disagree drop the key. A fit with
+fewer than 30 leaderboard rows raises `hv_tdv_training_rows_insufficient`.
+`rows_raw` in `hv_overlay` is 0. `nfl-hv-board-replay` scores each board:
+HV-rank five vs draft-count chalk five vs the hindsight ceiling, under
+`value * (slot_multiplier + card_boost)`.
+
+### Live train
+
+Not executed from this agent. No `training_rows`, `hv_overlay`, or model
+sha from the worker volume. Those fields stay unverified until the command
+below runs on an image that contains this commit.
+
+| Fact | Verified |
+|---|---|
+| Railway account (MCP `whoami`) | Cheeks Magunda |
+| Project / env | `sports-oracle` `cca6b03f-8a84-4fb5-aaa5-decb3830392d` / `nfl-production` `766868da-e124-4c62-86bf-fb515c38e4fe` |
+| Worker service | `nfl-oracle-worker` `a5520eb7-e8e0-4f74-afeb-8919cb52c358` |
+| Worker SUCCESS deployment | `666dd019-b0b1-465e-b2a0-81b80d0bd939` commit `4ca64ed` (Railway list-deployments, 2026-09-28T03:22Z). Not this HV/TDV lock. A newer deploy `cb93bb2d-9c9d-4f56-9880-eb4129bfdc00` commit `3f1b0ef` was BUILDING at the same read |
+| Prior deployment `1f424a71-57b1-4dd3-937f-eda5c09f4509` | REMOVED (commit `578566d`) |
+| This checkout corpora | `nfl-oracle/data` is catalog/schedule only (about 380K). No `data/raw/corpus_g` tree to fit |
+| `make write-path-check` | Failed on this host: `gh codespace list` HTTP 403 (integration token). Not a Codespace. Code push is direct `git push` |
+| Next slate in `data/schedule/schedules.csv` | 2026-09-28 week 3 `2026_03_PHI_CHI` gametime `20:15` |
+
+Hold `train --force` inside that game's T-40 window. The command activates
+a model in the recommendation store (serving path). Rollback: redeploy
+worker deployment `666dd019-b0b1-465e-b2a0-81b80d0bd939` (the SUCCESS image
+at this read); previous model artifacts stay in the store
+(`activate_model` retains them). No Railway env knob was changed here.
+
+Operator command, from Codespace `fluffy-zebra-g4gqq746477q2jg`, after this
+commit is the worker SUCCESS image:
+
+```bash
+cd /workspaces/sports
+scripts/codespace-railway-env -- railway ssh \
+  --project cca6b03f-8a84-4fb5-aaa5-decb3830392d \
+  --environment 766868da-e124-4c62-86bf-fb515c38e4fe \
+  --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
+```
+
+Paste the JSON (`training_rows`, `hv_overlay` with `rows_raw` 0,
+`archive_depth.fit_seasons`, `model_sha256`) back into this section.
+Read-only board score on the same image:
+
+```bash
+scripts/codespace-railway-env -- railway ssh \
+  --project cca6b03f-8a84-4fb5-aaa5-decb3830392d \
+  --environment 766868da-e124-4c62-86bf-fb515c38e4fe \
+  --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-hv-board-replay --contest-root /app/nfl-oracle/data/raw/corpus_c'
+```
+
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 
 Early window failed (`future_forecast` then `stale_player`). Harden landed so
@@ -175,14 +240,11 @@ Safe live_ok slate-context features force-included on the production
 
 ## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
 
-Locked: train / optimize toward Real Sports **Highest value / Total Value Daily
-Leaderboard** (`highestBoostedValuePlayers` / HIGH TOTAL VALUE boards) for every
-slate - Amihere / Copper / Aubrey-style boards (NFL draftStats Highest-value
-lists). **Do not train on prior users' winning drafts** as the fit target;
-those remain a reference bar. Cash, diversified, and median construction are
-not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
-knobs: Max-value / race construction and mono serve sections below. Existing
-valuelaw + feature ridge only; no new model stacks (#523).
+The fit target is the HV + TDV leaderboard section above (#597). Winning
+drafts stay a reference bar, not the label. Cash, diversified, and median
+construction are not the objective. Serve knobs: Max-value / race
+construction below. Existing valuelaw + feature ridge only; no new model
+stacks (#523).
 
 ## Max-value / race construction knobs (#453 / #502 / #505, 2026-09-27)
 
