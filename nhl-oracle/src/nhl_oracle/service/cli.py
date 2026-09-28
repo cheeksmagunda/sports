@@ -45,6 +45,12 @@ def _worker(*, once: bool, poll_seconds: int) -> int:
     poll_seconds = max(1, poll_seconds)
     while True:
         readiness = _readiness_payload()
+        # Railway parses a JSON log line and shows `message`. Without it the
+        # heartbeat renders as a blank line.
+        message = (
+            "nhl-worker observation heartbeat; freeze_ready stays false "
+            "until a complete live slate is inside T-40"
+        )
         payload = {
             "role": "worker",
             "status": "idle",
@@ -53,10 +59,8 @@ def _worker(*, once: bool, poll_seconds: int) -> int:
             "checked_at": datetime.now(UTC).isoformat(),
             "freeze_ready": readiness["freeze_ready"],
             "readiness": readiness,
-            "detail": (
-                "nhl-worker observation heartbeat; freeze_ready stays false "
-                "until a complete live slate is inside T-40"
-            ),
+            "message": message,
+            "detail": message,
         }
         print(json.dumps(payload), flush=True)
         if once:
