@@ -1,9 +1,9 @@
 {
-  "generated_at_utc": "2026-09-27T15:44:37+00:00",
+  "generated_at_utc": "2026-09-28T18:40:57+00:00",
   "schema_version": 1,
   "tables": {
     "dayclose_grades": {
-      "bytes": 218122,
+      "bytes": 273697,
       "columns": [
         "day",
         "sha256",
@@ -11,11 +11,11 @@
         "payload_json"
       ],
       "file": "dayclose_grades.csv",
-      "rows": 6,
-      "sha256": "fff65a699327543f504d2c707c4285a2e4ee00f10eed3619abf034dec8c79e9a"
+      "rows": 7,
+      "sha256": "1e33c3e2c1afe770f380100b0ad3ae3bed586323347de05efacb2500ebc84f73"
     },
     "frozen_lineups": {
-      "bytes": 3003901,
+      "bytes": 3387191,
       "columns": [
         "slate_date",
         "contest_id",
@@ -30,11 +30,11 @@
         "slate_json"
       ],
       "file": "frozen_lineups.csv",
-      "rows": 44,
-      "sha256": "03bea6e3b3abd7780396d4734a227f83701e39e76e01c37e152d18b5c05366b0"
+      "rows": 45,
+      "sha256": "504c73086d176cb907aaff28c73643a260ec8c4e6a7f50d2d654a60ff224415b"
     },
     "player_results": {
-      "bytes": 24777,
+      "bytes": 31432,
       "columns": [
         "day",
         "contest_id",
@@ -50,11 +50,11 @@
         "highest_score"
       ],
       "file": "player_results.csv",
-      "rows": 185,
-      "sha256": "608692e3f8a221df8b20c901b016d53824949c6ec7e7f79e838c8a29ae03085f"
+      "rows": 235,
+      "sha256": "049e342204622772f3f0570d21ea7de45f25701b8ffc3488abfef04e3c52d0a8"
     },
     "prepared_decisions": {
-      "bytes": 8419284,
+      "bytes": 14517770,
       "columns": [
         "day",
         "sha256",
@@ -62,8 +62,8 @@
         "payload_json"
       ],
       "file": "prepared_decisions.csv",
-      "rows": 45,
-      "sha256": "c031d9d07defea364c11c698951dfdf3d01e563c3d48ce1ba0b1e829339d649a"
+      "rows": 54,
+      "sha256": "147c6c2c2e60f0ec08969d61e09521692225e78b31644ed9cab9c3fe63cf6bb8"
     }
   },
   "transaction": {
