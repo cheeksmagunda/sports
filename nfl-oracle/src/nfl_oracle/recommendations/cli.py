@@ -219,7 +219,8 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
     # model records will not match the history this bundle persists.
     enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
     # Prefer HV/TDV board realized values when a board joins the row. Raw
-    # Corpus G box scores remain the fallback. Draft counts are not a target.
+    # Corpus G box scores remain the fallback. The Value column is attached
+    # for sample weights only. Draft counts are not a target.
     labeled, hv_audit = load_and_apply_hv_labels(enriched, project)
     enriched = tuple(labeled)
     model = fit_model(enriched, trained_at=now, hv_label_audit=hv_audit.to_dict())

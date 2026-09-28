@@ -1,0 +1,138 @@
+{
+  "source": "operator_screenshot.realsports.draftStats.highestBoostedValuePlayers",
+  "section": "highestBoostedValuePlayers",
+  "label": "total_value_leaderboard",
+  "sport": "nfl",
+  "slate_key": "2026-09-27",
+  "note": "Transcribed from an operator Real Sports Daily Draft Stats Highest value screenshot on 2026-09-28. player_id values are transcription keys, not provider ids. value is the left-hand realized number (ridge target). displayed_value is the UI Value column. drafts are recorded and are not a label. Multi-slate NFL board. Boswell Value 29 on 24 drafts; Gibbs Value 18.7 on 1.7k drafts.",
+  "players": [
+    {
+      "player_id": 91001,
+      "name": "Chris Boswell",
+      "value": 5.8,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 29.0,
+      "drafts": 24,
+      "team": "PIT"
+    },
+    {
+      "player_id": 91002,
+      "name": "Sam Darnold",
+      "value": 5.4,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 27.2,
+      "drafts": 792
+    },
+    {
+      "player_id": 91003,
+      "name": "Will Anderson Jr.",
+      "value": 7.6,
+      "card_boost": 1.4,
+      "most_common_slot": 1,
+      "displayed_value": 25.9,
+      "drafts": 7
+    },
+    {
+      "player_id": 91004,
+      "name": "Harold Fannin Jr.",
+      "value": 4.6,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 23.1,
+      "drafts": 3
+    },
+    {
+      "player_id": 91005,
+      "name": "Genesis Smith",
+      "value": 5.4,
+      "card_boost": 3.0,
+      "most_common_slot": 5,
+      "displayed_value": 22.7,
+      "drafts": 1
+    },
+    {
+      "player_id": 91006,
+      "name": "Kenyon Sadiq",
+      "value": 4.4,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 22.1,
+      "drafts": 5
+    },
+    {
+      "player_id": 91007,
+      "name": "Jacob Rodriguez",
+      "value": 4.5,
+      "card_boost": 3.0,
+      "most_common_slot": 2,
+      "displayed_value": 21.6,
+      "drafts": 2
+    },
+    {
+      "player_id": 91008,
+      "name": "Jordan Addison",
+      "value": 4.1,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 20.6,
+      "drafts": 8
+    },
+    {
+      "player_id": 91009,
+      "name": "Jaylen Warren",
+      "value": 6.2,
+      "card_boost": 1.2,
+      "most_common_slot": 1,
+      "displayed_value": 19.7,
+      "drafts": 8
+    },
+    {
+      "player_id": 91010,
+      "name": "Harrison Mevis",
+      "value": 3.8,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 18.8,
+      "drafts": 3
+    },
+    {
+      "player_id": 91011,
+      "name": "Dominic Zvada",
+      "value": 4.5,
+      "card_boost": 2.2,
+      "most_common_slot": 1,
+      "displayed_value": 18.8,
+      "drafts": 1
+    },
+    {
+      "player_id": 91012,
+      "name": "Jahmyr Gibbs",
+      "value": 9.4,
+      "card_boost": 0.0,
+      "most_common_slot": 1,
+      "displayed_value": 18.7,
+      "drafts": 1700
+    },
+    {
+      "player_id": 91013,
+      "name": "Aaron Rodgers",
+      "value": 4.6,
+      "card_boost": 2.0,
+      "most_common_slot": 1,
+      "displayed_value": 18.5,
+      "drafts": 7
+    },
+    {
+      "player_id": 91014,
+      "name": "Kyle Van Noy",
+      "value": 3.6,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 18.0,
+      "drafts": 1
+    }
+  ],
+  "slate_date": "2026-09-27"
+}

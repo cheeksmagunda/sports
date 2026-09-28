@@ -172,6 +172,18 @@ def player_high_tv_weights_from_draft_stats(
     )
 
 
+class _ValueColumnRankView:
+    """Duck-typed row whose ``value`` is the Value column, for weight ranking only."""
+
+    __slots__ = ("player_id", "game_id", "did_not_play", "value")
+
+    def __init__(self, row: Any, value: float | None) -> None:
+        self.player_id = row.player_id
+        self.game_id = row.game_id
+        self.did_not_play = bool(getattr(row, "did_not_play", False))
+        self.value = value
+
+
 def sample_weights_for_history(
     rows: Sequence[object],
     *,
@@ -179,10 +191,22 @@ def sample_weights_for_history(
     high_weight: float = 4.0,
     base_weight: float = 1.0,
 ) -> list[float]:
-    """NFL history rows -> shared per-game top-k high-TV sample weights."""
+    """Per-game top-k weights ranked by the Value column when a board joined.
 
+    ``value_column`` is realized times slot plus boost (or a stated Value).
+    Rows without that column rank on realized ``value``, which is also the
+    ridge target. Draft counts are not read.
+    """
+
+    ranked: list[object] = []
+    for row in rows:
+        column = getattr(row, "value_column", None)
+        if column is None:
+            ranked.append(row)
+        else:
+            ranked.append(_ValueColumnRankView(row, float(column)))
     return sample_weights_for_labeled_rows(
-        rows, top_k=top_k, high_weight=high_weight, base_weight=base_weight
+        ranked, top_k=top_k, high_weight=high_weight, base_weight=base_weight
     )
 
 

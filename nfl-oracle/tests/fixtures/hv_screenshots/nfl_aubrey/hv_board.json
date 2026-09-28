@@ -1,0 +1,137 @@
+{
+  "source": "operator_screenshot.realsports.draftStats.highestBoostedValuePlayers",
+  "section": "highestBoostedValuePlayers",
+  "label": "total_value_leaderboard",
+  "sport": "nfl",
+  "slate_key": "2026-09-17",
+  "note": "Transcribed from an operator Real Sports Daily Draft Stats Highest value screenshot on 2026-09-28. player_id values are transcription keys, not provider ids. value is the left-hand realized number (ridge target). displayed_value is the UI Value column. drafts are recorded and are not a label. NFL Highest value board with Aubrey at 27.8 on 19 drafts. Chase is chalk at 1.7k and still high value.",
+  "players": [
+    {
+      "player_id": 93001,
+      "name": "Brandon Aubrey",
+      "value": 5.6,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 27.8,
+      "drafts": 19
+    },
+    {
+      "player_id": 93002,
+      "name": "Spencer Shrader",
+      "value": 5.0,
+      "card_boost": 2.9,
+      "most_common_slot": 1,
+      "displayed_value": 24.7,
+      "drafts": 3
+    },
+    {
+      "player_id": 93003,
+      "name": "Tre Tucker",
+      "value": 5.1,
+      "card_boost": 3.0,
+      "most_common_slot": 2,
+      "displayed_value": 24.3,
+      "drafts": 3
+    },
+    {
+      "player_id": 93004,
+      "name": "Jaylen Waddle",
+      "value": 4.7,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 23.5,
+      "drafts": 17
+    },
+    {
+      "player_id": 93005,
+      "name": "CeeDee Lamb",
+      "value": 7.0,
+      "card_boost": 1.3,
+      "most_common_slot": 1,
+      "displayed_value": 23.0,
+      "drafts": 85
+    },
+    {
+      "player_id": 93006,
+      "name": "Dalton Schultz",
+      "value": 4.6,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 22.9,
+      "drafts": 4
+    },
+    {
+      "player_id": 93007,
+      "name": "Harrison Butker",
+      "value": 6.7,
+      "card_boost": 1.3,
+      "most_common_slot": 1,
+      "displayed_value": 22.2,
+      "drafts": 31
+    },
+    {
+      "player_id": 93008,
+      "name": "Ja'Marr Chase",
+      "value": 4.4,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 22.0,
+      "drafts": 1700
+    },
+    {
+      "player_id": 93009,
+      "name": "Devin Lloyd",
+      "value": 8.3,
+      "card_boost": 0.6,
+      "most_common_slot": 1,
+      "displayed_value": 21.6,
+      "drafts": 1
+    },
+    {
+      "player_id": 93010,
+      "name": "DeVonta Smith",
+      "value": 5.1,
+      "card_boost": 1.8,
+      "most_common_slot": 1,
+      "displayed_value": 19.3,
+      "drafts": 76
+    },
+    {
+      "player_id": 93011,
+      "name": "Andre Szmyt",
+      "value": 4.2,
+      "card_boost": 3.0,
+      "most_common_slot": 3,
+      "displayed_value": 19.2,
+      "drafts": 2
+    },
+    {
+      "player_id": 93012,
+      "name": "Bobby Okereke",
+      "value": 3.7,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 18.5,
+      "drafts": 1
+    },
+    {
+      "player_id": 93013,
+      "name": "Dee Winters",
+      "value": 3.8,
+      "card_boost": 3.0,
+      "most_common_slot": 2,
+      "displayed_value": 18.2,
+      "drafts": 1
+    },
+    {
+      "player_id": 93014,
+      "name": "Zaven Collins",
+      "value": 4.3,
+      "card_boost": 3.0,
+      "most_common_slot": 5,
+      "displayed_value": 18.1,
+      "drafts": 1
+    }
+  ],
+  "slate_date": "2026-09-17"
+}

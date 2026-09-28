@@ -58,8 +58,12 @@ def test_export_fixture_contest_with_hv_section(tmp_path: Path) -> None:
     assert tv["section"] == HV_SECTION
     assert tv["source"] == f"draft_stats.{HV_SECTION}"
     assert tv["player_count"] == 6
-    assert tv["players"][0]["player_id"] == 401
+    # Rank is the Value column, not raw realized. Player 406 (realized 3.0,
+    # boost 2.5, slot out of range so the best slot) leads player 401.
+    assert tv["players"][0]["player_id"] == 406
     assert tv["players"][0]["rank"] == 1
+    assert tv["players"][0]["value"] == 3.0
+    assert tv["players"][0]["displayed_value"] == 13.5
 
     lines = (contest_dir / DRAFT_STATS_FILENAME).read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 7  # 6 HV + 1 mostDrafted

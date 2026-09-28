@@ -45,6 +45,10 @@ class HistoricalPerformance(Record):
     available_at: datetime
     captured_at: datetime
     value: Finite
+    # Draft-image Value column (realized * (slot + boost)) when an HV board
+    # joined this row. Sample weights rank on it. Ridge y stays ``value``.
+    # Excluded from the training fingerprint so a weight hint is not a label.
+    value_column: Finite | None = Field(default=None, exclude=True)
     opportunity: Finite | None = None
     team_id: PositiveId | None = None
     opponent_team_id: PositiveId | None = None
@@ -459,6 +463,8 @@ def _hv_label_evaluation(audit: Mapping[str, int] | None) -> dict[str, int | str
         "hv_label_collisions": int(audit.get("label_collisions", 0)),
         "hv_contests_indexed": int(audit.get("contests_indexed", 0)),
         "hv_export_files_indexed": int(audit.get("export_files_indexed", 0)),
+        "hv_value_column_rows": int(audit.get("value_column_rows", 0)),
+        "hv_sample_weight_policy": "value_column_when_joined_else_realized_not_draft_count",
         "hv_win_frequency_target_rows": 0,
     }
 
@@ -650,7 +656,7 @@ def fit_model(
             "holdout_winner": holdout_winner,
             "holdout_winner_mae": candidates_mae[holdout_winner],
             "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
-            "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
+            "high_tv_sample_weighting": "per_game_top5_value_column_else_realized_full_archive",
             "training_target": "high_total_value_full_archive_not_win_chalk",
             **_hv_label_evaluation(hv_label_audit),
             "context_evidence_disclosure": (

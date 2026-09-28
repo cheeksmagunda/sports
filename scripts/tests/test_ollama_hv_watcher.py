@@ -159,6 +159,36 @@ def _five_players() -> list[dict[str, object]]:
     ]
 
 
+def test_board_summary_ranks_stated_value_column_ahead_of_chalk() -> None:
+    summary = summarize_board_payload(
+        {
+            "sport": "nfl",
+            "slate_key": "boswell",
+            "section": "highestBoostedValuePlayers",
+            "players": [
+                {
+                    "player_id": 1,
+                    "name": "Boswell",
+                    "value": 5.8,
+                    "displayed_value": 29.0,
+                    "drafts": 24,
+                },
+                {
+                    "player_id": 2,
+                    "name": "Gibbs",
+                    "value": 9.4,
+                    "displayed_value": 18.7,
+                    "drafts": 1700,
+                },
+            ],
+        }
+    )
+    assert summary.top_players[0]["name"] == "Boswell"
+    assert summary.top_players[0]["value"] == 29.0
+    assert summary.top_players[0]["real_score"] == 5.8
+    assert summary.top_players[1]["name"] == "Gibbs"
+
+
 def test_board_summary_ranks_by_value() -> None:
     summary = summarize_board_payload(
         {

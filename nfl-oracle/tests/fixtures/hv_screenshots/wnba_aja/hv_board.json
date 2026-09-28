@@ -1,0 +1,136 @@
+{
+  "source": "operator_screenshot.realsports.draftStats.highestBoostedValuePlayers",
+  "section": "highestBoostedValuePlayers",
+  "label": "total_value_leaderboard",
+  "sport": "wnba",
+  "slate_key": "wnba-highest-value",
+  "note": "Transcribed from an operator Real Sports Daily Draft Stats Highest value screenshot on 2026-09-28. player_id values are transcription keys, not provider ids. value is the left-hand realized number (ridge target). displayed_value is the UI Value column. drafts are recorded and are not a label. WNBA illustration of the same law, not an nfl-oracle contest. A'ja Value 19.2 equals 9.6 * 2.0 and is also the chalk.",
+  "players": [
+    {
+      "player_id": 94001,
+      "name": "A'ja Wilson",
+      "value": 9.6,
+      "card_boost": 0.0,
+      "most_common_slot": 1,
+      "displayed_value": 19.2,
+      "drafts": 3700
+    },
+    {
+      "player_id": 94002,
+      "name": "Tiffany Hayes",
+      "value": 5.0,
+      "card_boost": 1.6,
+      "most_common_slot": 1,
+      "displayed_value": 18.1,
+      "drafts": 28
+    },
+    {
+      "player_id": 94003,
+      "name": "Cecilia Zandalasini",
+      "value": 3.6,
+      "card_boost": 2.2,
+      "most_common_slot": 1,
+      "displayed_value": 15.1,
+      "drafts": 15
+    },
+    {
+      "player_id": 94004,
+      "name": "Breanna Stewart",
+      "value": 6.8,
+      "card_boost": 0.1,
+      "most_common_slot": 1,
+      "displayed_value": 14.4,
+      "drafts": 141
+    },
+    {
+      "player_id": 94005,
+      "name": "Leonie Fiebich",
+      "value": 3.8,
+      "card_boost": 1.5,
+      "most_common_slot": 2,
+      "displayed_value": 12.5,
+      "drafts": 1
+    },
+    {
+      "player_id": 94006,
+      "name": "Nia Brodie",
+      "value": 3.2,
+      "card_boost": 1.6,
+      "most_common_slot": 1,
+      "displayed_value": 11.4,
+      "drafts": 1
+    },
+    {
+      "player_id": 94007,
+      "name": "Gabby Williams",
+      "value": 3.7,
+      "card_boost": 0.8,
+      "most_common_slot": 1,
+      "displayed_value": 10.4,
+      "drafts": 91
+    },
+    {
+      "player_id": 94008,
+      "name": "Raven Johnson",
+      "value": 2.2,
+      "card_boost": 3.0,
+      "most_common_slot": 2,
+      "displayed_value": 10.4,
+      "drafts": 1
+    },
+    {
+      "player_id": 94009,
+      "name": "Aliyah Boston",
+      "value": 4.5,
+      "card_boost": 0.3,
+      "most_common_slot": 1,
+      "displayed_value": 10.2,
+      "drafts": 18
+    },
+    {
+      "player_id": 94010,
+      "name": "Stephanie Talbot",
+      "value": 2.0,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 10.1,
+      "drafts": 1
+    },
+    {
+      "player_id": 94011,
+      "name": "Rhyne Howard",
+      "value": 4.4,
+      "card_boost": 0.2,
+      "most_common_slot": 1,
+      "displayed_value": 9.8,
+      "drafts": 145
+    },
+    {
+      "player_id": 94012,
+      "name": "Paige Bueckers",
+      "value": 4.4,
+      "card_boost": 0.1,
+      "most_common_slot": 1,
+      "displayed_value": 9.3,
+      "drafts": 812
+    },
+    {
+      "player_id": 94013,
+      "name": "Kayla Thornton",
+      "value": 2.4,
+      "card_boost": 1.9,
+      "most_common_slot": 1,
+      "displayed_value": 9.2,
+      "drafts": 29
+    },
+    {
+      "player_id": 94014,
+      "name": "Sonia Citron",
+      "value": 3.7,
+      "card_boost": 0.4,
+      "most_common_slot": 1,
+      "displayed_value": 8.9,
+      "drafts": 73
+    }
+  ]
+}

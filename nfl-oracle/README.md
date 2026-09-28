@@ -269,17 +269,35 @@ isolated per profile (shared pool skips stay on every profile).
 `nfl-pipeline train` loads Corpus G, then overlays Highest-value / Total Value
 boards before `fit_model`. A board joins on `(player_id, game_id)` when the
 contest names a game, otherwise on `(player_id, America/New_York slate date)`.
-The label is the board's realized value. It is not `drafts` / `count`, and it
-is not `value * (slot + boost)` (the optimizer applies slot multipliers later).
-Missing boards leave the raw box score. Reconstructed exports are ignored.
+Ridge `y` is the board's realized value (the left-hand number), or the raw
+box score when no board joins. It is not `drafts` / `count`. It is also not
+the Value column: the optimizer already multiplies projections by
+`(slot + boost)`, so training on that product would double-count. Sample
+weights rank by the Value column when the board states one (`displayed_value`
+or `highestScore`, else `realized * (most common slot + boost)`). Reconstructed
+exports are ignored.
 
-`nfl-hv-board-replay` scores each real HV board with the draft-image law
+`nfl-hv-board-replay` scores each real HV board with
 `realized_value * (slot_multiplier + card_boost)` and the observed slots
-`(2.0, 1.8, 1.6, 1.4, 1.2)`. It reports the HV-rank five, the draft-count
-chalk five, and the hindsight ceiling, with per-card multipliers when
-`--cards` is set. Ollama's watcher ranks the same boards by value and proposes
-that HV-rank five; this harness is the score for that card. Ridge learns the
-realized value. The optimizer objective stays `total_value`.
+`(2.0, 1.8, 1.6, 1.4, 1.2)`. HV rank is the five highest Value-column players,
+then placed by descending realized value. Chalk is the five highest draft
+counts. Hindsight is the exact best five. Ollama ranks `displayed_value` /
+`highestScore` when present, else `value`, and never draft count.
+
+T-40 HV lineup env (`HV_T40_KNOBS` in `recommendations/hv_boards.py`):
+
+| Knob | Value |
+| --- | --- |
+| `NFL_OPTIMIZER_PROFILE` | `max_value` (1 team, 1 game) |
+| `NFL_OPTIMIZER_UPSIDE_WEIGHT` | `0` (unset `max_value` already uses 0) |
+| `NFL_OPTIMIZER_FIELD_WEIGHT` | `0` (unset `max_value` already uses 0) |
+| `NFL_PICKER_BOOST_RANK_BLEND` | `0` |
+| `NFL_PICKER_POSITION_CALIBRATION` | `0` |
+
+`diversified` still defaults upside `0.15` and field `0.1`. An explicit weight
+env wins over either profile. Rollback of the `max_value` zeros:
+`NFL_OPTIMIZER_UPSIDE_WEIGHT=0.15` and `NFL_OPTIMIZER_FIELD_WEIGHT=0.1`.
+Bare `OptimizerConfig()` is unchanged.
 
 ```sh
 # Full retrain on the worker volume (Codespace). No knob flip.

@@ -83,11 +83,19 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "draft_law": "realized_value * (slot_multiplier + card_boost)",
         "slot_multipliers": [2.0, 1.8, 1.6, 1.4, 1.2],
         "ollama_candidate": (
-            "top five distinct players by HV/TDV board value, not draft count; "
-            "this harness then scores that five with the draft law"
+            "top five distinct players by displayed_value or highestScore "
+            "when present, else value; never draft count"
         ),
-        "ridge_label": "HV/TDV realized value when a board joins, else raw Corpus G box score",
+        "ridge_label": (
+            "realized production (left-hand value or Corpus G box). "
+            "Not the Value column, which the optimizer multiplies again."
+        ),
+        "sample_weight_rank": "value_column when a board joined, else realized value",
         "optimizer_objective": "total_value",
+        "hv_t40_knobs": (
+            "max_value, teams=1, games=1, upside_weight=0, field_weight=0, "
+            "boost_rank_blend=0, position_calibration=0"
+        ),
         "corpora": {
             "contest_root": str(contest),
             "contest_root_exists": contest.is_dir(),

@@ -106,7 +106,14 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
       explicit integer overrides (1..5) that win over the profile preset.
     - ``NFL_OPTIMIZER_UPSIDE_WEIGHT`` / ``NFL_OPTIMIZER_FIELD_WEIGHT``: floats
       (0..2) that tune the contest-utility re-rank (right-tail p90 lift and
-      field-beat leverage). Unset keeps the production defaults.
+      field-beat leverage). Under ``max_value`` an unset weight is 0 so the
+      freeze is expected total value: a high-draft lower-value card cannot
+      outrank a sparse higher-value card, and a high-draft card that also has
+      the highest value is kept. ``diversified`` still defaults to the bare
+      ``OptimizerConfig`` weights (0.15 / 0.1). An explicit env value wins
+      for either profile. Rollback of the max_value zeros:
+      ``NFL_OPTIMIZER_UPSIDE_WEIGHT=0.15`` and
+      ``NFL_OPTIMIZER_FIELD_WEIGHT=0.1``.
     """
 
     env = environ if environ is not None else os.environ
@@ -117,8 +124,16 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
     teams, games = OPTIMIZER_PROFILE_PRESETS[profile]
     teams = _env_diversity_int(env, "NFL_OPTIMIZER_MIN_DISTINCT_TEAMS", teams)
     games = _env_diversity_int(env, "NFL_OPTIMIZER_MIN_DISTINCT_GAMES", games)
-    upside = _env_weight_float(env, "NFL_OPTIMIZER_UPSIDE_WEIGHT", defaults.upside_weight)
-    field = _env_weight_float(env, "NFL_OPTIMIZER_FIELD_WEIGHT", defaults.field_weight)
+    # max_value selects the Value column. Nonzero field weight fades correct
+    # chalk; nonzero upside leaves the exact expected-value MILP.
+    if profile == "max_value":
+        upside_default = 0.0
+        field_default = 0.0
+    else:
+        upside_default = float(defaults.upside_weight)
+        field_default = float(defaults.field_weight)
+    upside = _env_weight_float(env, "NFL_OPTIMIZER_UPSIDE_WEIGHT", upside_default)
+    field = _env_weight_float(env, "NFL_OPTIMIZER_FIELD_WEIGHT", field_default)
     return OptimizerConfig(
         min_distinct_teams=teams,
         min_distinct_games=games,

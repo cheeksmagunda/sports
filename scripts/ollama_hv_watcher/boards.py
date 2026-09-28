@@ -41,7 +41,7 @@ class BoardSummary:
                 f"HV/TDV board label={self.label} sport={self.sport} "
                 f"slate={self.slate_key} players={self.player_count}"
             ),
-            "Top players (highest value / max_value / top_1 style ranks):",
+            "Top players by the Value column (not draft count):",
         ]
         for i, row in enumerate(self.top_players[:top_n], start=1):
             name = row["name"] if row.get("name") else row["player_id"]
@@ -83,14 +83,30 @@ def _normalize_player(row: dict[str, Any], *, index: int, path: str) -> dict[str
         value = _as_float(row.get("max_value"), field="max_value", context=ctx)
     else:
         raise LiveDataRequiredError("value|max_value", context=ctx)
+    stated = row.get("displayed_value")
+    if stated is None:
+        stated = row.get("highest_score")
+    if stated is None:
+        stated = row.get("highestScore")
+    # Rank on the Value column when the board states it. ``value`` stays the
+    # realized number on our exports, so using it as the rank key would put
+    # a 9.4 chalk card ahead of a 5.8 card whose Value is 29.
+    rank_value = (
+        _as_float(stated, field="displayed_value|highest_score", context=ctx)
+        if stated is not None
+        else value
+    )
     real_raw = row.get("real_score")
     if real_raw is None:
         real_raw = row.get("score")
+    if real_raw is None and stated is not None:
+        real_raw = value
     real_score = (
         _as_float(real_raw, field="real_score|score", context=ctx)
         if real_raw is not None
         else None
     )
+    value = rank_value
     team = row.get("team") if row.get("team") is not None else row.get("team_abbr")
     return {
         "player_id": player_id,

@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1121 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -417,6 +417,21 @@ Generated from `git ls-files`. 1116 tracked files. Regenerate with `scripts/gene
 ## nfl-oracle/tests/fixtures/coverage/
 - nfl-oracle/tests/fixtures/coverage/dense_catalog.json -- (test fixture data)
 - nfl-oracle/tests/fixtures/coverage/dense_matrix.json -- (test fixture data)
+
+## nfl-oracle/tests/fixtures/hv_screenshots/
+- nfl-oracle/tests/fixtures/hv_screenshots/README.md -- Transcribed Real Sports Highest-value boards
+
+## nfl-oracle/tests/fixtures/hv_screenshots/nfl_aubrey/
+- nfl-oracle/tests/fixtures/hv_screenshots/nfl_aubrey/hv_board.json -- (test fixture data)
+
+## nfl-oracle/tests/fixtures/hv_screenshots/nfl_boswell/
+- nfl-oracle/tests/fixtures/hv_screenshots/nfl_boswell/hv_board.json -- (test fixture data)
+
+## nfl-oracle/tests/fixtures/hv_screenshots/nfl_tnf_gb_atl/
+- nfl-oracle/tests/fixtures/hv_screenshots/nfl_tnf_gb_atl/hv_board.json -- (test fixture data)
+
+## nfl-oracle/tests/fixtures/hv_screenshots/wnba_aja/
+- nfl-oracle/tests/fixtures/hv_screenshots/wnba_aja/hv_board.json -- (test fixture data)
 
 ## nfl-oracle/tests/fixtures/identity/
 - nfl-oracle/tests/fixtures/identity/dense_players.json -- (test fixture data)

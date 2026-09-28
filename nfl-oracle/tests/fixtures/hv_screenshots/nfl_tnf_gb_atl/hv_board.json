@@ -1,0 +1,149 @@
+{
+  "source": "operator_screenshot.realsports.draftStats.highestBoostedValuePlayers",
+  "section": "highestBoostedValuePlayers",
+  "label": "total_value_leaderboard",
+  "sport": "nfl",
+  "slate_key": "tnf-gb-atl",
+  "note": "Transcribed from an operator Real Sports Daily Draft Stats Highest value screenshot on 2026-09-28. player_id values are transcription keys, not provider ids. value is the left-hand realized number (ridge target). displayed_value is the UI Value column. drafts are recorded and are not a label. TNF GB at ATL. London Value 33.5 is both popular and the highest value.",
+  "players": [
+    {
+      "player_id": 92001,
+      "name": "Drake London",
+      "value": 6.8,
+      "card_boost": 2.9,
+      "most_common_slot": 1,
+      "displayed_value": 33.5,
+      "drafts": 2000,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92002,
+      "name": "Bijan Robinson",
+      "value": 9.0,
+      "card_boost": 0.0,
+      "most_common_slot": 1,
+      "displayed_value": 18.0,
+      "drafts": 8000,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92003,
+      "name": "Nick Folk",
+      "value": 3.4,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 17.0,
+      "drafts": 26,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92004,
+      "name": "Xavier McKinney",
+      "value": 3.3,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 16.5,
+      "drafts": 19,
+      "team": "GB"
+    },
+    {
+      "player_id": 92005,
+      "name": "Xavier Watts",
+      "value": 3.1,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 15.7,
+      "drafts": 11,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92006,
+      "name": "C.J. Henderson",
+      "value": 2.8,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 13.9,
+      "drafts": 88,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92007,
+      "name": "Matthew Golden",
+      "value": 4.0,
+      "card_boost": 1.0,
+      "most_common_slot": 1,
+      "displayed_value": 11.9,
+      "drafts": 605,
+      "team": "GB"
+    },
+    {
+      "player_id": 92008,
+      "name": "Brian Robinson",
+      "value": 2.5,
+      "card_boost": 2.5,
+      "most_common_slot": 1,
+      "displayed_value": 11.4,
+      "drafts": 380,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92009,
+      "name": "Daniel Whelan",
+      "value": 1.9,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 9.5,
+      "drafts": 75,
+      "team": "GB"
+    },
+    {
+      "player_id": 92010,
+      "name": "Christian Watson",
+      "value": 3.7,
+      "card_boost": 0.1,
+      "most_common_slot": 1,
+      "displayed_value": 7.8,
+      "drafts": 1000,
+      "team": "GB"
+    },
+    {
+      "player_id": 92011,
+      "name": "Jordan Love",
+      "value": 2.9,
+      "card_boost": 0.5,
+      "most_common_slot": 1,
+      "displayed_value": 7.3,
+      "drafts": 1500,
+      "team": "GB"
+    },
+    {
+      "player_id": 92012,
+      "name": "Michael Penix Jr.",
+      "value": 3.0,
+      "card_boost": 0.0,
+      "most_common_slot": 1,
+      "displayed_value": 6.0,
+      "drafts": 122,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92013,
+      "name": "Austin Hooper",
+      "value": 1.2,
+      "card_boost": 3.0,
+      "most_common_slot": 1,
+      "displayed_value": 5.9,
+      "drafts": 2,
+      "team": "ATL"
+    },
+    {
+      "player_id": 92014,
+      "name": "Mike Hughes",
+      "value": 1.2,
+      "card_boost": 2.4,
+      "most_common_slot": 1,
+      "displayed_value": 5.3,
+      "drafts": 87
+    }
+  ]
+}

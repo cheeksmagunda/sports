@@ -9,16 +9,21 @@ Default slots are the observed NFL multipliers ``(2.0, 1.8, 1.6, 1.4, 1.2)``.
 
 Three lineups are scored on each board:
 
-- **HV rank**: the five highest realized values (the leaderboard, not draft
-  counts), ordered into descending slots.
+- **HV rank**: the five highest Value-column numbers (stated Value, else
+  ``realized * (observed slot + boost)``), not draft counts. Chosen players
+  are then placed by descending realized value so the largest production
+  takes the largest slot. That placement is optimal because the boost term
+  does not depend on slot order.
 - **Chalk**: the five highest draft counts (win-frequency), ordered the same
   way so the gap is selection, not slot mistakes.
 - **Hindsight**: the exact best five under the draft law (boosts included).
 
-Ollama's slate watcher ranks the same boards by ``value`` and proposes that
-HV-rank five (``scripts/ollama_hv_watcher``). Ridge trains on the board's
-realized value when the board joins a Corpus G row. The optimizer's objective
-stays ``total_value``. This harness is the shared score for those candidates.
+Ollama's slate watcher ranks by ``displayed_value`` / ``highestScore`` when
+the board states that Value column, otherwise by ``value``
+(``scripts/ollama_hv_watcher``). It does not rank by draft count. Ridge
+trains on realized production when the board joins a Corpus G row. Sample
+weights and this HV rank use the Value column. The optimizer objective stays
+``total_value``. This harness is the shared score for those candidates.
 
 Read-only. No provider calls, no contest entry, no store writes.
 """
@@ -37,6 +42,7 @@ from nfl_oracle.recommendations.hv_boards import (
     HvBoard,
     HvBoardPlayer,
     iter_training_boards,
+    player_value_column,
 )
 
 LINEUP_SIZE = 5
@@ -132,10 +138,13 @@ def hv_rank_lineup(
     players: Sequence[HvBoardPlayer],
     slots: Sequence[float],
 ) -> ScoredLineup:
-    """Top realized values, best slot order. Draft counts are ignored."""
+    """Top Value-column players, then best slot order. Draft counts are ignored."""
 
     pool = _by_id(players)
-    ranked = sorted(pool.values(), key=lambda player: (-player.realized_value, player.player_id))
+    ranked = sorted(
+        pool.values(),
+        key=lambda player: (-player_value_column(player, slots), player.player_id),
+    )
     chosen = [player.player_id for player in ranked[: len(slots)]]
     ordered = order_by_realized(chosen, pool)
     return score_ordered(ordered, pool, slots, kind="hv_rank")

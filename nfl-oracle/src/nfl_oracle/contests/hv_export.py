@@ -9,10 +9,10 @@ coverage manifest of gaps.
 
 Env:
 
-- ``NFL_CORPUS_C_ROOT`` — Corpus C root (default ``{project}/data/raw/corpus_c``).
+- ``NFL_CORPUS_C_ROOT``: Corpus C root (default ``{project}/data/raw/corpus_c``).
   On Railway the worker volume mounts at ``/app/nfl-oracle/data``, so the
   default becomes ``/app/nfl-oracle/data/raw/corpus_c``.
-- ``NFL_HV_EXPORT_ROOT`` — optional default export destination.
+- ``NFL_HV_EXPORT_ROOT``: optional default export destination.
 
 Coordinate with portfolio #526 (HV corpus repo), #453 / #503 (Corpus G volume),
 and PR #512 (nightly Corpus G). Never mint credentials; read-only disk walk.
@@ -34,6 +34,7 @@ from nfl_oracle.contests.parse import ContestParseError, ParsedContest, load_con
 from nfl_oracle.contests.schema import DraftStatRow
 from nfl_oracle.contests.store import ContestStore, corpus_c_root, project_root
 from nfl_oracle.recommendations.high_tv import high_tv_board_from_draft_stats
+from nfl_oracle.recommendations.hv_boards import HvBoardPlayer, player_value_column
 
 HV_SECTION = "highestBoostedValuePlayers"
 SCHEMA_VERSION = 1
@@ -67,6 +68,10 @@ class LeaderboardPlayer:
     drafts: int | None
     value: float | None
     rank: int
+    # Value column: stated highestScore, else realized * (slot + boost).
+    # ``value`` / ``real_score`` stay realized production so a later train
+    # overlay does not treat 29 as the ridge target.
+    displayed_value: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -205,29 +210,47 @@ def iter_raw_draft_stat_rows(
             }
 
 
+def _displayed_value(row: DraftStatRow | None, realized: float | None) -> float | None:
+    """Value column for an export row. None when there is no realized number."""
+
+    if row is None or realized is None:
+        return None
+    return player_value_column(
+        HvBoardPlayer(
+            player_id=int(row.player_id),
+            realized_value=float(realized),
+            card_boost=float(row.card_boost or 0.0),
+            most_common_slot=row.most_common_slot,
+            displayed_value=None if row.highest_score is None else float(row.highest_score),
+        )
+    )
+
+
 def leaderboard_from_hv_section(rows: Sequence[DraftStatRow]) -> list[LeaderboardPlayer]:
     hv = [r for r in rows if r.section == HV_SECTION]
     ordered = sorted(
         hv,
         key=lambda r: (
-            -(r.value if r.value is not None else float("-inf")),
+            -(_displayed_value(r, None if r.value is None else float(r.value)) or float("-inf")),
             r.player_id,
         ),
     )
     out: list[LeaderboardPlayer] = []
     for rank, row in enumerate(ordered, start=1):
+        realized = None if row.value is None else float(row.value)
         out.append(
             LeaderboardPlayer(
                 player_id=row.player_id,
                 name=row.display_name,
                 team_id=row.team_id,
-                real_score=row.value,
+                real_score=realized,
                 base=row.base_boosted_value,
                 card_boost=row.card_boost,
                 slot=row.most_common_slot,
                 drafts=row.draft_count,
-                value=row.value,
+                value=realized,
                 rank=rank,
+                displayed_value=_displayed_value(row, realized),
             )
         )
     return out
@@ -262,6 +285,7 @@ def leaderboard_from_reconstruction(
                 drafts=None if row is None else row.draft_count,
                 value=score,
                 rank=rank,
+                displayed_value=_displayed_value(row, score),
             )
         )
     return players, board.source

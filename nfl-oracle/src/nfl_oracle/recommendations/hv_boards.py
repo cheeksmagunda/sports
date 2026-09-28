@@ -10,17 +10,19 @@ Entrypoints this module serves:
   pool replay (``contest_pool_replay``) and ``sweep_picker_knobs`` stay the
   walk-forward production comparison; they are not the HV label source.
 
-Label ladder, same contract as ``oracle_core.high_tv``:
+Two numbers, on purpose:
 
-1. When a Real Sports Highest-value / Total Value board is present
-   (``highestBoostedValuePlayers``, not a reconstructed or popularity
-   section), the fit target is that board's realized value.
-2. Otherwise the finalized Corpus G box score stays the label.
+- Ridge ``y`` is realized production: the left-hand board number, or the
+  Corpus G box score when no board joins. Training ``y`` on the Value column
+  and then multiplying by ``(slot + boost)`` again would double-count.
+- The Value column is ``realized * (slot_multiplier + card_boost)``, or the
+  provider ``highestScore`` / transcribed ``displayed_value`` when that number
+  is present. Sample weights and the replay HV rank use this column. Draft
+  counts never enter either one.
 
-Draft counts, most-drafted sections, and prior users' winning lineups are
-never the target. The optimizer still multiplies projections by slot
-multipliers, so this label is the per-player realized value, not
-``value * (slot + boost)``. That product is the replay score.
+``HV_T40_KNOBS`` is the env that makes the serving optimizer select that
+Value column at T-40: ``max_value``, one team, one game, upside 0, field 0,
+picker blend 0. Explicit env overrides still win.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from nfl_oracle.contests.parse import iter_contests
+from nfl_oracle.contests.schema import OBSERVED_SLOT_MULTIPLIERS
 from nfl_oracle.contests.store import ContestStore
 from nfl_oracle.recommendations.model import HistoricalPerformance
 
@@ -42,16 +45,42 @@ HV_SECTION = "highestBoostedValuePlayers"
 EASTERN = ZoneInfo("America/New_York")
 BOARD_FILENAMES = ("total_value_leaderboard.json", "hv_board.json")
 
+# Serving env that reproduces an HV lineup at T-40. Optimizer weights of 0
+# keep selection on expected total value, so a popular high-value card
+# (London, A'ja) stays and a popular lower-value card (Gibbs) does not.
+# ``NFL_PICKER_BOOST_RANK_BLEND`` stays 0: the multiplier law is
+# ``value * (slot + boost)``, not a swap of projected means into boost order.
+# Live worker may still set that blend explicitly. This mapping does not
+# mutate Railway.
+HV_T40_KNOBS: dict[str, str] = {
+    "NFL_OPTIMIZER_PROFILE": "max_value",
+    "NFL_OPTIMIZER_MIN_DISTINCT_TEAMS": "1",
+    "NFL_OPTIMIZER_MIN_DISTINCT_GAMES": "1",
+    "NFL_OPTIMIZER_UPSIDE_WEIGHT": "0",
+    "NFL_OPTIMIZER_FIELD_WEIGHT": "0",
+    "NFL_PICKER_BOOST_RANK_BLEND": "0",
+    "NFL_PICKER_POSITION_CALIBRATION": "0",
+    "NFL_PICKER_PROFILE": "identity",
+}
+
 
 @dataclass(frozen=True)
 class HvBoardPlayer:
-    """One player on an HV/TDV board. ``drafts`` is recorded and never a label."""
+    """One player on an HV/TDV board. ``drafts`` is recorded and never a label.
+
+    ``realized_value`` is the left-hand number (ridge ``y``).
+    ``displayed_value`` is the Value column when the provider or a transcript
+    already states it. ``most_common_slot`` is the 1-indexed slot behind that
+    column. Neither drafts nor the Value column replaces ``realized_value``.
+    """
 
     player_id: int
     realized_value: float
     card_boost: float = 0.0
     drafts: int | None = None
     name: str | None = None
+    most_common_slot: int | None = None
+    displayed_value: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -89,9 +118,33 @@ class HvLabelAudit:
     export_files_indexed: int = 0
     export_files_skipped_reconstructed: int = 0
     win_frequency_target_rows: int = 0
+    value_column_rows: int = 0
 
     def to_dict(self) -> dict[str, int]:
         return asdict(self)
+
+
+def player_value_column(
+    player: HvBoardPlayer,
+    slots: Sequence[float] = OBSERVED_SLOT_MULTIPLIERS,
+) -> float:
+    """Real Sports Value column for one board row.
+
+    Prefer a stated Value (``displayed_value``, usually provider
+    ``highestScore`` or a transcribed UI number). Otherwise
+    ``realized * (slot_multiplier + card_boost)`` at ``most_common_slot``.
+    A missing or out-of-range slot uses the best slot: at T-40 the lineup
+    assigns slots, and the best slot is the one the optimizer can give.
+    """
+
+    if player.displayed_value is not None:
+        return float(player.displayed_value)
+    slot = player.most_common_slot
+    if slot is not None and 1 <= int(slot) <= len(slots):
+        multiplier = float(slots[int(slot) - 1])
+    else:
+        multiplier = float(slots[0])
+    return float(player.realized_value) * (multiplier + float(player.card_boost))
 
 
 @dataclass
@@ -165,12 +218,22 @@ def _player_from_mapping(row: Mapping[str, Any]) -> HvBoardPlayer | None:
         boost = 0.0
     drafts = _as_int(row.get("drafts") if "drafts" in row else row.get("count"))
     name = row.get("name") or row.get("display_name")
+    displayed = _as_float(row.get("displayed_value"))
+    if displayed is None:
+        displayed = _as_float(row.get("highest_score"))
+    if displayed is None:
+        displayed = _as_float(row.get("highestScore"))
+    slot = _as_int(row.get("most_common_slot"))
+    if slot is None:
+        slot = _as_int(row.get("mostCommonPosition"))
     return HvBoardPlayer(
         player_id=player_id,
         realized_value=realized,
         card_boost=float(boost),
         drafts=drafts,
         name=None if name is None else str(name),
+        most_common_slot=slot,
+        displayed_value=displayed,
     )
 
 
@@ -227,6 +290,8 @@ def boards_from_contest_root(root: Path) -> tuple[list[HvBoard], int]:
                     card_boost=float(row.card_boost),
                     drafts=row.draft_count,
                     name=row.display_name,
+                    most_common_slot=row.most_common_slot,
+                    displayed_value=None if row.highest_score is None else float(row.highest_score),
                 )
             )
         record = parsed.contest
@@ -365,7 +430,9 @@ def apply_hv_board_labels(
 
     A join is ``(player_id, game_id)`` when the board names a game, otherwise
     ``(player_id, America/New_York slate date)`` for boards that have a date
-    and no game id. Rows with no join keep their Corpus G value.
+    and no game id. Rows with no join keep their Corpus G value. Joined rows
+    also receive ``value_column`` (the Value column) for sample weights.
+    Ridge still trains on ``value``.
     """
 
     report = audit or HvLabelAudit(boards_seen=len(boards))
@@ -380,12 +447,17 @@ def apply_hv_board_labels(
             updated.append(row)
             continue
         report.hv_board_rows += 1
+        report.value_column_rows += 1
+        column = player_value_column(label)
+        # Ridge y stays realized production. value_column is excluded from the
+        # training fingerprint and is only the sample-weight rank key.
+        update: dict[str, Any] = {"value_column": column}
         if abs(float(row.value) - label.realized_value) <= 1e-6:
             report.hv_board_rows_already_matched += 1
-            updated.append(row)
-            continue
-        report.hv_board_rows_relabeled += 1
-        updated.append(row.model_copy(update={"value": label.realized_value}))
+        else:
+            report.hv_board_rows_relabeled += 1
+            update["value"] = label.realized_value
+        updated.append(row.model_copy(update=update))
     report.win_frequency_target_rows = 0
     return updated, report
 

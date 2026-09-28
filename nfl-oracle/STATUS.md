@@ -1,23 +1,54 @@
 # Status
 
-Last verified: 2026-09-28T03:05Z
+Last verified: 2026-09-28T03:20Z
 
-## HV/TDV train path and draft-image replay (#597)  -  2026-09-28T03:05Z
+## HV/TDV Value column (#597)  -  2026-09-28T03:20Z
 
-Train objective prefers a Real Sports Highest-value / Total Value board when
-one joins a Corpus G row (`nfl_oracle.recommendations.hv_boards`). The fit
-label is that board's realized value. Draft counts and winning lineups are
-not the target. With no board, the finalized box score stays. This run did
-not flip Railway knobs and did not activate a model.
+Operator screenshots (NFL multi-slate, TNF GB at ATL, WNBA) fix the objective
+on the Value column, not draft frequency. Boswell is Value 29 on 24 drafts
+because `5.8 * (2.0 + 3.0) = 29`. Gibbs is Value 18.7 on 1.7k drafts
+(`9.4 * 2.0 = 18.8`, display rounding). London is Value 33.5 and also chalk.
+A'ja Wilson is Value 19.2 (`9.6 * 2.0`) and also chalk. Sparse high value
+plus boost often wins. When chalk is also the high value, it stays.
 
-### How the three consumers use the same boards
+Ridge `y` stays realized production (the left-hand number, or the Corpus G
+box score). Training on 29 and then multiplying by `(slot + boost)` again
+would score Boswell as 145. Sample weights and HV rank use the Value column
+(`displayed_value` or `highestScore` when stated, else
+`realized * (slot + boost)`). Draft counts are stored and never a label.
+`hv_win_frequency_target_rows` stays 0.
+
+### T-40 knobs that reproduce an HV lineup
+
+Code constant `HV_T40_KNOBS` in `nfl_oracle.recommendations.hv_boards`:
+
+| Knob | HV value | Why |
+|---|---|---|
+| `NFL_OPTIMIZER_PROFILE` | `max_value` | 1 team / 1 game, so a TNF stack is legal |
+| `NFL_OPTIMIZER_UPSIDE_WEIGHT` | `0` | selection is expected total value, exact MILP |
+| `NFL_OPTIMIZER_FIELD_WEIGHT` | `0` | do not fade London or A'ja for being popular |
+| `NFL_PICKER_BOOST_RANK_BLEND` | `0` | multiplier law, not a swap of means into boost order |
+| `NFL_PICKER_POSITION_CALIBRATION` | `0` | identity until a post-retrain residual exists |
+
+Unset `max_value` (the empty-env serving default) now uses upside 0 and field
+0. `diversified` still uses 0.15 / 0.1. Explicit env wins. Bare
+`OptimizerConfig()` is unchanged. Rollback of the zeros:
+`NFL_OPTIMIZER_UPSIDE_WEIGHT=0.15` and `NFL_OPTIMIZER_FIELD_WEIGHT=0.1`.
+
+This session did not change Railway variables and did not redeploy. The
+weight-default change takes effect on the next deploy of this commit. Live
+worker and API still have `NFL_PICKER_BOOST_RANK_BLEND=0.75` and
+`NFL_PICKER_PROFILE=boost_0.75` (recorded below). That blend is not the HV
+set. It was not flipped here.
+
+### How the consumers use the boards
 
 | Consumer | What it scores |
 |---|---|
-| Ollama watcher (`scripts/ollama_hv_watcher`) | Sorts the HV/TDV board by `value` (not `drafts`) and proposes the top five distinct players as slots 1..5. It does not multiply by slot multipliers itself. |
-| Ridge (`fit_model` via `nfl-pipeline train`) | Learns the per-player realized value. HV/TDV board value replaces the box score when the board joins; otherwise the raw box score. Sample weights still upweight the top values in each game. `hv_win_frequency_target_rows` is always 0. |
-| Optimizer | Objective stays `total_value`: expected lineup score under slot multipliers and card boosts. It consumes ridge projections. It does not fit on win frequency. |
-| `nfl-hv-board-replay` | Scores the Ollama-style HV-rank five, the draft-count chalk five, and the hindsight ceiling with `realized_value * (slot_multiplier + card_boost)`. Slots `(2.0, 1.8, 1.6, 1.4, 1.2)`. |
+| Ollama watcher (`scripts/ollama_hv_watcher`) | Ranks by `displayed_value` or `highestScore` when the board states the Value column, else by `value`. Never by `drafts`. Does not apply slot multipliers itself. |
+| Ridge (`fit_model` via `nfl-pipeline train`) | Learns realized production. A joined board replaces the box score with that realized number and attaches `value_column` for weights only. `value_column` is excluded from the training fingerprint. |
+| Optimizer | Objective stays `total_value`: `projection * (slot + boost)`. With the HV knobs the freeze is that expected total. |
+| `nfl-hv-board-replay` | HV-rank five (Value column), chalk five (draft count), hindsight ceiling. Slots `(2.0, 1.8, 1.6, 1.4, 1.2)`. Chosen HV players are placed by descending realized value. |
 
 ### Commands
 
@@ -49,49 +80,53 @@ make -C nfl-oracle hv-board-replay \
 
 ### This cloud VM run (not the worker volume)
 
-Corpora on the VM: Corpus G absent, Corpus C absent, HV export absent.
-`nfl-pipeline train --dry-run` was not executed (no Corpus G rows to fit).
-No Railway mutation.
+`nfl-oracle/data` is 380K and `wnba-oracle/data` is 20K. No `corpus_g`,
+`corpus_c`, or `hv_boards` tree is in the checkout. `nfl-pipeline train`
+and `train --dry-run` were not executed: there are no Corpus G rows to fit.
+No Railway mutation. Schema samples (`scripts/ollama_hv_watcher/fixtures`,
+`scripts/realsports_corpus/fixtures`, oracle-core `daily_draft_stats_sections`)
+are one-player or invented-name fixtures and were not scored as Real Sports
+boards.
 
-Fixture replay of `nfl-oracle/tests/fixtures/corpus_c_hv` (seed not used):
+Every HV board that is actually in the repo was replayed.
+
+Checked-in contest fixture `tests/fixtures/corpus_c_hv` (contest 9001; 9002
+has no HV section). Value-column rank now matches hindsight and beats chalk:
 
 | Metric | Value |
 |---|---|
 | Contests seen | 2 |
-| HV boards scored | 1 (contest 9001, 6 players) |
-| Excluded | `missing_hv_section=1` (contest 9002) |
-| Slot multipliers | 2.0, 1.8, 1.6, 1.4, 1.2 |
-| HV-rank total | 53.4 |
+| HV boards scored | 1 |
+| Excluded | `missing_hv_section=1` |
+| HV-rank total | 57.7 |
 | Hindsight total | 57.7 |
-| HV-rank capture | 0.925477 |
-| Chalk total / capture | 53.4 / 0.925477 (tie: this fixture's draft counts rank the same five) |
-| HV beats chalk | no (tie) |
+| HV-rank capture | 1.0 |
+| Chalk total | 53.4 |
+| HV beats chalk | yes |
 
-Contest 9001 HV-rank cards (realized value, slot, boost, card score):
+Transcribed operator screenshots in `tests/fixtures/hv_screenshots`
+(`player_id` values are transcription keys, not provider ids). WNBA is the
+same law, not an NFL contest:
 
-| Slot | Player | Realized | Slot multiplier | Card boost | Card score |
-|---|---:|---:|---:|---:|---:|
-| 1 | 401 | 5.0 | 2.0 | 0.0 | 10.0 |
-| 2 | 402 | 4.6 | 1.8 | 0.5 | 10.58 |
-| 3 | 403 | 4.2 | 1.6 | 1.0 | 10.92 |
-| 4 | 404 | 3.8 | 1.4 | 1.5 | 11.02 |
-| 5 | 405 | 3.4 | 1.2 | 2.0 | 10.88 |
+| Board | HV total | Chalk total | Hindsight | HV capture | HV beats chalk |
+|---|---:|---:|---:|---:|---|
+| NFL Boswell slate | 121.6 | 105.06 | 121.6 | 1.0 | yes (Gibbs in chalk, not in the HV five) |
+| TNF GB at ATL | 93.14 | 70.84 | 93.14 | 1.0 | yes (London and Bijan in both) |
+| NFL Aubrey slate | 114.68 | 104.43 | 114.98 | 0.997391 | yes (Aubrey in the HV five; Chase in chalk only) |
+| WNBA A'ja | 71.38 | 54.04 | 71.38 | 1.0 | yes (A'ja in both, slot 1) |
 
-Synthetic harness depth (not Real Sports rows; `--synthetic 2000 --seed 597`),
-built so high draft counts are low realized value:
+Boswell slate HV five, placed by descending realized value: Will Anderson Jr.
+25.84, Chris Boswell 27.84 (slot 2; his UI Value 29 is the slot-1 card),
+Sam Darnold 24.84, Genesis Smith 23.76, Harold Fannin Jr. 19.32. Chalk slot 1
+is Jahmyr Gibbs at 18.8.
 
-| Metric | Value |
-|---|---|
-| Boards scored | 2000 |
-| HV beats chalk | 2000 |
-| Chalk beats HV | 0 |
-| Mean HV-rank capture | 0.998092 |
-| Mean chalk capture | 0.363387 |
-| Mean HV-rank total | 64.1675 |
-| Mean hindsight total | 64.288813 |
+A perfect-foresight optimizer call with `HV_T40_KNOBS` on those six means and
+boosts (one game, one team) keeps Boswell and drops Gibbs.
 
-Checks on this VM: `pytest nfl-oracle/tests` 563 passed, 1 docker test
-deselected. `mypy` on the touched modules passed.
+Checks on this VM after the Value-column change: `pytest nfl-oracle/tests`
+568 passed, 1 docker test deselected. `mypy` on the touched modules passed.
+Ollama watcher tests in `scripts/tests/test_ollama_hv_watcher.py` passed in
+the same focused run (Boswell's stated Value 29 ranks ahead of Gibbs).
 
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 

@@ -1,9 +1,11 @@
 """Env-driven optimizer construction config (max-value / race mode) for #453.
 
 Serving defaults via ``optimizer_config_from_env`` are win-draft ``max_value``
-(#505 / #552). Bare ``OptimizerConfig()`` stays diversified for call sites that
-construct configs in-process. The ``max_value`` profile drops the diversity
-floor to 1/1; upside/field weight knobs tune the contest-utility re-rank.
+(#505 / #552, HV Value-column selection #597). Bare ``OptimizerConfig()`` stays
+diversified for call sites that construct configs in-process. The ``max_value``
+profile drops the diversity floor to 1/1 and, unless the weight env vars are
+set, uses upside 0 and field 0 so the freeze is expected total value.
+``diversified`` keeps the bare weight defaults (0.15 / 0.1).
 """
 
 from __future__ import annotations
@@ -24,8 +26,11 @@ def test_empty_env_reproduces_production_defaults() -> None:
     assert cfg.profile == "max_value"
     assert cfg.min_distinct_teams == 1
     assert cfg.min_distinct_games == 1
-    assert cfg.upside_weight == default.upside_weight
-    assert cfg.field_weight == default.field_weight
+    # #597: unset max_value weights are expected total value, not field-fade.
+    assert cfg.upside_weight == 0.0
+    assert cfg.field_weight == 0.0
+    assert default.upside_weight == 0.15
+    assert default.field_weight == 0.1
     assert cfg.objective == "total_value"
 
 
@@ -35,6 +40,16 @@ def test_max_value_profile_drops_diversity_floor_to_one() -> None:
     assert cfg.min_distinct_teams == 1
     assert cfg.min_distinct_games == 1
     assert OPTIMIZER_PROFILE_PRESETS["max_value"] == (1, 1)
+
+
+def test_diversified_profile_keeps_bare_utility_weights() -> None:
+    cfg = optimizer_config_from_env({"NFL_OPTIMIZER_PROFILE": "diversified"})
+    default = OptimizerConfig()
+    assert cfg.profile == "diversified"
+    assert cfg.upside_weight == default.upside_weight
+    assert cfg.field_weight == default.field_weight
+    assert cfg.min_distinct_teams == 3
+    assert cfg.min_distinct_games == 2
 
 
 def test_explicit_diversity_overrides_win_over_profile_preset() -> None:

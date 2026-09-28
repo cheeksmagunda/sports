@@ -80,9 +80,11 @@ here. NFL does not import WNBA code.
 
 `nfl-pipeline train` prefers a Real Sports Highest-value / Total Value board
 (`highestBoostedValuePlayers`) when that board joins a Corpus G row, and
-otherwise keeps the finalized box score. Draft counts and winning lineups are
-not fit targets. Commands for a full retrain and for `nfl-hv-board-replay`
-live in `README.md`. The latest offline metrics live in `STATUS.md`.
+otherwise keeps the finalized box score. Ridge learns realized production.
+Sample weights and the T-40 lineup rank the Value column
+(`realized * (slot + boost)`), not draft counts. Commands, `HV_T40_KNOBS`,
+and `nfl-hv-board-replay` live in `README.md`. The latest offline metrics
+live in `STATUS.md`.
 
 ## Scaffold modules (observation only)
 

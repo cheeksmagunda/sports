@@ -67,6 +67,12 @@ def test_overlay_prefers_hv_section_and_ignores_most_drafted() -> None:
     labeled = next(player for player in boards[0].players if player.player_id == 401)
     assert labeled.drafts == 20
     assert labeled.realized_value == 5.0
+    joined = next(row for row in updated if row.player_id == 401)
+    # Slot 1, boost 0: Value column is 5.0 * 2.0. Ridge y stays 5.0.
+    assert joined.value == 5.0
+    assert joined.value_column == 10.0
+    assert "value_column" not in joined.model_dump()
+    assert audit.value_column_rows == 1
 
 
 def test_reconstructed_export_is_not_an_hv_board() -> None:
@@ -119,7 +125,10 @@ def test_hindsight_keeps_high_boost_over_a_slightly_higher_raw_value() -> None:
     board = HvBoard(players=players, source="corpus_c.highestBoostedValuePlayers", contest_id=1)
     scored = replay_board(board, slots=SLOTS)
     assert scored is not None
-    assert scored.hv_rank_total == 34.0
+    # Value-column rank keeps the +3.0 card (player 15) that raw realized drops.
+    assert scored.hv_rank_total == 39.58
+    assert 15 in scored.hv_rank_player_ids
+    assert 14 not in scored.hv_rank_player_ids
     assert scored.hindsight_total == 39.58
     assert scored.hv_rank_capture is not None
     assert scored.chalk_capture is not None
@@ -135,7 +144,9 @@ def test_fixture_replay_scores_hv_board_and_skips_missing_section() -> None:
     assert summary.excluded.get("missing_hv_section") == 1
     assert results[0].contest_id == 9001
     assert results[0].slot_multipliers == SLOTS
-    assert results[0].hv_beats_chalk is None
+    assert results[0].hv_beats_chalk is True
+    assert 406 in results[0].hv_rank_player_ids
+    assert 401 not in results[0].hv_rank_player_ids
     assert results[0].hv_rank_capture is not None
     assert 0 < results[0].hv_rank_capture <= 1.0
     for card in results[0].hv_cards:
@@ -188,3 +199,199 @@ def test_train_parser_accepts_dry_run() -> None:
     args = _parser().parse_args(["train", "--dry-run"])
     assert args.dry_run is True
     assert args.force is False
+
+
+SCREENSHOTS = Path(__file__).resolve().parents[1] / "fixtures" / "hv_screenshots"
+
+
+def test_boswell_value_column_beats_gibbs_formula() -> None:
+    from nfl_oracle.recommendations.hv_boards import player_value_column
+
+    boswell = HvBoardPlayer(
+        player_id=91001,
+        name="Chris Boswell",
+        realized_value=5.8,
+        card_boost=3.0,
+        drafts=24,
+        most_common_slot=1,
+        displayed_value=29.0,
+    )
+    gibbs_formula = HvBoardPlayer(
+        player_id=91012,
+        name="Jahmyr Gibbs",
+        realized_value=9.4,
+        card_boost=0.0,
+        drafts=1700,
+        most_common_slot=1,
+    )
+    assert player_value_column(boswell) == 29.0
+    assert (
+        player_value_column(
+            HvBoardPlayer(player_id=91001, realized_value=5.8, card_boost=3.0, most_common_slot=1)
+        )
+        == 29.0
+    )
+    assert abs(player_value_column(gibbs_formula) - 18.8) < 1e-9
+    aja = HvBoardPlayer(player_id=94001, realized_value=9.6, card_boost=0.0, most_common_slot=1)
+    assert player_value_column(aja) == 19.2
+
+
+def test_sample_weights_follow_value_column_not_realized() -> None:
+    from nfl_oracle.recommendations.high_tv import sample_weights_for_history
+
+    kickoff = datetime(2025, 9, 28, 17, tzinfo=UTC)
+    # Boswell column 29, five cards at column 20, Gibbs column 18.8 with the
+    # highest realized number. Top-5 by the column excludes Gibbs.
+    specs = [(1, 5.8, 29.0), (7, 9.4, 18.8)]
+    specs[1:1] = [(pid, 4.0, 20.0) for pid in range(2, 7)]
+    rows = [
+        _row(player_id=pid, game_id=77, value=realized, kickoff=kickoff).model_copy(
+            update={"value_column": column}
+        )
+        for pid, realized, column in specs
+    ]
+    weights = {
+        row.player_id: weight
+        for row, weight in zip(rows, sample_weights_for_history(rows), strict=True)
+    }
+    assert weights[1] == 4.0
+    assert weights[5] == 4.0
+    assert weights[7] == 1.0
+    raw_rows = [row.model_copy(update={"value_column": None}) for row in rows]
+    raw = {
+        row.player_id: weight
+        for row, weight in zip(raw_rows, sample_weights_for_history(raw_rows), strict=True)
+    }
+    assert raw[7] == 4.0
+    assert raw[5] == 1.0
+
+
+def test_screenshot_boards_prefer_value_column_and_keep_correct_chalk() -> None:
+    results, summary = replay_roots(
+        contest_root=Path("/tmp/nfl-hv-screenshots-no-corpus"),
+        export_root=SCREENSHOTS,
+    )
+    assert summary.n_scored == 4
+    by_key = {row.path.rsplit("/", 2)[-2]: row for row in results}
+    boswell = by_key["nfl_boswell"]
+    assert 91001 in boswell.hv_rank_player_ids
+    assert 91012 not in boswell.hv_rank_player_ids
+    assert 91012 in boswell.chalk_player_ids
+    assert boswell.hv_beats_chalk is True
+    london = by_key["nfl_tnf_gb_atl"]
+    assert 92001 in london.hv_rank_player_ids
+    assert 92001 in london.chalk_player_ids
+    assert london.hv_beats_chalk is True
+    aubrey = by_key["nfl_aubrey"]
+    assert 93001 in aubrey.hv_rank_player_ids
+    assert 93008 not in aubrey.hv_rank_player_ids
+    assert 93008 in aubrey.chalk_player_ids
+    aja = by_key["wnba_aja"]
+    assert aja.hv_rank_player_ids[0] == 94001
+    assert 94001 in aja.chalk_player_ids
+    assert aja.hv_beats_chalk is True
+
+
+def test_hv_t40_knobs_drop_gibbs_and_keep_expected_value() -> None:
+    from nfl_oracle.recommendations.hv_boards import HV_T40_KNOBS
+    from nfl_oracle.recommendations.model import Projection
+    from nfl_oracle.recommendations.optimizer import (
+        ScoringPolicy,
+        optimize,
+        optimizer_config_from_env,
+    )
+    from nfl_oracle.recommendations.picker_knobs import picker_knobs_from_env
+    from nfl_oracle.recommendations.schema import Candidate, Contest, EvidenceClock, Game, Slate
+
+    cfg = optimizer_config_from_env(HV_T40_KNOBS)
+    assert cfg.profile == "max_value"
+    assert cfg.min_distinct_teams == 1
+    assert cfg.min_distinct_games == 1
+    assert cfg.upside_weight == 0.0
+    assert cfg.field_weight == 0.0
+    picker = picker_knobs_from_env(HV_T40_KNOBS)
+    assert picker.boost_rank_blend == 0.0
+    assert picker.position_calibration == 0.0
+    assert picker.profile == "identity"
+    empty = optimizer_config_from_env({})
+    assert empty.upside_weight == 0.0
+    assert empty.field_weight == 0.0
+
+    decision = datetime(2026, 9, 28, 18, tzinfo=UTC)
+    clock = EvidenceClock(source_available_at=decision, captured_at=decision)
+    cards = (
+        (101, "Chris Boswell", 5.8, 3.0),
+        (102, "Sam Darnold", 5.4, 3.0),
+        (103, "Will Anderson Jr.", 7.6, 1.4),
+        (104, "Harold Fannin Jr.", 4.6, 3.0),
+        (105, "Genesis Smith", 5.4, 3.0),
+        (106, "Jahmyr Gibbs", 9.4, 0.0),
+    )
+    candidates = tuple(
+        Candidate(
+            player_id=pid,
+            game_id=501,
+            team_id=10,
+            name=name,
+            position="K" if pid in {101, 104} else "WR",
+            team="PIT",
+            opponent="NYJ",
+            injury_status="Active",
+            card_boost=boost,
+            clock=clock,
+        )
+        for pid, name, _mean, boost in cards
+    )
+    target = Slate(
+        contest=Contest(
+            contest_id=597,
+            day=decision.date(),
+            end_day=decision.date(),
+            slot_multipliers=SLOTS,
+            is_locked=False,
+            is_finalized=False,
+            clock=clock,
+            evidence_sha256="c" * 64,
+        ),
+        games=(
+            Game(
+                game_id=501,
+                season=2026,
+                kickoff_at=decision + timedelta(hours=4),
+                home_team_id=10,
+                away_team_id=11,
+                home_team="PIT",
+                away_team="NYJ",
+                status="scheduled",
+            ),
+        ),
+        candidates=candidates,
+        captured_at=decision,
+        source_hashes=("d" * 64,),
+        pool_roster_count=len(candidates),
+        pool_search_matched_count=len(candidates),
+    )
+    projections = tuple(
+        Projection(
+            player_id=pid,
+            mean=mean,
+            conditional_mean=mean,
+            stddev=0.1,
+            availability_probability=1,
+            prior_games=4,
+            samples=(mean, mean),
+            provenance=("screenshot_realized",),
+        )
+        for pid, _name, mean, _boost in cards
+    )
+    recommendation = optimize(
+        target,
+        projections,
+        decision_at=decision,
+        scoring_policy=ScoringPolicy(),
+        config=cfg,
+    )
+    picked = {pick.player_id for pick in recommendation.picks}
+    assert 101 in picked
+    assert 106 not in picked
+    assert recommendation.construction_profile == "max_value"
