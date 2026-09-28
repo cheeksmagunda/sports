@@ -13,7 +13,7 @@ from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.baselines.ridge import RidgeRegressor
 from nfl_oracle.features.live import REQUIRED_LIVE_OK_CONTEXT_FEATURES
-from nfl_oracle.recommendations.high_tv import sample_weights_for_train_target
+from nfl_oracle.recommendations.display_rank_weights import sample_weights_contest_display
 from nfl_oracle.recommendations.schema import (
     EvidenceClock,
     Finite,
@@ -453,6 +453,7 @@ def fit_model(
     *,
     trained_at: datetime,
     fit_config: FitConfig | None = None,
+    contest_boosts: Mapping[tuple[int, int], float] | None = None,
 ) -> RatingModel:
     now = utc(trained_at)
     cfg = fit_config or FitConfig()
@@ -478,7 +479,7 @@ def fit_model(
     train = [r for r in ordered if r.available_at < split]
     holdout = [r for r in ordered if r.kickoff_at >= split]
     names = _context_feature_names(train)
-    train_weight_list = sample_weights_for_train_target(train)
+    train_weight_list = sample_weights_contest_display(train, boosts=contest_boosts)
     train_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(train, train_weight_list, strict=True)
@@ -556,7 +557,7 @@ def fit_model(
     # position_mean / global_mean also zero context coefficients; only ridge
     # preserves pace/defense/matchup/depth for v2 TNF.
     selected_estimator: EstimatorName = "ridge" if names else holdout_winner
-    ordered_weight_list = sample_weights_for_train_target(ordered)
+    ordered_weight_list = sample_weights_contest_display(ordered, boosts=contest_boosts)
     ordered_weights = {
         (row.player_id, row.game_id): weight
         for row, weight in zip(ordered, ordered_weight_list, strict=True)

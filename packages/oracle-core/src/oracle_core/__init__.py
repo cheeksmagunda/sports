@@ -22,6 +22,14 @@ from oracle_core.config import (
     get_runtime_config,
     validate_required_env,
 )
+from oracle_core.contest_max import (
+    DEFAULT_SLOT_MULTIPLIERS,
+    ContestPlayer,
+    compare_board,
+    contest_display_rank_weights,
+    display_contest_value,
+    summarize_boards,
+)
 from oracle_core.corpus_matchup import (
     MATCHUP_SCHEMA_VERSION,
     AppendResult,
@@ -264,6 +272,12 @@ __all__ = [
     "build_high_tv_board",
     "game_is_fit_eligible",
     "select_label_kind",
+    "DEFAULT_SLOT_MULTIPLIERS",
+    "ContestPlayer",
+    "compare_board",
+    "contest_display_rank_weights",
+    "display_contest_value",
+    "summarize_boards",
     "game_value_rank_weights",
     "player_weights_from_values",
     "rank_player_ids_by_value",

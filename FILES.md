@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1143 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -90,6 +90,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - drive/2026-09-14-nfl-v2-overnight-handoff.md -- NFL Oracle v2: overnight build handoff (for ChatGPT)
 - drive/2026-09-14-week-close-task-and-w2-boosts-handoff.md -- NFL week-close task design + week-2 boost handling
 - drive/2026-09-14-week1-operator-retro.md -- Week 1 retro: operator observations
+- drive/2026-09-28-contest-max-history-map.md -- Historical contest maximization map
 - drive/NFL-ORACLE Data Science Resources, Strategy, Research, and more.txt
 - drive/README.md -- Document Drive
 - drive/Sports Flows.pdf
@@ -326,13 +327,18 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/__init__.py -- NFL recommendation generation and serving, without contest submission.
 - nfl-oracle/src/nfl_oracle/recommendations/app.py -- Read-only recommendation API. Provider credentials are never loaded here.
 - nfl-oracle/src/nfl_oracle/recommendations/cli.py -- Production roles for the NFL recommendation service.
+- nfl-oracle/src/nfl_oracle/recommendations/cli.py -- Production roles for the NFL recommendation service.
+- nfl-oracle/src/nfl_oracle/recommendations/cli.py -- Production roles for the NFL recommendation service.
 - nfl-oracle/src/nfl_oracle/recommendations/context.py -- Time-filtered NFL role, matchup and environment features.
 - nfl-oracle/src/nfl_oracle/recommendations/dayclose.py -- Day-close grading: score a frozen NFL lineup against finalized real-world
 - nfl-oracle/src/nfl_oracle/recommendations/dayclose_persist.py -- Persist day-close Corpus C field results as race-ready parquet.
+- nfl-oracle/src/nfl_oracle/recommendations/display_rank_weights.py -- Contest-display sample weights for the HV/TDV train path.
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
 - nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Keep only HV/TDV leaderboard rows as the NFL train target.
+- nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
+- nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/ollama_tick_tilt.py -- Env-gated Ollama tick tilt for NFL picker projections (#574).
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
@@ -348,6 +354,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 ## nfl-oracle/src/nfl_oracle/replay/
 - nfl-oracle/src/nfl_oracle/replay/__init__.py -- Replay the saved Corpus C contest archive against the verified scoring law.
 - nfl-oracle/src/nfl_oracle/replay/backtest.py -- Historical zero-boost projection backtests over Corpus G player games.
+- nfl-oracle/src/nfl_oracle/replay/contest_max_map_cli.py -- Offline map: HV display five vs raw five vs chalk vs the hindsight ceiling.
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay.py -- Replay the production pipeline on the pool each Corpus C contest showed (#280).
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay_cli.py -- CLI: production pipeline replayed on each Corpus C contest's visible pool (#280).
 - nfl-oracle/src/nfl_oracle/replay/harness.py -- Replay the saved Corpus C archive against the verified scoring law.
@@ -476,6 +483,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_contest_algebra_and_gates.py -- Contest scoring algebra + entry gates (observation only).
 - nfl-oracle/tests/unit/test_contest_corpus.py -- Corpus C: scoring-law verification, boost recovery, and censoring honesty.
 - nfl-oracle/tests/unit/test_contest_dry_run.py -- Offline contest dry-run: five-card shadow slate + hard-deny submit.
+- nfl-oracle/tests/unit/test_contest_max_map.py -- Contest-display weights and the offline HV/chalk/ceiling map.
 - nfl-oracle/tests/unit/test_corpus_backup.py
 - nfl-oracle/tests/unit/test_corpus_c_hv_export.py -- Corpus C offline Total Value / HV board export (issue #526).
 - nfl-oracle/tests/unit/test_corpus_g.py -- Tests for Corpus G summarize + persist boundary.
@@ -726,6 +734,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/src/oracle_core/browser.py -- Guaranteed-cleanup Playwright browser sessions.
 - packages/oracle-core/src/oracle_core/cache.py -- JSON TTL caching over a technical key-value capability.
 - packages/oracle-core/src/oracle_core/config.py -- Runtime settings shared by applications without loading an env file.
+- packages/oracle-core/src/oracle_core/contest_max.py -- Five-card contest maximization over a visible HV/TDV board.
 - packages/oracle-core/src/oracle_core/corpus_matchup.py -- Provider-neutral durable game-stats + matchup corpus layout.
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
@@ -755,6 +764,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/tests/test_artifacts.py
 - packages/oracle-core/tests/test_browser.py
 - packages/oracle-core/tests/test_config.py
+- packages/oracle-core/tests/test_contest_max.py -- HV display rank vs raw value vs chalk vs the hindsight ceiling.
 - packages/oracle-core/tests/test_corpus_matchup.py -- Tests for durable game-stats matchup corpus append helpers.
 - packages/oracle-core/tests/test_dayclose.py
 - packages/oracle-core/tests/test_dossier.py
