@@ -10,7 +10,11 @@ from nhl_oracle.contest.algebra import (
     item_score,
     score_ordered_lineup,
 )
-from nhl_oracle.contest.pick import FivePlayerPick, select_five_player_pick
+from nhl_oracle.contest.pick import (
+    FivePlayerPick,
+    select_five_player_pick,
+    select_no_boost_five_from_full_pool,
+)
 
 __all__ = [
     "DEFAULT_SLOT_MULTIPLIERS",
@@ -23,4 +27,5 @@ __all__ = [
     "item_score",
     "score_ordered_lineup",
     "select_five_player_pick",
+    "select_no_boost_five_from_full_pool",
 ]

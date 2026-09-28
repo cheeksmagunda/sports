@@ -436,6 +436,51 @@ scripts/codespace-railway-env -- railway ssh --service nfl-oracle-worker -- \
   bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
 ```
 
+`train --force` is the max-depth fit for the HV + TDV leaderboards
+(issue #597, operator lock from audit #599): Real Sports Highest value /
+Total Value Daily Leaderboard, section `highestBoostedValuePlayers`. It
+loads finalized games under `NFL_HISTORY_ROOT` (default
+`/app/nfl-oracle/data/raw/corpus_g` on the worker; no year cap) and calls
+the #185 ladder (`high_tv_board_from_draft_stats`, `select_label_kind`,
+`build_high_potential_labels`). A row stays in the design matrix only when
+`(player_id, game_id)` is on that section and the board source is
+`nfl_highestBoostedValuePlayers`. The label is that board's `value`. The
+top five on the board take the high sample weight. Draft counts,
+popularity sections, winning drafts, and reconstructed boards are excluded.
+Corpus G box `value` is not y. Fewer than 30 leaderboard rows fails with
+`hv_tdv_training_rows_insufficient`. The JSON report includes
+`training_target`, `archive_depth`, and `hv_overlay` (`boards`,
+`rows_overlaid`, `rows_excluded`, `rows_raw` is 0, `conflicts`,
+`fit_seasons`, `operator_lock`).
+
+Label roots (missing directories add no boards, so those games stay out of the fit):
+
+| Env | Default under the project root |
+|---|---|
+| `NFL_HISTORY_ROOT` | `data/raw/corpus_g` |
+| `NFL_CORPUS_C_ROOT` | `data/raw/corpus_c` |
+| `NFL_HV_EXPORT_ROOT` | `data/export/hv_boards` |
+| `NFL_HV_CORPUS_ROOT` | `data/raw/realsports_corpus` |
+
+`railway ssh` runs the **deployed image**. The overlay is absent until this
+commit is the worker's SUCCESS deployment. Exact project-scoped commands are
+in the PR for #597.
+
+Read-only board score (same image), HV-rank five vs draft-count chalk five
+vs the hindsight ceiling, `value * (slot_multiplier + card_boost)`:
+
+```bash
+railway ssh --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-hv-board-replay --contest-root /app/nfl-oracle/data/raw/corpus_c'
+```
+
+Offline fixture proof (no database, no volume):
+
+```sh
+uv run --package nfl-oracle nfl-hv-board-replay \
+  --contest-root nfl-oracle/tests/fixtures/corpus_c_hv
+```
+
 Do not train on a bare Codespace checkout, and do not use Mac
 `SPORTS_ALLOW_LOCAL_RAILWAY` for this. Respect the T-40 / slate-lock window
 documented in `STATUS.md` before forcing a rebuild on a live slate.

@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -17,6 +17,8 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - CLAUDE.md -- Sports Oracle Portfolio Instructions
 - CONTRIBUTING.md -- Contributing to Sports Oracle
 - ENTRY_POINTS.md -- Entry Points Reference
+- FILES.md -- File manifest (generated, do not hand-edit)
+- FILES.md -- File manifest (generated, do not hand-edit)
 - FILES.md -- File manifest (generated, do not hand-edit)
 - Makefile -- Build/test/lint entrypoints
 - OVERVIEW.md -- Sports Oracle: Portfolio Overview
@@ -64,6 +66,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - .github/workflows/nfl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
 - .github/workflows/nhl-history-nightly.yml -- GitHub Actions workflow
+- .github/workflows/nhl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/realsports-corpus-append.yml -- GitHub Actions workflow
 - .github/workflows/secret-audit.yml -- GitHub Actions workflow
 - .github/workflows/watchdog-monitor.yml -- GitHub Actions workflow
@@ -329,6 +332,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/grading.py -- Immutable post-slate grading for frozen NFL recommendations.
 - nfl-oracle/src/nfl_oracle/recommendations/high_tv.py -- NFL wiring for shared high-potential training (issue #185).
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
+- nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Keep only HV/TDV leaderboard rows as the NFL train target.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
 - nfl-oracle/src/nfl_oracle/recommendations/ollama_tick_tilt.py -- Env-gated Ollama tick tilt for NFL picker projections (#574).
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
@@ -347,6 +351,8 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay.py -- Replay the production pipeline on the pool each Corpus C contest showed (#280).
 - nfl-oracle/src/nfl_oracle/replay/contest_pool_replay_cli.py -- CLI: production pipeline replayed on each Corpus C contest's visible pool (#280).
 - nfl-oracle/src/nfl_oracle/replay/harness.py -- Replay the saved Corpus C archive against the verified scoring law.
+- nfl-oracle/src/nfl_oracle/replay/hv_board_replay.py -- Score HV boards: HV-rank five vs draft-count chalk vs hindsight ceiling.
+- nfl-oracle/src/nfl_oracle/replay/hv_board_replay_cli.py -- CLI: score saved HV boards (HV five vs chalk five vs hindsight).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest.py -- Walk-forward backtest of the actual production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest_cli.py -- CLI: walk-forward backtest of the production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/racer.py -- NFL evaluate hook for the portfolio race engine (#339).
@@ -484,6 +490,8 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_feature_value_model.py -- Leakage-safe feature_ridge value model + strategy wiring.
 - nfl-oracle/tests/unit/test_feature_wiring_189.py -- Evidence-backed FeatureSpec wiring landed for issue #189.
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
+- nfl-oracle/tests/unit/test_hv_board_replay.py -- HV-rank five, draft-count chalk, and hindsight ceiling use the draft-image law.
+- nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV leaderboard rows are the only train labels. Box rows are excluded.
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
 - nfl-oracle/tests/unit/test_identity_from_corpus.py -- Identity hydration from Corpus G players fixtures.
@@ -544,6 +552,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_weekclose.py
 - nfl-oracle/tests/unit/test_weekclose_gate.py
 - nfl-oracle/tests/unit/test_worker_context_bootstrap.py -- Worker context cold-start for Week-2 / TNF freezes (no baked-in artifacts).
+- nfl-oracle/tests/unit/test_worker_failure_day.py -- Worker failure rows use the Eastern slate date (#599).
 - nfl-oracle/tests/unit/test_worker_retry.py
 - nfl-oracle/tests/unit/test_worker_terminal_state.py -- A published slate is terminal: freeze once, then stop.
 
@@ -610,6 +619,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/scripts/append_game_stats_matchup.py -- Append NHL public boxscore games into the durable matchup corpus.
 - nhl-oracle/scripts/export_hv_board.py -- NHL HV board export stub (issue #526).
 - nhl-oracle/scripts/live_contract_audit.py -- CLI wrapper for nhl_oracle.ingest.audit (read-only).
+- nhl-oracle/scripts/nhl_t40_watchdog.py -- Scheduled NHL T-40 freeze watchdog.
 
 ## nhl-oracle/src/nhl_oracle/
 - nhl-oracle/src/nhl_oracle/__init__.py -- NHL Oracle application package.
@@ -670,7 +680,9 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 ## nhl-oracle/src/nhl_oracle/scheduler/
 - nhl-oracle/src/nhl_oracle/scheduler/__init__.py -- NHL freeze-cycle job skeleton (no live provider, no contest entry).
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
+- nhl-oracle/src/nhl_oracle/scheduler/readiness.py -- T-40 win-freeze readiness for a live NHL slate (observation only).
 - nhl-oracle/src/nhl_oracle/scheduler/t40.py -- T-40 freeze publication policy coherent with NHL contest algebra (#535).
+- nhl-oracle/src/nhl_oracle/scheduler/watchdog.py -- Public-schedule T-40 watchdog for the NHL daily five (observation only).
 
 ## nhl-oracle/src/nhl_oracle/service/
 - nhl-oracle/src/nhl_oracle/service/__init__.py -- Minimal NHL staging HTTP service and pipeline CLI.
@@ -696,6 +708,8 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/tests/test_realsports_auth_bootstrap.py
 - nhl-oracle/tests/test_redact.py
 - nhl-oracle/tests/test_service_scaffold.py -- Staging HTTP service and Docker/Railway scaffold contracts.
+- nhl-oracle/tests/test_t40_watchdog.py -- Public T-40 runner: zero boost, full roster, no invented five.
+- nhl-oracle/tests/test_win_freeze_readiness.py -- T-40 win freeze: complete pool, zero boost until every team has played.
 
 ## nhl-oracle/tests/fixtures/realsports/
 - nhl-oracle/tests/fixtures/realsports/contest_draftinfo.json -- (test fixture data)
@@ -869,6 +883,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).
 - scripts/tests/test_realsports_corpus_layout.py -- Real Sports corpus layout and durable-store export stubs (#526).
 - scripts/tests/test_realsports_corpus_manifest.py -- Offline unit checks for Real Sports corpus staging and coverage (#526).
+- scripts/tests/test_t40_watchdog_schedule.py -- NFL T-40 watchdog crons cover EDT Saturday and name the WNBA mono API (#599).
 
 ## wnba-oracle/
 - wnba-oracle/.agent.md -- WNBA Oracle Instructions

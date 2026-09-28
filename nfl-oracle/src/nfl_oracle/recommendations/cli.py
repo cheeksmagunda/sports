@@ -36,6 +36,7 @@ from nfl_oracle.common.logging import get_logger
 from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
+from nfl_oracle.recommendations.hv_labels import apply_hv_tdv_labels
 from nfl_oracle.recommendations.optimizer import optimizer_config_from_env
 from nfl_oracle.recommendations.picker_knobs import picker_knobs_from_env
 from nfl_oracle.recommendations.pipeline import (
@@ -198,8 +199,10 @@ def _load_context(project: Path, slate: Any, now: datetime) -> ContextSnapshot:
 def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> ModelBundle:
     root = Path(os.environ.get("NFL_HISTORY_ROOT", str(project / "data" / "raw" / "corpus_g")))
     rows, excluded = load_history(root)
-    if len(rows) < 30:
-        raise RuntimeError("historical_training_rows_insufficient")
+    # Operator lock (#599): y is the #185 HV/TDV rung only. Box rows are dropped.
+    rows, hv_audit = apply_hv_tdv_labels(project, rows)
+    if len(rows) < 30 or any(row.label_kind != "hv_tdv_leaderboard" for row in rows):
+        raise RuntimeError("hv_tdv_training_rows_insufficient")
     metadata = load_history_metadata(root, rows)
     enrichment = enrich_historical_rows(rows, snapshot, metadata=metadata)
     from nfl_oracle.recommendations.model import (
@@ -218,20 +221,33 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
     # model records will not match the history this bundle persists.
     enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
     model = fit_model(enriched, trained_at=now)
+    audit: dict[str, Any] = {
+        "history_root": str(root),
+        "history_rows": len(rows),
+        "history_excluded": excluded,
+        "hv_overlay": hv_audit.to_dict(),
+        "training_target": hv_audit.training_target,
+        "context_rows": len(enrichment.rows),
+        "context_excluded": enrichment.excluded,
+        "context_evidence_mode": enrichment.evidence_mode,
+        "contest_entry": False,
+        **identity_audit,
+    }
+    try:
+        from nfl_oracle.recommendations.high_tv import report_nfl_archive_season_depth
+
+        audit["archive_depth"] = report_nfl_archive_season_depth(
+            project_root=project,
+            fit_rows=rows,
+            corpus_g_root=root,
+        ).to_dict()
+    except (OSError, ValueError, KeyError, TypeError):
+        audit["archive_depth"] = {"status": "unverified"}
     return ModelBundle(
         model=model,
         history=tuple(enriched),
         source_hashes=tuple(source.sha256 for source in snapshot.sources.values()),
-        audit={
-            "history_root": str(root),
-            "history_rows": len(rows),
-            "history_excluded": excluded,
-            "context_rows": len(enrichment.rows),
-            "context_excluded": enrichment.excluded,
-            "context_evidence_mode": enrichment.evidence_mode,
-            "contest_entry": False,
-            **identity_audit,
-        },
+        audit=audit,
     )
 
 
@@ -519,6 +535,30 @@ async def _worker_once(
         return await pipeline.publish(day, reader)
 
 
+def worker_failure_slate_day(requested_day: date | None, now: datetime) -> date:
+    """Eastern slate date for a worker failure row (#599).
+
+    An explicit ``--day`` wins. Otherwise use America/New_York. UTC midnight
+    is still the previous evening in the East, and filing ``now(UTC).date()``
+    painted Monday's slate with Sunday's exception.
+    """
+    if requested_day is not None:
+        return requested_day
+    aware = now.tzinfo is not None and now.utcoffset() is not None
+    moment = now if aware else now.replace(tzinfo=UTC)
+    return moment.astimezone(SCHEDULE_TIMEZONE).date()
+
+
+def worker_failure_detail_code(error: BaseException, *, retryable_reason: str) -> str:
+    """Persist a gate code, or a type name plus OSError errno, never a path."""
+    if retryable_reason:
+        return retryable_reason
+    code = type(error).__name__.lower()
+    if isinstance(error, OSError) and isinstance(error.errno, int):
+        return f"{code}:{error.errno}"
+    return code
+
+
 def _record_worker_failure(
     store: RecommendationStore,
     day: date,
@@ -634,24 +674,28 @@ async def _run_worker(
             else:
                 print(json.dumps({"status": "waiting_or_locked"}))
         except NoSlate as error:
-            day = requested_day or datetime.now(UTC).date()
+            day = worker_failure_slate_day(requested_day, datetime.now(UTC))
             _record_worker_failure(store, day, status="no_slate", detail_code=str(error))
             print(json.dumps({"status": "no_slate"}))
         except Exception as error:
-            day = requested_day or datetime.now(UTC).date()
+            day = worker_failure_slate_day(requested_day, datetime.now(UTC))
             # Recording only the exception type leaves a refused freeze
             # undiagnosable after the fact: every gate failure arrives as a bare
             # "valueerror" and the slate is gone before anyone can reproduce it.
             # Gate failures raise ValueError with an internal reason code, which
             # is safe to keep. Other exception types can carry provider URLs or
-            # query values, so those stay type-only.
+            # query values, so those stay type-only. OSError keeps errno and
+            # drops the path (#599).
             reason = str(error)[:200] if type(error) is ValueError else ""
             retryable = reason in _RETRYABLE_FREEZE_REASONS
+            detail_code = worker_failure_detail_code(
+                error, retryable_reason=reason if retryable else ""
+            )
             _record_worker_failure(
                 store,
                 day,
                 status="waiting" if retryable else "error",
-                detail_code=reason if retryable else type(error).__name__.lower(),
+                detail_code=detail_code,
                 details={"reason": reason, "retryable": True}
                 if retryable
                 else ({"reason": reason} if reason else None),
@@ -707,20 +751,22 @@ def _train(*, force: bool = False) -> int:
         digest = _ensure_model(project, store, pipeline, snapshot, now)
         retrained = digest != previous
     model = pipeline.active_model()[1].model
-    print(
-        json.dumps(
-            {
-                "status": "trained" if retrained else "reused_active_model",
-                "retrained": retrained,
-                "model_sha256": digest,
-                "trained_at": model.trained_at.isoformat(),
-                "selected_estimator": model.selected_estimator,
-                "training_rows": model.training_rows,
-                "holdout_rows": model.evaluation.get("holdout_rows"),
-                "contest_entry": False,
-            }
-        )
-    )
+    report: dict[str, Any] = {
+        "status": "trained" if retrained else "reused_active_model",
+        "retrained": retrained,
+        "model_sha256": digest,
+        "trained_at": model.trained_at.isoformat(),
+        "selected_estimator": model.selected_estimator,
+        "training_rows": model.training_rows,
+        "holdout_rows": model.evaluation.get("holdout_rows"),
+        "training_target": model.evaluation.get("training_target"),
+        "contest_entry": False,
+    }
+    if retrained:
+        bundle = pipeline.active_model()[1]
+        report["history_rows"] = bundle.audit.get("history_rows")
+        report["hv_overlay"] = bundle.audit.get("hv_overlay")
+    print(json.dumps(report))
     return 0
 
 
@@ -865,7 +911,13 @@ def _parser() -> argparse.ArgumentParser:
     migrate_command = commands.add_parser("migrate")
     migrate_command.set_defaults()
     train = commands.add_parser(
-        "train", help="ensure an active model exists, or rebuild one with --force"
+        "train",
+        help=(
+            "ensure an active model exists, or rebuild one with --force; "
+            "objective is HV + TDV leaderboards only "
+            "(highestBoostedValuePlayers via the #185 ladder). "
+            "Rows off that board are excluded. Corpus G box value is not the target"
+        ),
     )
     train.add_argument(
         "--force",

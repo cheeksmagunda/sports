@@ -1,6 +1,28 @@
 # Status
 
-Last verified: 2026-09-28T02:58:00Z
+Last verified: 2026-09-28T03:17:46Z
+
+## Live watchdog (#599)  -  2026-09-28T03:17:46Z
+
+Public `https://wnba-api-wnba-production.up.railway.app`. No Railway
+variable was changed.
+
+| Fact | Value |
+|---|---|
+| `/health` | `status=ok`, `version=0.1.0` |
+| `/watchdog/today` slate | `2026-09-27` (still Eastern evening) |
+| Freeze | `ready_for_freeze=true`, phase `already_frozen`, blockers `[]` |
+| Advisories | `config_drift`, `rotowire_empty` |
+| `config_drift` | `2026-09-28T03:06:00Z`, only `payout_regime` actual `top_20`, expected `top_1` |
+| `rotowire_empty` | history row `2026-09-27T04:07:42Z`, pool 124 |
+
+The drift payload lists every EXPECTED_PROD_CONFIG miss. Only
+`payout_regime` was present, so the other expected keys on that job2
+process matched, including `serve_primary=eb` and
+`optimizer_objective_mode=total_draft_value`. `payout_regime` was not
+flipped in this change. Actions probes that set `WNBA_API_BASE` now use
+this mono host. Legacy `api-production-7033` still answered `/health` 200
+and is no longer the probe target.
 
 ## EB F-cohort serve fallback (#592)  -  2026-09-28T02:55:47Z
 
@@ -212,10 +234,8 @@ Missing seasons: none.
 - Actions `wnba-dayclose-verify` last success
   [run 36240844716](https://github.com/cheeksmagunda/sports/actions/runs/36240844716)
   (2026-09-26T12:05Z).
-- Actions `watchdog-monitor` still failing: workflows hardcode
-  `WNBA_API_BASE=https://api-production-7033.up.railway.app` (legacy cold
-  standby). Mono serving URL is healthy; Actions probe URL drift is residual
-  cutover debt (also `wnba-pre-freeze-guard`, `wnba-backfill-enrichment`).
+- Actions probe host is the mono API. See Live watchdog (#599) above.
+  This 2026-09-26 note recorded the legacy `api-production-7033` hardcode.
 
 ## Dual-fire + data-plane gate re-verify (#453 / #454)  -  2026-09-27T03:04Z
 

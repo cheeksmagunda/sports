@@ -44,6 +44,7 @@ __all__ = [
     "player_high_tv_weights_from_draft_stats",
     "report_nfl_archive_season_depth",
     "sample_weights_for_history",
+    "sample_weights_for_train_target",
     "tv_board_coverage_from_contests",
 ]
 
@@ -170,6 +171,52 @@ def player_high_tv_weights_from_draft_stats(
         best_possible_weight=best_possible_weight,
         base_weight=base_weight,
     )
+
+
+def sample_weights_for_train_target(
+    rows: Sequence[Any],
+    *,
+    top_k: int = 5,
+    high_weight: float = 4.0,
+    base_weight: float = 1.0,
+) -> list[float]:
+    """Weights for the HV + TDV leaderboard objective.
+
+    When a game has any ``label_kind == hv_tdv_leaderboard`` row, only those
+    leaderboard rows compete for the top-k weight. A larger raw box score in
+    the same game cannot outrank the board. ``nfl-pipeline train`` never
+    passes raw-box rows (operator lock). This raw top-k branch is only for
+    direct callers that still hold mixed rows.
+    """
+
+    board_values: dict[int, dict[int, float]] = {}
+    raw_values: dict[int, dict[int, float]] = {}
+    for row in rows:
+        if bool(getattr(row, "did_not_play", False)):
+            continue
+        value = getattr(row, "value", None)
+        if value is None:
+            continue
+        game_id = int(row.game_id)
+        player_id = int(row.player_id)
+        raw_values.setdefault(game_id, {})[player_id] = float(value)
+        if getattr(row, "label_kind", "raw_box") == "hv_tdv_leaderboard":
+            board_values.setdefault(game_id, {})[player_id] = float(value)
+
+    weight_by_game_player: dict[tuple[int, int], float] = {}
+    for game_id, mapping in raw_values.items():
+        source = board_values.get(game_id) or mapping
+        ranked = game_value_rank_weights(
+            source, top_k=top_k, high_weight=high_weight, base_weight=base_weight
+        )
+        for pid, weight in ranked.items():
+            weight_by_game_player[(game_id, pid)] = weight
+
+    out: list[float] = []
+    for row in rows:
+        key = (int(row.game_id), int(row.player_id))
+        out.append(weight_by_game_player.get(key, base_weight))
+    return out
 
 
 def sample_weights_for_history(
