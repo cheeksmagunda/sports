@@ -390,12 +390,16 @@ railway ssh --service nfl-oracle-worker -- \
   bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
 ```
 
-`train --force` is the max-depth HV/TDV fit (issue #597). It loads every
-finalized game under `NFL_HISTORY_ROOT` (default
-`/app/nfl-oracle/data/raw/corpus_g` on the worker; no year cap), then
-overlays `highestBoostedValuePlayers` values onto those rows before
-`fit_model`. Draft counts are not labels. A player-game with no scoped HV
-board keeps the raw box `value`. The JSON report includes `hv_overlay`
+`train --force` is the max-depth fit for the HV + TDV leaderboards
+(issue #597): Real Sports Highest value / Total Value Daily Leaderboard,
+section `highestBoostedValuePlayers`. It loads every finalized game under
+`NFL_HISTORY_ROOT` (default `/app/nfl-oracle/data/raw/corpus_g` on the
+worker; no year cap). Where a board scopes `(player_id, game_id)`, that
+leaderboard `value` is the label and the top five on the board take the
+high sample weight. A larger raw box score in the same game does not.
+Draft counts, popularity sections, and winning drafts are not labels. A
+game with no leaderboard keeps the raw box `value` and the raw top-five
+weight. The JSON report includes `training_target` and `hv_overlay`
 (`boards`, `rows_overlaid`, `rows_raw`, `conflicts`).
 
 Label roots (all optional; missing directories are a no-op overlay):

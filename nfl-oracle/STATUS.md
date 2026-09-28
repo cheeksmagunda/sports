@@ -2,13 +2,18 @@
 
 Last verified: 2026-09-28T03:10Z
 
-## HV/TDV train target (#597)  -  2026-09-28T03:10Z
+## HV/TDV train target (#597)  -  2026-09-28T03:20Z
 
-`nfl-pipeline train` now overlays `highestBoostedValuePlayers` values onto
-Corpus G rows before `fit_model` (draft counts are not the label). Missing
-or conflicting boards keep the raw box value. `nfl-hv-board-replay` scores
-each HV board: HV-rank five vs draft-count chalk five vs the hindsight
-ceiling, under `value * (slot_multiplier + card_boost)`.
+Train objective is the HV + TDV leaderboards: Real Sports Highest value /
+Total Value Daily Leaderboard (`draftStats.highestBoostedValuePlayers`).
+`nfl-pipeline train` writes that section's `value` onto the matching Corpus
+G row and sets `label_kind=hv_tdv_leaderboard`. Sample weights then give the
+high weight to the top five on that board. A larger raw box score in the
+same game does not. Draft counts, popularity sections, and winning drafts
+are not the label. A game with no leaderboard, or two boards that disagree,
+keeps `label_kind=raw_box`. `nfl-hv-board-replay` scores each board: HV-rank
+five vs draft-count chalk five vs the hindsight ceiling, under
+`value * (slot_multiplier + card_boost)`.
 
 ### Live train
 
@@ -140,14 +145,11 @@ Safe live_ok slate-context features force-included on the production
 
 ## Training target: Total Value Daily Leaderboard (#453 / #505 / #523)  -  2026-09-27
 
-Locked: train / optimize toward Real Sports **Highest value / Total Value Daily
-Leaderboard** (`highestBoostedValuePlayers` / HIGH TOTAL VALUE boards) for every
-slate - Amihere / Copper / Aubrey-style boards (NFL draftStats Highest-value
-lists). **Do not train on prior users' winning drafts** as the fit target;
-those remain a reference bar. Cash, diversified, and median construction are
-not the objective. Portfolio goal: root `../README.md` (Product goal). Serve
-knobs: Max-value / race construction and mono serve sections below. Existing
-valuelaw + feature ridge only; no new model stacks (#523).
+The fit target is the HV + TDV leaderboard section above (#597). Winning
+drafts stay a reference bar, not the label. Cash, diversified, and median
+construction are not the objective. Serve knobs: Max-value / race
+construction below. Existing valuelaw + feature ridge only; no new model
+stacks (#523).
 
 ## Max-value / race construction knobs (#453 / #502 / #505, 2026-09-27)
 

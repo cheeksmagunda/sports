@@ -199,8 +199,7 @@ def _load_context(project: Path, slate: Any, now: datetime) -> ContextSnapshot:
 def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> ModelBundle:
     root = Path(os.environ.get("NFL_HISTORY_ROOT", str(project / "data" / "raw" / "corpus_g")))
     rows, excluded = load_history(root)
-    # HV/TDV boards replace box values before the fit. Missing boards keep the
-    # raw postgame value (label ladder rung 2). Draft counts are not labels.
+    # Objective: HV + TDV leaderboards. Missing boards keep the raw box value.
     rows, hv_audit = apply_hv_tdv_labels(project, rows)
     if len(rows) < 30:
         raise RuntimeError("historical_training_rows_insufficient")
@@ -876,8 +875,9 @@ def _parser() -> argparse.ArgumentParser:
         "train",
         help=(
             "ensure an active model exists, or rebuild one with --force; "
-            "labels are HV/TDV board values when a highestBoostedValuePlayers "
-            "board scopes the game, else raw Corpus G box value"
+            "objective is HV + TDV leaderboards "
+            "(highestBoostedValuePlayers); raw box value is only the "
+            "fallback when that game has no leaderboard"
         ),
     )
     train.add_argument(
