@@ -1,0 +1,22 @@
+{
+  "slate_date": "2026-09-20",
+  "regime": "sunday_multi",
+  "source": "Daily Draft Stats Highest value screenshot",
+  "note": "Visible Highest value section only. Draft count is the chalk signal on these rows. Not the full Sunday roster.",
+  "rows": [
+    {"player_id": 1, "name": "Brandon Aubrey", "position": "K", "team": "DAL", "base": 5.6, "boost": 3.0, "slot": "1st", "drafts": 19, "value": 27.8},
+    {"player_id": 2, "name": "Spencer Shrader", "position": "K", "team": "IND", "base": 5.0, "boost": 2.9, "slot": "1st", "drafts": 3, "value": 24.7},
+    {"player_id": 3, "name": "Tre Tucker", "position": "WR", "team": "LV", "base": 5.1, "boost": 3.0, "slot": "2nd", "drafts": 3, "value": 24.3},
+    {"player_id": 4, "name": "Jaylen Waddle", "position": "WR", "team": "MIA", "base": 4.7, "boost": 3.0, "slot": "1st", "drafts": 17, "value": 23.5},
+    {"player_id": 5, "name": "CeeDee Lamb", "position": "WR", "team": "DAL", "base": 7.0, "boost": 1.3, "slot": "1st", "drafts": 85, "value": 23.0},
+    {"player_id": 6, "name": "Dalton Schultz", "position": "TE", "team": "HOU", "base": 4.6, "boost": 3.0, "slot": "1st", "drafts": 4, "value": 22.9},
+    {"player_id": 7, "name": "Harrison Butker", "position": "K", "team": "KC", "base": 6.7, "boost": 1.3, "slot": "1st", "drafts": 31, "value": 22.2},
+    {"player_id": 8, "name": "Ja'Marr Chase", "position": "WR", "team": "CIN", "base": 4.4, "boost": 3.0, "slot": "1st", "drafts": "1.7k", "value": 22.0},
+    {"player_id": 9, "name": "Devin Lloyd", "position": "LB", "team": "JAX", "base": 8.3, "boost": 0.6, "slot": "1st", "drafts": 1, "value": 21.6},
+    {"player_id": 10, "name": "DeVonta Smith", "position": "WR", "team": "PHI", "base": 5.1, "boost": 1.8, "slot": "1st", "drafts": 76, "value": 19.3},
+    {"player_id": 11, "name": "Andre Szmyt", "position": "K", "team": "CLE", "base": 4.2, "boost": 3.0, "slot": "3rd", "drafts": 2, "value": 19.2},
+    {"player_id": 12, "name": "Bobby Okereke", "position": "LB", "team": "NYG", "base": 3.7, "boost": 3.0, "slot": "1st", "drafts": 1, "value": 18.5},
+    {"player_id": 13, "name": "Dee Winters", "position": "LB", "team": "SF", "base": 3.8, "boost": 3.0, "slot": "2nd", "drafts": 1, "value": 18.2},
+    {"player_id": 14, "name": "Zaven Collins", "position": "LB", "team": "ARI", "base": 4.3, "boost": 3.0, "slot": "5th", "drafts": 1, "value": 18.1}
+  ]
+}

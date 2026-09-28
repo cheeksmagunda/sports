@@ -11,6 +11,11 @@ Stable chain and the MNF required-ON contract: `CONNECTORS.md`
 #653 / #654 on main) remain the last verified process state. No serving
 flip and no Railway env write in this change.
 
+## HV/TDV offline backtest harness (#603)  -  2026-09-28T17:45Z
+
+Offline research only. Reports under `nfl-oracle/reports/hv_regime_backtest.{md,json}`
+and `hv_tdv_campaign.md`. No Railway env write; blend stays 0 for MNF.
+
 ## Full HV retrain (operator)  -  2026-09-28T17:25:11Z
 
 Outside MNF T-40. `nfl-pipeline train --force` on `nfl-oracle-worker`.
