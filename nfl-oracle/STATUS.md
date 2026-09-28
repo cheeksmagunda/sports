@@ -54,7 +54,10 @@ delta from this note.
 Invalid values fail closed. `player_id` remains only the last key when boost
 and own projection both tie. The caps are hard: a pool that cannot fill five
 cards raises `optimizer_no_feasible_lineup` instead of relaxing the cap.
-`NFL_PICKER_BOOST_RANK_BLEND` is unchanged (last verified live value `0.75`).
+This change does not set `NFL_PICKER_BOOST_RANK_BLEND`,
+`NFL_OPTIMIZER_UPSIDE_WEIGHT`, or `NFL_OPTIMIZER_FIELD_WEIGHT`. Leave the
+live serving values in place: blend `0`, upside `0`, field `0`. Do not
+restore `0.75` / `0.15` / `0.10`. This session did not re-read Railway.
 The serving image stays the previously verified worker until a later deploy.
 
 ### Slate size (same rules both shapes)
@@ -67,7 +70,7 @@ each boost tier. `slate_regime` on the frozen lineup is `one_game` or
 
 | Shape | Games | Pool (order of magnitude) | Example | What the knobs do |
 |-------|-------|---------------------------|---------|-------------------|
-| `one_game` | 1 | about 150 | MNF 2026-09-29 PHI at CHI | at most one K, at most one LB/DB/DL, slot 1 is the highest projected mean, boost ties follow own projection |
+| `one_game` | 1 | about 150 | MNF 2026-09-28 PHI at CHI, gametime 20:15 (`schedules.csv` `2026_03_PHI_CHI`) | at most one K, at most one LB/DB/DL, slot 1 is the highest projected mean, boost ties follow own projection |
 | `multi_game` | many | about 600-800 | full Sunday slate | the same four rules |
 
 Live pool counts for those days are unverified. The unit tests build a
