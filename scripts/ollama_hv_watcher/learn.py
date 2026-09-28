@@ -26,6 +26,7 @@ from ollama_hv_watcher.pick import (
     lineup_for_summary,
     lineup_prompt_block,
 )
+from ollama_hv_watcher.sim import sim_report
 
 OLLAMA_UNAVAILABLE_NOTES = "ollama_unavailable"
 OLLAMA_GATE_FORBIDDEN_NOTES = "ollama_gate_forbidden"
@@ -93,12 +94,13 @@ def build_learn_prompt(
         )
     else:
         tasks = (
-            "Given the board + proposed five-player card below, write concise "
-            "structured notes:\n"
-            "1) confirm or replace the five-player card (still exactly five)\n"
-            "2) top_1 / max_value signal and why slot 1 is that player\n"
-            "3) stacking or correlation guesses (teams) inside the five\n"
-            "4) one calibration question for the next slate\n"
+            "The five-player card is the total-draft-value simulation "
+            "(value * (slot + boost)), already chosen. Do not replace it. "
+            "Write concise notes on that sim:\n"
+            "1) why slot 1 leads committed total value\n"
+            "2) the single biggest risk to that total\n"
+            "3) stacking or correlation inside the five\n"
+            "4) one calibration question after the slate settles\n"
         )
     return (
         header
@@ -130,19 +132,21 @@ def write_learning_tick(
     )
     out_path = out_dir / f"tick_{stamp}.json"
     card = lineup if lineup is not None else lineup_for_summary(summary)
+    selection = (
+        "app_frozen_lineup"
+        if summary.section == APP_FROZEN_SECTION
+        else "total_draft_value_sim"
+    )
     payload: dict[str, Any] = {
         "written_at": utc_now_iso(),
         "gate_reason": gate_reason,
         "model": model,
         "dry_run": dry_run,
         "phase": summary.phase,
-        "lineup_source": (
-            "app_frozen_lineup"
-            if summary.section == APP_FROZEN_SECTION
-            else "board_rank"
-        ),
+        "lineup_source": selection,
         "lineup_size": FIVE_PLAYER_LINEUP_SIZE,
         "five_player_lineup": list(card),
+        "sim": sim_report(card, sport=summary.sport or "", selection=selection),
         "board": summary.to_dict(),
         "notes": notes,
     }

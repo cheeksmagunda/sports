@@ -175,7 +175,7 @@ def _normalize_player(
         if real_raw is not None
         else None
     )
-    return {
+    out = {
         "player_id": player_id,
         "name": name,
         "team": team,
@@ -184,6 +184,12 @@ def _normalize_player(
         "slot": row.get("slot"),
         "drafts": row.get("drafts"),
     }
+    # card_boost is a pre-lock slate input, not an outcome. The TDV sim
+    # needs it on history boards the same way pregame boards already keep it.
+    for key in ("position", "opponent", "card_boost", "slot_multiplier"):
+        if row.get(key) is not None:
+            out[key] = row.get(key)
+    return out
 
 
 def summarize_board_payload(

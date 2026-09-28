@@ -27,6 +27,7 @@ from nfl_oracle.replay.contest_pool_replay import (
     replay_contest_pools,
     summarize,
 )
+from nfl_oracle.replay.hv_train_inputs import boost_audit, prepare_hv_replay_train_inputs
 from nfl_oracle.replay.production_backtest_cli import (
     add_fit_config_args,
     fit_config_from_args,
@@ -103,12 +104,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_fit_config_args(parser)
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
+    parser.add_argument(
+        "--project",
+        type=Path,
+        default=Path("nfl-oracle"),
+        help="App root used to resolve Corpus C / HV export paths for train weights.",
+    )
+    parser.add_argument(
+        "--skip-hv-labels",
+        action="store_true",
+        help="Keep raw Corpus G rows; still load contest boosts when exports exist.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     inputs = load_backtest_inputs(args.history_root, args.context_snapshot)
+    hv = prepare_hv_replay_train_inputs(
+        args.project,
+        inputs.enriched,
+        corpus_c_root=args.contest_root,
+        apply_labels=not args.skip_hv_labels,
+    )
     contests = [
         contest
         for contest in iter_contests(ContestStore(args.contest_root), finalized_only=True)
@@ -143,13 +161,14 @@ def main(argv: list[str] | None = None) -> int:
         profile=args.optimizer_profile,
     )
     results, excluded = replay_contest_pools(
-        inputs.enriched,
+        hv.rows,
         contests,
         fold_of=fold_of,
         team_keys=inputs.team_keys,
         optimizer_config=optimizer_config,
         fit_config=fit_config,
         compact_samples=not args.full_samples,
+        contest_boosts=hv.contest_boosts,
         picker=picker,
         progress=progress,
     )
@@ -167,6 +186,12 @@ def main(argv: list[str] | None = None) -> int:
         "context_rows": inputs.context_rows,
         "context_excluded": inputs.context_excluded,
         "context_evidence_mode": inputs.context_evidence_mode,
+        "hv_train": {
+            "applied": hv.applied,
+            "fit_rows": len(hv.rows),
+            "hv_overlay": hv.hv_overlay,
+            **boost_audit(hv.contest_boosts),
+        },
         "started_at": started.isoformat(),
         "finished_at": datetime.now(UTC).isoformat(),
         "summary": asdict(summary),

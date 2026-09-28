@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1151 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -360,6 +360,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/replay/harness.py -- Replay the saved Corpus C archive against the verified scoring law.
 - nfl-oracle/src/nfl_oracle/replay/hv_board_replay.py -- Score HV boards: HV-rank five vs draft-count chalk vs hindsight ceiling.
 - nfl-oracle/src/nfl_oracle/replay/hv_board_replay_cli.py -- CLI: score saved HV boards (HV five vs chalk five vs hindsight).
+- nfl-oracle/src/nfl_oracle/replay/hv_train_inputs.py -- Apply the production HV/TDV train target to offline replay inputs (#620).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest.py -- Walk-forward backtest of the actual production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest_cli.py -- CLI: walk-forward backtest of the production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/racer.py -- NFL evaluate hook for the portfolio race engine (#339).
@@ -500,6 +501,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
 - nfl-oracle/tests/unit/test_hv_board_replay.py -- HV-rank five, draft-count chalk, and hindsight ceiling use the draft-image law.
 - nfl-oracle/tests/unit/test_hv_emphasis.py -- HV top-10 emphasis names stay on live features and off chalk channels.
+- nfl-oracle/tests/unit/test_hv_replay_train_inputs.py -- Replay uses the same HV/TDV train target and display weights as production (#620).
 - nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV leaderboard rows are the only train labels. Box rows are excluded.
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
@@ -831,6 +833,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - scripts/ollama_hv_watcher/live.py -- Loud fail-closed errors when live slate/board fields are missing (#574).
 - scripts/ollama_hv_watcher/pick.py -- Five-player daily contest pick contract for Ollama HV/TDV (#574).
 - scripts/ollama_hv_watcher/serve.py -- systemd-less Ollama serve helpers: health curl, pidfile, nohup (#574).
+- scripts/ollama_hv_watcher/sim.py -- Total-draft-value simulation for the Ollama HV helper (#620).
 - scripts/ollama_hv_watcher/training_data_manifest.json
 - scripts/ollama_hv_watcher/training_manifest.py -- Load the HV/TDV training-data inventory for the Ollama watcher (#574).
 - scripts/ollama_hv_watcher/watcher.py -- Portfolio HV/TDV slate watcher loop (issue #574).
@@ -893,6 +896,7 @@ Generated from `git ls-files`. 1147 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
 - scripts/tests/test_ollama_client_json.py -- JSON generate contract for the shared Ollama HTTP client (#595).
 - scripts/tests/test_ollama_hv_app_api.py -- Offline tests: pregame leak stop + sport app API adapter + daemon (#574).
+- scripts/tests/test_ollama_hv_sim.py -- Total-draft-value sim on Ollama learn ticks (#620).
 - scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
 - scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).

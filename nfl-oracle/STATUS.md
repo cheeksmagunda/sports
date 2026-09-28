@@ -4,6 +4,17 @@ Last verified: 2026-09-28T04:59Z
 
 
 
+## Model map + HV train/replay close (#620) - unverified pending merge
+
+Rebases #627 onto main after #597 / #644 / #647 / #654. Train stays
+`hv_labels` + `hv_emphasis` + display-rank weights. Replay CLIs now pass
+the same HV/TDV filter and contest boosts into `fit_model` when boards are
+linked; an archive with no linked board keeps raw-value top-5 weights.
+Ollama learn ticks record a TDV `sim` block and still do not publish a
+freeze. NHL sim boost stays 0 in that helper. Live blend / upside / field
+stay at 0. Do not restore boost-rank blend 0.75. This PR does not run
+`nfl-pipeline train --force` and does not flip Railway knobs.
+
 ## Live train after #650 day-scope (Refs #647)  -  2026-09-28T04:59Z
 
 Outside MNF T-40. Slate status `waiting`, `next_freeze` `2026-09-28T23:35:00Z`.

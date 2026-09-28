@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from ollama_hv_watcher.boards import BoardSummary
+from ollama_hv_watcher.sim import total_value_lineup
 
 # Hard contest size: five players every day, every sport.
 FIVE_PLAYER_LINEUP_SIZE = 5
@@ -105,11 +106,16 @@ def frozen_app_lineup(summary: BoardSummary) -> tuple[dict[str, Any], ...]:
 
 
 def lineup_for_summary(summary: BoardSummary) -> tuple[dict[str, Any], ...]:
-    """App-frozen boards keep the app's five; other boards rank by value."""
+    """App-frozen boards keep the app's five. Other boards use the TDV sim.
+
+    The sim maximizes ``value * (slot + boost)``. NHL boosts are forced to 0.
+    ``five_player_lineup`` remains the raw board-order card for callers that
+    want that order explicitly.
+    """
 
     if summary.section == APP_FROZEN_SECTION:
         return frozen_app_lineup(summary)
-    return five_player_lineup(summary)
+    return total_value_lineup(summary.top_players, sport=summary.sport or "")
 
 
 def lineup_prompt_block(lineup: tuple[dict[str, Any], ...]) -> str:
