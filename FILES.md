@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1140 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1143 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -735,6 +735,7 @@ Generated from `git ls-files`. 1140 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/src/oracle_core/dayclose.py -- Generic day-close sweep orchestration, shared by every sport application.
 - packages/oracle-core/src/oracle_core/dossier.py -- Cross-sport post-slate dossier contract and legacy dossier compatibility.
 - packages/oracle-core/src/oracle_core/draft_stats_catalog.py -- Daily Draft Stats / draftStats section inventory (issue #526).
+- packages/oracle-core/src/oracle_core/feature_matrix.py -- Portfolio FEATURE_MATRIX: available | wired | serving (#583).
 - packages/oracle-core/src/oracle_core/fitness.py -- Domain-free WIN/CLOSE fitness helpers for the portfolio backtest race.
 - packages/oracle-core/src/oracle_core/high_tv.py -- Domain-free high-potential training contracts and dataset helpers.
 - packages/oracle-core/src/oracle_core/http.py -- Provider-neutral HTTP transports with bounded retry behavior.
@@ -765,6 +766,7 @@ Generated from `git ls-files`. 1140 tracked files. Regenerate with `scripts/gene
 - packages/oracle-core/tests/test_dayclose.py
 - packages/oracle-core/tests/test_dossier.py
 - packages/oracle-core/tests/test_draft_stats_catalog.py -- Tests for the portfolio draftStats section catalog (#526).
+- packages/oracle-core/tests/test_feature_matrix.py -- Portfolio FEATURE_MATRIX vocabulary (#583).
 - packages/oracle-core/tests/test_fitness.py
 - packages/oracle-core/tests/test_high_tv.py -- High-potential label ladder and weight builders (issue #185).
 - packages/oracle-core/tests/test_http.py
@@ -803,7 +805,7 @@ Generated from `git ls-files`. 1140 tracked files. Regenerate with `scripts/gene
 - scripts/corpus/README.md -- Real Sports history corpus (#526)
 - scripts/corpus/export_nfl_from_corpus_g.py -- Export NFL game_stats + matchups from durable Corpus G (zero Real calls).
 - scripts/corpus/export_wnba_from_store.py -- Export WNBA HV boards from durable stores (zero Real Sports calls).
-- scripts/corpus/feature_field_map.md -- Corpus field → own-model FeatureSpec map (#526 → #523)
+- scripts/corpus/feature_field_map.md -- Corpus field → own-model FeatureSpec map (#526 → #523 / #583)
 
 ## scripts/corpus/schema/
 - scripts/corpus/schema/coverage_manifest.schema.json
@@ -1393,6 +1395,7 @@ Generated from `git ls-files`. 1140 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_model_research_benchmark.py -- Pure helper tests for the model research benchmark script.
 - wnba-oracle/tests/unit/test_model_tournament.py
 - wnba-oracle/tests/unit/test_model_validity_audit.py -- Model-validity audit (#53 umbrella): machine-readable characterization of
+- wnba-oracle/tests/unit/test_moneyline_fuse_flag.py -- WNBA h2h moneyline fuse stays off unless WNBA_FUSE_MONEYLINE is set (#583).
 - wnba-oracle/tests/unit/test_multiple_comparisons.py -- Multiple-comparisons guard: CPCV splitter + deflated-edge test (D63).
 - wnba-oracle/tests/unit/test_objective_shaping.py -- Objective-shaping terms (D87, Phase 1): leverage / ceiling / duplication.
 - wnba-oracle/tests/unit/test_opp_dvp_lookup.py -- D74: build_opp_dvp_lookup computes per-opponent mean real_score allowed.

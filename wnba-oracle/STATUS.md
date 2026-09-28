@@ -48,6 +48,16 @@ n=4 display=raw=1.0 chalk 0.527012; has_3x_tail n=219 display 0.996684 raw
 0.892250 chalk 0.413318. Method and backlog:
 `../drive/2026-09-28-contest-max-history-map.md`.
 
+## FEATURE_MATRIX / UNUSED_GOLD (#583)
+
+Code inventory only. No Railway read and no serving-knob flip.
+`oracle_core.feature_matrix` lists available, wired, and serving.
+`seasonAverages.*` stays unused. Odds API h2h reaches EB `team_moneyline`
+only when `WNBA_FUSE_MONEYLINE` is `1` / `true` / `yes` / `on`. The default
+is off, so job1 does not write the field. EB still ignores a present
+moneyline when `moneyline_beta` is 0. Rollback is leave the flag unset.
+
+
 ## EB F-cohort serve fallback (#592)  -  2026-09-28T02:55:47Z
 
 - Bug: `eb_predict_one` used `cohort_means.get(cohort, 0.0)` while the shipped
