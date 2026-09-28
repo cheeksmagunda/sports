@@ -27,6 +27,8 @@ def test_empty_env_reproduces_production_defaults() -> None:
     assert cfg.upside_weight == default.upside_weight
     assert cfg.field_weight == default.field_weight
     assert cfg.objective == "total_value"
+    assert cfg.ollama_engine is True
+    assert default.ollama_engine is False
 
 
 def test_max_value_profile_drops_diversity_floor_to_one() -> None:
@@ -68,6 +70,8 @@ def test_weight_knobs_are_read_and_range_checked() -> None:
         {"NFL_OPTIMIZER_UPSIDE_WEIGHT": "9"},
         {"NFL_OPTIMIZER_FIELD_WEIGHT": "-1"},
         {"NFL_OPTIMIZER_UPSIDE_WEIGHT": "abc"},
+        {"NFL_OLLAMA_ENGINE": "maybe"},
+        {"NFL_OLLAMA_ENGINE": "2"},
     ],
 )
 def test_invalid_env_fails_closed(env: dict[str, str]) -> None:
@@ -87,7 +91,7 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
         projections(target),
         decision_at=BASE + timedelta(days=8),
         scoring_policy=ScoringPolicy(),
-        config=optimizer_config_from_env({}),
+        config=optimizer_config_from_env({"NFL_OLLAMA_ENGINE": "0"}),
     )
     assert empty_env.construction_profile == "max_value"
 
@@ -96,7 +100,9 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
         projections(target),
         decision_at=BASE + timedelta(days=8),
         scoring_policy=ScoringPolicy(),
-        config=optimizer_config_from_env({"NFL_OPTIMIZER_PROFILE": "diversified"}),
+        config=optimizer_config_from_env(
+            {"NFL_OPTIMIZER_PROFILE": "diversified", "NFL_OLLAMA_ENGINE": "0"}
+        ),
     )
     assert diversified.construction_profile == "diversified"
 
@@ -105,7 +111,9 @@ def test_profile_is_recorded_on_the_recommendation_artifact() -> None:
         projections(target),
         decision_at=BASE + timedelta(days=8),
         scoring_policy=ScoringPolicy(),
-        config=optimizer_config_from_env({"NFL_OPTIMIZER_PROFILE": "max_value"}),
+        config=optimizer_config_from_env(
+            {"NFL_OPTIMIZER_PROFILE": "max_value", "NFL_OLLAMA_ENGINE": "0"}
+        ),
     )
     assert max_value.construction_profile == "max_value"
     assert max_value.requested_distinct_teams == 1

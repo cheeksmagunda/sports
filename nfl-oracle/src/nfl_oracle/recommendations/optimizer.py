@@ -17,6 +17,11 @@ from pydantic import Field
 from nfl_oracle.common.logging import get_logger
 from nfl_oracle.contests.schema import MAX_OBSERVED_BOOST
 from nfl_oracle.recommendations.model import Projection
+from nfl_oracle.recommendations.ollama_engine import (
+    OllamaJsonClient,
+    ollama_engine_from_env,
+    score_candidates,
+)
 from nfl_oracle.recommendations.schema import Candidate, EvidenceClock, Finite, Record, Slate
 
 log = get_logger("nfl_oracle.recommendations.optimizer")
@@ -66,6 +71,9 @@ class OptimizerConfig(Record):
     # Serving reads NFL_OPTIMIZER_PROFILE via optimizer_config_from_env
     # (default max_value / win-draft). Bare OptimizerConfig() stays diversified.
     profile: str = "diversified"
+    # Bare configs stay on classic contest utility. Serving turns the Ollama
+    # engine on through optimizer_config_from_env unless NFL_OLLAMA_ENGINE=0.
+    ollama_engine: bool = False
 
 
 # Production default: three distinct teams, two distinct games. The optimizer
@@ -107,6 +115,9 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
     - ``NFL_OPTIMIZER_UPSIDE_WEIGHT`` / ``NFL_OPTIMIZER_FIELD_WEIGHT``: floats
       (0..2) that tune the contest-utility re-rank (right-tail p90 lift and
       field-beat leverage). Unset keeps the production defaults.
+    - ``NFL_OLLAMA_ENGINE``: unset or ``1`` scores beam candidates with the
+      Ollama JSON engine (at least 1000 sims). ``0`` restores classic contest
+      utility. Invalid values raise.
     """
 
     env = environ if environ is not None else os.environ
@@ -125,6 +136,7 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
         upside_weight=upside,
         field_weight=field,
         profile=profile,
+        ollama_engine=ollama_engine_from_env(env),
     )
 
 
@@ -397,6 +409,7 @@ def optimize(
     scoring_policy: ScoringPolicy,
     config: OptimizerConfig | None = None,
     field: FieldObservation | None = None,
+    ollama_client: OllamaJsonClient | None = None,
 ) -> Recommendation:
     slate.assert_prelock(decision_at)
     cfg = config or OptimizerConfig()
@@ -602,6 +615,39 @@ def optimize(
         ranked.append((contest_utility(expected, p90, wins), expected, ids, p90, wins))
     ranked.sort(key=lambda item: (-item[0], -item[1], item[2]))
     _utility, expected, ids, p90, wins = ranked[0]
+    assumptions: tuple[str, ...] = (
+        "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
+        "game_correlation_is_configured_sensitivity_not_fitted",
+        "field_win_rate_against_simulated_opponent_not_payout_probability",
+        "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
+        "lineup_selected_by_contest_utility_over_expected_score_beam",
+    )
+    if cfg.ollama_engine:
+        selection = score_candidates(
+            beam,
+            eligible,
+            boost_by_player={pid: candidates[pid].card_boost for pid in by_id},
+            game_by_player={pid: candidates[pid].game_id for pid in by_id},
+            scorer=scoring_policy.score,
+            slots=slots,
+            game_ids=tuple(game.game_id for game in slate.games),
+            ownership=ownership,
+            seed=cfg.seed,
+            game_correlation=cfg.game_correlation,
+            simulations=cfg.simulations,
+            field_slot_by_p90=(
+                cfg.upside_weight > 0 or cfg.field_weight > 0 or cfg.profile == "max_value"
+            ),
+            client=ollama_client,
+        )
+        if selection is None:
+            assumptions = (*assumptions, "ollama_engine_fallback_classic_utility")
+        else:
+            ids = selection.player_ids
+            expected = selection.expected
+            p90 = selection.simulated_p90
+            wins = selection.simulated_field_win_rate
+            assumptions = (*assumptions, "ollama_engine_selected_by_json_utility")
     return Recommendation(
         picks=tuple(
             Pick(
@@ -643,11 +689,5 @@ def optimize(
         boost_nonzero_count=slate.boost_nonzero_count,
         boost_max=slate.boost_max,
         construction_profile=cfg.profile,
-        assumptions=(
-            "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
-            "game_correlation_is_configured_sensitivity_not_fitted",
-            "field_win_rate_against_simulated_opponent_not_payout_probability",
-            "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
-            "lineup_selected_by_contest_utility_over_expected_score_beam",
-        ),
+        assumptions=assumptions,
     )

@@ -608,6 +608,14 @@ under gitignored `data/ollama_hv/`. Training / `ollama generate` requires
 `coverage_manifest` complete (#526) or `SPORTS_OLLAMA_UNLOCK=1`. Commands
 and the training-data inventory: `scripts/ollama_hv_watcher/README.md`.
 Structural role: `OVERVIEW.md`.
+Portfolio Codespace helper. Arms at the earliest slate
+T-40 across sports and stays open until the latest slate `close_at`. Default
+model `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`. Training /
+`ollama generate` requires `coverage_manifest` complete (#526) or
+`SPORTS_OLLAMA_UNLOCK=1`. Commands: `scripts/ollama_hv_watcher/README.md`.
+NFL candidate scoring calls `client.generate_json` when `NFL_OLLAMA_ENGINE`
+is on. The knob, classic-utility fallback, and `=0` kill switch are in
+`nfl-oracle/STATUS.md`. The watcher training gate is unchanged.
 
 ```sh
 bash scripts/ollama_hv_watcher/install_codespace.sh

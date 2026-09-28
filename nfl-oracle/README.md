@@ -211,6 +211,15 @@ Optimizer objective is always `total_value` (max draft-value portfolio EV).
 Set `NFL_OPTIMIZER_PROFILE=max_value` to drop the diversity floor for race
 construction; default remains `diversified`.
 
+`optimizer_config_from_env` turns on `NFL_OLLAMA_ENGINE` unless it is `0`
+(`false` / `off` / `no` also restore classic). The engine keeps the ridge
+projection, picker knobs, and optimizer candidates, runs at least 1000
+simulations, and ranks those candidates by an Ollama JSON utility. Player ids
+in that utility must match a candidate lineup in order. Timeout, transport
+error, invalid JSON, or any other id keeps the classic contest-utility
+lineup. Host, model, and timeout: `NFL_OLLAMA_HOST`, `NFL_OLLAMA_MODEL`,
+`NFL_OLLAMA_TIMEOUT_S`. Bare `OptimizerConfig()` stays classic.
+
 ## First-season proof
 
 ```sh

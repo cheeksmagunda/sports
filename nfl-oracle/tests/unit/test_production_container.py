@@ -19,6 +19,11 @@ def test_production_container_is_role_split_and_secret_free() -> None:
         f"COPY nfl-oracle/data/schedule/README.md {bootstrap_dir}/README.md",
     ]
     assert "alembic upgrade" not in dockerfile
+    client_copy = (
+        "COPY scripts/ollama_hv_watcher/client.py "
+        "/app/scripts/ollama_hv_watcher/client.py"
+    )
+    assert client_copy in dockerfile
 
 
 def test_railway_config_points_at_nfl_production_image() -> None:
