@@ -67,16 +67,16 @@ def _slate(
 
 
 def test_day_plan_arms_at_earliest_t40_and_releases_at_latest_close() -> None:
-    kick_a = datetime(2026, 9, 27, 17, 0, tzinfo=UTC)
-    kick_b = datetime(2026, 9, 27, 23, 0, tzinfo=UTC)
+    kick_a = datetime(2000, 1, 3, 17, 0, tzinfo=UTC)
+    kick_b = datetime(2000, 1, 3, 23, 0, tzinfo=UTC)
     plan = build_day_plan(
         [
-            _slate("nfl", "sun", kick_a, datetime(2026, 9, 28, 4, 0, tzinfo=UTC)),
-            _slate("wnba", "eve", kick_b, datetime(2026, 9, 28, 2, 30, tzinfo=UTC)),
+            _slate("nfl", "sun", kick_a, datetime(2000, 1, 4, 4, 0, tzinfo=UTC)),
+            _slate("wnba", "eve", kick_b, datetime(2000, 1, 4, 2, 30, tzinfo=UTC)),
         ]
     )
     assert plan.arm_at == kick_a - timedelta(minutes=40)
-    assert plan.release_at == datetime(2026, 9, 28, 4, 0, tzinfo=UTC)
+    assert plan.release_at == datetime(2000, 1, 4, 4, 0, tzinfo=UTC)
     assert plan.slates[0].session_id == "nfl:sun"
     assert plan.slates[1].session_id == "wnba:eve"
 
@@ -88,7 +88,7 @@ def test_day_plan_arms_at_earliest_t40_and_releases_at_latest_close() -> None:
     assert plan.should_run(at_arm) is True
     assert [s.session_id for s in plan.active_sessions(at_arm)] == ["nfl:sun"]
 
-    mid = datetime(2026, 9, 27, 22, 30, tzinfo=UTC)
+    mid = datetime(2000, 1, 3, 22, 30, tzinfo=UTC)
     active = {s.session_id for s in plan.active_sessions(mid)}
     assert active == {"nfl:sun", "wnba:eve"}
 
@@ -97,13 +97,13 @@ def test_day_plan_arms_at_earliest_t40_and_releases_at_latest_close() -> None:
 
 
 def test_duplicate_session_ids_rejected() -> None:
-    kick = datetime(2026, 9, 27, 20, 0, tzinfo=UTC)
-    close = datetime(2026, 9, 27, 23, 0, tzinfo=UTC)
+    kick = datetime(2000, 1, 3, 20, 0, tzinfo=UTC)
+    close = datetime(2000, 1, 3, 23, 0, tzinfo=UTC)
     with pytest.raises(ValueError, match="duplicate_session_id"):
         DayWatchPlan(
             slates=(
-                _slate("nhl", "2026-09-27", kick, close),
-                _slate("nhl", "2026-09-27", kick + timedelta(hours=1), close),
+                _slate("nhl", "2000-01-03", kick, close),
+                _slate("nhl", "2000-01-03", kick + timedelta(hours=1), close),
             )
         )
 
@@ -114,8 +114,8 @@ def test_fixture_calendars_cover_all_sports() -> None:
     sports = {s.sport for s in plan.slates}
     assert sports == {"wnba", "nfl", "nhl", "nba"}
     # Earliest arm is NFL T-40 on the sample fixture day.
-    assert plan.arm_at == datetime(2026, 9, 27, 16, 20, tzinfo=UTC)
-    assert plan.release_at == datetime(2026, 9, 28, 4, 0, tzinfo=UTC)
+    assert plan.arm_at == datetime(2000, 1, 3, 16, 20, tzinfo=UTC)
+    assert plan.release_at == datetime(2000, 1, 4, 4, 0, tzinfo=UTC)
 
 
 def test_discover_prefers_explicit_windows_json(tmp_path: Path) -> None:
@@ -235,7 +235,7 @@ def test_write_learning_tick_dry_path(tmp_path: Path) -> None:
     summary = summarize_board_payload(
         {
             "sport": "wnba",
-            "slate_key": "2026-09-27",
+            "slate_key": "2000-01-03",
             "section": "highestBoostedValuePlayers",
             "players": _five_players(),
         }

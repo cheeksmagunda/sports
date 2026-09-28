@@ -34,7 +34,7 @@ from realsports_corpus.layout import REQUIRED_VARIABLE_FAMILIES
 
 
 def test_portfolio_arms_at_earliest_t40_and_closes_at_latest() -> None:
-    t0 = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
+    t0 = datetime(2000, 1, 3, 18, 0, tzinfo=UTC)
     a = SlateWindow("wnba", "w1", t0, t0 + timedelta(hours=2))
     b = SlateWindow("nfl", "n1", t0 + timedelta(hours=1), t0 + timedelta(hours=5))
     window = build_portfolio_window([a, b])
@@ -53,13 +53,13 @@ def test_empty_portfolio_is_none() -> None:
 
 
 def test_slate_requires_aware_datetimes() -> None:
-    naive = datetime(2026, 9, 27, 18, 0)  # noqa: DTZ001 — intentional naive
+    naive = datetime(2000, 1, 3, 18, 0)  # noqa: DTZ001 - intentional naive
     with pytest.raises(ValueError):
         SlateWindow("nba", "x", naive, naive + timedelta(hours=1))
 
 
 def test_duplicate_session_id_rejected() -> None:
-    t0 = datetime(2026, 9, 27, 18, 0, tzinfo=UTC)
+    t0 = datetime(2000, 1, 3, 18, 0, tzinfo=UTC)
     a = SlateWindow("wnba", "dup", t0, t0 + timedelta(hours=2))
     b = SlateWindow("wnba", "dup", t0 + timedelta(minutes=30), t0 + timedelta(hours=3))
     with pytest.raises(ValueError, match="duplicate_session_id"):

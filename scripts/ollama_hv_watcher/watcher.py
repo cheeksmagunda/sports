@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ollama_hv_watcher.boards import discover_board_paths, load_board_summary
+from ollama_hv_watcher.boards import armed_board_paths, load_pregame_board_summary
 from ollama_hv_watcher.discover import discover_day_plan
 from ollama_hv_watcher.gate import (
     ensure_ollama_training_allowed,
@@ -88,7 +88,7 @@ def status_snapshot(
     try:
         reason = ensure_ollama_training_allowed(manifest)
         gate = {"allowed": True, "reason": reason}
-    except Exception as exc:  # noqa: BLE001 — surface gate text in status
+    except Exception as exc:  # noqa: BLE001 - surface gate text in status
         gate = {"allowed": False, "error": str(exc)}
     payload: dict[str, Any] = {
         "now": now.isoformat().replace("+00:00", "Z"),
@@ -111,23 +111,17 @@ def status_snapshot(
     return payload
 
 
-def _learn_once(cfg: WatcherConfig, plan: DayWatchPlan) -> list[str]:
+def _learn_once(
+    cfg: WatcherConfig, plan: DayWatchPlan, *, now: datetime | None = None
+) -> list[str]:
+    """Learn on armed slates' PREGAME boards only (never data_root/boards)."""
+
     written: list[str] = []
     manifest = load_manifest_or_empty(cfg.coverage_manifest)
-    boards_root = cfg.data_root / "boards"
-    paths = discover_board_paths(boards_root)
-    if not paths:
-        for slate in plan.slates:
-            paths.extend(
-                discover_board_paths(cfg.data_root / slate.sport / slate.slate_id)
-            )
-    seen: set[Path] = set()
+    paths = armed_board_paths(cfg.data_root, plan.active_sessions(now or utc_now()))
     for path in paths:
-        if path in seen:
-            continue
-        seen.add(path)
         try:
-            summary = load_board_summary(path)
+            summary = load_pregame_board_summary(path)
             out = run_learn(
                 summary,
                 data_root=cfg.data_root,
@@ -155,7 +149,7 @@ def run_watch_loop(
     """Poll until past latest slate close (or max_iterations for tests).
 
     Requires LIVE windows JSON (or explicit fixtures). Missing calendars raise
-    ``LiveDataRequiredError`` immediately — no placeholder wait loop.
+    ``LiveDataRequiredError`` immediately - no placeholder wait loop.
     """
 
     cfg.data_root.mkdir(parents=True, exist_ok=True)
@@ -180,8 +174,8 @@ def run_watch_loop(
             elif plan.should_run(now):
                 if cfg.learn:
                     try:
-                        learned.extend(_learn_once(cfg, plan))
-                    except Exception as exc:  # noqa: BLE001 — keep watcher alive
+                        learned.extend(_learn_once(cfg, plan, now=now))
+                    except Exception as exc:  # noqa: BLE001 - keep watcher alive
                         err_path = cfg.data_root / "watcher_errors.log"
                         with err_path.open("a", encoding="utf-8") as fh:
                             fh.write(f"{now.isoformat()} learn_error={exc}\n")
