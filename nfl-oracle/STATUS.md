@@ -53,6 +53,19 @@ a one-game stack inside a Sunday pool; that is the diversity floor, not a
 weaker cap. A Sunday-only cap would leave PHI at CHI uncapped. This change
 does not do that.
 
+## Win stack index (#594)
+
+Pointer only. This index does not restate the sections below and does not
+re-check Railway.
+
+- Code contract (max_value env default vs bare diversified `OptimizerConfig`,
+  picker identity defaults, worker T-40 publish vs watchdog alert):
+  `README.md` (Win stack).
+- Live worker knobs, Corpus G volume, and the 2026-09-27 harden: sections
+  below, starting with Win-draft harden.
+- Ollama is not the NFL ridge/valuelaw serve path and does not publish the
+  freeze. Role: root `../OVERVIEW.md`.
+
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 
 Early window failed (`future_forecast` then `stale_player`). Harden landed so
@@ -404,7 +417,6 @@ No train `--force`. No env mutation; authorized picker knobs already matched
   path is healthy via storage_state.
 - Post-T-40 live freeze outcome still to confirm on Sunday (freeze once,
   publish, no re-freeze).
-
 
 
 ## Scheduled NFL jobs report through their Actions runs, not issues (2026-09-26, issue #442)
@@ -1456,7 +1468,6 @@ Provenance + manifests carry `event_time`, `source_available_at`, `captured_at`,
 and `decision_at` (null on historical backfill). See README train/live section.
 
 
-
 ## Data / strategy / feature scaffolds (2026-09-06 CT)
 
 Observation-only modules on branch `codex/nfl-data-schemas-scaffold` (no contest entry):
@@ -1486,7 +1497,6 @@ Still deferred: Corpus C ingest, provider-verified slot/boost/lock contract, Rai
 - Research: `GET /research/provider/status`
 - Box auth still missing; status expected `auth_missing`
 - GitHub push/MCP write still 403; see `/workspace/codex-nfl/HANDOFF.md`
-
 
 
 ## Research service path (2026-09-06 CT)

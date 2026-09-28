@@ -5,11 +5,54 @@ games/box/play archive with Real `value` labels) and honest coverage audits.
 
 Portfolio product goal: root `../README.md` (Product goal). Current NFL serve
 knobs and training-target detail are in `STATUS.md` and must be reverified
-before production work.
+before production work. Structural outline: root `../OVERVIEW.md`.
 
 Current scope includes read-only ingest, redacted persistence, the gated
 recommendation and freeze/grade pipeline, and Railway-hosted operations.
 Contest submission and live contest entry remain hard-forbidden by policy.
+
+## Win stack
+
+Inline contract for this app. Live Railway values stay in `STATUS.md`.
+
+**Model path.** Train toward Highest value / Total Value boards
+(`highestBoostedValuePlayers` or a reconstructed value ranking from Corpus
+C). Own model is valuelaw plus feature ridge (`features.own_model_map`,
+`recommendations.model`). No LightGBM primary. Ollama
+(`scripts/ollama_hv_watcher`) notes on those same boards. It does not
+replace the ridge serve path and it does not publish the freeze.
+
+**T-40 runner.** The worker publishes. `recommendations/pipeline.py` sets
+due at contest cutoff minus 40 minutes. `recommendations/cli.py` waits with
+`waiting_for_t40`, then `publish()`. The watchdog
+(`recommendations/watchdog.py`, `scripts/nfl_t40_watchdog.py`,
+`.github/workflows/nfl-t40-watchdog.yml`) only alerts when a freeze is
+missing. It does not freeze.
+
+**Connectors.** Real Sports read-only client: `ingest/realsports.py`
+(`headers_or_capture`). Railway API and worker: `STATUS.md` and root
+`../ENTRY_POINTS.md`. Corpus C/G on the worker volume
+(`NFL_CORPUS_C_ROOT`, `NFL_DATA_ROOT`). There is no `assurance.connectors`
+catalog in this app.
+
+### Env knobs (code contract)
+
+Serving reads `optimizer_config_from_env`. Bare `OptimizerConfig()` stays
+diversified (3 teams / 2 games) and is not the serve default.
+
+| Env | When unset |
+|---|---|
+| `NFL_OPTIMIZER_PROFILE` | `max_value` (diversity floor 1/1). Rollback: `diversified` |
+| `NFL_OPTIMIZER_MIN_DISTINCT_TEAMS` / `NFL_OPTIMIZER_MIN_DISTINCT_GAMES` | profile preset; explicit ints 1..5 win |
+| `NFL_OPTIMIZER_UPSIDE_WEIGHT` | `0.15` |
+| `NFL_OPTIMIZER_FIELD_WEIGHT` | `0.10` |
+| `NFL_PICKER_BOOST_RANK_BLEND` | `0.0` (identity) |
+| `NFL_PICKER_POSITION_CALIBRATION` | `0.0` |
+| `NFL_PICKER_PROFILE` | `identity` unless a blend or calibration is set |
+| `NFL_RECOMMENDATIONS_ENABLED` | off unless set to a truthy token (`cli.py` default `"0"`) |
+
+Invalid optimizer or picker values raise. Live process values (including
+any blend above the identity default) are in `STATUS.md`.
 
 ## Connection surfaces
 
@@ -304,7 +347,7 @@ make check-boundaries
 
 
 
-## Data / strategy / feature scaffolds (observation only)
+## Data, strategy, and feature packages
 
 - `nfl_oracle.data`: catalog / coverage / paths helpers
 - `nfl_oracle.strategy`: pre-lock clock gates, five-card structural checks, shadow snapshots
@@ -371,15 +414,15 @@ runs the explicit migration, verifies the append-only trigger, exports and
 restores freezes, run records, and artifacts, then removes the temporary
 container. It does not connect to Railway or any other database.
 
-## Codespace daily ops (planned)
+## Codespace daily ops
 
-Codespaces is the long-term home for every app's daily processes (NFL is the
-first concrete slice). The Codespace Railway CLI uses the account/workspace
-credential `RAILWAY_API_TOKEN`; the scoped `RAILWAY_TOKEN` is reserved for
-explicit GitHub Actions repair paths. Full checklist lives in `STATUS.md`.
-Shadow only: Corpus G coverage refresh → label/baseline recompute → status
-artifact; no contest entry; no recreate-blind Codespace; device secrets are
-`NFL_DEVICE_UUID` / `NFL_DEVICE_NAME` only (never git).
+Railway and Real Sports work for this app run from the Codespace through
+`scripts/codespace-railway-env`. Canonical auth is the synced CLI session
+described in root `../ENTRY_POINTS.md` (API token is fallback only; never
+both token kinds). Device env names are `NFL_DEVICE_UUID` /
+`NFL_DEVICE_NAME`. Full live checklist: `STATUS.md`. Shadow path only:
+Corpus G coverage refresh, then label/baseline recompute, then a status
+artifact. No contest entry.
 
 
 ### Forced model retrain (worker volume)
@@ -389,9 +432,7 @@ Codespace**). Keep that Codespace Available around the slate window. The
 worker image exposes `nfl-pipeline` on `/opt/venv/bin`, not on a bare PATH.
 
 ```bash
-unset RAILWAY_TOKEN
-railway whoami   # must show the operator Railway account
-railway ssh --service nfl-oracle-worker -- \
+scripts/codespace-railway-env -- railway ssh --service nfl-oracle-worker -- \
   bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
 ```
 

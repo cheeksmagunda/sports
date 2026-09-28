@@ -389,6 +389,19 @@ All entry points access the same monorepo structure:
   features, strategy, scoring, calendar, contests, and provider adapters
 - **nhl-oracle** (`nhl-oracle/`) — NHL application, owns models,
   features, strategy, scoring, calendar, contests, and provider adapters
+- **Root `scripts/`**: portfolio operations. Sport apps must not import
+  one another, and `oracle-core` must not import a sport app.
+- **Win stack ownership** (structural map: `OVERVIEW.md`; live serve
+  values only in each app `STATUS.md`):
+  - Each sport owns its model, T-40 freeze runner, scoring, and serve knobs.
+  - `oracle_core.race` and `oracle_core.fitness` are domain-free WIN/CLOSE
+    backtest machinery. They do not score a contest.
+  - `scripts/ollama_hv_watcher` is a portfolio Codespace helper inside the
+    HV/TDV model path (same Highest-value boards, five-player notes). It is
+    not a serve primary. Sport apps must not import it as a model.
+  - Corpus layout helpers live under `scripts/corpus`,
+    `scripts/realsports_corpus`, and `scripts/rs_corpus`. Durable contest
+    history is the sibling repo named in `ENTRY_POINTS.md`.
 - **Shared commands** — all entry points run the same `make` targets
   from root or app directory
 

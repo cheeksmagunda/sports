@@ -306,18 +306,28 @@ cat /workspaces/sports/nfl-oracle/AGENTS.md
 
 ```
 cheeksmagunda/sports/
-├── packages/oracle-core/        Domain-free shared platform
-├── wnba-oracle/                 WNBA app (models, features, contests, etc.)
-├── nfl-oracle/                  NFL app (models, features, contests, etc.)
-├── nba-oracle/                  NBA app (models, features, contests, etc.)
-├── nhl-oracle/                  NHL app (models, features, contests, etc.)
-├── scripts/                      Portfolio operations (auth, secrets, CI)
+├── packages/oracle-core/         Domain-free platform (oracle_core)
+├── wnba-oracle/                  WNBA app (models, jobs, contests)
+├── nfl-oracle/                   NFL app (models, worker, contests)
+├── nba-oracle/                   NBA app (health scaffold, history loader)
+├── nhl-oracle/                   NHL app (contract, baselines, staging shell)
+├── scripts/                      Portfolio ops, corpus helpers, Ollama watcher
+│   ├── ollama_hv_watcher/        HV/TDV model-path helper (not a serve primary)
+│   ├── corpus/                   Monorepo corpus exporters
+│   ├── realsports_corpus/        Sibling-repo layout + coverage manifest
+│   └── rs_corpus/                Real Sports key-dump scaffold
+├── drive/                        Scratch briefs (not canonical state)
 ├── AGENTS.md                     Portfolio instructions for all agents
-├── README.md                     Portfolio overview
+├── OVERVIEW.md                   Structural map (layout, T-40, Ollama role)
+├── README.md                     Portfolio overview and product goal
+├── ENTRY_POINTS.md               This file
 ├── Makefile                      Shared build targets
 ├── pyproject.toml                Workspace dependencies
 └── .devcontainer/                Codespaces environment
 ```
+
+`OVERVIEW.md` is the outline of what each tree owns. Each app `README.md`
+is the inline contract for that sport. Live knobs stay in `STATUS.md`.
 
 ## Shared commands (work the same everywhere)
 
@@ -469,8 +479,8 @@ evidence on #457 / #453):
 | WNBA API | `wnba-production` | `https://wnba-api-wnba-production.up.railway.app` |
 | WNBA frontend | `wnba-production` | `https://wnba-frontend-wnba-production.up.railway.app` |
 
-NHL / NBA staging shells may gain `*.up.railway.app` domains later; they are not
-serving paths until the owning app `STATUS.md` says so.
+NHL and NBA public hostnames, when they exist, are recorded in that app's
+`STATUS.md`. A staging health URL there is not a contest serving path.
 
 Legacy hostnames on old projects may still answer until cron/domain cut completes; prefer the mono public URLs above and keep data-plane on the public TCP proxy (see next subsection).
 
@@ -588,11 +598,16 @@ complete historical capture (binary install + watcher: #574).
 
 ## Ollama HV watcher (#574)
 
-Portfolio Codespace helper (not per-app serving). Arms at the earliest slate
-T-40 across sports and stays open until the latest slate `close_at`. Default
-model `llama3.2:3b`. Artifacts under gitignored `data/ollama_hv/`. Training /
-`ollama generate` requires `coverage_manifest` complete (#526) or
-`SPORTS_OLLAMA_UNLOCK=1`. Commands: `scripts/ollama_hv_watcher/README.md`.
+Portfolio Codespace helper inside the HV/TDV model path (issue #574). It
+reads the same Highest-value / Total Value boards the sport models train on
+and writes five-player learn ticks. It does not replace a sport serve
+primary (`WNBA_SERVE_PRIMARY`, NFL ridge / valuelaw, NHL priors). It does not
+publish a freeze. Arms at the earliest supplied slate T-40 and stays open
+until the latest slate `close_at`. Default model `llama3.2:3b`. Artifacts
+under gitignored `data/ollama_hv/`. Training / `ollama generate` requires
+`coverage_manifest` complete (#526) or `SPORTS_OLLAMA_UNLOCK=1`. Commands
+and the training-data inventory: `scripts/ollama_hv_watcher/README.md`.
+Structural role: `OVERVIEW.md`.
 
 ```sh
 bash scripts/ollama_hv_watcher/install_codespace.sh

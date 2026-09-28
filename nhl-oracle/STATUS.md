@@ -3,6 +3,16 @@
 Last verified: 2026-09-27 CT (#535 HV train/backtest wiring; continues #453/#526;
 #501 zero-boost gate; #482 nhl-staging Docker live smoke)
 
+## Win stack index (#594)
+
+Pointer only. Not a new live check.
+
+- Code contract (HV label, zero-boost gate, T-40 skeleton, no serve knobs,
+  export stub exit 78): `README.md` (Win stack).
+- Staging health URLs and the corpus gap: sections below.
+- Ollama is not an NHL model and there is still no hosted freeze publish.
+  Role: root `../OVERVIEW.md`.
+
 ## Highest Total Value train + backtest path (#535 / #453 / #526)  -  2026-09-27
 
 - **Train/backtest target:** Real Sports Highest value / Total Value board
