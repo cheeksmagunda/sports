@@ -175,10 +175,35 @@ def hv_feature_emphasis_names() -> dict[str, Any]:
     }
 
 
+def _feature_spec_property(row: dict[str, str]) -> dict[str, Any]:
+    """One live FeatureSpec as a schema.org PropertyValue."""
+
+    return property_value(
+        name=row["name"],
+        value=True,
+        property_id="oracle:FeatureSpec",
+        additional={"group": row["group"], "role": row["role"], "live_ok": True},
+    )
+
+
+def _role_observation(role: str, rows: list[dict[str, str]]) -> dict[str, Any]:
+    """Observation whose properties are the FeatureSpecs in one emphasis role."""
+
+    return observation(
+        about=sports_event(identifier=f"hv-tdv-{role}", name=f"HV/TDV {role}"),
+        measured_property=property_value(name="FeatureSpec role", property_id="oracle:FeatureSpec"),
+        value=len(rows),
+        unit_text="feature",
+        additional_properties=[_feature_spec_property(row) for row in rows],
+    )
+
+
 def _observation(report: dict[str, Any]) -> dict[str, Any]:
-    by_role: dict[str, list[str]] = {}
+    """Parent Observation. Each role recurses to its own FeatureSpec Observation."""
+
+    by_role: dict[str, list[dict[str, str]]] = {}
     for row in report["feature_spec"]:
-        by_role.setdefault(str(row["role"]), []).append(str(row["name"]))
+        by_role.setdefault(str(row["role"]), []).append(row)
     properties = [
         property_value(name="draft count is label", value=False),
         property_value(name="winning drafts are label", value=False),
@@ -187,10 +212,30 @@ def _observation(report: dict[str, Any]) -> dict[str, Any]:
         property_value(name="rank key", value=_RANK_KEY),
         property_value(name="score law", value=_SCORE_LAW),
         property_value(name="sample", value=report["sample"]),
-        property_value(name="ridge core", value=", ".join(report["ridge_core"])),
+        property_value(
+            name="ridge core",
+            value=len(report["ridge_core"]),
+            value_reference=observation(
+                about=sports_event(identifier="hv-tdv-ridge-core", name="HV/TDV ridge core"),
+                measured_property=property_value(name="ridge core"),
+                value=len(report["ridge_core"]),
+                unit_text="feature",
+                additional_properties=[
+                    property_value(name=name, value=True, property_id="oracle:ridge-slot")
+                    for name in report["ridge_core"]
+                ],
+            ),
+        ),
     ]
-    for role, names in by_role.items():
-        properties.append(property_value(name=role, value=", ".join(names)))
+    for role, rows in by_role.items():
+        properties.append(
+            property_value(
+                name=role,
+                value=len(rows),
+                property_id="oracle:FeatureSpec",
+                value_reference=_role_observation(role, rows),
+            )
+        )
     node = observation(
         about=sports_event(identifier="hv-tdv-leaderboard", name="HV/TDV contest board"),
         measured_property=property_value(name="HV top-10 feature emphasis"),

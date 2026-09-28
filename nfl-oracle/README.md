@@ -460,11 +460,12 @@ is one board; `NFL_TRAIN_DISPLAY_TOP_K` overrides the 10). With no boost
 map the high weight stays the per-game raw-value top five. Every other
 HV-board player stays in the fit at the base weight. Draft counts,
 popularity sections, winning drafts, and reconstructed boards are excluded.
-The train audit `hv_feature_emphasis` names the live FeatureSpec roles
-that can move an HV-board row (usage priors, matchup, role, pace, slate,
-injury), the ridge slots that multiply a coefficient, and the chalk
-channels that stay off (`prior_log_count` forced to 0, draft count,
-winning drafts). Card boost is the rank key and the optimizer score. It
+The train audit `hv_feature_emphasis` records a schema.org Observation.
+Each emphasis role is a nested Observation of PropertyValues with
+propertyID `oracle:FeatureSpec` (usage priors, matchup, role, pace, slate,
+injury), plus the ridge slots that multiply a coefficient. Chalk channels
+stay off that graph (`prior_log_count` forced to 0, draft count, winning
+drafts). Card boost is the rank key and the optimizer score. It
 is not a ridge coefficient. `card_boost_post_settlement` stays
 live-forbidden.
 Corpus G box `value` is not y. Fewer than 30 leaderboard rows fails with

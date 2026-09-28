@@ -11,6 +11,31 @@ from nfl_oracle.recommendations.hv_emphasis import (
 )
 
 
+def _feature_spec_names(node: object) -> set[str]:
+    """Names on nested PropertyValues marked oracle:FeatureSpec."""
+
+    found: set[str] = set()
+    if isinstance(node, dict):
+        if node.get("@type") == "PropertyValue" and node.get("propertyID") == "oracle:FeatureSpec":
+            name = node.get("name")
+            if isinstance(name, str) and name not in {
+                "usage",
+                "matchup",
+                "role",
+                "pace",
+                "slate",
+                "injury",
+                "FeatureSpec role",
+            }:
+                found.add(name)
+        for value in node.values():
+            found |= _feature_spec_names(value)
+    elif isinstance(node, list):
+        for value in node:
+            found |= _feature_spec_names(value)
+    return found
+
+
 def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     report = hv_feature_emphasis()
     names = [row["name"] for row in report["feature_spec"]]
@@ -41,7 +66,23 @@ def test_emphasis_names_are_live_and_chalk_channels_stay_off() -> None:
     assert flags["draft count is label"] is False
     assert flags["winning drafts are label"] is False
     assert flags["card boost is ridge feature"] is False
-    assert "prior_started" in flags["usage"]
+    usage = next(item for item in observation["additionalProperty"] if item["name"] == "usage")
+    assert usage["propertyID"] == "oracle:FeatureSpec"
+    nested = usage["valueReference"]
+    assert nested["@type"] == "Observation"
+    spec_names = {
+        item["name"]
+        for item in nested["additionalProperty"]
+        if item.get("propertyID") == "oracle:FeatureSpec"
+    }
+    assert "prior_started" in spec_names
+    assert "prior_minutes" in spec_names
+    walked = _feature_spec_names(observation)
+    assert "opp_def_value_allowed_prior" in walked
+    assert "position" in walked
+    assert "prior_log_count" not in walked
+    assert "draft_count" not in walked
+    assert "card_boost_post_settlement" not in walked
     compact = hv_feature_emphasis_names()
     json.dumps(compact)
     assert compact["boost_is_ridge_feature"] is False

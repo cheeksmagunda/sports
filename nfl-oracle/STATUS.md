@@ -120,8 +120,11 @@ The display window is a higher-value, higher-boost set than the chalk
 window, and most of it is not the chalk set. Every HV-board player stays
 a training row. Players outside this window keep the base weight.
 
-`nfl-pipeline train` writes `hv_feature_emphasis` on the audit. Live
-FeatureSpec roles that can move an HV-board row:
+`nfl-pipeline train` writes `hv_feature_emphasis` on the audit. The
+observation nests each role as its own schema.org Observation. Each live
+feature on that role is a PropertyValue with propertyID `oracle:FeatureSpec`.
+The parent records that draft count and winning drafts are not labels.
+Live FeatureSpec roles that can move an HV-board row:
 
 | Role | FeatureSpec names |
 |---|---|
