@@ -21,6 +21,8 @@ This app is not on the freeze path.
 | Game-stats append | `scripts/append_game_stats_matchup.py` uses `oracle_core.corpus_matchup` |
 | Public history connector | `nba-history-load` / `history_loader.py` (`data.nba.com`). Observation only. Counts: `STATUS.md` |
 | Real Sports connector | `nba-corpus-g-backfill` writes a blocked coverage matrix and exits non-zero when the process has no portfolio `REALSPORTS_*` material. It does not mint a session |
+helpers, an auth-blocked Corpus G backfill gate, and an observation-only
+T-40 freeze gate. Contest entry, provider HTTP ingest, models, and serving
 
 ## Connection surfaces
 
@@ -83,3 +85,19 @@ uv run --package nba-oracle nba-history-load --start-season 2021 --end-season 20
 ```
 
 Requires `DATABASE_PUBLIC_URL` (public TCP / `*.proxy.rlwy.net`, `sslmode=require`).
+
+## Freeze gate
+
+`nba_oracle.scheduler` is an observation-only T-40 gate. It is not mounted
+on the health API and it does not submit a lineup. `contest_entry` stays
+false.
+
+- Pool completeness counts games whose tip is still ahead of the decision
+  clock. A tipped game drops out of the denominator. An unobserved player
+  on a still-draftable game fails closed.
+- `run_freeze_cycle` collects, then reads the clock, then stamps one
+  evidence epoch for that tick. Optional future feature rows are skipped.
+  A required future row fails closed. Refusal reasons are on the job result.
+- The job name is `nba_freeze_cycle`, role `worker` only, lease
+  `nba:freeze_cycle`.
+- Live pool, runner, and Railway gaps are in `STATUS.md`.
