@@ -132,6 +132,12 @@ class ContestPoolResult:
     diversity_relaxed: bool
     naive_capture_ratio: float | None = None
     picker_profile: str = "identity"
+    # ``visible`` is the contest's draft-stats pool. ``contest_games`` is every
+    # non-absent Corpus G row on those same games (full participant roster).
+    pool_scope: str = "visible"
+    mean_pick_prior_games: float | None = None
+    cold_start_picks: int = 0
+    cold_start_candidates: int = 0
 
 
 @dataclass(frozen=True)
@@ -167,17 +173,28 @@ def rows_by_eastern_day(
 def join_contest_pool(
     contest: ParsedContest,
     day_rows: Sequence[HistoricalPerformance],
+    *,
+    scope: str = "visible",
 ) -> ContestPool | None:
-    """Restrict one ET day's Corpus G rows to this contest's visible pool.
+    """Restrict one ET day's Corpus G rows to this contest's pool.
 
-    The cutoff is the day's first kickoff across every Corpus G game that day,
-    and every one of those games is excluded from training, which is
-    conservative when a contest covers only part of the day.
+    ``scope='visible'`` keeps draft-stats players only. ``scope='contest_games'``
+    keeps every Corpus G row on a game that the visible pool actually matched,
+    which is the full participant roster of those games (cold-start chalk
+    comparison). The cutoff is the day's first kickoff across every Corpus G
+    game that day, and every one of those games is excluded from training,
+    which is conservative when a contest covers only part of the day.
     """
+    if scope not in {"visible", "contest_games"}:
+        raise ValueError("pool_scope_invalid")
     if not day_rows:
         return None
     pool_ids = {row.player_id for row in contest.draft_stats}
-    joined = tuple(row for row in day_rows if row.player_id in pool_ids)
+    if scope == "visible":
+        joined = tuple(row for row in day_rows if row.player_id in pool_ids)
+    else:
+        visible_games = {row.game_id for row in day_rows if row.player_id in pool_ids}
+        joined = tuple(row for row in day_rows if row.game_id in visible_games)
     if not joined:
         return None
     present = {row.player_id for row in joined}
@@ -222,6 +239,7 @@ def replay_contest_pools(
     fitter: Fitter = _production_fit,
     picker: PickerKnobs | None = None,
     progress: Callable[[str], None] | None = None,
+    pool_scope: str = "visible",
 ) -> tuple[tuple[ContestPoolResult, ...], dict[str, int]]:
     """Walk-forward production replay restricted to each contest's visible pool.
 
@@ -242,7 +260,7 @@ def replay_contest_pools(
         if not contest.draft_stats:
             excluded["no_draft_stats"] += 1
             continue
-        pool = join_contest_pool(contest, by_day.get(contest.contest.day, ()))
+        pool = join_contest_pool(contest, by_day.get(contest.contest.day, ()), scope=pool_scope)
         if pool is None:
             excluded["no_corpus_g_rows_for_day"] += 1
             continue
@@ -276,6 +294,7 @@ def replay_contest_pools(
                 compact_samples=compact_samples,
                 picker=knobs,
                 excluded=excluded,
+                pool_scope=pool_scope,
             )
             if result is not None:
                 results.append(result)
@@ -296,6 +315,7 @@ def _run_contest(
     compact_samples: bool,
     picker: PickerKnobs,
     excluded: dict[str, int],
+    pool_scope: str = "visible",
 ) -> ContestPoolResult | None:
     contest = pool.contest
     history = rows_before(rows, cutoff=pool.cutoff, exclude_game_ids=pool.day_game_ids)
@@ -367,10 +387,22 @@ def _run_contest(
         and abs(contest_values[row.player_id] - row.value) > VALUE_MISMATCH_TOLERANCE
     )
     replay = replay_contest(contest)
-    if replay.hindsight_best is None or replay.hindsight_best.total_score <= 0:
-        excluded["nonpositive_ceiling"] += 1
-        return None
-    ceiling = replay.hindsight_best.total_score
+    if pool_scope == "visible":
+        if replay.hindsight_best is None or replay.hindsight_best.total_score <= 0:
+            excluded["nonpositive_ceiling"] += 1
+            return None
+        ceiling = replay.hindsight_best.total_score
+        hindsight_ids = replay.hindsight_best.player_ids
+    else:
+        # Full participant roster of the contest's games. Ceiling is hindsight
+        # on that roster, not the visible-pool ceiling, so the ratio is not
+        # comparable to the visible-pool capture number.
+        full_ceiling = best_lineup(actual, boosts, slots)
+        if full_ceiling is None or full_ceiling.total_score <= 0:
+            excluded["nonpositive_ceiling"] += 1
+            return None
+        ceiling = full_ceiling.total_score
+        hindsight_ids = full_ceiling.player_ids
     policy = ScoringPolicy()
     committed = sum(
         policy.score(actual[pick.player_id], pick.slot_multiplier, pick.card_boost)
@@ -395,7 +427,11 @@ def _run_contest(
     winner_ids = tuple(pick.player_id for pick in winner.picks) if winner else ()
     visible = [entry.total_from_picks() for entry in contest.entries]
     visible_scores = [score for score in visible if score is not None]
-    hindsight_ids = replay.hindsight_best.player_ids
+    prior_counts: dict[int, int] = defaultdict(int)
+    for row in history:
+        prior_counts[row.player_id] += 1
+    pick_priors = [prior_counts[pid] for pid in chosen]
+    candidate_priors = [prior_counts[row.player_id] for row in playing]
     return ContestPoolResult(
         contest_id=pool.contest_id,
         day=contest.contest.day,
@@ -415,16 +451,28 @@ def _run_contest(
         capture_ratio=committed / ceiling,
         ordered_capture_ratio=ordered_score / ceiling,
         hindsight_overlap=len(set(chosen) & set(hindsight_ids)),
-        winner_score=replay.winner_score,
-        winner_capture_ratio=replay.winner_capture_ratio,
-        winner_player_ids=winner_ids,
-        winner_overlap=len(set(chosen) & set(winner_ids)) if winner else None,
-        beats_winner=(committed > replay.winner_score) if replay.winner_score is not None else None,
-        beats_visible_entries=sum(committed > score for score in visible_scores),
+        winner_score=replay.winner_score if pool_scope == "visible" else None,
+        winner_capture_ratio=replay.winner_capture_ratio if pool_scope == "visible" else None,
+        winner_player_ids=winner_ids if pool_scope == "visible" else (),
+        winner_overlap=(
+            len(set(chosen) & set(winner_ids)) if winner and pool_scope == "visible" else None
+        ),
+        beats_winner=(
+            (committed > replay.winner_score)
+            if pool_scope == "visible" and replay.winner_score is not None
+            else None
+        ),
+        beats_visible_entries=(
+            sum(committed > score for score in visible_scores) if pool_scope == "visible" else 0
+        ),
         visible_entries=len(visible_scores),
         diversity_relaxed=lineup.diversity_relaxed,
         naive_capture_ratio=naive_capture,
         picker_profile=picker.profile,
+        pool_scope=pool_scope,
+        mean_pick_prior_games=(mean(pick_priors) if pick_priors else None),
+        cold_start_picks=sum(count == 0 for count in pick_priors),
+        cold_start_candidates=sum(count == 0 for count in candidate_priors),
     )
 
 
@@ -498,10 +546,19 @@ def capture_with_picker(
     )
 
 
-def replay_contest_pools_knob_sweep(
+@dataclass(frozen=True)
+class ReplaySetting:
+    """One shared-fit replay arm: picker knobs plus an optimizer config."""
+
+    name: str
+    picker: PickerKnobs
+    optimizer: OptimizerConfig | None = None
+
+
+def replay_contest_pools_setting_sweep(
     rows: Sequence[HistoricalPerformance],
     contests: Iterable[ParsedContest],
-    knobs_list: Sequence[PickerKnobs],
+    settings: Sequence[ReplaySetting],
     *,
     fold_of: Callable[[ContestPool], Hashable] | None = None,
     now: datetime | None = None,
@@ -511,15 +568,20 @@ def replay_contest_pools_knob_sweep(
     compact_samples: bool = True,
     fitter: Fitter = _production_fit,
     progress: Callable[[str], None] | None = None,
+    pool_scope: str = "visible",
 ) -> dict[str, tuple[tuple[ContestPoolResult, ...], dict[str, int]]]:
-    """One walk-forward fit, many picker settings. Keys are ``PickerKnobs.profile``."""
-    if not knobs_list:
-        raise ValueError("knobs_list_empty")
-    profiles = [k.profile for k in knobs_list]
-    if len(set(profiles)) != len(profiles):
-        raise ValueError("picker_profile_not_unique")
+    """One walk-forward fit, many picker/optimizer settings.
+
+    Keys are ``ReplaySetting.name``. A setting with ``optimizer is None`` uses
+    the shared ``optimizer_config`` (default ``OptimizerConfig(simulations=100)``).
+    """
+    if not settings:
+        raise ValueError("settings_empty")
+    names = [setting.name for setting in settings]
+    if len(set(names)) != len(names):
+        raise ValueError("replay_setting_name_not_unique")
     clock_now = utc(now or datetime.now(UTC))
-    cfg = optimizer_config or OptimizerConfig(simulations=100)
+    default_cfg = optimizer_config or OptimizerConfig(simulations=100)
     model_fit_config = fit_config or FitConfig()
     fold_key = fold_of or _default_fold
     by_day = rows_by_eastern_day(rows)
@@ -529,7 +591,7 @@ def replay_contest_pools_knob_sweep(
         if not contest.draft_stats:
             shared_excluded["no_draft_stats"] += 1
             continue
-        pool = join_contest_pool(contest, by_day.get(contest.contest.day, ()))
+        pool = join_contest_pool(contest, by_day.get(contest.contest.day, ()), scope=pool_scope)
         if pool is None:
             shared_excluded["no_corpus_g_rows_for_day"] += 1
             continue
@@ -537,9 +599,9 @@ def replay_contest_pools_knob_sweep(
     folds: dict[Hashable, list[ContestPool]] = defaultdict(list)
     for pool in pools:
         folds[fold_key(pool)].append(pool)
-    results_by_profile: dict[str, list[ContestPoolResult]] = {k.profile: [] for k in knobs_list}
-    excluded_by_profile: dict[str, dict[str, int]] = {
-        k.profile: defaultdict(int) for k in knobs_list
+    results_by_name: dict[str, list[ContestPoolResult]] = {setting.name: [] for setting in settings}
+    excluded_by_name: dict[str, dict[str, int]] = {
+        setting.name: defaultdict(int) for setting in settings
     }
     for key, fold_pools in sorted(folds.items(), key=lambda item: min(p.cutoff for p in item[1])):
         fold_cutoff = min(pool.cutoff for pool in fold_pools)
@@ -555,7 +617,7 @@ def replay_contest_pools_knob_sweep(
             shared_excluded[f"fit:{error}"] += len(fold_pools)
             continue
         for pool in sorted(fold_pools, key=lambda p: (p.cutoff, p.contest_id)):
-            for knobs in knobs_list:
+            for setting in settings:
                 per_excluded: dict[str, int] = defaultdict(int)
                 result = _run_contest(
                     pool,
@@ -564,24 +626,63 @@ def replay_contest_pools_knob_sweep(
                     fold=str(key),
                     now=clock_now,
                     team_keys=team_keys,
-                    config=cfg,
+                    config=setting.optimizer or default_cfg,
                     compact_samples=compact_samples,
-                    picker=knobs,
+                    picker=setting.picker,
                     excluded=per_excluded,
+                    pool_scope=pool_scope,
                 )
                 for reason, count in per_excluded.items():
-                    excluded_by_profile[knobs.profile][reason] += count
+                    excluded_by_name[setting.name][reason] += count
                 if result is not None:
-                    results_by_profile[knobs.profile].append(result)
+                    results_by_name[setting.name].append(result)
                     if progress is not None:
                         progress(
-                            f"contest:{pool.contest_id} profile={knobs.profile} "
+                            f"contest:{pool.contest_id} setting={setting.name} "
                             f"capture={result.capture_ratio:.3f}"
                         )
     return {
-        profile: (
+        name: (
             tuple(results),
-            _merge_excluded_counts(shared_excluded, excluded_by_profile[profile]),
+            _merge_excluded_counts(shared_excluded, excluded_by_name[name]),
         )
-        for profile, results in results_by_profile.items()
+        for name, results in results_by_name.items()
     }
+
+
+def replay_contest_pools_knob_sweep(
+    rows: Sequence[HistoricalPerformance],
+    contests: Iterable[ParsedContest],
+    knobs_list: Sequence[PickerKnobs],
+    *,
+    fold_of: Callable[[ContestPool], Hashable] | None = None,
+    now: datetime | None = None,
+    team_keys: Mapping[int, str] | None = None,
+    optimizer_config: OptimizerConfig | None = None,
+    fit_config: FitConfig | None = None,
+    compact_samples: bool = True,
+    fitter: Fitter = _production_fit,
+    progress: Callable[[str], None] | None = None,
+    pool_scope: str = "visible",
+) -> dict[str, tuple[tuple[ContestPoolResult, ...], dict[str, int]]]:
+    """One walk-forward fit, many picker settings. Keys are ``PickerKnobs.profile``."""
+    if not knobs_list:
+        raise ValueError("knobs_list_empty")
+    profiles = [k.profile for k in knobs_list]
+    if len(set(profiles)) != len(profiles):
+        raise ValueError("picker_profile_not_unique")
+    settings = tuple(ReplaySetting(name=knobs.profile, picker=knobs) for knobs in knobs_list)
+    return replay_contest_pools_setting_sweep(
+        rows,
+        contests,
+        settings,
+        fold_of=fold_of,
+        now=now,
+        team_keys=team_keys,
+        optimizer_config=optimizer_config,
+        fit_config=fit_config,
+        compact_samples=compact_samples,
+        fitter=fitter,
+        progress=progress,
+        pool_scope=pool_scope,
+    )

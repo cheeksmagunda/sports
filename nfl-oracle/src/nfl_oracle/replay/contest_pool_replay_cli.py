@@ -101,6 +101,37 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the profile's requested distinct-game floor (1..5).",
     )
+    parser.add_argument(
+        "--max-defenders",
+        type=int,
+        default=0,
+        help="Cap DL/LB/DB (and aliases) in the five. 0 disables (research default).",
+    )
+    parser.add_argument(
+        "--max-kickers",
+        type=int,
+        default=0,
+        help="Cap K in the five. 0 disables (research default).",
+    )
+    parser.add_argument(
+        "--slot-by-mean",
+        action="store_true",
+        help="Place the chosen five into slots by descending projected mean.",
+    )
+    parser.add_argument(
+        "--no-slot-by-mean",
+        action="store_true",
+        help="Keep joint search slot order (overrides --slot-by-mean).",
+    )
+    parser.add_argument(
+        "--pool-scope",
+        choices=("visible", "contest_games"),
+        default="visible",
+        help=(
+            "visible: contest draft-stats pool. contest_games: every Corpus G "
+            "participant on those games (cold-start chalk denominator)."
+        ),
+    )
     add_fit_config_args(parser)
     parser.add_argument("--out", type=Path, default=None, help="JSON report path.")
     return parser
@@ -141,6 +172,9 @@ def main(argv: list[str] | None = None) -> int:
             args.min_distinct_games if args.min_distinct_games is not None else preset_games
         ),
         profile=args.optimizer_profile,
+        max_defenders=args.max_defenders,
+        max_kickers=args.max_kickers,
+        slot_by_mean=(False if args.no_slot_by_mean else args.slot_by_mean),
     )
     results, excluded = replay_contest_pools(
         inputs.enriched,
@@ -152,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         compact_samples=not args.full_samples,
         picker=picker,
         progress=progress,
+        pool_scope=args.pool_scope,
     )
     summary = summarize(results, excluded)
     payload = {
@@ -161,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         "fit_config": fit_config.model_dump(mode="json"),
         "picker": picker.model_dump(mode="json"),
         "optimizer": optimizer_config.model_dump(mode="json"),
+        "pool_scope": args.pool_scope,
         "contests_with_field_evidence": len(contests),
         "history_rows": len(inputs.rows),
         "history_excluded": inputs.history_excluded,

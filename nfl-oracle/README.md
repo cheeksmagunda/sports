@@ -328,6 +328,28 @@ Replay CLIs accept optional `--fit-*` knobs so a race can vary the shared
 ridge `FitConfig` without editing code. Knob-sweep `excluded` reasons are
 isolated per profile (shared pool skips stay on every profile).
 
+`nfl-contest-pool-replay` also accepts `--max-defenders`, `--max-kickers`,
+`--slot-by-mean` / `--no-slot-by-mean`, and `--pool-scope visible|contest_games`.
+Research CLI defaults are uncapped (`0`), joint slots, and the visible
+draft-stats pool. Serving freeze defaults (one K, one defender, slot-by-mean)
+come from `optimizer_config_from_env` (#616/#617) and are separate.
+`contest_games` scores every Corpus G participant on the contest's games
+against that roster's own hindsight ceiling (cold-start chalk comparison;
+not the same ratio as the visible pool).
+
+Shared-fit Highest-value / Total-value grid (identity vs boost 0.75, max 1
+defender, max 1 kicker, slot-by-mean, plus the contest-game chalk arm):
+
+```sh
+cd nfl-oracle
+uv run --package nfl-oracle python scripts/hv_tdv_campaign.py \
+  --history-root data/raw/corpus_g \
+  --contest-root data/raw/corpus_c \
+  --context-snapshot /path/to/context.json \
+  --out reports/hv_tdv_campaign.json \
+  --report reports/hv_tdv_campaign.md
+```
+
 Nightly day-close writes Corpus C field rows as parquet under
 `data/race/dayclose/<season>/` and `scripts/build_race_corpus.py` aggregates
 them for offline Actions. `scripts/resolve_context_snapshot.py` locates the
