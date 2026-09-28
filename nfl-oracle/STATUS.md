@@ -1,43 +1,41 @@
 # Status
 
-Last verified: 2026-09-28T17:15Z
+Last verified: 2026-09-28T17:20Z
 
-## HV/TDV board backtest by slate regime (#603)  -  2026-09-28T17:15Z
+## HV/TDV board backtest by slate regime (#603)  -  2026-09-28T17:20Z
 
-Offline research only. Primary metric is Highest-value / Total-value board
-capture (top-5 hits and share of that board's displayed Value), not win
-frequency. Sunday multi-game and one-night (TNF/SNF/MNF) stay separate.
-Report and exact command: `nfl-oracle/reports/hv_regime_backtest.md` (JSON
-sibling). No Railway variable, deploy, or restart from this issue. **Do not
-flip live `NFL_PICKER_BOOST_RANK_BLEND` to 0.75** (live stays `0`; see Live
-train / #637).
+Success metric is the Highest-value / Total-value board only: top-5 hits,
+and the share of that top 5's displayed Value those hits carry. Draft count
+and win frequency are not scored. Sunday multi-game and one-night stay
+separate. Report and exact command: `nfl-oracle/reports/hv_regime_backtest.md`
+(JSON sibling). No Railway variable, deploy, or restart. **Do not flip live
+`NFL_PICKER_BOOST_RANK_BLEND` to 0.75** (live stays `0`; see Live train /
+#637). Offline arms still compare identity vs `0.75`.
 
-The two screenshot boards (2026-09-20, 2026-09-27) are `sunday_multi`. Pool
-is the visible Highest value section, not the full roster. Displayed value
-matches `base * (slot + boost)` within 0.20.
+The two screenshot boards (2026-09-20 and 2026-09-27) are `sunday_multi`.
+Pool is the visible Highest value section (14 rows), not the full roster.
+Displayed value matches `base * (slot_multiplier(most_common_slot) + boost)`
+within 0.20.
 
-Perfect-base optimizer, mean of the two Sundays:
+Perfect-base optimizer (realized base, no blend), mean of the two Sundays:
+HV/TDV top-5 hit rate 90.0%, board Value capture 90.7%. Sep 20 identity
+hits 4 of 5 (81.3% of board Value) and includes two kickers. Sep 27
+identity hits 5 of 5 (100% of board Value) and includes two defenders.
+`boost_0.75` on that same correct base hits the board at 10.0% and captures
+8.9% of board Value. Max-1 defender and max-1 kicker on the blend captures
+20.2%.
 
-| policy | HV/TDV hit rate | board Value note |
-|--------|-----------------|------------------|
-| identity uncapped | 90.0% | Sep 20: 4/5 (two K); Sep 27: 5/5 (two DEF) |
-| `boost_0.75` uncapped | 10.0% | captures ~8.9% of board Value mean (see report) |
-| `boost_0.75` + max 1 DEF + max 1 K | 20.0% | captures ~20.2% of board Value mean |
-
-One-night boards scored: 0. Corpus C was empty on the worker volume at the
-campaign inventory, so production ridge walk-forward was not replayed.
-Harness flags for the next hydrate: `--max-defenders`, `--max-kickers`,
+One-night boards scored: 0 for TNF, SNF, and MNF. Corpus C was empty on the
+worker volume inventory, so production ridge walk-forward was not replayed.
+Harness for the next hydrate: `--max-defenders`, `--max-kickers`,
 `--slot-by-mean` / `--no-slot-by-mean`, `--pool-scope visible|contest_games`,
-plus `scripts/hv_tdv_campaign.py` and `scripts/hv_regime_backtest.py`.
-Campaign contract: `nfl-oracle/reports/hv_tdv_campaign.md`.
+`scripts/hv_tdv_campaign.py`, `scripts/hv_regime_backtest.py`. Campaign
+contract: `nfl-oracle/reports/hv_tdv_campaign.md`. Contest-pool replay now
+records `hv_board_hits` / `hv_board_capture` when a board is attached.
 
-Cold-start chalk: `--pool-scope contest_games` scores every Corpus G
-participant on the contest's games against that roster's own ceiling;
-`visible` uses the draft-stats pool. Those two denominators were not scored
-on a full Corpus C grid this session.
-
-Serving code defaults for slot-by-mean / max K / max defenders already landed
-via #616/#617. This PR does not change live Railway knobs.
+Cold-start chalk: `--pool-scope contest_games` vs `visible`. Those
+denominators were not scored on a full Corpus C grid this session. Serving
+slot-by-mean / max K / max defenders already on main via #616/#617.
 
 ## HV/TDV knob campaign inventory (#603)  -  2026-09-28T03:15Z
 
@@ -55,7 +53,8 @@ Read-only volume list on `nfl-oracle-worker` (`sports-oracle` /
 The contest-pool grid did not run (empty Corpus C). The 2026-09-25 shared-fit
 sweep (91 contests, diversified floor) remains the ridge mixture reference:
 identity mean capture 51.7%, `boost_0.75` 57.9%. That grid was not remeasured
-under `max_value` and was not stored per slate regime.
+under `max_value` and was not stored per slate regime. It is hindsight
+capture on a mixture of regimes, not the HV/TDV board metric above.
 
 ## Live train after #650 day-scope (Refs #647)  -  2026-09-28T04:59Z
 

@@ -66,6 +66,7 @@ from nfl_oracle.replay.harness import (
     eligible_pool_values,
     replay_contest,
 )
+from nfl_oracle.replay.hv_board_overlap import hv_board_success
 from nfl_oracle.replay.production_backtest import (
     Fitter,
     LeakageError,
@@ -140,8 +141,11 @@ class ContestPoolResult:
     cold_start_picks: int = 0
     cold_start_candidates: int = 0
     # sunday_multi, one_night_tnf / one_night_snf / one_night_mnf, or other.
-    # Sunday chalk and a one-night slate are not one sample.
+    # Sunday and a one-night slate are not one sample.
     slate_regime: str = "unclassified"
+    # Success metric: top 5 of highestBoostedValuePlayers by displayed value.
+    hv_board_hits: int | None = None
+    hv_board_capture: float | None = None
 
 
 @dataclass(frozen=True)
@@ -436,6 +440,12 @@ def _run_contest(
         prior_counts[row.player_id] += 1
     pick_priors = [prior_counts[pid] for pid in chosen]
     candidate_priors = [prior_counts[row.player_id] for row in playing]
+    hv_board = tuple(
+        (row.player_id, float(row.value))
+        for row in contest.draft_stats
+        if row.section == "highestBoostedValuePlayers" and row.value is not None
+    )
+    hv_hits, hv_capture = hv_board_success(chosen, hv_board)
     return ContestPoolResult(
         contest_id=pool.contest_id,
         day=contest.contest.day,
@@ -478,6 +488,8 @@ def _run_contest(
         cold_start_picks=sum(count == 0 for count in pick_priors),
         cold_start_candidates=sum(count == 0 for count in candidate_priors),
         slate_regime=regime_from_kickoffs(tuple(row.kickoff_at for row in pool.rows)),
+        hv_board_hits=hv_hits,
+        hv_board_capture=hv_capture,
     )
 
 

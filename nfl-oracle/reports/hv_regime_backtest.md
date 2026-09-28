@@ -1,16 +1,18 @@
-# HV top-5 vs chalk, split by slate regime (#603)
+# HV/TDV board backtest, split by slate regime (#603)
 
-Generated 2026-09-28T03:27:27+00:00.
+Generated 2026-09-28T03:33:20+00:00.
+
+Success metric is the Highest value board only: top-5 hits, and
+the share of that top 5's displayed Value the hits carry.
+Draft count and win frequency are not scored.
 
 Sunday multi-game and one-night (TNF, SNF, MNF) are separate samples.
 A rate measured on Sunday is not a MNF rate.
 
 Board pool: the visible Highest value section in the screenshots.
 That is not the full roster. Players off the board are absent.
-Chalk is the highest draft count on those same rows.
 The optimizer counterfactual uses realized base as a perfect
-projection, then the live boost-rank blend, then the scoring law
-`base * (slot + boost)` with slots assigned by descending projection.
+projection, then the live boost-rank blend, then picks five.
 It is not a walk-forward fit. Corpus C is empty, so the production
 model was not replayed.
 
@@ -24,63 +26,53 @@ scripts/hv_regime_backtest.py --out reports/hv_regime_backtest.json --report rep
 
 ### 2026-09-20 `sunday_multi` law residual max 0.20
 
-HV top 5: Brandon Aubrey, Spencer Shrader, Tre Tucker, Jaylen Waddle, CeeDee Lamb
+HV/TDV top 5: Brandon Aubrey, Spencer Shrader, Tre Tucker, Jaylen Waddle, CeeDee Lamb
 
-Chalk top 5: Ja'Marr Chase, CeeDee Lamb, DeVonta Smith, Harrison Butker, Brandon Aubrey
+HV/TDV top 5 positions: 2 K, 0 DEF, 3 skill.
 
-HV vs chalk overlap: 2 of 5.
-
-HV top 5 positions: 2 K, 0 DEF, 3 skill. Chalk top 5: 2 K, 0 DEF, 3 skill.
-
-| policy | HV hits | chalk hits | realized | vs uncapped | K | DEF |
-|---|---|---|---|---|---|---|
-| identity_uncapped | 4 | 1 | 115.0 | 100.0% | 2 | 0 |
-| boost_0.75_uncapped | 0 | 0 | 94.6 | 82.2% | 1 | 3 |
-| boost_0.75_def1 | 1 | 1 | 102.0 | 88.7% | 1 | 1 |
-| boost_0.75_k1 | 0 | 0 | 94.6 | 82.2% | 1 | 3 |
-| boost_0.75_def1_k1 | 1 | 1 | 102.0 | 88.7% | 1 | 1 |
+| policy | HV hits | HV Value capture | K | DEF |
+|---|---|---|---|---|
+| identity_uncapped | 4 | 81.3% | 2 | 0 |
+| boost_0.75_uncapped | 0 | 0.0% | 1 | 3 |
+| boost_0.75_def1 | 1 | 19.1% | 1 | 1 |
+| boost_0.75_k1 | 0 | 0.0% | 1 | 3 |
+| boost_0.75_def1_k1 | 1 | 19.1% | 1 | 1 |
 
 ### 2026-09-27 `sunday_multi` law residual max 0.20
 
-HV top 5: Chris Boswell, Sam Darnold, Will Anderson Jr., Harold Fannin Jr., Genesis Smith
+HV/TDV top 5: Chris Boswell, Sam Darnold, Will Anderson Jr., Harold Fannin Jr., Genesis Smith
 
-Chalk top 5: Jahmyr Gibbs, Sam Darnold, Chris Boswell, Jordan Addison, Jaylen Warren
+HV/TDV top 5 positions: 1 K, 2 DEF, 2 skill.
 
-HV vs chalk overlap: 2 of 5.
-
-HV top 5 positions: 1 K, 2 DEF, 2 skill. Chalk top 5: 1 K, 0 DEF, 4 skill.
-
-| policy | HV hits | chalk hits | realized | vs uncapped | K | DEF |
-|---|---|---|---|---|---|---|
-| identity_uncapped | 5 | 2 | 121.6 | 100.0% | 1 | 2 |
-| boost_0.75_uncapped | 1 | 1 | 97.6 | 80.2% | 1 | 3 |
-| boost_0.75_def1 | 1 | 2 | 98.8 | 81.3% | 2 | 1 |
-| boost_0.75_k1 | 1 | 1 | 97.6 | 80.2% | 1 | 3 |
-| boost_0.75_def1_k1 | 1 | 2 | 97.1 | 79.9% | 1 | 1 |
-
-## Mean top-5 rate by regime
-
-Rate is hits/5. `identity_uncapped` is the optimizer when the
-projected base is already the realized base. `boost_0.75` is the
-live blend applied on top of that correct base, which reassigns
-the value table in boost order. One-night columns stay empty
-when no one-night board was scored. They are not the Sunday rate.
-
-| policy | sunday_multi HV | sunday_multi chalk | one_night HV | one_night chalk |
+| policy | HV hits | HV Value capture | K | DEF |
 |---|---|---|---|---|
-| identity_uncapped | 90.0% (n=2) | 30.0% (n=2) | n/a (n=0) | n/a (n=0) |
-| boost_0.75_uncapped | 10.0% (n=2) | 10.0% (n=2) | n/a (n=0) | n/a (n=0) |
-| boost_0.75_def1 | 20.0% (n=2) | 30.0% (n=2) | n/a (n=0) | n/a (n=0) |
-| boost_0.75_k1 | 10.0% (n=2) | 10.0% (n=2) | n/a (n=0) | n/a (n=0) |
-| boost_0.75_def1_k1 | 20.0% (n=2) | 30.0% (n=2) | n/a (n=0) | n/a (n=0) |
+| identity_uncapped | 5 | 100.0% | 1 | 2 |
+| boost_0.75_uncapped | 1 | 17.7% | 1 | 3 |
+| boost_0.75_def1 | 1 | 22.7% | 2 | 1 |
+| boost_0.75_k1 | 1 | 17.7% | 1 | 3 |
+| boost_0.75_def1_k1 | 1 | 21.3% | 1 | 1 |
 
-Sunday HV-list vs chalk-list overlap, before any optimizer: 40.0% (n=2).
+## Mean HV/TDV board rate by regime
 
-`one_night_tnf` boards scored: 0. Optimizer HV/chalk rate: not run.
+Hit rate is hits/5 on the board top 5. Value capture is the
+share of that top 5's displayed Value. `identity_uncapped` is
+the optimizer when the projected base is already the realized
+base. `boost_0.75` is the live blend on that correct base.
+One-night columns stay empty when no one-night board was scored.
 
-`one_night_snf` boards scored: 0. Optimizer HV/chalk rate: not run.
+| policy | sunday_multi hits | sunday_multi Value | one_night hits | one_night Value |
+|---|---|---|---|---|
+| identity_uncapped | 90.0% (n=2) | 90.7% (n=2) | n/a (n=0) | n/a (n=0) |
+| boost_0.75_uncapped | 10.0% (n=2) | 8.9% (n=2) | n/a (n=0) | n/a (n=0) |
+| boost_0.75_def1 | 20.0% (n=2) | 20.9% (n=2) | n/a (n=0) | n/a (n=0) |
+| boost_0.75_k1 | 10.0% (n=2) | 8.9% (n=2) | n/a (n=0) | n/a (n=0) |
+| boost_0.75_def1_k1 | 20.0% (n=2) | 20.2% (n=2) | n/a (n=0) | n/a (n=0) |
 
-`one_night_mnf` boards scored: 0. Optimizer HV/chalk rate: not run.
+`one_night_tnf` boards scored: 0. HV/TDV rate: not run.
+
+`one_night_snf` boards scored: 0. HV/TDV rate: not run.
+
+`one_night_mnf` boards scored: 0. HV/TDV rate: not run.
 
 ## Contest-day inventory (not an optimizer frequency)
 
@@ -106,9 +98,8 @@ Same-day SNF sits inside `sunday_multi` when that Sunday also has two or more af
 
 - `NFL_OPTIMIZER_PROFILE=max_value`.
 - No defender cap and no kicker cap. Slot order stays joint.
-- On these two boards, perfect-base identity (the optimizer when the base is already known, n=2) put HV-board players in the top 5 at 90.0% and chalk at 30.0%. Sep 20's identity five includes two kickers. Sep 27's includes two defenders. A max-1 cap on both drops the blended arm to 84.3% of that identity lineup.
-- Do not chase Sunday draft-count chalk. HV top 5 and chalk top 5 overlap 40.0%.
-- Do not read `boost_0.75` as the knob that finds this board once the base is known. On the same perfect base it hits HV top 5 at 10.0% and captures 81.2%, because the blend reassigns a correct value table toward boost order.
+- On these two boards, perfect-base identity (the optimizer when the base is already known, n=2) hits the HV/TDV top 5 at 90.0% and captures 90.7% of that top 5's Value. Sep 20's identity five includes two kickers. Sep 27's includes two defenders.
+- `boost_0.75` on that same perfect base hits the board at 10.0% and captures 8.9% of the board Value. Max-1 defender and max-1 kicker on the blend captures 20.2%.
 - Leave the live ridge blend at `NFL_PICKER_BOOST_RANK_BLEND=0.75` until a regime-split refit replaces it. The 2026-09-25 sweep (identity 51.7%, boost 0.75 57.9%, 91 contests) is that ridge on a mixture of regimes. It is not this table and it is not MNF.
 
 ### one_night_mnf (tonight), and TNF / SNF

@@ -133,9 +133,14 @@ def _arm_row(name: str, results: tuple[ContestPoolResult, ...]) -> dict[str, obj
     cold_picks = [r.cold_start_picks for r in results]
     cold_candidates = [r.cold_start_candidates for r in results]
     priors = [r.mean_pick_prior_games for r in results if r.mean_pick_prior_games is not None]
+    hv_hits = [r.hv_board_hits for r in results if r.hv_board_hits is not None]
+    hv_capture = [r.hv_board_capture for r in results if r.hv_board_capture is not None]
     return {
         "name": name,
         "n": summary.all.n_contests,
+        "mean_hv_board_hits": (sum(hv_hits) / len(hv_hits)) if hv_hits else None,
+        "mean_hv_board_capture": (sum(hv_capture) / len(hv_capture)) if hv_capture else None,
+        "hv_board_n": len(hv_hits),
         "mean_capture": summary.all.mean_capture_ratio,
         "median_capture": summary.all.median_capture_ratio,
         "mean_ordered_capture": summary.all.mean_ordered_capture_ratio,
@@ -178,24 +183,18 @@ def render_report(payload: dict[str, object]) -> str:
         return [
             name,
             str(arm["n"]),
-            _pct(arm["mean_capture"]),  # type: ignore[arg-type]
-            _pct(arm["median_capture"]),  # type: ignore[arg-type]
-            _pct(arm["mean_ordered_capture"]),  # type: ignore[arg-type]
-            _pct(arm["boosted_mean"]),  # type: ignore[arg-type]
-            str(arm["contests_beating_winner"]),
-            _num(arm["mean_pick_prior_games"]),  # type: ignore[arg-type]
+            _num(arm["mean_hv_board_hits"]),  # type: ignore[arg-type]
+            _pct(arm["mean_hv_board_capture"]),  # type: ignore[arg-type]
+            str(arm["hv_board_n"]),
             _num(arm["mean_cold_start_picks"]),  # type: ignore[arg-type]
         ]
 
     headers = [
         "setting",
         "n",
-        "HV/TDV mean",
-        "median",
-        "ordered mean",
-        "boosted mean",
-        "beats winner",
-        "mean prior games",
+        "HV board hits",
+        "HV board Value",
+        "boards scored",
         "cold-start picks",
     ]
     focus = [
@@ -213,7 +212,16 @@ def render_report(payload: dict[str, object]) -> str:
     ranked = sorted(
         (arm for arm in arms if isinstance(arm, dict)),
         key=lambda arm: (
-            -(arm["mean_capture"] if isinstance(arm["mean_capture"], int | float) else -1),
+            -(
+                arm["mean_hv_board_hits"]
+                if isinstance(arm["mean_hv_board_hits"], int | float)
+                else -1
+            ),
+            -(
+                arm["mean_hv_board_capture"]
+                if isinstance(arm["mean_hv_board_capture"], int | float)
+                else -1
+            ),
             str(arm["name"]),
         ),
     )
@@ -225,13 +233,12 @@ def render_report(payload: dict[str, object]) -> str:
             continue
         chalk_rows.append(
             [
-                str(arm["name"]),
+                str(arm["name"]) + " contest_games",
                 str(arm["n"]),
-                _pct(arm["mean_capture"]),  # type: ignore[arg-type]
-                _pct(arm["mean_ordered_capture"]),  # type: ignore[arg-type]
-                _num(arm["mean_pick_prior_games"]),  # type: ignore[arg-type]
+                _num(arm["mean_hv_board_hits"]),  # type: ignore[arg-type]
+                _pct(arm["mean_hv_board_capture"]),  # type: ignore[arg-type]
+                str(arm["hv_board_n"]),
                 _num(arm["mean_cold_start_picks"]),  # type: ignore[arg-type]
-                _num(arm["mean_cold_start_candidates"]),  # type: ignore[arg-type]
             ]
         )
     visible_chalk_rows = []
@@ -241,11 +248,10 @@ def render_report(payload: dict[str, object]) -> str:
             [
                 name.removesuffix("_defany_kany_slotjoint") + " visible",
                 str(arm["n"]),
-                _pct(arm["mean_capture"]),  # type: ignore[arg-type]
-                _pct(arm["mean_ordered_capture"]),  # type: ignore[arg-type]
-                _num(arm["mean_pick_prior_games"]),  # type: ignore[arg-type]
+                _num(arm["mean_hv_board_hits"]),  # type: ignore[arg-type]
+                _pct(arm["mean_hv_board_capture"]),  # type: ignore[arg-type]
+                str(arm["hv_board_n"]),
                 _num(arm["mean_cold_start_picks"]),  # type: ignore[arg-type]
-                _num(arm["mean_cold_start_candidates"]),  # type: ignore[arg-type]
             ]
         )
     best = ranked[0] if ranked else None
@@ -254,9 +260,10 @@ def render_report(payload: dict[str, object]) -> str:
         "",
         f"Issue #{payload['issue']}. Generated {payload['finished_at']}.",
         "",
-        "Primary metric is capture ratio: realized total value of the frozen",
-        "five divided by the hindsight-best five on the same pool, slots, and",
-        "boosts. Win counts are reference only.",
+        "Success metric is the Highest-value / Total-value board: mean hits",
+        "in the top 5 of `highestBoostedValuePlayers`, and the share of that",
+        "board's Value total those hits carry. Hindsight capture and win",
+        "counts are not the decision.",
         "",
         "Under `score = value * (slot + boost)`, a player's boost does not",
         "change which slot is optimal for a fixed five: the joint assignment",
@@ -279,31 +286,30 @@ def render_report(payload: dict[str, object]) -> str:
         "",
         _markdown_table(headers, [cell(name) for name in focus if name in by_name]),
         "",
-        "## Ranked by HV/TDV mean capture",
+        "## Ranked by HV/TDV board hits",
         "",
         _markdown_table(
             headers,
             [cell(str(arm["name"])) for arm in ranked if isinstance(arm, dict)],
         ),
         "",
-        "## Cold-start chalk: visible pool vs contest-game roster",
+        "## Full roster vs visible pool, same HV/TDV board",
         "",
-        "Visible pool is the contest's draft-stats players. Contest-game roster",
-        "is every Corpus G participant on those games. Capture ratios use",
-        "different ceilings and are not one leaderboard. Cold-start means zero",
-        "Corpus G rows for that player strictly before the slate cutoff.",
-        "Contest-game rows are postgame participants, so availability is",
-        "generous versus a true pregame roster.",
+        "Both scopes are scored against the contest Highest-value board.",
+        "Visible pool is the contest's draft-stats players. Contest-game",
+        "roster is every Corpus G participant on those games. Cold-start",
+        "means zero Corpus G rows for that player strictly before the slate",
+        "cutoff. Contest-game rows are postgame participants, so availability",
+        "is generous versus a true pregame roster.",
         "",
         _markdown_table(
             [
                 "arm",
                 "n",
-                "HV/TDV mean",
-                "ordered mean",
-                "mean prior games",
+                "HV board hits",
+                "HV board Value",
+                "boards scored",
                 "cold-start picks",
-                "cold-start candidates",
             ],
             visible_chalk_rows + chalk_rows,
         ),
@@ -314,7 +320,9 @@ def render_report(payload: dict[str, object]) -> str:
             [
                 "## Top arm on this run",
                 "",
-                f"`{best['name']}` mean capture {_pct(best['mean_capture'])} "  # type: ignore[arg-type]
+                f"`{best['name']}` mean HV board hits "
+                f"{_num(best['mean_hv_board_hits'])} "  # type: ignore[arg-type]
+                f"Value capture {_pct(best['mean_hv_board_capture'])} "  # type: ignore[arg-type]
                 f"on n={best['n']}.",
                 "",
             ]
@@ -331,7 +339,7 @@ def render_report(payload: dict[str, object]) -> str:
                 "",
             ]
         )
-        split_headers = ["regime", "setting", "n", "HV/TDV mean", "cold-start picks"]
+        split_headers = ["regime", "setting", "n", "HV board hits", "HV board Value"]
         split_rows: list[list[str]] = []
         focus_regimes = (
             "sunday_multi",
@@ -358,8 +366,8 @@ def render_report(payload: dict[str, object]) -> str:
                         regime,
                         setting,
                         str(arm["n"]),
-                        _pct(arm["mean_capture"]),  # type: ignore[arg-type]
-                        _num(arm["mean_cold_start_picks"]),  # type: ignore[arg-type]
+                        _num(arm["mean_hv_board_hits"]),  # type: ignore[arg-type]
+                        _pct(arm["mean_hv_board_capture"]),  # type: ignore[arg-type]
                     ]
                 )
         lines.append(_markdown_table(split_headers, split_rows))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Score HV-board top-5 vs chalk, split by Sunday multi-game and one-night.
+"""Score lineups against HV/TDV boards, split by Sunday and one-night.
 
 Screenshot boards are Sunday. One-night contest days are counted from the
 historical contest inventory joined to the nflverse schedule. Optimizer
@@ -119,7 +119,6 @@ def _aggregate(board_payloads: list[dict[str, object]]) -> dict[str, dict[str, o
         rows = []
         for name in policy_names:
             hv_hits: list[float] = []
-            chalk_hits: list[float] = []
             captures: list[float] = []
             for board in boards:
                 policies = board["policies"]
@@ -127,21 +126,17 @@ def _aggregate(board_payloads: list[dict[str, object]]) -> dict[str, dict[str, o
                 match = next(item for item in policies if item["name"] == name)
                 assert isinstance(match, dict)
                 hv_hits.append(float(match["hv_top5_hits"]) / 5.0)
-                chalk_hits.append(float(match["chalk_top5_hits"]) / 5.0)
-                captures.append(float(match["capture_vs_uncapped"]))
+                captures.append(float(match["hv_board_capture"]))
             rows.append(
                 {
                     "name": name,
                     "n_boards": len(boards),
                     "mean_hv_top5_rate": _mean(hv_hits),
-                    "mean_chalk_top5_rate": _mean(chalk_hits),
-                    "mean_capture_vs_uncapped": _mean(captures),
+                    "mean_hv_board_capture": _mean(captures),
                 }
             )
-        overlaps = [float(board["hv_chalk_overlap"]) / 5.0 for board in boards]
         out[regime] = {
             "n_boards": len(boards),
-            "mean_hv_vs_chalk_top5": _mean(overlaps),
             "policies": rows,
         }
     return out
@@ -155,19 +150,21 @@ def render(payload: dict[str, object]) -> str:
     aggregate = payload["aggregate"]
     assert isinstance(aggregate, dict)
     lines = [
-        "# HV top-5 vs chalk, split by slate regime (#603)",
+        "# HV/TDV board backtest, split by slate regime (#603)",
         "",
         f"Generated {payload['finished_at']}.",
+        "",
+        "Success metric is the Highest value board only: top-5 hits, and",
+        "the share of that top 5's displayed Value the hits carry.",
+        "Draft count and win frequency are not scored.",
         "",
         "Sunday multi-game and one-night (TNF, SNF, MNF) are separate samples.",
         "A rate measured on Sunday is not a MNF rate.",
         "",
         "Board pool: the visible Highest value section in the screenshots.",
         "That is not the full roster. Players off the board are absent.",
-        "Chalk is the highest draft count on those same rows.",
         "The optimizer counterfactual uses realized base as a perfect",
-        "projection, then the live boost-rank blend, then the scoring law",
-        "`base * (slot + boost)` with slots assigned by descending projection.",
+        "projection, then the live boost-rank blend, then picks five.",
         "It is not a walk-forward fit. Corpus C is empty, so the production",
         "model was not replayed.",
         "",
@@ -188,20 +185,13 @@ def render(payload: dict[str, object]) -> str:
             f"law residual max {_num(board['law_max_abs_residual'], 2)}"
         )
         lines.append("")
-        lines.append(f"HV top 5: {', '.join(board['hv_top5'])}")
-        lines.append("")
-        lines.append(f"Chalk top 5: {', '.join(board['chalk_top5'])}")
-        lines.append("")
-        lines.append(f"HV vs chalk overlap: {board['hv_chalk_overlap']} of 5.")
+        lines.append(f"HV/TDV top 5: {', '.join(board['hv_top5'])}")
         lines.append("")
         hv_pos = board["hv_top5_positions"]
-        chalk_pos = board["chalk_top5_positions"]
-        assert isinstance(hv_pos, dict) and isinstance(chalk_pos, dict)
+        assert isinstance(hv_pos, dict)
         lines.append(
-            f"HV top 5 positions: {hv_pos['kickers']} K, "
-            f"{hv_pos['defenders']} DEF, {hv_pos['skill']} skill. "
-            f"Chalk top 5: {chalk_pos['kickers']} K, "
-            f"{chalk_pos['defenders']} DEF, {chalk_pos['skill']} skill."
+            f"HV/TDV top 5 positions: {hv_pos['kickers']} K, "
+            f"{hv_pos['defenders']} DEF, {hv_pos['skill']} skill."
         )
         lines.append("")
         policy_rows = []
@@ -213,33 +203,37 @@ def render(payload: dict[str, object]) -> str:
                 [
                     str(item["name"]),
                     str(item["hv_top5_hits"]),
-                    str(item["chalk_top5_hits"]),
-                    f"{float(item['realized_score']):.1f}",
-                    _pct(float(item["capture_vs_uncapped"])),
+                    _pct(float(item["hv_board_capture"])),
                     str(item["kickers"]),
                     str(item["defenders"]),
                 ]
             )
         lines.append(
             _table(
-                ["policy", "HV hits", "chalk hits", "realized", "vs uncapped", "K", "DEF"],
+                ["policy", "HV hits", "HV Value capture", "K", "DEF"],
                 policy_rows,
             )
         )
         lines.append("")
     lines.extend(
         [
-            "## Mean top-5 rate by regime",
+            "## Mean HV/TDV board rate by regime",
             "",
-            "Rate is hits/5. `identity_uncapped` is the optimizer when the",
-            "projected base is already the realized base. `boost_0.75` is the",
-            "live blend applied on top of that correct base, which reassigns",
-            "the value table in boost order. One-night columns stay empty",
-            "when no one-night board was scored. They are not the Sunday rate.",
+            "Hit rate is hits/5 on the board top 5. Value capture is the",
+            "share of that top 5's displayed Value. `identity_uncapped` is",
+            "the optimizer when the projected base is already the realized",
+            "base. `boost_0.75` is the live blend on that correct base.",
+            "One-night columns stay empty when no one-night board was scored.",
             "",
         ]
     )
-    headers = ["policy", "sunday_multi HV", "sunday_multi chalk", "one_night HV", "one_night chalk"]
+    headers = [
+        "policy",
+        "sunday_multi hits",
+        "sunday_multi Value",
+        "one_night hits",
+        "one_night Value",
+    ]
     sunday = aggregate[SUNDAY_MULTI]
     assert isinstance(sunday, dict)
     sunday_policies = {str(row["name"]): row for row in sunday["policies"]}  # type: ignore[index]
@@ -257,7 +251,7 @@ def render(payload: dict[str, object]) -> str:
             [
                 name,
                 f"{_pct(row['mean_hv_top5_rate'])} (n={row['n_boards']})",  # type: ignore[arg-type]
-                f"{_pct(row['mean_chalk_top5_rate'])} (n={row['n_boards']})",  # type: ignore[arg-type]
+                f"{_pct(row['mean_hv_board_capture'])} (n={row['n_boards']})",  # type: ignore[arg-type]
                 "n/a (n=0)",
                 "n/a (n=0)",
             ]
@@ -266,17 +260,10 @@ def render(payload: dict[str, object]) -> str:
         table_rows.append(["none", "n/a", "n/a", "n/a", "n/a"])
     lines.append(_table(headers, table_rows))
     lines.append("")
-    lines.append(
-        "Sunday HV-list vs chalk-list overlap, before any optimizer: "
-        f"{_pct(sunday['mean_hv_vs_chalk_top5'])} (n={sunday['n_boards']})."
-    )
-    lines.append("")
     for regime in ONE_NIGHT_REGIMES:
         block = aggregate[regime]
         assert isinstance(block, dict)
-        lines.append(
-            f"`{regime}` boards scored: {block['n_boards']}. Optimizer HV/chalk rate: not run."
-        )
+        lines.append(f"`{regime}` boards scored: {block['n_boards']}. HV/TDV rate: not run.")
         lines.append("")
     lines.extend(
         [
@@ -329,19 +316,16 @@ def _knobs_markdown(aggregate: dict[str, dict[str, object]]) -> str:
             "- `NFL_OPTIMIZER_PROFILE=max_value`.",
             "- No defender cap and no kicker cap. Slot order stays joint.",
             "- On these two boards, perfect-base identity (the optimizer when "
-            f"the base is already known, n={sunday['n_boards']}) put HV-board "
-            f"players in the top 5 at {_pct(identity['mean_hv_top5_rate'])} and "  # type: ignore[arg-type]
-            f"chalk at {_pct(identity['mean_chalk_top5_rate'])}. Sep 20's "
-            "identity five includes two kickers. Sep 27's includes two "
-            "defenders. A max-1 cap on both drops the blended arm to "
-            f"{_pct(capped['mean_capture_vs_uncapped'])} of that identity lineup.",  # type: ignore[arg-type]
-            "- Do not chase Sunday draft-count chalk. HV top 5 and chalk top 5 "
-            f"overlap {_pct(sunday['mean_hv_vs_chalk_top5'])}.",
-            "- Do not read `boost_0.75` as the knob that finds this board once "
-            "the base is known. On the same perfect base it hits HV top 5 at "
+            f"the base is already known, n={sunday['n_boards']}) hits the "
+            f"HV/TDV top 5 at {_pct(identity['mean_hv_top5_rate'])} and captures "  # type: ignore[arg-type]
+            f"{_pct(identity['mean_hv_board_capture'])} of that top 5's Value. "  # type: ignore[arg-type]
+            "Sep 20's identity five includes two kickers. Sep 27's includes "
+            "two defenders.",
+            "- `boost_0.75` on that same perfect base hits the board at "
             f"{_pct(blend['mean_hv_top5_rate'])} and captures "  # type: ignore[arg-type]
-            f"{_pct(blend['mean_capture_vs_uncapped'])}, because the blend "
-            "reassigns a correct value table toward boost order.",
+            f"{_pct(blend['mean_hv_board_capture'])} of the board Value. "  # type: ignore[arg-type]
+            "Max-1 defender and max-1 kicker on the blend captures "
+            f"{_pct(capped['mean_hv_board_capture'])}.",  # type: ignore[arg-type]
             "- Leave the live ridge blend at `NFL_PICKER_BOOST_RANK_BLEND=0.75` "
             "until a regime-split refit replaces it. The 2026-09-25 sweep "
             "(identity 51.7%, boost 0.75 57.9%, 91 contests) is that ridge on "

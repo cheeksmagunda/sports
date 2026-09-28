@@ -1,20 +1,21 @@
 # NFL Highest-value / Total-value campaign (#603)
 
-Generated 2026-09-28. The grid did not execute. When it does, capture is
-reported separately for `sunday_multi`, `one_night_tnf`, `one_night_snf`,
-and `one_night_mnf`. The screenshot measurement that did run, with that
-split, is `reports/hv_regime_backtest.md`.
+Generated 2026-09-28. The grid did not execute. When it does, the success
+metric is the Highest-value / Total-value board (top-5 hits and that
+board's Value share), reported separately for `sunday_multi`,
+`one_night_tnf`, `one_night_snf`, and `one_night_mnf`. The screenshot
+measurement that did run is `reports/hv_regime_backtest.md`.
 
 Worker volume
 `data/raw/corpus_c` listed 0 entries (not truncated) at about 03:15Z, and
-this checkout has no local Corpus C or Corpus G payloads. Capture tables
+this checkout has no local Corpus C or Corpus G payloads. Tables
 below are the command contract for the next run that has both trees and a
 ContextSnapshot. Volume facts and the live-knob recommendation are in
 `nfl-oracle/STATUS.md`.
 
-Primary metric is capture ratio: realized total value of the frozen five
-divided by the hindsight-best five on the same pool, slots, and boosts.
-Win counts are reference only.
+Success metric is the Highest-value / Total-value board: hits in the top 5
+of `highestBoostedValuePlayers`, and the share of that board's Value those
+hits carry. Hindsight capture and win counts are not the decision.
 
 ## Command
 
