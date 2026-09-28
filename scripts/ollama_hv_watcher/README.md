@@ -16,14 +16,21 @@ lineup. Ollama does not publish that freeze.
 
 - It only READS each app's public API (`adapters/app_api.py`, stdlib
   `urllib`, bounded timeout and retry, no credentials).
-- Every learn tick's `five_player_lineup` is exactly the app's five in the
-  app's slot order (`lineup_source=app_frozen_lineup`). The tick records
-  that shape. It does not replace, reorder, block, or delay the freeze.
+- When the board is the app's frozen five (`lineup_source=app_frozen_lineup`),
+  the tick keeps that five in that slot order. The `sim` block scores it
+  under `value * (slot_multiplier + card_boost)`. Notes annotate; they do
+  not replace, reorder, block, or delay the freeze.
+- When the board is not an app freeze, the tick's `five_player_lineup` is
+  the total-draft-value sim (`lineup_source=total_draft_value_sim`, via
+  `lineup_for_summary` / `sim.py`). `card_boost` stays on board summaries
+  so the sim can prefer a high-boost player the raw board rank would drop.
+  NHL boosts in this helper stay 0 (the helper cannot see whether every
+  club has played).
 - Tilt is the armed path into the NFL picker (`NFL_OLLAMA_TICK_TILT_WEIGHT`,
   default 0, identity). Weight 0 does not open the tick file.
 - If Ollama is down or times out the tick is still written with
   `notes="ollama_unavailable"` (or `ollama_gate_forbidden` when the gate is
-  closed), so the app's five are always recorded.
+  closed) and a `sim` block, so the five and the score are always recorded.
 
 ## Pre-game only (leak stop)
 

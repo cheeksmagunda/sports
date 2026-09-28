@@ -2,6 +2,14 @@
 
 Last verified: 2026-09-28T17:22Z
 
+## Replay HV train weights after #671 (#620 follow-up)
+
+Production replay CLIs now apply the same HV/TDV label filter and display-rank
+contest boosts as `nfl-pipeline train` when boards are linked
+(`replay.hv_train_inputs`). Unlinked archives keep raw-value top-5 weights.
+Ollama TDV sim already landed in #671. Live blend / upside / field stay at 0.
+Do not restore boost-rank blend 0.75. No Railway knob flip in this change.
+
 ## Full HV/TDV retrain + Ollama arm (#620 / #574)  -  2026-09-28T17:21Z
 
 | Fact | Value |

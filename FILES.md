@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1154 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1156 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -367,6 +367,7 @@ Generated from `git ls-files`. 1154 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/replay/harness.py -- Replay the saved Corpus C archive against the verified scoring law.
 - nfl-oracle/src/nfl_oracle/replay/hv_board_replay.py -- Score HV boards: HV-rank five vs draft-count chalk vs hindsight ceiling.
 - nfl-oracle/src/nfl_oracle/replay/hv_board_replay_cli.py -- CLI: score saved HV boards (HV five vs chalk five vs hindsight).
+- nfl-oracle/src/nfl_oracle/replay/hv_train_inputs.py -- Apply the production HV/TDV train target to offline replay inputs (#620).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest.py -- Walk-forward backtest of the actual production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/production_backtest_cli.py -- CLI: walk-forward backtest of the production prediction pipeline (#280).
 - nfl-oracle/src/nfl_oracle/replay/racer.py -- NFL evaluate hook for the portfolio race engine (#339).
@@ -507,6 +508,7 @@ Generated from `git ls-files`. 1154 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_fit_rejects_player_prior_activation.py -- Production fit must not activate player_prior (name chalk).
 - nfl-oracle/tests/unit/test_hv_board_replay.py -- HV-rank five, draft-count chalk, and hindsight ceiling use the draft-image law.
 - nfl-oracle/tests/unit/test_hv_emphasis.py -- HV top-10 emphasis names stay on live features and off chalk channels.
+- nfl-oracle/tests/unit/test_hv_replay_train_inputs.py -- Replay uses the same HV/TDV train target and display weights as production (#620).
 - nfl-oracle/tests/unit/test_hv_train_labels.py -- HV/TDV leaderboard rows are the only train labels. Box rows are excluded.
 - nfl-oracle/tests/unit/test_identity_coverage_density.py -- Offline identity + coverage density fixtures and helpers.
 - nfl-oracle/tests/unit/test_identity_dedup_collisions.py -- Identity alias/dedup reconciliation beyond first+last (offline).
