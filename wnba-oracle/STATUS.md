@@ -1,15 +1,25 @@
 # Status
 
-Last verified: 2026-09-27T14:30Z
+Last verified: 2026-09-28T02:58:00Z
 
-## Wipe-safe TDV Settings default (#584)  -  2026-09-27T14:30Z
+## EB F-cohort serve fallback (#592)  -  2026-09-28T02:55:47Z
 
-PR branch `feat/584-tdv-default-wipe-safe` only. **HOLD merge until after
-NFL/WNBA freezes** (merge redeploys workers). Code default
+- Bug: `eb_predict_one` used `cohort_means.get(cohort, 0.0)` while the shipped
+  artifact trains `cohorts_trained: ["F"]` only (`read_label_corpus` stamps F).
+  Missing G/C became 0.0 then the 0.5 floor → 2026-09-27 forwards-only chalk.
+- Fix (serve path only, no retrain): absent cohort key falls back to trained
+  `F` mean + player alpha; present G/C keys (including stored `0.0`) still used.
+- Follow-up (not this change): carry real positions into the label corpus and
+  retrain so G/C means exist. Rollback: revert + redeploy `wnba-api` /
+  `wnba-cron-job2`.
+
+## Wipe-safe TDV Settings default (#584)  -  2026-09-28T02:57:24Z
+
+Merged to `main` as #589 (`e636040`). Code default
 `Settings.optimizer_objective_mode=total_draft_value`; EXPECTED adds
 `serve_primary=eb`. Live env already TDV + `top_1`; `WNBA_SERVE_PRIMARY`
-unset → eb. Focused unit tests green. Does not change today's freeze math
-while env is set.
+unset → eb.
+
 
 ## Overnight freeze readiness (#535)  -  2026-09-27T05:31:49Z
 
