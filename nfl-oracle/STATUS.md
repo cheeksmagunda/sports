@@ -33,6 +33,26 @@ cards raises `optimizer_no_feasible_lineup` instead of relaxing the cap.
 `NFL_PICKER_BOOST_RANK_BLEND` is unchanged (last verified live value `0.75`).
 The serving image stays the previously verified worker until a later deploy.
 
+### Slate size (same rules both shapes)
+
+Caps and the boost tie-break do not scale with the pool and do not switch
+on Sunday vs a night game. They are properties of the committed five and of
+each boost tier. `slate_regime` on the frozen lineup is `one_game` or
+`multi_game`; `slate_pool` is the eligible pool the optimizer saw.
+`candidate_count` is that same pool. The label does not change the caps.
+
+| Shape | Games | Pool (order of magnitude) | Example | What the knobs do |
+|-------|-------|---------------------------|---------|-------------------|
+| `one_game` | 1 | about 150 | MNF 2026-09-29 PHI at CHI | at most one K, at most one LB/DB/DL, slot 1 is the highest projected mean, boost ties follow own projection |
+| `multi_game` | many | about 600-800 | full Sunday slate | the same four rules |
+
+Live pool counts for those days are unverified. The unit tests build a
+150-player one-game pool and a 700-player 14-game pool, including more
+defenders than the beam width on the Sunday shape. `max_value` still allows
+a one-game stack inside a Sunday pool; that is the diversity floor, not a
+weaker cap. A Sunday-only cap would leave PHI at CHI uncapped. This change
+does not do that.
+
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 
 Early window failed (`future_forecast` then `stale_player`). Harden landed so
