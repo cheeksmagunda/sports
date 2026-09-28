@@ -177,6 +177,21 @@ def _commit_slot_order(
     return tuple(sorted(ids, key=lambda pid: (-by_id[pid].mean, pid)))
 
 
+def slate_regime_name(game_count: int) -> str:
+    """Name the contest-day shape. The label does not change caps or tie-break.
+
+    ``one_game`` is a night slate such as MNF PHI at CHI (one game, pool on
+    the order of 150). ``multi_game`` is a Sunday slate (many games, pool on
+    the order of 600-800). Both use the same one-kicker cap, one-defender cap,
+    slot order, and projection tie-break.
+    """
+    if game_count < 1:
+        raise ValueError("slate_games_required")
+    if game_count == 1:
+        return "one_game"
+    return "multi_game"
+
+
 def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> OptimizerConfig:
     """Build an :class:`OptimizerConfig` from the process environment.
 
@@ -815,5 +830,7 @@ def optimize(
             ),
             f"max_kickers={cfg.max_kickers}",
             f"max_defenders={cfg.max_defenders}",
+            f"slate_regime={slate_regime_name(len(slate.games))}",
+            f"slate_pool={len(eligible)}",
         ),
     )
