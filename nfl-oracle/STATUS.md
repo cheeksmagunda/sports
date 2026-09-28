@@ -232,6 +232,33 @@ day when payload matchups are missing. Explicit `draftinfo.games` still
 wins. Blend/upside/field stay 0. `NFL_SLATE_DATE=2026-09-28` held through
 MNF freeze.
 
+### Live train metrics (#647) - 2026-09-28T04:58Z
+
+Worker SUCCESS `5285cbd2` commit `266fb60` (#650, includes #643+#640+#647).
+`nfl-pipeline train --force` outside T-40 at 2026-09-28T04:58:33Z.
+
+| Field | Value |
+|---|---|
+| status | trained / retrained true |
+| model_sha256 | `6b82ac0431ff47692f0b73eff246761706c678cda2c3e2f266ca240a78580d80` |
+| selected_estimator | ridge |
+| training_rows | 824 |
+| holdout_rows | 203 |
+| training_target | hv_tdv_leaderboards |
+| hv_overlay.boards | 72 |
+| hv_overlay.rows_overlaid | 824 |
+| hv_overlay.rows_raw | 0 |
+| hv_overlay.rows_excluded | 36886 |
+| hv_overlay.conflicts | 0 |
+| hv_overlay.skipped_unscoped | 19 |
+| hv_overlay.skipped_boards | 20 |
+| hv_overlay.fit_seasons | 2024, 2025 |
+| hv_overlay.operator_lock | hv_tdv_only |
+| NFL_SLATE_DATE | 2026-09-28 |
+| blend / upside / field | 0 / 0 / 0 |
+
+Ollama remains learn/tilt on top of ridge/valuelaw (runs-on-shape). No knob flip.
+
 ### Live train
 
 Not executed from this agent until the #647 image is worker SUCCESS. No
