@@ -70,7 +70,7 @@ build pipeline). `src/nfl_oracle/` subpackages (file counts):
 | Subpackage | Files | Purpose |
 |---|---|---|
 | `strategy/` | 16 | Five-card legality gates, clocks, scoring algebra, lineup optimizer, dry-run |
-| `recommendations/` | 14 | The live pipeline: `pipeline.py` (prepare/publish/lock), `optimizer.py`, `provider.py` (read-only collection), `store.py`, `dayclose.py`, `grading.py`, `model.py`, CLI |
+| `recommendations/` | 20 | The live pipeline: `pipeline.py` (prepare/publish/lock), `optimizer.py`, `provider.py` (read-only collection), `store.py`, `dayclose.py`, `grading.py`, `model.py`, `hv_boards.py` (HV/TDV train labels), CLI |
 | `baselines/` | 10 | Value-prediction baselines: ridge, priors, walk-forward eval, CLI |
 | `contests/` | 9 | Real-contest archive parsing (scoring-law verification) |
 | `data/`, `ingest/` | 7 each | Coverage/catalog helpers; Corpus G (raw game data) ingest |
@@ -78,7 +78,8 @@ build pipeline). `src/nfl_oracle/` subpackages (file counts):
 | `valuelaw/` | 5 | Reverse-engineered box-score to contest-value model (the "solved" half of prediction) |
 | `providers/` | 5 | Provider adapters/stubs |
 | `features/`, `calendar/` | 4 each | Feature schema/rows; season/week resolution |
-| `service/`, `replay/`, `labels/`, `common/` | 3 each | Research API routes; historical contest replay harness; value-label schema; shared utilities |
+| `replay/` | 10 | Historical contest replay, including HV/TDV draft-image scoring (`hv_board_replay`) |
+| `service/`, `labels/`, `common/` | 3 each | Research API routes; value-label schema; shared utilities |
 
 Also: `scripts/` (14 files, CLIs/ops scripts), `frontend/` (3 files, static
 page), `config/`, `data/` (catalogs, gitignored raw payloads), `artifacts/`

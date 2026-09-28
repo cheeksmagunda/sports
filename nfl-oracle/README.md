@@ -264,6 +264,48 @@ Replay CLIs accept optional `--fit-*` knobs so a race can vary the shared
 ridge `FitConfig` without editing code. Knob-sweep `excluded` reasons are
 isolated per profile (shared pool skips stay on every profile).
 
+### HV / TDV train objective and draft-image replay (issue #597)
+
+`nfl-pipeline train` loads Corpus G, then overlays Highest-value / Total Value
+boards before `fit_model`. A board joins on `(player_id, game_id)` when the
+contest names a game, otherwise on `(player_id, America/New_York slate date)`.
+The label is the board's realized value. It is not `drafts` / `count`, and it
+is not `value * (slot + boost)` (the optimizer applies slot multipliers later).
+Missing boards leave the raw box score. Reconstructed exports are ignored.
+
+`nfl-hv-board-replay` scores each real HV board with the draft-image law
+`realized_value * (slot_multiplier + card_boost)` and the observed slots
+`(2.0, 1.8, 1.6, 1.4, 1.2)`. It reports the HV-rank five, the draft-count
+chalk five, and the hindsight ceiling, with per-card multipliers when
+`--cards` is set. Ollama's watcher ranks the same boards by value and proposes
+that HV-rank five; this harness is the score for that card. Ridge learns the
+realized value. The optimizer objective stays `total_value`.
+
+```sh
+# Full retrain on the worker volume (Codespace). No knob flip.
+# See "Forced model retrain" below for the railway ssh wrapper.
+#   nfl-pipeline train --force
+
+# Offline fit: print the HV label audit, do not activate a model or write the store.
+NFL_HISTORY_ROOT=nfl-oracle/data/raw/corpus_g \
+NFL_CORPUS_C_ROOT=nfl-oracle/data/raw/corpus_c \
+NFL_HV_EXPORT_ROOT=nfl-oracle/data/export/hv_boards \
+  uv run --package nfl-oracle nfl-pipeline train --dry-run
+
+# Full-year HV replay (Corpus C + exported boards). No database, no Railway.
+make -C nfl-oracle hv-board-replay \
+  CONTEST_ROOT=data/raw/corpus_c \
+  EXPORT_ROOT=data/export/hv_boards \
+  HV_REPLAY_ARGS="--cards --out /tmp/hv_board_replay.json"
+
+# Checked-in fixture (contest 9001) when the volume is not mounted:
+make -C nfl-oracle hv-board-replay HV_REPLAY_ARGS="--cards"
+```
+
+`contest_pool_replay` and `sweep_picker_knobs` remain the walk-forward
+production comparison against the visible contest pool. They are not the HV
+label source.
+
 Nightly day-close writes Corpus C field rows as parquet under
 `data/race/dayclose/<season>/` and `scripts/build_race_corpus.py` aggregates
 them for offline Actions. `scripts/resolve_context_snapshot.py` locates the
@@ -392,7 +434,10 @@ railway ssh --service nfl-oracle-worker -- \
 
 Do not train on a bare Codespace checkout, and do not use Mac
 `SPORTS_ALLOW_LOCAL_RAILWAY` for this. Respect the T-40 / slate-lock window
-documented in `STATUS.md` before forcing a rebuild on a live slate.
+documented in `STATUS.md` before forcing a rebuild on a live slate. The fit
+prefers on-volume HV/TDV boards when they are present (`NFL_CORPUS_C_ROOT`,
+`NFL_HV_EXPORT_ROOT`, optional `NFL_HV_BOARD_ROOT`). It does not change
+optimizer or picker env knobs.
 
 ## Corpus C Total Value / HV board export (issue #526)
 

@@ -1,6 +1,97 @@
 # Status
 
-Last verified: 2026-09-27T17:25Z
+Last verified: 2026-09-28T03:05Z
+
+## HV/TDV train path and draft-image replay (#597)  -  2026-09-28T03:05Z
+
+Train objective prefers a Real Sports Highest-value / Total Value board when
+one joins a Corpus G row (`nfl_oracle.recommendations.hv_boards`). The fit
+label is that board's realized value. Draft counts and winning lineups are
+not the target. With no board, the finalized box score stays. This run did
+not flip Railway knobs and did not activate a model.
+
+### How the three consumers use the same boards
+
+| Consumer | What it scores |
+|---|---|
+| Ollama watcher (`scripts/ollama_hv_watcher`) | Sorts the HV/TDV board by `value` (not `drafts`) and proposes the top five distinct players as slots 1..5. It does not multiply by slot multipliers itself. |
+| Ridge (`fit_model` via `nfl-pipeline train`) | Learns the per-player realized value. HV/TDV board value replaces the box score when the board joins; otherwise the raw box score. Sample weights still upweight the top values in each game. `hv_win_frequency_target_rows` is always 0. |
+| Optimizer | Objective stays `total_value`: expected lineup score under slot multipliers and card boosts. It consumes ridge projections. It does not fit on win frequency. |
+| `nfl-hv-board-replay` | Scores the Ollama-style HV-rank five, the draft-count chalk five, and the hindsight ceiling with `realized_value * (slot_multiplier + card_boost)`. Slots `(2.0, 1.8, 1.6, 1.4, 1.2)`. |
+
+### Commands
+
+Full retrain on the worker volume (no knob flip; T-40 window still applies):
+
+```bash
+unset RAILWAY_TOKEN
+railway ssh --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
+```
+
+Offline fit, no store write:
+
+```bash
+NFL_HISTORY_ROOT=nfl-oracle/data/raw/corpus_g \
+NFL_CORPUS_C_ROOT=nfl-oracle/data/raw/corpus_c \
+NFL_HV_EXPORT_ROOT=nfl-oracle/data/export/hv_boards \
+  uv run --package nfl-oracle nfl-pipeline train --dry-run
+```
+
+HV replay (no database):
+
+```bash
+make -C nfl-oracle hv-board-replay \
+  CONTEST_ROOT=data/raw/corpus_c \
+  EXPORT_ROOT=data/export/hv_boards \
+  HV_REPLAY_ARGS="--cards --out /tmp/hv_board_replay.json"
+```
+
+### This cloud VM run (not the worker volume)
+
+Corpora on the VM: Corpus G absent, Corpus C absent, HV export absent.
+`nfl-pipeline train --dry-run` was not executed (no Corpus G rows to fit).
+No Railway mutation.
+
+Fixture replay of `nfl-oracle/tests/fixtures/corpus_c_hv` (seed not used):
+
+| Metric | Value |
+|---|---|
+| Contests seen | 2 |
+| HV boards scored | 1 (contest 9001, 6 players) |
+| Excluded | `missing_hv_section=1` (contest 9002) |
+| Slot multipliers | 2.0, 1.8, 1.6, 1.4, 1.2 |
+| HV-rank total | 53.4 |
+| Hindsight total | 57.7 |
+| HV-rank capture | 0.925477 |
+| Chalk total / capture | 53.4 / 0.925477 (tie: this fixture's draft counts rank the same five) |
+| HV beats chalk | no (tie) |
+
+Contest 9001 HV-rank cards (realized value, slot, boost, card score):
+
+| Slot | Player | Realized | Slot multiplier | Card boost | Card score |
+|---|---:|---:|---:|---:|---:|
+| 1 | 401 | 5.0 | 2.0 | 0.0 | 10.0 |
+| 2 | 402 | 4.6 | 1.8 | 0.5 | 10.58 |
+| 3 | 403 | 4.2 | 1.6 | 1.0 | 10.92 |
+| 4 | 404 | 3.8 | 1.4 | 1.5 | 11.02 |
+| 5 | 405 | 3.4 | 1.2 | 2.0 | 10.88 |
+
+Synthetic harness depth (not Real Sports rows; `--synthetic 2000 --seed 597`),
+built so high draft counts are low realized value:
+
+| Metric | Value |
+|---|---|
+| Boards scored | 2000 |
+| HV beats chalk | 2000 |
+| Chalk beats HV | 0 |
+| Mean HV-rank capture | 0.998092 |
+| Mean chalk capture | 0.363387 |
+| Mean HV-rank total | 64.1675 |
+| Mean hindsight total | 64.288813 |
+
+Checks on this VM: `pytest nfl-oracle/tests` 563 passed, 1 docker test
+deselected. `mypy` on the touched modules passed.
 
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 

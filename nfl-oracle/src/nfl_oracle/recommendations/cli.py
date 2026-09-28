@@ -36,6 +36,7 @@ from nfl_oracle.common.logging import get_logger
 from nfl_oracle.data.paths import resolve_data_paths
 from nfl_oracle.recommendations.context import build_context, enrich_historical_rows
 from nfl_oracle.recommendations.history import load_history, load_history_metadata
+from nfl_oracle.recommendations.hv_boards import load_and_apply_hv_labels
 from nfl_oracle.recommendations.optimizer import optimizer_config_from_env
 from nfl_oracle.recommendations.picker_knobs import picker_knobs_from_env
 from nfl_oracle.recommendations.pipeline import (
@@ -217,7 +218,11 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
     # sees must be the same filtered set, or the training fingerprint the
     # model records will not match the history this bundle persists.
     enriched, identity_audit = drop_ambiguous_identity_rows(enriched)
-    model = fit_model(enriched, trained_at=now)
+    # Prefer HV/TDV board realized values when a board joins the row. Raw
+    # Corpus G box scores remain the fallback. Draft counts are not a target.
+    labeled, hv_audit = load_and_apply_hv_labels(enriched, project)
+    enriched = tuple(labeled)
+    model = fit_model(enriched, trained_at=now, hv_label_audit=hv_audit.to_dict())
     return ModelBundle(
         model=model,
         history=tuple(enriched),
@@ -230,6 +235,8 @@ def _model_bundle(project: Path, snapshot: ContextSnapshot, now: datetime) -> Mo
             "context_excluded": enrichment.excluded,
             "context_evidence_mode": enrichment.evidence_mode,
             "contest_entry": False,
+            "hv_labels": hv_audit.to_dict(),
+            "hv_label_policy": "prefer_hv_tdv_board_when_present_else_raw_box",
             **identity_audit,
         },
     )
@@ -673,7 +680,36 @@ async def _run_worker(
         await asyncio.sleep(max(10, min(poll_seconds, 60)))
 
 
-def _train(*, force: bool = False) -> int:
+def _train_report(
+    model: Any,
+    *,
+    retrained: bool,
+    digest: str | None,
+    hv_labels: dict[str, Any] | None,
+    dry_run: bool,
+) -> dict[str, Any]:
+    return {
+        "status": "dry_run" if dry_run else ("trained" if retrained else "reused_active_model"),
+        "retrained": retrained and not dry_run,
+        "dry_run": dry_run,
+        "model_sha256": digest,
+        "trained_at": model.trained_at.isoformat(),
+        "selected_estimator": model.selected_estimator,
+        "training_rows": model.training_rows,
+        "holdout_rows": model.evaluation.get("holdout_rows"),
+        "hv_label_policy": model.evaluation.get("hv_label_policy"),
+        "hv_boards_seen": model.evaluation.get("hv_boards_seen"),
+        "hv_board_rows": model.evaluation.get("hv_board_rows"),
+        "hv_board_rows_relabeled": model.evaluation.get("hv_board_rows_relabeled"),
+        "hv_raw_box_rows": model.evaluation.get("hv_raw_box_rows"),
+        "hv_win_frequency_target_rows": model.evaluation.get("hv_win_frequency_target_rows"),
+        "hv_labels": hv_labels or {},
+        "contest_entry": False,
+        "railway_mutation": False,
+    }
+
+
+def _train(*, force: bool = False, dry_run: bool = False) -> int:
     project = _project_root()
     ensure_offline_schedules(resolve_data_paths(project).root)
     now = datetime.now(UTC)
@@ -682,6 +718,20 @@ def _train(*, force: bool = False) -> int:
         snapshot = _bootstrap_context(project, now)
     else:
         snapshot = ContextSnapshot.load(context_path)
+    if dry_run:
+        bundle = _model_bundle(project, snapshot, now)
+        print(
+            json.dumps(
+                _train_report(
+                    bundle.model,
+                    retrained=False,
+                    digest=None,
+                    hv_labels=bundle.audit.get("hv_labels"),
+                    dry_run=True,
+                )
+            )
+        )
+        return 0
     store = RecommendationStore(_engine(), writable=True)
     pipeline = RecommendationPipeline(
         store,
@@ -706,19 +756,18 @@ def _train(*, force: bool = False) -> int:
             previous = None
         digest = _ensure_model(project, store, pipeline, snapshot, now)
         retrained = digest != previous
-    model = pipeline.active_model()[1].model
+    active = pipeline.active_model()[1]
+    model = active.model
+    hv_labels = active.audit.get("hv_labels") if retrained else None
     print(
         json.dumps(
-            {
-                "status": "trained" if retrained else "reused_active_model",
-                "retrained": retrained,
-                "model_sha256": digest,
-                "trained_at": model.trained_at.isoformat(),
-                "selected_estimator": model.selected_estimator,
-                "training_rows": model.training_rows,
-                "holdout_rows": model.evaluation.get("holdout_rows"),
-                "contest_entry": False,
-            }
+            _train_report(
+                model,
+                retrained=retrained,
+                digest=digest,
+                hv_labels=hv_labels,
+                dry_run=False,
+            )
         )
     )
     return 0
@@ -876,6 +925,14 @@ def _parser() -> argparse.ArgumentParser:
             "weekly scheduled retrain needs"
         ),
     )
+    train.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "fit on Corpus G plus any on-disk HV/TDV boards and print the "
+            "label audit without activating a model or writing the store"
+        ),
+    )
     dayclose = commands.add_parser("dayclose")
     dayclose.add_argument("--day")
     dayclose.add_argument("--catchup-window-days", type=int, default=7)
@@ -913,7 +970,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"status": "migrated", "contest_entry": False}))
         return 0
     if args.command == "train":
-        return _train(force=args.force)
+        return _train(force=args.force, dry_run=args.dry_run)
     if args.command == "dayclose":
         return _dayclose(args.day, catchup_window_days=args.catchup_window_days)
     if args.command == "weekclose":

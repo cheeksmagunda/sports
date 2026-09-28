@@ -76,6 +76,14 @@ here. NFL does not import WNBA code.
   research and freeze/grade workflows; contest submission and live entry remain
   hard-forbidden by the provider boundary.
 
+## Train target (HV / TDV)
+
+`nfl-pipeline train` prefers a Real Sports Highest-value / Total Value board
+(`highestBoostedValuePlayers`) when that board joins a Corpus G row, and
+otherwise keeps the finalized box score. Draft counts and winning lineups are
+not fit targets. Commands for a full retrain and for `nfl-hv-board-replay`
+live in `README.md`. The latest offline metrics live in `STATUS.md`.
+
 ## Scaffold modules (observation only)
 
 Own packages under `nfl_oracle`: `data`, `strategy`, `features`, `calendar`,

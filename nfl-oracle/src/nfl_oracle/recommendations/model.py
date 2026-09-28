@@ -444,11 +444,31 @@ def _design(
     return x, y, w
 
 
+def _hv_label_evaluation(audit: Mapping[str, int] | None) -> dict[str, int | str]:
+    """Record whether this fit consumed HV/TDV boards. Absent audit leaves the dict empty."""
+
+    if audit is None:
+        return {}
+    return {
+        "hv_label_policy": "prefer_hv_tdv_board_when_present_else_raw_box",
+        "hv_boards_seen": int(audit.get("boards_seen", 0)),
+        "hv_board_rows": int(audit.get("hv_board_rows", 0)),
+        "hv_board_rows_relabeled": int(audit.get("hv_board_rows_relabeled", 0)),
+        "hv_board_rows_already_matched": int(audit.get("hv_board_rows_already_matched", 0)),
+        "hv_raw_box_rows": int(audit.get("raw_box_rows", 0)),
+        "hv_label_collisions": int(audit.get("label_collisions", 0)),
+        "hv_contests_indexed": int(audit.get("contests_indexed", 0)),
+        "hv_export_files_indexed": int(audit.get("export_files_indexed", 0)),
+        "hv_win_frequency_target_rows": 0,
+    }
+
+
 def fit_model(
     rows: Sequence[HistoricalPerformance],
     *,
     trained_at: datetime,
     fit_config: FitConfig | None = None,
+    hv_label_audit: Mapping[str, int] | None = None,
 ) -> RatingModel:
     now = utc(trained_at)
     cfg = fit_config or FitConfig()
@@ -632,6 +652,7 @@ def fit_model(
             "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
             "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
             "training_target": "high_total_value_full_archive_not_win_chalk",
+            **_hv_label_evaluation(hv_label_audit),
             "context_evidence_disclosure": (
                 "retrospective_reconstructed_context_included"
                 if retrospective_rows
