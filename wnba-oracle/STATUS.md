@@ -1,6 +1,6 @@
 # Status
 
-Last verified: 2026-09-28T03:17:46Z
+Last verified: 2026-09-28T17:20:00Z
 
 ## Live watchdog (#599)  -  2026-09-28T03:17:46Z
 
@@ -58,24 +58,100 @@ is off, so job1 does not write the field. EB still ignores a present
 moneyline when `moneyline_beta` is 0. Rollback is leave the flag unset.
 
 
-## EB F-cohort serve fallback (#592)  -  2026-09-28T02:55:47Z
+## EB F-cohort fallback and 2026-09-27 loss (#592 / #623)  -  2026-09-28T03:38:08Z
 
-- Bug: `eb_predict_one` used `cohort_means.get(cohort, 0.0)` while the shipped
-  artifact trains `cohorts_trained: ["F"]` only (`read_label_corpus` stamps F).
-  Missing G/C became 0.0 then the 0.5 floor → 2026-09-27 forwards-only chalk.
-- Fix (serve path only, no retrain): absent cohort key falls back to trained
-  `F` mean + player alpha; present G/C keys (including stored `0.0`) still used.
-- Follow-up (not this change): carry real positions into the label corpus and
-  retrain so G/C means exist. Rollback: revert + redeploy `wnba-api` /
-  `wnba-cron-job2`.
+Verified from the live dossier and frozen lineup for slate `2026-09-27`
+(freeze `2026-09-27T17:20:49Z`, `serve_primary=eb`,
+`objective_mode=total_draft_value`, `leverage_weight=0.28`, artifact
+`picker_95264ce9_1788339935`, cohort means `{F: 2.517}` only, 178 player
+alphas). Replay script: `scripts/backtest_eb_cohort_impact.py` on dossiers
+`2026-09-17` through `2026-09-24` and `2026-09-27`. Measured drafts were
+omitted (the snapshot has no pre-lock counts). Realized scores are
+`slate_labels.real_score`. Hillmon and Siegrist have no ingested score, so
+the frozen lineup and the fallback optimizer lineup are partial and are not
+scored as zero.
+
+The shipped artifact was trained while `read_label_corpus` stamped every
+row `F`. Serve passed real positions. Missing `G` and `C` means became
+`0.0`, then the `0.5` floor. That is the F-hardcoded cohort bug. Forcing
+position `F` at serve matches the F-mean fallback on this artifact, because
+`F` is the only stored mean. The HV board Value column is committed slot
+value, `real_score * (slot_base + card_boost)`. Wilson at boost 0 in slot 1
+is `9.578 * 2.0 = 19.155`, which the board shows as 19.2.
+
+| Path (2026-09-27) | What it did | Labeled Spearman (n=54) | Production optimizer lineup |
+| --- | --- | --- | --- |
+| Frozen | 5 forwards | n/a | Collier, Kuier, Hillmon, Fiebich, Siegrist |
+| `eb_bug` (live math) | 23 G and 7 C floored at 0.5. Median pred G 0.591, C 0.536, F 1.799 | 0.246 | Collier, Hillmon, Kuier, Siegrist, Dugalić (4 of 5 frozen) |
+| `eb_fallback` / `eb_hardcoded` | No 0.5 floor. Median pred G 1.678, C 1.611, F 1.799 | 0.528 | Wilson (C), Collier, Kuier, Siegrist, Hull (G) |
+| `heads` | Still stamps position `F` in `_predict_heads_for_pool` | 0.549 | Wilson, Austin, Zandalasini, Timpson, Kuier. Committed score 43.115 (fully labeled). Hindsight on those five 43.372 |
+| `eb_empirical` | Artifact F mean plus prior HV gap vs F. Alpha stays F-centered | 0.526 | Collier, Hillmon, Kuier, Siegrist, Hull. Deterministic TDV still included Wilson. Production optimizer drops her |
+| `eb_hv_aligned` | Same gap, alpha shifted by it. Served level matches fallback | 0.528 | Wilson (C), Collier, Kuier, Siegrist, Hull (G). Same five as fallback |
+
+HV top-5 hindsight (not an achievable committed order): 61.893
+(Wilson 9.578, Stewart, Hayes, Young, Boston). Wilson was the slate's
+highest HV score and was absent from the freeze. In the fallback optimizer
+she is slot 1 at boost 0, contribution 19.155. Frozen slot 1 was Collier,
+realized contribution 4.551. That slot swap is +14.604 and is not the full
+lineup delta: Siegrist is still unscored, and slot order of the other names
+also moves.
+
+Nine-slate deterministic replay, mean Spearman vs labeled `real_score`:
+bug 0.209, fallback 0.469, empirical 0.468, heads 0.506.
+Mean overlap with that slate's HV top 5: bug 0.22, fallback 0.56, heads 1.00.
+Prior HV means excluding 2026-09-27: F 3.771 (n=59), G 3.682 (n=80),
+C 3.569 (n=24). Gaps versus F are -0.089 (G) and -0.202 (C).
+
+`leverage_weight` 0.0, 0.28, and 0.40 produced the same fallback lineup.
+Under `total_draft_value` the optimizer does not apply `leverage_weight`
+(`picker/optimize.py`, the total-draft-value branch). Keep `0.28`.
+No Railway variable change.
+
+The serve fix is already on `main` (`4ca64ed`, #592). Railway SUCCESS at
+this check: `wnba-api` deployment `f59a7bf4` commit `4ca64ed`
+(2026-09-28T03:12:12Z); `wnba-cron-job2` deployment `2030122d` commit
+`3f1b0ef` (2026-09-28T03:13:29Z), which contains `4ca64ed`. This change
+does not redeploy those images. Rollback of the serve fix remains revert
+of `4ca64ed` and redeploy of those two images.
+
+A'ja-class centers on that HV board are cohort C with slot-1 value at
+least 10: Wilson (`C`, 19.155, pred 2.703 under the bug, 5.666 under
+fallback and under the paired alignment) and Boston (`C-F`, 10.246, pred
+0.836 under the bug, 2.856 under fallback and alignment). Both clear the
+crush. Wilson is in the fallback and paired-alignment production
+optimizers and absent from the bug and from the mean-gap optimizer.
+Boston does not take a fifth slot: boost 0.3 loses total-draft-value to
+Kuier, Siegrist, and Hull. That is the objective, not a remaining floor.
+
+`read_label_corpus` now joins `job1_enrichment.position` and uses `F` only
+when that pool row is blank. The next `oracle-train` on that corpus writes
+G/C means with alphas centered on them. For a player already in this
+artifact the high-shrink limit of that train is the paired shift above,
+which keeps Wilson. A mean-only swap does not. A short-window refit of
+alphas on the nine dossiers also does not: it lifted same-game boost
+teammates (Talbot at 3.0) and the production optimizer dropped Wilson.
+This process has no `DATABASE_URL`, so that full train was not run here.
+No model SHA flip in this change. Heads stay the rollback for EB primary,
+not the cohort fix. LightGBM gamelog rows stay pooled F.
+
+Fix order before the next T-40 (next slate_meta is unverified:
+`/slate/2026-09-28` through `2026-10-01` returned 404 at the 03:20Z check,
+and `/watchdog/today` was still slate `2026-09-27`):
+
+1. Leave the deployed F-mean fallback in place. It is the serve path that
+   puts Wilson back at board value 19.2. Confirm the next job2 log shows
+   guards and centers above the 0.5 floor.
+2. Leave `OPTIMIZER_LEVERAGE_WEIGHT=0.28` and `WNBA_SERVE_PRIMARY` unset.
+3. Train the next artifact from the joined HV corpus. Do not serve the
+   mean-gap empirical swap, and do not promote a short-window refit.
+   Until that artifact ships, the fallback remains the production lineup.
 
 ## Wipe-safe TDV Settings default (#584)  -  2026-09-28T02:57:24Z
 
 Merged to `main` as #589 (`e636040`). Code default
 `Settings.optimizer_objective_mode=total_draft_value`; EXPECTED adds
 `serve_primary=eb`. Live env already TDV + `top_1`; `WNBA_SERVE_PRIMARY`
-unset → eb.
-
+unset, so the code default is EB.
 
 ## Win stack index (#594)
 
@@ -156,7 +232,10 @@ to keep EB primary while unset.
 
 ## Serve Tier-0 -> EB primary + vegas/boost (#523)  -  2026-09-27
 
-Code on branch (not yet production-verified on mono):
+Post-freeze measurement of this path is in the 2026-09-28 #592 section above.
+This block is the pre-freeze record.
+
+Code on branch (not yet production-verified on mono at the time of this block):
 
 - Serve ladder default is `WNBA_SERVE_PRIMARY=eb`: Tier-0 uses
   `EBHierarchicalBaseline` with optional `team_pace` / `opp_pace` /
@@ -501,7 +580,7 @@ not exposed by the read-only checks available during this audit.
 
 - The leak-free GitHub Actions benchmark run [36133177919](https://github.com/cheeksmagunda/sports/actions/runs/36133177919) succeeded at about 2026-09-25 07:31 CT. Its `model-research-benchmark-merged` artifact contains `MODEL_RESEARCH_BENCHMARK.md` and `benchmark_results.json` covering 109 slates.
 - The compiled production baseline uses `optimizer_leverage_weight=0.28`. The only leverage challenger in the default grid was `knob:leverage_weight_0.2`: paired score W/T/L was approximately 9/92/8 versus baseline, mean score delta was approximately -0.036, and payout was flat. This provides no flip signal.
-- Decision: keep `optimizer_leverage_weight=0.28`. No Railway variable change is needed, and `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` already remains `0.28`, so no config code update is needed. Live Railway `cron-job2` confirms `OPTIMIZER_LEVERAGE_WEIGHT=0.28`.
+- Decision: keep `optimizer_leverage_weight=0.28`. No Railway variable change is needed, and `EXPECTED_PROD_CONFIG["optimizer_leverage_weight"]` already remains `0.28`, so no config code update is needed. Live Railway `cron-job2` confirms `OPTIMIZER_LEVERAGE_WEIGHT=0.28`. The 2026-09-28 total-draft-value replay (section above) left the lineup unchanged at 0.0, 0.28, and 0.40.
 - The dedicated E1 leverage matrix (`0.0`, `0.14`, `0.28`, `0.40`) was not run. It remains an optional follow-up; picker-knob work is proceeding in parallel under #280 and #37. Full matrix is ~86 CPU-hours at default samples; not justified pre-Sunday given flat default-grid signal.
 
 ## optimizer_leverage_weight evidence gate (#289)  -  2026-09-25

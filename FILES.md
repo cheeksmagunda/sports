@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1154 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1156 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -1080,6 +1080,7 @@ Generated from `git ls-files`. 1154 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/scripts/backfill_placement_scores.py -- Recompute contest_placements.entry_score under the committed slot order.
 - wnba-oracle/scripts/backfill_player_slate_ownership.py -- Backfill player_slate_ownership.actual_* from existing slate_labels.drafts.
 - wnba-oracle/scripts/backtest_counterfactual.py -- Counterfactual backtest: attribute the picker's leaderboard gap to its
+- wnba-oracle/scripts/backtest_eb_cohort_impact.py -- Replay the F-only EB cohort bug against the 2026-09-27 freeze (#592).
 - wnba-oracle/scripts/backtest_optimizer.py -- Run the picker on the 2026-05-25 slate using its actual realized
 - wnba-oracle/scripts/backtest_pipeline.py -- Out-of-sample backtest graded on each slate's Highest value board (#505).
 - wnba-oracle/scripts/backtest_walkforward.py -- Walk-forward backtest: HONEST prediction-quality measurement (no leakage).
@@ -1365,6 +1366,7 @@ Generated from `git ls-files`. 1154 tracked files. Regenerate with `scripts/gene
 - wnba-oracle/tests/unit/test_dossier.py -- Unit and integration tests for dossier entry and gap computation.
 - wnba-oracle/tests/unit/test_dossier_api.py -- #35 phase 3 / #39: read-only dossier API surface.
 - wnba-oracle/tests/unit/test_draft_stats_export.py -- Tests for WNBA draftStats / recorded_states corpus export (#526).
+- wnba-oracle/tests/unit/test_eb_hv_alignment.py -- HV training alignment keeps a center at her F-fallback level (#623).
 - wnba-oracle/tests/unit/test_eb_residual_targets.py -- EB residual target wiring (#350).
 - wnba-oracle/tests/unit/test_eval_racer.py -- Offline unit tests for wnba_oracle.eval.racer (#356).
 - wnba-oracle/tests/unit/test_export_realsports_corpus_526.py -- Unit tests for WNBA Real Sports corpus export layout (#526).
