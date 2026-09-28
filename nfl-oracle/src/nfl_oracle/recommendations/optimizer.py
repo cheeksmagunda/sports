@@ -18,6 +18,11 @@ from pydantic import Field
 from nfl_oracle.common.logging import get_logger
 from nfl_oracle.contests.schema import MAX_OBSERVED_BOOST
 from nfl_oracle.recommendations.model import Projection
+from nfl_oracle.recommendations.ollama_engine import (
+    OllamaJsonClient,
+    ollama_engine_from_env,
+    score_candidates,
+)
 from nfl_oracle.recommendations.schema import Candidate, EvidenceClock, Finite, Record, Slate
 
 log = get_logger("nfl_oracle.recommendations.optimizer")
@@ -74,6 +79,9 @@ class OptimizerConfig(Record):
     # (provider K) and one defender (LB/DB/DL family).
     max_kickers: int = Field(default=1, ge=0, le=5)
     max_defenders: int = Field(default=1, ge=0, le=5)
+    # Bare configs stay on classic contest utility. Serving turns the Ollama
+    # engine on through optimizer_config_from_env unless NFL_OLLAMA_ENGINE=0.
+    ollama_engine: bool = False
 
 
 # Production default: three distinct teams, two distinct games. The optimizer
@@ -217,6 +225,9 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
       Default ``1``. ``0`` disables that cap. An integer above 5 also disables
       it (a five-card lineup cannot hold more). Negative or non-integer values
       raise.
+    - ``NFL_OLLAMA_ENGINE``: unset or ``1`` scores beam candidates with the
+      Ollama JSON engine (at least 1000 sims). ``0`` restores classic contest
+      utility. Invalid values raise.
     """
 
     env = environ if environ is not None else os.environ
@@ -238,6 +249,7 @@ def optimizer_config_from_env(environ: Mapping[str, str] | None = None) -> Optim
         slot_by_mean=_env_flag(env, "NFL_OPTIMIZER_SLOT_BY_MEAN", True),
         max_kickers=_env_lineup_cap(env, "NFL_OPTIMIZER_MAX_KICKERS", defaults.max_kickers),
         max_defenders=_env_lineup_cap(env, "NFL_OPTIMIZER_MAX_DEFENDERS", defaults.max_defenders),
+        ollama_engine=ollama_engine_from_env(env),
     )
 
 
@@ -557,6 +569,7 @@ def optimize(
     scoring_policy: ScoringPolicy,
     config: OptimizerConfig | None = None,
     field: FieldObservation | None = None,
+    ollama_client: OllamaJsonClient | None = None,
 ) -> Recommendation:
     slate.assert_prelock(decision_at)
     cfg = config or OptimizerConfig()
@@ -776,6 +789,39 @@ def optimize(
         ids = ordered
         expected = sum(scores[pid][slot] for slot, pid in enumerate(ids))
         p90, wins = evaluate(ids)
+    assumptions: tuple[str, ...] = (
+        "exact_binary_assignment_when_scipy_is_available_else_bounded_beam_fallback",
+        "game_correlation_is_configured_sensitivity_not_fitted",
+        "field_win_rate_against_simulated_opponent_not_payout_probability",
+        "total_value_is_expected_sum_of_committed_slot_and_player_multipliers",
+        "lineup_selected_by_contest_utility_over_expected_score_beam",
+    )
+    if cfg.ollama_engine:
+        selection = score_candidates(
+            beam,
+            eligible,
+            boost_by_player={pid: candidates[pid].card_boost for pid in by_id},
+            game_by_player={pid: candidates[pid].game_id for pid in by_id},
+            scorer=scoring_policy.score,
+            slots=slots,
+            game_ids=tuple(game.game_id for game in slate.games),
+            ownership=ownership,
+            seed=cfg.seed,
+            game_correlation=cfg.game_correlation,
+            simulations=cfg.simulations,
+            field_slot_by_p90=(
+                cfg.upside_weight > 0 or cfg.field_weight > 0 or cfg.profile == "max_value"
+            ),
+            client=ollama_client,
+        )
+        if selection is None:
+            assumptions = (*assumptions, "ollama_engine_fallback_classic_utility")
+        else:
+            ids = selection.player_ids
+            expected = selection.expected
+            p90 = selection.simulated_p90
+            wins = selection.simulated_field_win_rate
+            assumptions = (*assumptions, "ollama_engine_selected_by_json_utility")
     return Recommendation(
         picks=tuple(
             Pick(
@@ -833,4 +879,5 @@ def optimize(
             f"slate_regime={slate_regime_name(len(slate.games))}",
             f"slate_pool={len(eligible)}",
         ),
+        assumptions=assumptions,
     )

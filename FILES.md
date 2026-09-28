@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1138 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -173,6 +173,8 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/Makefile -- Build/test/lint entrypoints
 - nfl-oracle/README.md -- nfl-oracle
 - nfl-oracle/STATUS.md -- Status
+- nfl-oracle/STATUS.md -- Status
+- nfl-oracle/STATUS.md -- Status
 - nfl-oracle/docker-compose.yml
 - nfl-oracle/docker-entrypoint.sh -- Shell script
 - nfl-oracle/pyproject.toml -- Package/tool configuration
@@ -334,6 +336,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/src/nfl_oracle/recommendations/history.py -- Resumable, bounded historical collection and audited model input loading.
 - nfl-oracle/src/nfl_oracle/recommendations/hv_labels.py -- Keep only HV/TDV leaderboard rows as the NFL train target.
 - nfl-oracle/src/nfl_oracle/recommendations/model.py -- Chronological Real-value model with explicit evidence and holdout diagnostics.
+- nfl-oracle/src/nfl_oracle/recommendations/ollama_engine.py -- Ollama JSON utilities over optimizer candidate lineups.
 - nfl-oracle/src/nfl_oracle/recommendations/ollama_tick_tilt.py -- Env-gated Ollama tick tilt for NFL picker projections (#574).
 - nfl-oracle/src/nfl_oracle/recommendations/optimizer.py -- Five-card selection with committed ordering and feasible slate diversity.
 - nfl-oracle/src/nfl_oracle/recommendations/picker_knobs.py -- Evidence-backed projection knobs applied after predict, before optimize (#280).
@@ -500,6 +503,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_live_ok_context_features.py -- Canonical live_ok injury/weather context features stay wired (#418).
 - nfl-oracle/tests/unit/test_local_research_docker.py -- Local nfl-oracle-local research Docker assets (observation-only; no secrets).
 - nfl-oracle/tests/unit/test_multi_contest_day.py -- Multi-contest day selection for the NFL worker and NFLReader.collect.
+- nfl-oracle/tests/unit/test_ollama_engine.py -- Ollama candidate scoring sits on the classic optimizer (#595).
 - nfl-oracle/tests/unit/test_ollama_tick_tilt.py -- Ollama tick tilt contract for NFL picker (#574).
 - nfl-oracle/tests/unit/test_optimizer_env_config.py -- Env-driven optimizer construction config (max-value / race mode) for #453.
 - nfl-oracle/tests/unit/test_own_model_feature_map_523.py -- Phase-1 (#523): own-model ridge consumes safe live_ok slate context.
@@ -877,6 +881,7 @@ Generated from `git ls-files`. 1133 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_check_issue_link.py
 - scripts/tests/test_codespace_railway_env.py -- Unit tests for scripts/codespace-railway-env auth preference (no live Railway).
 - scripts/tests/test_no_status_issues.py -- GitHub Issues are work items with a solution, never job status (issue #442).
+- scripts/tests/test_ollama_client_json.py -- JSON generate contract for the shared Ollama HTTP client (#595).
 - scripts/tests/test_ollama_hv_app_api.py -- Offline tests: pregame leak stop + sport app API adapter + daemon (#574).
 - scripts/tests/test_ollama_hv_watcher.py -- Offline tests for Ollama HV slate watcher timing + gate (#574).
 - scripts/tests/test_ollama_hv_windows.py -- Offline tests for Ollama HV watcher window math and gate (#574).
