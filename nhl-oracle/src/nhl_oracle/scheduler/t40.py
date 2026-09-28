@@ -14,6 +14,7 @@ from typing import Any
 
 from nhl_oracle.contest.algebra import DEFAULT_SLOT_MULTIPLIERS, ROSTER_SIZE
 from nhl_oracle.contest.pick import FivePlayerPick
+from nhl_oracle.contract.boost_gate import BoostEligibility
 from nhl_oracle.contract.schema import ContestFormat, LockScope, NhlContestContract
 
 T40_OFFSET = timedelta(minutes=40)
@@ -89,8 +90,17 @@ def evaluate_freeze_coherence(
     contract: NhlContestContract,
     now: datetime,
     lock_at: datetime | None,
+    eligibility: BoostEligibility | None = None,
+    pool_complete: bool | None = None,
 ) -> FreezeCoherence:
-    """Check five-player pick + T-40 window against NHL contest algebra."""
+    """Check five-player pick + T-40 window against NHL contest algebra.
+
+    With no eligibility evidence the zero-boost gate stays closed: a pick
+    whose effective card boost is nonzero cannot freeze. Pass a cleared
+    ``BoostEligibility`` only after every club has at least one GP.
+    ``pool_complete=False`` refuses the freeze; ``None`` leaves pool checks
+    to the caller (older call sites).
+    """
 
     reasons = list(assert_contract_five_card(contract))
     if len(pick.player_ids) != ROSTER_SIZE:
@@ -113,6 +123,16 @@ def evaluate_freeze_coherence(
             reasons.append("past_lock")
         elif not in_window:
             reasons.append("before_t40_window")
+
+    # No eligibility evidence is the same as the gate still being closed.
+    boost_gated = eligibility is None or not eligibility.boost_allowed
+    if boost_gated:
+        if not pick.lineup_score.boost_gated:
+            reasons.append("zero_boost_not_applied")
+        if any(card.effective_card_boost != 0.0 for card in pick.lineup_score.contributions):
+            reasons.append("effective_boost_nonzero_while_gated")
+    if pool_complete is False:
+        reasons.append("pool_incomplete")
 
     return FreezeCoherence(
         ok=not reasons,
