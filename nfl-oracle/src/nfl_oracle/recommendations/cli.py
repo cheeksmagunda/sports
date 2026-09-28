@@ -519,6 +519,30 @@ async def _worker_once(
         return await pipeline.publish(day, reader)
 
 
+def worker_failure_slate_day(requested_day: date | None, now: datetime) -> date:
+    """Eastern slate date for a worker failure row (#599).
+
+    An explicit ``--day`` wins. Otherwise use America/New_York. UTC midnight
+    is still the previous evening in the East, and filing ``now(UTC).date()``
+    painted Monday's slate with Sunday's exception.
+    """
+    if requested_day is not None:
+        return requested_day
+    aware = now.tzinfo is not None and now.utcoffset() is not None
+    moment = now if aware else now.replace(tzinfo=UTC)
+    return moment.astimezone(SCHEDULE_TIMEZONE).date()
+
+
+def worker_failure_detail_code(error: BaseException, *, retryable_reason: str) -> str:
+    """Persist a gate code, or a type name plus OSError errno, never a path."""
+    if retryable_reason:
+        return retryable_reason
+    code = type(error).__name__.lower()
+    if isinstance(error, OSError) and isinstance(error.errno, int):
+        return f"{code}:{error.errno}"
+    return code
+
+
 def _record_worker_failure(
     store: RecommendationStore,
     day: date,
@@ -634,24 +658,28 @@ async def _run_worker(
             else:
                 print(json.dumps({"status": "waiting_or_locked"}))
         except NoSlate as error:
-            day = requested_day or datetime.now(UTC).date()
+            day = worker_failure_slate_day(requested_day, datetime.now(UTC))
             _record_worker_failure(store, day, status="no_slate", detail_code=str(error))
             print(json.dumps({"status": "no_slate"}))
         except Exception as error:
-            day = requested_day or datetime.now(UTC).date()
+            day = worker_failure_slate_day(requested_day, datetime.now(UTC))
             # Recording only the exception type leaves a refused freeze
             # undiagnosable after the fact: every gate failure arrives as a bare
             # "valueerror" and the slate is gone before anyone can reproduce it.
             # Gate failures raise ValueError with an internal reason code, which
             # is safe to keep. Other exception types can carry provider URLs or
-            # query values, so those stay type-only.
+            # query values, so those stay type-only. OSError keeps errno and
+            # drops the path (#599).
             reason = str(error)[:200] if type(error) is ValueError else ""
             retryable = reason in _RETRYABLE_FREEZE_REASONS
+            detail_code = worker_failure_detail_code(
+                error, retryable_reason=reason if retryable else ""
+            )
             _record_worker_failure(
                 store,
                 day,
                 status="waiting" if retryable else "error",
-                detail_code=reason if retryable else type(error).__name__.lower(),
+                detail_code=detail_code,
                 details={"reason": reason, "retryable": True}
                 if retryable
                 else ({"reason": reason} if reason else None),

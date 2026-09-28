@@ -1,6 +1,30 @@
 # Status
 
-Last verified: 2026-09-28T02:59:00Z
+Last verified: 2026-09-28T03:17:45Z
+
+## MNF pregate (#599)  -  2026-09-28T03:17:45Z
+
+Public read of `nfl-api` (`/health` and `/slate/2026-09-28`). No Railway
+variable was read or changed. Blend, upside, and field weights were left
+as they are.
+
+| Fact | Value |
+|---|---|
+| `/health` | `status=ok`, `recommendation_database=ok` |
+| Slate run | `waiting`, `detail_code=waiting_offline_pregate` |
+| Games | `[]`. Live collect has not run. |
+| `next_live_check_by` | `2026-09-28T23:15:00+00:00` |
+| `cutoff_at` | `2026-09-29T00:15:00+00:00` (20:15 ET, PHI at CHI) |
+| `next_freeze` | `null` until that live check |
+| Disk | `ok`, 21.4% of 4,838,498,304 bytes, free 3,784,351,744 |
+
+The offline pregate skips Real Sports until 20 minutes before the next
+kickoff. `games: []` before 23:15Z is that skip, not an unarmed Monday.
+Worker failure rows for an unrequested day now use the Eastern slate date.
+An `OSError` detail code keeps the errno and drops the path. The weekly
+Saturday T-40 cron starts at hour 16 UTC so an EDT 1pm ET window (T-40
+16:20Z) is checked. Dated November and December holiday crons stay on hour
+17 because those dates are EST (1pm ET T-40 is 17:20Z).
 
 ## Ollama tick ↔ picker tilt contract (#574, 2026-09-28)
 

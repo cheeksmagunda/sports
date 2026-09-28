@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  WNBA_API_BASE: https://api-production-7033.up.railway.app
+  WNBA_API_BASE: https://wnba-api-wnba-production.up.railway.app
   WNBA_RAILWAY_ENVIRONMENT_ID: d57a759e-e189-439b-a612-bd220ef59c39
   WNBA_RAILWAY_BACKFILL_SERVICE_ID: 633aa1db-6c54-466d-8f89-39517a889fb4
 

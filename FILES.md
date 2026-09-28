@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1120 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -544,6 +544,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nfl-oracle/tests/unit/test_weekclose.py
 - nfl-oracle/tests/unit/test_weekclose_gate.py
 - nfl-oracle/tests/unit/test_worker_context_bootstrap.py -- Worker context cold-start for Week-2 / TNF freezes (no baked-in artifacts).
+- nfl-oracle/tests/unit/test_worker_failure_day.py -- Worker failure rows use the Eastern slate date (#599).
 - nfl-oracle/tests/unit/test_worker_retry.py
 - nfl-oracle/tests/unit/test_worker_terminal_state.py -- A published slate is terminal: freeze once, then stop.
 
@@ -869,6 +870,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - scripts/tests/test_realsports_corpus_coverage_status.py -- Offline coverage_manifest generate + Ollama gate handoff (#526).
 - scripts/tests/test_realsports_corpus_layout.py -- Real Sports corpus layout and durable-store export stubs (#526).
 - scripts/tests/test_realsports_corpus_manifest.py -- Offline unit checks for Real Sports corpus staging and coverage (#526).
+- scripts/tests/test_t40_watchdog_schedule.py -- NFL T-40 watchdog crons cover EDT Saturday and name the WNBA mono API (#599).
 
 ## wnba-oracle/
 - wnba-oracle/.agent.md -- WNBA Oracle Instructions
