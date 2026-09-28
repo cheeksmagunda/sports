@@ -631,7 +631,7 @@ def fit_model(
             "holdout_winner_mae": candidates_mae[holdout_winner],
             "ridge_forced_for_wired_context": bool(names) and holdout_winner != "ridge",
             "high_tv_sample_weighting": "per_game_top5_value_rank_full_archive",
-            "training_target": "high_total_value_full_archive_not_win_chalk",
+            "training_target": "hv_tdv_board_value_else_raw_box_not_draft_count",
             "context_evidence_disclosure": (
                 "retrospective_reconstructed_context_included"
                 if retrospective_rows

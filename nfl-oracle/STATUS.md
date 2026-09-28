@@ -90,6 +90,59 @@ re-check Railway.
 - Ollama is not the NFL ridge/valuelaw serve path and does not publish the
   freeze. Role: root `../OVERVIEW.md`.
 
+## HV/TDV train target (#597)  -  2026-09-28T03:10Z
+
+`nfl-pipeline train` now overlays `highestBoostedValuePlayers` values onto
+Corpus G rows before `fit_model` (draft counts are not the label). Missing
+or conflicting boards keep the raw box value. `nfl-hv-board-replay` scores
+each HV board: HV-rank five vs draft-count chalk five vs the hindsight
+ceiling, under `value * (slot_multiplier + card_boost)`.
+
+### Live train
+
+Not executed from this agent. No `training_rows`, `hv_overlay`, or model
+sha from the worker volume. Those fields stay unverified until the command
+below runs on an image that contains this commit.
+
+| Fact | Verified |
+|---|---|
+| Railway account (MCP `whoami`) | Cheeks Magunda |
+| Project / env | `sports-oracle` `cca6b03f-8a84-4fb5-aaa5-decb3830392d` / `nfl-production` `766868da-e124-4c62-86bf-fb515c38e4fe` |
+| Worker service | `nfl-oracle-worker` `a5520eb7-e8e0-4f74-afeb-8919cb52c358` |
+| Worker SUCCESS deployment | `1f424a71-57b1-4dd3-937f-eda5c09f4509` commit `578566d` (ollama T-40 helper, not this overlay) |
+| This checkout corpora | `nfl-oracle/data` is catalog/schedule only (about 380K). No `data/raw/corpus_g` tree to fit |
+| `make write-path-check` | Failed on this host: `gh codespace list` HTTP 403 (integration token). Not a Codespace. Code push is direct `git push` |
+| Next slate in `data/schedule/schedules.csv` | 2026-09-28 week 3 `2026_03_PHI_CHI` gametime `20:15` |
+
+Hold `train --force` inside that game's T-40 window. The command activates
+a model in the recommendation store (serving path). Rollback: redeploy
+worker deployment `1f424a71-57b1-4dd3-937f-eda5c09f4509`; previous model
+artifacts stay in the store (`activate_model` retains them). No Railway env
+knob was changed here.
+
+Operator command, from Codespace `fluffy-zebra-g4gqq746477q2jg`, after this
+commit is the worker SUCCESS image:
+
+```bash
+cd /workspaces/sports
+scripts/codespace-railway-env -- railway ssh \
+  --project cca6b03f-8a84-4fb5-aaa5-decb3830392d \
+  --environment 766868da-e124-4c62-86bf-fb515c38e4fe \
+  --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-pipeline train --force'
+```
+
+Paste the JSON (`training_rows`, `hv_overlay`, `model_sha256`) back into
+this section. Read-only board score on the same image:
+
+```bash
+scripts/codespace-railway-env -- railway ssh \
+  --project cca6b03f-8a84-4fb5-aaa5-decb3830392d \
+  --environment 766868da-e124-4c62-86bf-fb515c38e4fe \
+  --service nfl-oracle-worker -- \
+  bash -lc 'export PATH=/opt/venv/bin:$PATH; nfl-hv-board-replay --contest-root /app/nfl-oracle/data/raw/corpus_c'
+```
+
 ## Win-draft harden (#590)  -  2026-09-27T17:25Z
 
 Early window failed (`future_forecast` then `stale_player`). Harden landed so
