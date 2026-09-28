@@ -164,9 +164,7 @@ def apply_picker_knobs(
     if knobs.boost_rank_blend == 0.0 and knobs.position_calibration == 0.0:
         adjusted_tuple: tuple[Projection, ...] = tuple(projections)
     else:
-        aligned = _boost_aligned_means(
-            projections, boost_of, tie_break=knobs.boost_tie_break
-        )
+        aligned = _boost_aligned_means(projections, boost_of, tie_break=knobs.boost_tie_break)
         bias = position_bias or {}
         adjusted: list[Projection] = []
         for projection in projections:
