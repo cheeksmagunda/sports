@@ -460,13 +460,13 @@ is one board; `NFL_TRAIN_DISPLAY_TOP_K` overrides the 10). With no boost
 map the high weight stays the per-game raw-value top five. Every other
 HV-board player stays in the fit at the base weight. Draft counts,
 popularity sections, winning drafts, and reconstructed boards are excluded.
-The train audit `hv_feature_emphasis` records a schema.org Observation.
-Each emphasis role, and each condition that produced the row, is a nested
-Observation of PropertyValues with propertyID `oracle:FeatureSpec`.
-Conditions are the player profile, the slate (calendar, kickoff, pace,
-matchup), and external pre-game factors (weather, moneylines, injury).
-Chalk channels stay off that graph (`prior_log_count` forced to 0, draft
-count, winning drafts). Card boost is the rank key and the optimizer score. It
+The train audit `hv_feature_emphasis` records a schema.org Observation of
+every live pre-game FeatureSpec (`live_ok`, `train_ok`, not `label_only`),
+including `global_prior_mean`. Each FeatureSpec group and each condition
+(player profile, slate conditions, external pre-game) is a nested
+Observation. Ridge context is the full live context set. Chalk channels
+stay off that graph (`prior_log_count` forced to 0, draft count, winning
+drafts). Card boost is the rank key and the optimizer score. It
 is not a ridge coefficient. `card_boost_post_settlement` stays
 live-forbidden.
 Corpus G box `value` is not y. Fewer than 30 leaderboard rows fails with

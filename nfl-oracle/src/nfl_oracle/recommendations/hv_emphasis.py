@@ -1,10 +1,10 @@
-"""Live features and the conditions that put an HV-board row in the top 10.
+"""Every pre-game feature mapped onto post-game HV/TDV leaderboard rows.
 
 The train sample is every player on the HV/TDV leaderboard. High weight is
-that board's display top 10. The same rows carry the conditions that
-produced them: player profile, slate conditions, and external pre-game
-factors. Draft count, winning drafts, and the ridge ``prior_log_count``
-slot are not how a row enters that window.
+that board's display top 10. The feature set is every live pre-game
+FeatureSpec, not a hand-picked subset: player profile, slate conditions,
+and external pre-game factors. Draft count, winning drafts, and the ridge
+``prior_log_count`` slot are not how a row enters that window.
 
 Card boost is the display rank key and the optimizer score. It is not a
 ridge coefficient. ``card_boost_post_settlement`` stays live-forbidden.
@@ -17,133 +17,23 @@ from typing import Any
 from oracle_core.schemaorg import observation, property_value, sports_event, with_context
 
 from nfl_oracle.features.live import (
-    INJURY_CATEGORIES,
-    KICKOFF_SLOT_FEATURE_NAMES,
     REQUIRED_LIVE_OK_CONTEXT_FEATURES,
     WEATHER_FEATURE_NAMES,
 )
-from nfl_oracle.features.schema import feature_registry
+from nfl_oracle.features.schema import FeatureSpec, feature_registry
+from nfl_oracle.labels.schema import LIVE_FEATURE_BLACKLIST
 from nfl_oracle.recommendations.model import RatingModel
 
-# (feature name, FeatureSpec.group). The role is the emphasis bucket.
-_SPEC_ROLES: dict[str, tuple[tuple[str, str], ...]] = {
-    "usage": (
-        ("player_prior_mean", "prior"),
-        ("player_prior_median", "prior"),
-        ("position_prior_mean", "prior"),
-        ("position_prior_median", "prior"),
-        ("team_prior_mean", "prior"),
-        ("prior_n_games", "prior"),
-        ("prior_fallback_level", "prior"),
-        ("prior_started", "prior"),
-        ("prior_minutes", "prior"),
-        ("prior_did_not_play", "prior"),
-    ),
-    "matchup": (
-        ("opponent_adjusted_prior", "prior"),
-        ("opp_def_value_allowed_prior", "matchup"),
-        ("home_away", "matchup"),
-        ("opponent_team", "matchup"),
-        ("is_divisional", "matchup"),
-        ("team_moneyline", "matchup"),
-        ("opponent_moneyline", "matchup"),
-        ("last_ten_wins", "matchup"),
-    ),
-    "role": (
-        ("position", "identity"),
-        ("team_id", "identity"),
-    ),
-    "pace": (
-        ("team_pace_prior", "pace"),
-        ("opponent_pace_prior", "pace"),
-    ),
-    "slate": (
-        ("overall_rank", "slate_meta"),
-        ("kickoff_slot", "slate_meta"),
-        ("days_rest", "calendar"),
-    ),
-    "injury": (
-        ("injury_status", "injury"),
-        ("injury_status_available", "injury"),
-        ("injury_body_part", "injury"),
-    ),
-    "external_pregame": (
-        ("weather_temp_f", "weather"),
-        ("weather_wind_mph", "weather"),
-        ("weather_precip_prob", "weather"),
-        ("weather_available", "weather"),
-    ),
-}
-
-# Conditions that produced an HV-board row. Names are live FeatureSpecs.
-# A name may also sit in a role above. Draft count is not a condition.
-_CONDITIONS: dict[str, tuple[tuple[str, str], ...]] = {
-    "player_profile": (
-        ("position", "identity"),
-        ("team_id", "identity"),
-        ("player_prior_mean", "prior"),
-        ("player_prior_median", "prior"),
-        ("position_prior_mean", "prior"),
-        ("position_prior_median", "prior"),
-        ("team_prior_mean", "prior"),
-        ("prior_n_games", "prior"),
-        ("prior_fallback_level", "prior"),
-        ("prior_started", "prior"),
-        ("prior_minutes", "prior"),
-        ("prior_did_not_play", "prior"),
-    ),
-    "slate_conditions": (
-        ("season", "calendar"),
-        ("week", "calendar"),
-        ("gameday", "calendar"),
-        ("days_rest", "calendar"),
-        ("kickoff_slot", "slate_meta"),
-        ("overall_rank", "slate_meta"),
-        ("home_away", "matchup"),
-        ("opponent_team", "matchup"),
-        ("is_divisional", "matchup"),
-        ("team_pace_prior", "pace"),
-        ("opponent_pace_prior", "pace"),
-        ("opponent_adjusted_prior", "prior"),
-        ("opp_def_value_allowed_prior", "matchup"),
-    ),
-    "external_pregame": (
-        ("weather_temp_f", "weather"),
-        ("weather_wind_mph", "weather"),
-        ("weather_precip_prob", "weather"),
-        ("weather_available", "weather"),
-        ("team_moneyline", "matchup"),
-        ("opponent_moneyline", "matchup"),
-        ("last_ten_wins", "matchup"),
-        ("injury_status", "injury"),
-        ("injury_status_available", "injury"),
-        ("injury_body_part", "injury"),
-    ),
-}
-
-_RIDGE_CONTEXT_ROLES: dict[str, tuple[str, ...]] = {
-    "usage": ("prior_started", "prior_minutes", "prior_did_not_play"),
-    "matchup": (
-        "opponent_adjusted_prior",
-        "opp_def_value_allowed_prior",
-        "home_away",
-        "is_home",
-        "is_divisional",
-        "team_moneyline",
-        "opponent_moneyline",
-        "moneyline_available",
-        "last_ten_wins",
-    ),
-    "pace": ("team_pace_prior", "opponent_pace_prior"),
-    "slate": ("overall_rank", "days_rest", *KICKOFF_SLOT_FEATURE_NAMES),
-    "injury": (
-        "injury_status_available",
-        "injury_body_part_hash",
-        "injury_body_part_available",
-        *(f"injury_{name}" for name in INJURY_CATEGORIES),
-    ),
-    "external_pregame": (*WEATHER_FEATURE_NAMES, "weather_available"),
-}
+_LEAKAGE_NAMES = frozenset(
+    {
+        "card_boost_post_settlement",
+        "same_slate_final_value",
+        "base_boosted_value",
+        "draft_stats_score",
+        "draft_stats_rank",
+        *LIVE_FEATURE_BLACKLIST,
+    }
+)
 
 _CHALK_OFF: dict[str, str] = {
     "prior_log_count": "ridge slot exists and its coefficient is forced to 0",
@@ -155,41 +45,81 @@ _RANK_KEY = "value * (top_slot + card_boost)"
 _SCORE_LAW = "value * (slot_multiplier + card_boost)"
 
 
-def _live_spec_rows(
-    registry: dict[str, Any],
-    pairs: tuple[tuple[str, str], ...],
-    *,
-    bucket: str,
-) -> list[dict[str, str]]:
-    rows: list[dict[str, str]] = []
-    for name, group in pairs:
-        spec = registry.get(name)
-        if spec is None or not spec.live_ok or not spec.train_ok or spec.group != group:
-            raise ValueError(f"hv_emphasis_feature_invalid:{name}")
-        if spec.group == "label_only" or name in {"draft_count", "prior_log_count"}:
-            raise ValueError(f"hv_emphasis_feature_invalid:{name}")
-        rows.append({"name": name, "group": spec.group, "role": bucket})
-    return rows
+def _is_pregame(spec: FeatureSpec) -> bool:
+    """Live train feature. Same-slate finals and chalk channels stay out."""
+
+    if spec.name in _LEAKAGE_NAMES or spec.name in {"draft_count", "prior_log_count"}:
+        return False
+    if spec.group == "label_only" or not spec.live_ok or not spec.train_ok:
+        return False
+    return True
+
+
+def _condition_bucket(spec: FeatureSpec) -> str:
+    """One condition class per pre-game spec. The classes cover the registry."""
+
+    if spec.group in {"weather", "injury"} or spec.name in {
+        "team_moneyline",
+        "opponent_moneyline",
+        "last_ten_wins",
+    }:
+        return "external_pregame"
+    if spec.group == "identity" or spec.name.startswith(
+        ("player_", "prior_", "position_prior", "global_prior", "team_prior")
+    ):
+        return "player_profile"
+    return "slate_conditions"
+
+
+def _ridge_role(name: str) -> str:
+    if name in {*WEATHER_FEATURE_NAMES, "weather_available"}:
+        return "external_pregame"
+    if name.startswith("injury"):
+        return "injury"
+    if name in {"team_pace_prior", "opponent_pace_prior"}:
+        return "pace"
+    if name in {"overall_rank", "days_rest"} or name.startswith("kickoff_slot_"):
+        return "slate"
+    if name in {"prior_started", "prior_minutes", "prior_did_not_play"}:
+        return "usage"
+    return "matchup"
 
 
 def hv_feature_emphasis() -> dict[str, Any]:
-    """Catalog used by ``nfl-pipeline train``. Names that are not live fail closed."""
+    """Catalog used by ``nfl-pipeline train``. A missing live spec fails closed."""
 
-    registry = {spec.name: spec for spec in feature_registry()}
-    feature_spec: list[dict[str, str]] = []
-    for role, pairs in _SPEC_ROLES.items():
-        feature_spec.extend(_live_spec_rows(registry, pairs, bucket=role))
-    conditions: list[dict[str, str]] = []
-    for condition, pairs in _CONDITIONS.items():
-        conditions.extend(_live_spec_rows(registry, pairs, bucket=condition))
+    specs = feature_registry()
+    feature_spec = [
+        {"name": spec.name, "group": spec.group, "role": spec.group}
+        for spec in specs
+        if _is_pregame(spec)
+    ]
+    pregame_names = {row["name"] for row in feature_spec}
+    live_names = {spec.name for spec in specs if spec.live_ok and spec.train_ok}
+    if pregame_names != live_names - _LEAKAGE_NAMES:
+        missing = sorted(live_names - _LEAKAGE_NAMES - pregame_names)
+        raise ValueError(f"hv_emphasis_pregame_incomplete:{','.join(missing)}")
+    for spec in specs:
+        if spec.group == "label_only" and spec.live_ok:
+            raise ValueError(f"hv_emphasis_leakage_live:{spec.name}")
+    conditions = [
+        {
+            "name": row["name"],
+            "group": row["group"],
+            "role": _condition_bucket(next(spec for spec in specs if spec.name == row["name"])),
+        }
+        for row in feature_spec
+    ]
+    if {row["name"] for row in conditions} != pregame_names:
+        raise ValueError("hv_emphasis_conditions_incomplete")
+    if len(conditions) != len(pregame_names):
+        raise ValueError("hv_emphasis_conditions_duplicate")
 
-    live_context = set(REQUIRED_LIVE_OK_CONTEXT_FEATURES)
-    ridge_context: list[dict[str, str]] = []
-    for role, names in _RIDGE_CONTEXT_ROLES.items():
-        for name in names:
-            if name not in live_context:
-                raise ValueError(f"hv_emphasis_context_invalid:{name}")
-            ridge_context.append({"name": name, "role": role})
+    ridge_context = [
+        {"name": name, "role": _ridge_role(name)} for name in REQUIRED_LIVE_OK_CONTEXT_FEATURES
+    ]
+    if {row["name"] for row in ridge_context} != set(REQUIRED_LIVE_OK_CONTEXT_FEATURES):
+        raise ValueError("hv_emphasis_context_incomplete")
 
     model_names = set(RatingModel.model_fields["feature_names"].default)
     if "prior_log_count" not in model_names:
@@ -199,12 +129,12 @@ def hv_feature_emphasis() -> dict[str, Any]:
         for name in RatingModel.model_fields["feature_names"].default
         if name not in {"intercept", "prior_log_count"}
     )
-    settlement = registry["card_boost_post_settlement"]
+    settlement = next(spec for spec in specs if spec.name == "card_boost_post_settlement")
     if settlement.live_ok:
         raise ValueError("hv_emphasis_post_settlement_boost_live")
 
     report = {
-        "sample": "every HV/TDV leaderboard row",
+        "sample": "every post-game HV/TDV leaderboard row",
         "high_weight": f"display top 10 by {_RANK_KEY}",
         "draft_count_is_label": False,
         "winning_drafts_are_label": False,
@@ -339,7 +269,7 @@ def _observation(report: dict[str, Any]) -> dict[str, Any]:
     )
     node = observation(
         about=sports_event(identifier="hv-tdv-leaderboard", name="HV/TDV contest board"),
-        measured_property=property_value(name="HV top-10 feature emphasis"),
+        measured_property=property_value(name="pre-game features of the HV/TDV board"),
         value=len(report["feature_spec"]),
         unit_text="feature",
         additional_properties=properties,

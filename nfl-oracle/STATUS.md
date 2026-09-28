@@ -71,11 +71,11 @@ flip optimizer or picker env.
 
 ## HV/TDV history train (#644) - 2026-09-28T04:44Z
 
-Operator lock. Learn the shape of every player on Highest-value and
-Total-value boards over history, and the conditions that produced those
-rows. The train mass is the full board. Top 10 by `value * (2 + card_boost)`
-on each Eastern slate takes the high weight. Every other board player stays
-in the fit at the base weight. Draft-count chalk is not the label. Winning
+Operator lock. Everything known pre-game is mapped onto the post-game
+Highest-value and Total-value leaderboards. The train mass is every
+player on those boards. Top 10 by `value * (2 + card_boost)` on each
+Eastern slate takes the high weight. Every other board player stays in
+the fit at the base weight. Draft-count chalk is not the label. Winning
 drafts are not the label. No Railway variable write, no deploy, and no
 contest entry from this change. `NFL_TRAIN_DISPLAY_TOP_K` is read by
 `nfl-pipeline train` when set; unset means 10. It is not set on Railway
@@ -125,46 +125,35 @@ window, and most of it is not the chalk set. Every HV-board player stays
 a training row. Players outside this window keep the base weight.
 
 `nfl-pipeline train` writes `hv_feature_emphasis` on the audit. The
-observation nests each role, and each condition, as its own schema.org
-Observation. Each live feature is a PropertyValue with propertyID
+observation maps every live pre-game FeatureSpec onto the post-game
+HV/TDV board. The set is the registry where `live_ok` and `train_ok` are
+true and the group is not `label_only`. A live spec missing from that set
+fails closed. Each FeatureSpec group, and each condition, is its own
+schema.org Observation. Each feature is a PropertyValue with propertyID
 `oracle:FeatureSpec`. The parent records that draft count and winning
 drafts are not labels.
 
-Conditions that produced an HV-board row:
-
 | Condition | FeatureSpec names |
 |---|---|
-| player profile | `position`, `team_id`, `player_prior_mean`, `player_prior_median`, `position_prior_mean`, `position_prior_median`, `team_prior_mean`, `prior_n_games`, `prior_fallback_level`, `prior_started`, `prior_minutes`, `prior_did_not_play` |
-| slate conditions | `season`, `week`, `gameday`, `days_rest`, `kickoff_slot`, `overall_rank`, `home_away`, `opponent_team`, `is_divisional`, `team_pace_prior`, `opponent_pace_prior`, `opponent_adjusted_prior`, `opp_def_value_allowed_prior` |
-| external pre-game | `weather_temp_f`, `weather_wind_mph`, `weather_precip_prob`, `weather_available`, `team_moneyline`, `opponent_moneyline`, `last_ten_wins`, `injury_status`, `injury_status_available`, `injury_body_part` |
+| player profile | `position`, `team_id`, `player_prior_mean`, `player_prior_median`, `position_prior_mean`, `position_prior_median`, `global_prior_mean`, `team_prior_mean`, `prior_n_games`, `prior_fallback_level`, `prior_did_not_play`, `prior_started`, `prior_minutes` |
+| slate conditions | `season`, `week`, `gameday`, `kickoff_slot`, `home_away`, `opponent_team`, `is_divisional`, `opponent_adjusted_prior`, `opp_def_value_allowed_prior`, `days_rest`, `team_pace_prior`, `opponent_pace_prior`, `overall_rank` |
+| external pre-game | `injury_status`, `injury_status_available`, `injury_body_part`, `weather_temp_f`, `weather_wind_mph`, `weather_precip_prob`, `weather_available`, `team_moneyline`, `opponent_moneyline`, `last_ten_wins` |
 
-Live FeatureSpec roles that can move an HV-board row:
-
-| Role | FeatureSpec names |
-|---|---|
-| usage | `player_prior_mean`, `player_prior_median`, `position_prior_mean`, `position_prior_median`, `team_prior_mean`, `prior_n_games`, `prior_fallback_level`, `prior_started`, `prior_minutes`, `prior_did_not_play` |
-| matchup | `opponent_adjusted_prior`, `opp_def_value_allowed_prior`, `home_away`, `opponent_team`, `is_divisional`, `team_moneyline`, `opponent_moneyline`, `last_ten_wins` |
-| role | `position`, `team_id` |
-| pace | `team_pace_prior`, `opponent_pace_prior` |
-| slate | `overall_rank`, `kickoff_slot`, `days_rest` |
-| injury | `injury_status`, `injury_status_available`, `injury_body_part` |
-| external pre-game | `weather_temp_f`, `weather_wind_mph`, `weather_precip_prob`, `weather_available` |
+Same names by FeatureSpec group: `calendar` (`season`, `week`, `gameday`, `days_rest`), `slate_meta` (`kickoff_slot`, `overall_rank`), `matchup` (`home_away`, `opponent_team`, `is_divisional`, `opp_def_value_allowed_prior`, `team_moneyline`, `opponent_moneyline`, `last_ten_wins`), `identity` (`position`, `team_id`), `prior` (the player, position, global, and team priors, `opponent_adjusted_prior`, `prior_n_games`, `prior_fallback_level`, `prior_did_not_play`, `prior_started`, `prior_minutes`), `injury`, `weather`, and `pace` (`team_pace_prior`, `opponent_pace_prior`).
 
 Ridge core slots that multiply a coefficient: `player_mean_shrunk`,
 `recent_mean_shrunk`, `position_mean`, `prior_stddev`, `opportunity_trend`.
-Ridge context slots in the same roles add `is_home`, `moneyline_available`,
-`kickoff_slot_early`, `kickoff_slot_late`, `kickoff_slot_snf`,
-`kickoff_slot_mnf`, `kickoff_slot_other`, `injury_body_part_hash`,
-`injury_body_part_available`, and the `injury_<category>` one-hots
-(`active`, `questionable`, `doubtful`, `out`, `inactive`, `ir`,
-`suspended`, `limited`, `dnp`, `full`, `unknown`) beside the usage,
-matchup, and pace names above. External pre-game weather is on the ridge
-context as `weather_temp_f`, `weather_wind_mph`, `weather_precip_prob`,
-and `weather_available`. Chalk channels stay off: `prior_log_count`
-(coefficient forced to 0), draft count, winning drafts. Card boost is the
-rank key `value * (2 + card_boost)` and the optimizer score
-`value * (slot + card_boost)`. It is not a ridge coefficient.
-`card_boost_post_settlement` stays `live_ok` false.
+Ridge context is the full `REQUIRED_LIVE_OK_CONTEXT_FEATURES` set: slate
+kickoff one-hots, matchup and moneylines, every `injury_<category>`
+one-hot plus `injury_body_part_hash`, pace, `prior_started`,
+`prior_minutes`, `prior_did_not_play`, and weather (`weather_temp_f`,
+`weather_wind_mph`, `weather_precip_prob`, `weather_available`). Chalk
+channels stay off: `prior_log_count` (coefficient forced to 0), draft
+count, winning drafts. Same-slate leakage stays off: `card_boost_post_settlement`,
+`same_slate_final_value`, `base_boosted_value`, `draft_stats_score`,
+`draft_stats_rank`. Card boost is the rank key `value * (2 + card_boost)`
+and the optimizer score `value * (slot + card_boost)`. It is not a ridge
+coefficient.
 
 Public `GET /lineup/2026-09-27` at `2026-09-28T04:42:07Z` is `locked`,
 `frozen_at` `2026-09-27T19:36:23Z`, `construction_profile` `max_value`,
