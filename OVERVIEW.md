@@ -58,6 +58,13 @@ Product goal (one statement): root `README.md`. The stack that pursues it:
 6. **Backtest race.** `oracle_core.race` plus `oracle_core.fitness`
    (WIN/CLOSE band). The app supplies the backtest. Workflows
    `wnba-race.yml` and `nfl-race.yml` dispatch that work.
+7. **Contest-max map.** `oracle_core.contest_max` scores a supplied pool
+   under `value * (slot_multiplier + card_boost)`. It compares the HV
+   display five (`value * (2 + card_boost)`), the raw-value five, and a
+   draft-count chalk five. Draft count is a comparison bar, never a
+   label. Measured tables live in each app `STATUS.md`. Inventory and
+   the remaining research list live in
+   `drive/2026-09-28-contest-max-history-map.md` (issue #633).
 
 ### T-40 runner map
 
@@ -89,7 +96,7 @@ do not share that catalog.
 
 ## oracle-core (`packages/oracle-core/src/oracle_core/`)
 
-Domain-free technical infrastructure. 26 Python modules as of this sync,
+Domain-free technical infrastructure. 27 Python modules as of this sync,
 including package `realsports_corpus/` (layout, manifest, store). Prefer
 schema.org (and PROV-O / IPTC Sport Schema only where noted in `AGENTS.md`)
 for shared entity contracts; see `schemaorg.py`. The package README is the
@@ -104,6 +111,7 @@ inline list; this table is the outline.
 | `logging.py`, `redaction.py` | Structured logging with secret redaction |
 | `service.py`, `testing.py` | Service scaffolding; shared test helpers |
 | `schemaorg.py`, `high_tv.py` | schema.org / JSON-LD constructors; high-TV board helpers |
+| `contest_max.py` | Five-card display rank, chalk comparison, hindsight ceiling (#633) |
 | `race.py`, `fitness.py` | WIN/CLOSE backtest race (search, genetics, elite band). Domain-free |
 | `draft_stats_catalog.py`, `hv_board_corpus.py` | Draft Stats section inventory; HV board document helper (#526) |
 | `realsports_corpus/` | Sibling-repo layout, coverage manifest, store |
@@ -141,11 +149,11 @@ Frontend is a static `index.html` (no build pipeline).
 
 | Subpackage | Files | Purpose |
 |---|---|---|
-| `recommendations/` | 19 | Live pipeline: prepare/publish/lock, optimizer, T-40 watchdog, CLI |
+| `recommendations/` | 21 | Live pipeline: prepare/publish/lock, optimizer, T-40 watchdog, CLI |
 | `strategy/` | 16 | Five-card legality, clocks, scoring algebra |
 | `contests/` | 11 | Contest archive parsing, including Corpus C HV export |
 | `baselines/`, `features/` | 10 each | Ridge / priors / walk-forward; own-model feature map |
-| `replay/` | 8 | Historical contest replay |
+| `replay/` | 9 | Historical contest replay, including `nfl-contest-max-map` |
 | `data/` | 8 | Coverage and catalog helpers |
 | `ingest/` | 7 | Corpus G ingest and Real Sports client |
 | `identity/` | 6 | Player identity resolution |

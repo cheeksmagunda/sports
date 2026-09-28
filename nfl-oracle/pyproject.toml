@@ -48,6 +48,7 @@ nfl-hv-board-replay = "nfl_oracle.replay.hv_board_replay_cli:main"
 nfl-pipeline = "nfl_oracle.recommendations.cli:main"
 nfl-contest-backfill = "nfl_oracle.contests.cli:main"
 nfl-corpus-c-hv-export = "nfl_oracle.contests.hv_export_cli:main"
+nfl-contest-max-map = "nfl_oracle.replay.contest_max_map_cli:main"
 nfl-boost-watch = "nfl_oracle.contests.boost_watch:main"
 
 [build-system]

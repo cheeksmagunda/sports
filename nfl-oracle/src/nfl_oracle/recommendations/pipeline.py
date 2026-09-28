@@ -16,6 +16,7 @@ from pydantic import Field, field_validator, model_validator
 
 from nfl_oracle.calendar import ScheduledGame, games_in_week, season_week_for_date
 from nfl_oracle.recommendations.context import ContextBundle
+from nfl_oracle.recommendations.display_rank_weights import contest_display_top_ids
 from nfl_oracle.recommendations.model import (
     ContextAdjustment,
     HistoricalPerformance,
@@ -245,6 +246,7 @@ class RecommendationPipeline:
             config=self.policy.optimizer,
             field=field,
         )
+        display_top = contest_display_top_ids(projections, slate.candidates)
         prepared = PreparedDecision(
             slate=slate,
             recommendation=lineup,
@@ -262,7 +264,12 @@ class RecommendationPipeline:
             slate.contest.day,
             status="waiting",
             detail_code="prepared_for_freeze",
-            details={"next_freeze": prepared.freeze_due_at.isoformat()},
+            details={
+                "next_freeze": prepared.freeze_due_at.isoformat(),
+                "contest_display_top5": list(display_top),
+                "contest_display_rank": "value_times_top_slot_plus_boost",
+                "draft_count_is_label": False,
+            },
         )
         return prepared
 

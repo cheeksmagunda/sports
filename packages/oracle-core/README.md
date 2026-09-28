@@ -1,8 +1,11 @@
 # oracle-core
 
 `oracle-core` contains provider-neutral technical infrastructure shared by
-Sports Oracle applications. It deliberately contains no league, calendar,
-player, scoring, model, strategy, or provider contract.
+Sports Oracle applications. League calendars, models, strategies, and
+provider payload parsers stay in the owning app. The shared five-card
+rearrangement `value * (slot_multiplier + card_boost)` lives in
+`oracle_core.contest_max` (issue #633) because every sport uses that
+same non-negative law.
 
 The public package includes:
 
@@ -28,6 +31,8 @@ The public package includes:
   SportsTeam, SportsOrganization, SportsEvent, Place, OrganizationRole,
   identifier/PropertyValue, sameAs, Observation, QuantitativeValue, ItemList,
   plus optional PROV-O attribution; high-TV boards in `oracle_core.high_tv`;
+  five-card contest display rank, chalk comparison, and hindsight ceiling
+  in `oracle_core.contest_max` (issue #633);
   Real Sports history corpus layout in `oracle_core.realsports_corpus`
   (`{sport}/{season}/{slate_or_game_id}/{artifact}.json` + coverage
   manifest) and HV board helpers in `oracle_core.hv_board_corpus`
