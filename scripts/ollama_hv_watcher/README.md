@@ -11,8 +11,11 @@ replaces ridge, math, valuelaw, or a sport-owned model. It is not a
 chatbot and not decoration. The campaign sentence is in `OVERVIEW.md`
 (Win stack, #653). Product goal: root `README.md` **Product goal**.
 
-Each sport app fires its own T-40 freeze and publishes its five-player
-lineup. Ollama does not publish that freeze.
+Each sport app (`nfl-oracle`, `wnba-oracle`) fires its own T-40 freeze and
+publishes its frozen five-player lineup on its own API and frontend. The
+required-ON contract for that freeze is the app's `CONNECTORS.md`, not this
+helper. Ollama does not publish that freeze. This helper is only an
+annotator on top of that:
 
 - It only READS each app's public API (`adapters/app_api.py`, stdlib
   `urllib`, bounded timeout and retry, no credentials).

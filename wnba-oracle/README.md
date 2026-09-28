@@ -5,7 +5,7 @@ available pool and pre-tip signals, builds WNBA-owned features, predicts player
 distributions, optimizes a five-player lineup, freezes the result, and serves
 read-only slate and lineup data.
 
-Portfolio product goal: root `../README.md` (Product goal). Current WNBA serve
+Portfolio product goal: root `../README.md` (Product goal). The T-40 hook graph is in `CONNECTORS.md` (machine catalog: `src/wnba_oracle/assurance/connectors.py`). Current WNBA serve
 knobs and training-target detail are in `STATUS.md` and must be reverified
 before production work. Structural outline: root `../OVERVIEW.md`.
 
@@ -14,10 +14,6 @@ before production work. Structural outline: root `../OVERVIEW.md`.
 Inline contract for this app. Live Railway values stay in `STATUS.md`.
 
 **Model path.** Train and grade on `highestBoostedValuePlayers` only.
-`read_label_corpus` joins `job1_enrichment.position` onto that board and
-uses `F` only when the pool row has no position. LightGBM heads stay
-pooled F (`build_gamelog_corpus` has no per-game position). Shipped F-only
-EB artifacts serve through the F-mean fallback in `eb_predict_one`.
 `WNBA_SERVE_PRIMARY` code default is `eb` (`EBHierarchicalBaseline`).
 `heads` restores LightGBM quantile heads and is the rollback, not the
 primary. Minutes blend and heuristics are cold-start only. Ollama
@@ -38,7 +34,7 @@ and `scripts/pre_freeze_guard.py`. Cron schedules are mutable; see
 `model_artifact`, `identity_override_file`, `payout_archive`, `wnba_api`,
 `frontend`, `espn`, `github_actions`, `railway`, `watchdog_alert_sink`,
 `watchdog_heartbeat_sink`, `realsports_session_recovery`. A freeze records
-connector ids, not credential values.
+connector ids, not credential values. Narrative hook map: `CONNECTORS.md`.
 
 ### Env knobs (code contract)
 
