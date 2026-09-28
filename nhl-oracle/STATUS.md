@@ -12,7 +12,8 @@ Pointer only. Not a new live check.
   export stub exit 78): `README.md` (Win stack).
 - Staging health URLs and the corpus gap: sections below.
 - Ollama is not an NHL model and there is still no hosted freeze publish.
-  Role: root `../OVERVIEW.md`.
+  Role and operator build map: root `../OVERVIEW.md` (Win stack). Ollama
+  training gate: root `../README.md`.
 
 ## Highest Total Value train + backtest path (#535 / #453 / #526)  -  2026-09-27
 

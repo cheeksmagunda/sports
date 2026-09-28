@@ -8,7 +8,9 @@ Pointer only. Not a new live check.
   exits 78, history loader is observation-only. See `README.md` (Win stack).
 - Portfolio goal: root `../README.md` (Product goal). No NBA train path yet.
 - Partial `nba_history_*` counts and Railway shell: sections below.
-- Ollama is not an NBA model. Role: root `../OVERVIEW.md`.
+- Ollama is not an NBA model. Role and operator build map: root
+  `../OVERVIEW.md` (Win stack). NBA is the remaining build on that map.
+  Ollama training gate: root `../README.md`.
 
 ## History corpus gap (#453 / #489)  -  2026-09-27
 

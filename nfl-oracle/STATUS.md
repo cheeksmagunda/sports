@@ -87,7 +87,9 @@ restore `0.75`. Max 1 DEF and max 1 K stay the code defaults from #616.
 Standing objective for every sport, every day: root `../README.md`
 (Product goal). `hv_overlay` and `hv_feature_emphasis` record that
 objective (`lineup_size` 5, `winning_drafts_are_reference_bar`,
-`cash_is_objective` false, `median_is_objective` false).
+`cash_is_objective` false, `median_is_objective` false). Product brief
+for this ship: `../OVERVIEW.md` (Win stack, operator build map). Ollama
+is not the serve primary. Blend `0.75` stays unrestored.
 
 When a card-boost map is present, each contest board (one Eastern slate)
 high-weights its top 10 by `value * (2 + card_boost)`. The regression
@@ -267,7 +269,8 @@ re-check Railway.
 - Live worker knobs, Corpus G volume, and the 2026-09-27 harden: sections
   below, starting with Win-draft harden.
 - Ollama is not the NFL ridge/valuelaw serve path and does not publish the
-  freeze. Role: root `../OVERVIEW.md`.
+  freeze. Role and operator build map: root `../OVERVIEW.md` (Win stack).
+  Ollama training gate: root `../README.md`.
 
 ## HV/TDV train target (#597, lock #599)  -  2026-09-28T03:22Z
 

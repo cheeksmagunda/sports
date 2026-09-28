@@ -21,6 +21,13 @@ The portfolio product goal is stated once in root `README.md` (Product goal).
 Do not restate it here; each sport `README.md` points at that section and at
 its own `STATUS.md` for current serve knobs.
 
+Operator build map: NFL, NHL, and WNBA are the built applications. NBA is
+the remaining build and still has weeks of product work ahead. That map is not a
+hosted-freeze claim. The T-40 table below is the publish fact: NHL is a
+skeleton with no hosted freeze, and NBA has no freeze runner. Dependency
+direction and the Ollama role are the Win stack below. Ollama training
+gate: root `README.md`.
+
 ## Monorepo layout
 
 Three layers. Dependency direction is sport application to `oracle-core`.
