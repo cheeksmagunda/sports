@@ -1,0 +1,65 @@
+name: nhl-t40-watchdog
+
+on:
+  schedule:
+    # NHL puck drops cluster from about 21:00Z through 03:30Z. T-40 for a
+    # 21:00Z opener is 20:20Z. Poll that band every day of the season.
+    # workflow_dispatch covers a specific Eastern slate date.
+    - cron: "*/15 20-23 * * *"
+    - cron: "*/15 0-3 * * *"
+  workflow_dispatch:
+    inputs:
+      day:
+        description: Slate date (YYYY-MM-DD) in US/Eastern; default is today
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nhl-t40-watchdog
+  cancel-in-progress: false
+
+jobs:
+  check:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+
+      - name: Run NHL T-40 watchdog
+        id: watchdog
+        continue-on-error: true
+        run: |
+          DAY_ARG=""
+          if [ -n "${{ inputs.day }}" ]; then
+            DAY_ARG="--day ${{ inputs.day }}"
+          fi
+          uv run --frozen --package nhl-oracle python nhl-oracle/scripts/nhl_t40_watchdog.py \
+            $DAY_ARG \
+            --report "$RUNNER_TEMP/nhl-t40-watchdog-report.md" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Ensure an incident-safe report exists
+        if: always()
+        run: |
+          if [ ! -s "$RUNNER_TEMP/nhl-t40-watchdog-report.md" ]; then
+            printf '# NHL T-40 watchdog\n\n- status: `error`\n- reason: `watchdog_report_missing`\n' > "$RUNNER_TEMP/nhl-t40-watchdog-report.md"
+          fi
+
+      # The run itself is the signal (issue #442). A missing full-roster
+      # freeze inside T-40 fails the run. No issue is filed.
+      - uses: ./.github/actions/dayclose-ledger
+        if: always()
+        with:
+          results_title: "NHL T-40 watchdog"
+          report_path: ${{ runner.temp }}/nhl-t40-watchdog-report.md
+          should_escalate: >-
+            ${{ (steps.watchdog.outcome != 'success' || steps.watchdog.outputs.status == 'alert' || steps.watchdog.outputs.status == 'error') && 'true' || 'false' }}

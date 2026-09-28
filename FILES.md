@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1122 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -64,6 +64,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - .github/workflows/nfl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/nfl-weekclose.yml -- GitHub Actions workflow
 - .github/workflows/nhl-history-nightly.yml -- GitHub Actions workflow
+- .github/workflows/nhl-t40-watchdog.yml -- GitHub Actions workflow
 - .github/workflows/realsports-corpus-append.yml -- GitHub Actions workflow
 - .github/workflows/secret-audit.yml -- GitHub Actions workflow
 - .github/workflows/watchdog-monitor.yml -- GitHub Actions workflow
@@ -610,6 +611,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/scripts/append_game_stats_matchup.py -- Append NHL public boxscore games into the durable matchup corpus.
 - nhl-oracle/scripts/export_hv_board.py -- NHL HV board export stub (issue #526).
 - nhl-oracle/scripts/live_contract_audit.py -- CLI wrapper for nhl_oracle.ingest.audit (read-only).
+- nhl-oracle/scripts/nhl_t40_watchdog.py -- Scheduled NHL T-40 freeze watchdog.
 
 ## nhl-oracle/src/nhl_oracle/
 - nhl-oracle/src/nhl_oracle/__init__.py -- NHL Oracle application package.
@@ -672,6 +674,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
 - nhl-oracle/src/nhl_oracle/scheduler/readiness.py -- T-40 win-freeze readiness for a live NHL slate (observation only).
 - nhl-oracle/src/nhl_oracle/scheduler/t40.py -- T-40 freeze publication policy coherent with NHL contest algebra (#535).
+- nhl-oracle/src/nhl_oracle/scheduler/watchdog.py -- Public-schedule T-40 watchdog for the NHL daily five (observation only).
 
 ## nhl-oracle/src/nhl_oracle/service/
 - nhl-oracle/src/nhl_oracle/service/__init__.py -- Minimal NHL staging HTTP service and pipeline CLI.
@@ -697,6 +700,7 @@ Generated from `git ls-files`. 1118 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/tests/test_realsports_auth_bootstrap.py
 - nhl-oracle/tests/test_redact.py
 - nhl-oracle/tests/test_service_scaffold.py -- Staging HTTP service and Docker/Railway scaffold contracts.
+- nhl-oracle/tests/test_t40_watchdog.py -- Public T-40 runner: zero boost, full roster, no invented five.
 - nhl-oracle/tests/test_win_freeze_readiness.py -- T-40 win freeze: complete pool, zero boost until every team has played.
 
 ## nhl-oracle/tests/fixtures/realsports/

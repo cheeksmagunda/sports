@@ -51,7 +51,9 @@ make typecheck
 sports-oracle `nhl-staging`. One image, separate roles: `nhl-pipeline serve`
 is the read-only API default; `nhl-pipeline worker` is an observation-only
 heartbeat that reports T-40 win-freeze readiness and does not collect a live
-slate. `nhl-pipeline readiness` prints the same fail-closed report.
+slate. `nhl-pipeline readiness` prints the same fail-closed report. The public
+T-40 runner is `scripts/nhl_t40_watchdog.py` (Actions `nhl-t40-watchdog`).
+It reads the public schedule only and does not collect a contest pool.
 Credentials never enter the image. No contest entry. API must not migrate
 on startup (no schema yet). The root `.dockerignore` must allowlist
 `nhl-oracle/src` or the Railway image build cannot see this package.

@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Any
 
 from nhl_oracle.contest.algebra import ROSTER_SIZE
-from nhl_oracle.contest.pick import select_five_player_pick
+from nhl_oracle.contest.pick import select_no_boost_five_from_full_pool
 from nhl_oracle.contract.boost_gate import (
     BoostEligibility,
     TeamGamesPlayed,
@@ -135,6 +135,13 @@ def evaluate_win_freeze_readiness(
 
     rows = _team_rows(team_games_played)
     eligibility = evaluate_boost_eligibility(rows)
+    if expected_pool_size <= ROSTER_SIZE:
+        return _from_eligibility(
+            eligibility,
+            blocked_reasons=("full_roster_pool_required",),
+            pool_complete=False,
+            pool_detail="full_roster_pool_required",
+        )
     base = contract if contract is not None else NhlContestContract()
     regime, eligibility = force_none_while_gated(base.boost_regime, eligibility)
     audited = replace(base, boost_regime=regime)
@@ -168,11 +175,12 @@ def evaluate_win_freeze_readiness(
                     for player_id in pool_ids
                     if player_id in card_boosts
                 }
-            pick = select_five_player_pick(
+            pick = select_no_boost_five_from_full_pool(
                 values,
+                expected_pool_size=len(values),
                 card_boosts=scoped_boosts,
                 contract=audited,
-                eligibility=eligibility,
+                team_games_played=rows,
             )
             coherence = evaluate_freeze_coherence(
                 pick=pick,

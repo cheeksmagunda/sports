@@ -129,8 +129,11 @@ through the early-slate gap (games starting before all 32 clubs have ≥1 GP).
 That gap is the strategy window: exploit field mispricing; never arm boost /
 ownership-fade / leverage early. Fail closed when team-GP coverage is missing.
 T-40 win-freeze readiness (`scheduler.readiness`) refuses a five-card freeze
-unless that gate holds, the slate pool matches its denominator (not a
-five-player stub), and the clock is inside `lock_at - 40m`.
+unless that gate holds, the slate pool is larger than five and matches its
+denominator, and the clock is inside `lock_at - 40m`. The no-boost picker is
+`select_no_boost_five_from_full_pool`. The public runner is
+`nhl-oracle/scripts/nhl_t40_watchdog.py` (`nhl-t40-watchdog` on Actions). It
+does not invent a lineup.
 Historical contest 1901 draftStats may show flat `multiplierBonus` from a
 later window and must not override the gate.
 

@@ -70,21 +70,35 @@ Pointer only. Not a new live check.
 
 ## T-40 win-freeze readiness (#601)  -  2026-09-28
 
-- **Runners:** GitHub still has `nhl-history-nightly` only (public NHL
-  history, no Real Sports). There is no NHL T-40 Actions watchdog. Railway
-  `nhl-worker` start command remains `nhl-pipeline worker`. The heartbeat
-  now includes `readiness` and stays `freeze_ready=false` until a complete
-  slate snapshot is injected inside T-40. It does not call Real Sports.
+- **No-boost picker:** `select_no_boost_five_from_full_pool` ranks the full
+  slate pool by pregame value and scores it with the zero-boost gate. There
+  is no caller boost-multiplier override. A pool of size 5 is rejected
+  (`full_roster_pool_required`). When slate teams are supplied, every team
+  must have cards and those cards must sum to the pool.
+- **Runners:** `nhl-history-nightly` remains the public history load.
+  `nhl-t40-watchdog` (`.github/workflows/nhl-t40-watchdog.yml`) polls the
+  public schedule and team-summary feeds every 15 minutes from 20:00Z
+  through 03:59Z, plus `workflow_dispatch`. It does not call Real Sports
+  and does not invent a five. Before T-40 the run stays green (`waiting`).
+  Inside the window, or after the earliest puck drop, a missing full-roster
+  freeze fails the run (`alert`). Lock time is the earliest regular-season
+  puck drop on the US/Eastern slate date, a proxy until a contest lock is
+  captured. Railway `nhl-worker` is still the idle heartbeat; it does not
+  collect the pool.
 - **Pool:** `gate_pool_completeness` still accepts a roster-sized fixture
   when no slate denominator is set (Week 2 audit shape). A win freeze sets
-  `expected_pool_size` and `games_scheduled` / `games_captured` and fails
-  unless the observed pool equals that denominator and every scheduled game
-  was captured. A five-player stub is not a complete slate.
+  `expected_pool_size` above 5 and `games_scheduled` / `games_captured`,
+  and fails unless the observed pool equals that denominator and every
+  scheduled game was captured.
 - **Zero boost:** unchanged rule (#501). Effective card boost stays 0 until
   all 32 clubs have >=1 GP. Missing coverage fails closed. A flat contract
   label is forced to `none` for the freeze score while the gate is closed.
-- **Code:** `nhl_oracle.scheduler.readiness`. Unit proof:
-  `tests/test_win_freeze_readiness.py`. `contest_entry` stays false.
+  Opening night 2026-09-29 is inside that gap (team summary total 0; ten
+  clubs on the slate).
+- **Code:** `nhl_oracle.scheduler.readiness`, `scheduler.watchdog`,
+  `contest.pick.select_no_boost_five_from_full_pool`. Unit proof:
+  `tests/test_win_freeze_readiness.py` and `tests/test_t40_watchdog.py`.
+  `contest_entry` stays false.
 
 ## Public 2026-27 coverage (verified 2026-09-28 UTC)
 
