@@ -25,16 +25,28 @@ def read_label_corpus(engine: sa.Engine | None = None) -> pl.DataFrame:
 
     One row per player-slate from ``slate_labels`` where
     ``section = highestBoostedValuePlayers``. No artificial date/year
-    cutoff — full slate_labels history. Winning-draft
+    cutoff. Full slate_labels history. Winning-draft
     ``leaderboard_lineup`` rows and popularity sections are excluded.
+
+    Position is the Real Sports pool position from ``job1_enrichment``
+    for that slate. ``cohort_for_position`` maps ``C`` and ``C-F`` to C
+    and ``G`` / ``G-F`` to G. A row with no pool position stays ``F`` so
+    history from before enrichment still trains. That join is the HV
+    training alignment (#623). The gamelog heads corpus is separate and
+    still pooled F.
     """
     eng = engine or get_engine()
     q = text(
-        "SELECT slate_date, platform_player_id AS player_id, display_name, "
-        "team_key AS team, card_boost, real_score, 'F' AS position "
-        "FROM slate_labels WHERE real_score IS NOT NULL "
-        "AND section = :section "
-        "ORDER BY slate_date, platform_player_id"
+        "SELECT l.slate_date, l.platform_player_id AS player_id, l.display_name, "
+        "l.team_key AS team, l.card_boost, l.real_score, "
+        "COALESCE(NULLIF(BTRIM(e.position), ''), 'F') AS position "
+        "FROM slate_labels l "
+        "LEFT JOIN job1_enrichment e "
+        "ON e.slate_date::text = l.slate_date "
+        "AND e.player_id = l.platform_player_id "
+        "WHERE l.real_score IS NOT NULL "
+        "AND l.section = :section "
+        "ORDER BY l.slate_date, l.platform_player_id"
     )
     with eng.connect() as conn:
         rows = conn.execute(q, {"section": TRAINING_LABEL_SECTION}).fetchall()

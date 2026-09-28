@@ -5,12 +5,14 @@ pipeline reads from here to assemble per-cohort design matrices; the
 predict pipeline reads from here to ensure column ordering matches the
 pickled artifact.
 
-Production contract: the canonical model is intentionally pooled-F until a
-trustworthy position source is available. The G/F/C labels are scaffolding
-only and are not shipped as real industry cohorts. Position strings from
-Real Sports may still be hyphenated (e.g. "G-F"); `cohort_for_position`
-reduces to a primary cohort for compatibility, but the artifact contract is
-pooled-F and the training corpus hardcodes "F" when no source exists.
+Production contract: LightGBM heads stay pooled-F. ``build_gamelog_corpus``
+has no per-game position, so every head row is F. The EB label corpus does
+not stamp F. ``read_label_corpus`` joins ``job1_enrichment.position`` for
+the Highest-value board and uses F only when that pool row has no position
+(#623). Shipped F-only EB artifacts still serve through the F-mean fallback
+in ``eb_predict_one`` until a train on the joined corpus replaces them.
+``cohort_for_position`` reduces hyphenated Real Sports strings (``G-F``,
+``F-C``, ``C-F``) to a primary cohort.
 """
 
 from __future__ import annotations

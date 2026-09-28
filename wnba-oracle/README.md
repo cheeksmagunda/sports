@@ -14,6 +14,10 @@ before production work. Structural outline: root `../OVERVIEW.md`.
 Inline contract for this app. Live Railway values stay in `STATUS.md`.
 
 **Model path.** Train and grade on `highestBoostedValuePlayers` only.
+`read_label_corpus` joins `job1_enrichment.position` onto that board and
+uses `F` only when the pool row has no position. LightGBM heads stay
+pooled F (`build_gamelog_corpus` has no per-game position). Shipped F-only
+EB artifacts serve through the F-mean fallback in `eb_predict_one`.
 `WNBA_SERVE_PRIMARY` code default is `eb` (`EBHierarchicalBaseline`).
 `heads` restores LightGBM quantile heads and is the rollback, not the
 primary. Minutes blend and heuristics are cold-start only. Ollama
