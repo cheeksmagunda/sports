@@ -254,6 +254,20 @@ def test_expected_prod_config_matches_live_tdv_flip() -> None:
 
     assert EXPECTED_PROD_CONFIG["optimizer_objective_mode"] == "total_draft_value"
     assert EXPECTED_PROD_CONFIG["optimizer_max_value_ownership_fade"] == 0.001
+    assert EXPECTED_PROD_CONFIG["serve_primary"] == "eb"
+    assert EXPECTED_PROD_CONFIG["payout_regime"] == "top_1"
+
+
+def test_settings_default_objective_is_tdv_when_env_unset(monkeypatch) -> None:
+    """Wipe insurance (#584): unset OPTIMIZER_OBJECTIVE_MODE yields TDV."""
+    from wnba_oracle.common.settings import Settings
+    from wnba_oracle.scheduler.job2 import build_optimize_config
+
+    monkeypatch.delenv("OPTIMIZER_OBJECTIVE_MODE", raising=False)
+    s = Settings()
+    cfg = build_optimize_config(s)
+    assert s.optimizer_objective_mode == "total_draft_value"
+    assert cfg.objective_mode == "total_draft_value"
 
 
 def test_tdv_skips_contrarian_in_build_specs(monkeypatch) -> None:
