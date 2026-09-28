@@ -39,3 +39,15 @@ def test_read_label_corpus_sql_filters_section_without_date_cap() -> None:
     # No artificial year / date lower bound in the SQL body.
     assert "slate_date >=" not in src
     assert "slate_date >" not in src
+
+
+def test_read_label_corpus_joins_pool_position_instead_of_stamping_f() -> None:
+    """HV training alignment (#623): position comes from job1, not a literal F."""
+
+    src = inspect.getsource(reads.read_label_corpus)
+    assert "LEFT JOIN job1_enrichment" in src
+    assert "e.position" in src
+    assert "e.slate_date::text = l.slate_date" in src
+    assert "e.player_id = l.platform_player_id" in src
+    assert "'F' AS position" not in src
+    assert "COALESCE(NULLIF(BTRIM(e.position), ''), 'F')" in src

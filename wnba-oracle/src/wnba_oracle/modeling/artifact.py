@@ -69,9 +69,11 @@ def eb_predict_one(
     if int(player_id) not in baseline.player_alpha:
         return None
     cohort = cohort_for_position(position)
-    # F-only artifacts (#592): label corpus stamps every row as F, so G/C keys
-    # are absent. Missing cohort must fall back to trained F mean + alpha, not
-    # 0.0 (which then hits the 0.5 floor and chalks forwards-only).
+    # F-only artifacts (#592): older trains stamped every label row as F, so
+    # G/C keys are absent. Missing cohort must fall back to the trained F mean
+    # plus alpha, not 0.0 (which then hits the 0.5 floor and chalks
+    # forwards-only). New trains join job1_enrichment.position (#623). A
+    # stored G or C mean, including a stored 0.0, is used as written.
     means = baseline.cohort_means
     if cohort in means:
         cohort_mean = float(means[cohort])
