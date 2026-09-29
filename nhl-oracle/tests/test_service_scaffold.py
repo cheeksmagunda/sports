@@ -47,7 +47,10 @@ def test_health_and_stub_routes_are_observation_only() -> None:
     assert "no_live_slate_snapshot" in body["blocked_reasons"]
 
 
-def test_worker_once_emits_idle_heartbeat(capsys: pytest.CaptureFixture[str]) -> None:
+def test_worker_once_emits_idle_heartbeat(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("NHL_T40_RUNNER", "0")
     assert main(["worker", "--once"]) == 0
     line = capsys.readouterr().out.strip().splitlines()[-1]
     payload = json.loads(line)

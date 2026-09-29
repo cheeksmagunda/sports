@@ -12,9 +12,9 @@ Week 3 chronological baselines (`labels/`, `baselines/`) run on synthetic
 labels; HV train/backtest wiring prefers HV-tagged rows when present and
 reports a corpus gap when they are not. Contest algebra and a T-40 coherence
 check exist in code. There is no Real-corpus fit, no contest-law optimizer,
-and no contest entry. Staging is a health/stub shell, not a freeze
-publisher: `nhl-pipeline serve` / `nhl-pipeline worker` on sports-oracle
-`nhl-staging` (`nhl-api`, `nhl-worker`, `nhl-frontend`). Frontend scaffold:
+and no contest entry. `nhl-pipeline worker` on sports-oracle `nhl-staging`
+runs the hosted T-40 runner (#675) and `nhl-pipeline serve` reads its
+lineups (`nhl-api`, `nhl-worker`, `nhl-frontend`). Frontend scaffold:
 `frontend/` (#462). Structural outline: root `../OVERVIEW.md`.
 
 ## Win stack
@@ -27,12 +27,13 @@ keeps the contest-law detail; this table is the map.
 | HV label | `labels.hv` / `TRAINING_LABEL_SECTION` = `highestBoostedValuePlayers`. `report_hv_corpus_gap` when durable boards are missing |
 | Contest score | `nhl_oracle.contest`: ordered five, slots `(2.0, 1.8, 1.6, 1.4, 1.2)`, `value * (slot_multiplier + effective_card_boost)` |
 | Boost | `contract.boost_gate`: multiplier 0 until every club has at least 1 GP |
-| T-40 runner | `scheduler.t40` opens at `lock_at - 40m`. `run_freeze_cycle(..., ensure_t40_coherent=)` fails closed. No hosted publish |
+| T-40 runner | `nhl-pipeline worker` (#675): `scheduler.live_cycle` collects the Real day (`/home/nhl/next`), contest, games, and every game's pool; `scheduler.runner` projects and runs `evaluate_win_freeze_readiness`; `service.lineup_store` writes `nhl_t40_lineups` (preview, then frozen once inside `lock_at - 40m`; frozen rows never change). `nhl-api` serves `GET /lineup/{date}` and `GET /readiness` from that table. Lock proxy is the earliest game start on the Real day. `nhl-pipeline cycle` prints one cycle without persisting. Kill switch `NHL_T40_RUNNER=0` |
+| Projection v0 | `rankings.primaryValue` (Real's season total value) divided by public prior-season GP, shrunk toward the pool's forward/D/G mean over 10 pseudo-games. Real player ids are NHL ids. No prior GP gets the position mean; `injuryStatus` Out gets 0. `NHL_PRIMARY_VALUE_SEASON_ID` overrides the GP season |
 | Own model | `features.own_model_map` routes pre-slate history to priors / ridge-valuelaw. No LightGBM primary |
 | Ollama | Portfolio helper on the same boards (`../OVERVIEW.md`). Not an NHL serve model |
 | Serve knobs | None. No `OPTIMIZER_*` / profile env contract |
 | HV export | `scripts/export_hv_board.py` exits 78 |
-| Connectors | Real Sports read-only audit client (`ingest/realsports.py`); public NHL API via `history_loader.py` and `nhl-history-nightly.yml`; Railway staging shell in `STATUS.md` |
+| Connectors | Real Sports read-only client (`ingest/realsports.py`, audit and T-40 pool); public NHL API via `history_loader.py` and `nhl-history-nightly.yml`; Railway staging shell in `STATUS.md` |
 
 ## Connection surfaces
 
@@ -132,9 +133,9 @@ ownership-fade / leverage early. Fail closed when team-GP coverage is missing.
 T-40 win-freeze readiness (`scheduler.readiness`) refuses a five-card freeze
 unless that gate holds, the slate pool is larger than five and matches its
 denominator, and the clock is inside `lock_at - 40m`. The no-boost picker is
-`select_no_boost_five_from_full_pool`. The public runner is
-`nhl-oracle/scripts/nhl_t40_watchdog.py` (`nhl-t40-watchdog` on Actions). It
-does not invent a lineup.
+`select_no_boost_five_from_full_pool`. The hosted runner is
+`nhl-pipeline worker` (Win stack table). `nhl-oracle/scripts/nhl_t40_watchdog.py`
+(`nhl-t40-watchdog` on Actions) is a public-schedule alert only.
 Historical contest 1901 draftStats may show flat `multiplierBonus` from a
 later window and must not override the gate.
 
