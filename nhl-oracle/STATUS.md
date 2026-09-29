@@ -1,8 +1,31 @@
 # Status
 
-Last verified: 2026-09-28T03:35:50Z (#630 staging readiness probe; continues #601
-T-40 win-freeze readiness, #535 HV train/backtest wiring, #501 zero-boost
-gate, #482 nhl-staging image)
+Last verified: 2026-09-29T20:44Z (#675 hosted T-40 runner; continues #630
+staging readiness probe, #601 T-40 win-freeze readiness, #535 HV
+train/backtest wiring, #501 zero-boost gate, #482 nhl-staging image)
+
+## Hosted T-40 runner (#675)  -  2026-09-29
+
+- **Opening night gap:** on 2026-09-29 `nhl-worker` was the idle heartbeat,
+  so nothing froze at T-40 (20:20Z for the 21:00Z FLA@CAR puck drop). The
+  operator entered a hand-built five.
+- **Live proof before merge (Codespace, 2026-09-29 about 20:37Z,
+  `nhl-pipeline cycle`, no persist):** Real day `2026-09-29`, daily contest
+  `2210`, 5 games, pool 239, `pool_complete`, `zero_boost_active=true`,
+  `blocked_reasons=[]`, status `frozen`. Five: McDavid (EDM), Draisaitl
+  (EDM), Matthews (TOR), Suzuki (MTL), Eichel (VGK).
+- **Railway env (names and `sha256[:8]` only):** `nhl-worker` has
+  `DATABASE_URL` `846ad823` and `REALSPORTS_STORAGE_STATE_B64GZ` `c4a729e2`
+  (same hash as `wnba-cron-job1`). `nhl-api` has the same `DATABASE_URL`.
+  No variable was changed.
+- **Unverified:** whether `rankings.primaryValue` moves to 2026-27 totals once
+  games are played. If it does, set `NHL_PRIMARY_VALUE_SEASON_ID=20262027` on
+  `nhl-worker`. Recheck after the first slate settles. The first hosted
+  freeze on Railway is also unverified until the post-merge deploy runs.
+- **Rollback:** set `NHL_T40_RUNNER=0` on `nhl-worker` (heartbeat only), or
+  redeploy the pre-runner images: `nhl-worker`
+  `2a809ef6-8f3a-4823-9b96-77ec0c9245d8`, `nhl-api`
+  `8f953dce-a49a-4556-95df-006335a6b886` (commit `eb555ed`).
 
 ## Win stack index (#594)
 
@@ -11,7 +34,7 @@ Pointer only. Not a new live check.
 - Code contract (HV label, zero-boost gate, T-40 skeleton, no serve knobs,
   export stub exit 78): `README.md` (Win stack).
 - Staging health URLs and the corpus gap: sections below.
-- Ollama is not an NHL model and there is still no hosted freeze publish.
+- Ollama is not an NHL model. The hosted freeze is the #675 runner below.
   LLM-internal runs-on-shape: learn ticks and tilt sit on top of the
   sport model and never replace it. Role and shape-and-condition
   campaign (#653): root `../OVERVIEW.md` (Win stack).
@@ -39,8 +62,8 @@ facts below were not re-queried for that doc. No serving flip.
   its denominator, effective card boost is 0 while the all-teams gate is
   closed, and the clock is inside the window. `GET /readiness` and
   `nhl-pipeline readiness` report that check. With no injected slate they
-  stay `freeze_ready=false` and do not invent a lineup. **Hosted freeze
-  publish is still unverified live** (no snapshot collector on the worker).
+  stay `freeze_ready=false` and do not invent a lineup. The hosted collector
+  and publish are the #675 runner (section above).
 - **Own-model map:** `features.own_model_map` routes pre-slate history features
   into priors / future ridge-valuelaw (explicitly **no LightGBM primary**).
 - **RS contest HV ingest gap (verified in-tree):** Week 2 audit seeds redacted
@@ -164,8 +187,8 @@ facts below were not re-queried for that doc. No serving flip.
 - At the probe, the next main commit `aae11d7` was still QUEUED (`nhl-api`
   `87b3ad0a-b350-4642-8abb-6b29140e33b9`, `nhl-worker`
   `2a0abd7e-cbaf-416d-b898-abdb4aa1c333`, created 2026-09-28T03:34:05Z).
-  Auto-deploy on later `main` pushes can replace the IDs above. Hosted
-  freeze publish stays unverified until a complete live slate is injected.
+  Auto-deploy on later `main` pushes can replace the IDs above. Current
+  runner deploy state: #675 section.
 - Rollback if a later `nhl-api` or `nhl-worker` deploy fails: api
   `eaa68181-e33d-4b97-953d-a1aaefdfdad4`, worker
   `d5360d12-99c9-4eff-9f65-26b39c6e6b4c`. Pre-readiness images, which do
@@ -262,7 +285,7 @@ facts below were not re-queried for that doc. No serving flip.
   Dockerfile + `railway.toml` matching the WNBA frontend deploy shape.
 - Staging container shell (#482 / #601 / #630): `nhl-pipeline serve`,
   `worker`, and `readiness`. Live deploy IDs are in the Railway section
-  above. No hosted freeze publisher yet.
+  above. Hosted freeze publisher: #675 runner.
 - Not started: Real-corpus baseline fit / walk-forward report, contest-law
   optimizer, production NHL serving / contest entry. Any future
   picker/backtest must assume zero boosts until every NHL team has played

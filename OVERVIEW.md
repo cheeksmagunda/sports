@@ -57,8 +57,8 @@ not restore NFL blend 0.75. Near-term slate facts stay in each app
    reference bar, not the fit target.
 2. **Own model, inside the app.** WNBA serve primary is empirical-Bayes
    (`WNBA_SERVE_PRIMARY`, code default `eb`). NFL serve math is valuelaw
-   plus feature ridge. NHL priors / ridge-valuelaw path is in-app and not
-   a hosted freeze. LightGBM is not the primary. No new model stack lives
+   plus feature ridge. NHL projection v0 (Real `primaryValue` per prior
+   GP) feeds the hosted T-40 runner (#675). LightGBM is not the primary. No new model stack lives
    in `oracle-core`.
 3. **Ollama, on top of that model path.** `scripts/ollama_hv_watcher` is
    LLM-internal runs-on-shape. Learn ticks and, when armed, tilt go into
@@ -87,7 +87,7 @@ not restore NFL blend 0.75. Near-term slate facts stay in each app
 |---|---|---|---|---|
 | WNBA | `job2` once at first tip minus `FREEZE_LEAD_MINUTES` (code default 40) | `wnba_oracle.scheduler.job2`, `api/slate.py` | `wnba-pre-freeze-guard.yml`, `wnba-oracle/scripts/pre_freeze_guard.py` | Yes. Schedules in `wnba-oracle/STATUS.md` |
 | NFL | worker publish at contest cutoff minus 40 minutes | `nfl_oracle.recommendations.pipeline`, `recommendations/cli.py` (`waiting_for_t40`) | `nfl-t40-watchdog.yml`, `nfl_oracle.recommendations.watchdog`, `nfl-oracle/scripts/nfl_t40_watchdog.py` (alert only; does not publish) | Yes. Worker facts in `nfl-oracle/STATUS.md` |
-| NHL | `scheduler.t40` (`lock_at` minus 40 minutes), optional `run_freeze_cycle(ensure_t40_coherent=...)` | `nhl_oracle.scheduler.t40`, `scheduler/freeze.py` | none | Skeleton only. No hosted freeze publish (`nhl-oracle/STATUS.md`) |
+| NHL | `nhl-pipeline worker` at earliest Real game start minus 40 minutes (`scheduler.t40`) | `nhl_oracle.scheduler.runner`, `scheduler/live_cycle.py`, `service/lineup_store.py` | `nhl-t40-watchdog.yml` (public schedule alert) | `nhl-pipeline worker` collects the Real pool, freezes at T-40, persists; `nhl-api` `/lineup/{date}` serves it (#675, `nhl-oracle/STATUS.md`) |
 | NBA | none | none | none | No freeze runner |
 | Portfolio | Ollama learn window at min(T-40) of supplied live windows | `scripts/ollama_hv_watcher` | coverage manifest gate (#526) or `SPORTS_OLLAMA_UNLOCK=1` | Codespace helper, not a freeze publisher |
 
@@ -188,8 +188,8 @@ T-40 runner, no contest optimizer. Staging shell facts: `STATUS.md`.
 
 Read-only contract audit, identity, redacted ingest, labels, baselines,
 contest algebra, zero-boost gate, and a T-40 freeze skeleton. Staging API /
-worker / frontend exist and are observation-only. No hosted freeze publish
-and no contest entry. Progress: `STATUS.md`. Roadmap: `README.md`.
+worker runs the hosted T-40 runner (#675) and the API serves its lineup.
+No contest entry. Progress: `STATUS.md`. Roadmap: `README.md`.
 
 `src/nhl_oracle/` subpackages (Python file counts at this sync):
 `contract/` 5, `ingest/` 6, `baselines/` 4, `identity/` 3, `scheduler/` 3

@@ -17,13 +17,14 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from nfl_oracle.calendar.schedule import load_schedules_csv
 from nfl_oracle.replay.hv_board_overlap import (
     BoardRow,
     parse_draft_count,
     parse_slot,
     score_board,
 )
+
+from nfl_oracle.calendar.schedule import load_schedules_csv
 from nfl_oracle.replay.slate_regime import (
     ONE_NIGHT_REGIMES,
     OPERATOR_REGIMES,

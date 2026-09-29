@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1180 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1184 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -716,7 +716,9 @@ Generated from `git ls-files`. 1180 tracked files. Regenerate with `scripts/gene
 ## nhl-oracle/src/nhl_oracle/scheduler/
 - nhl-oracle/src/nhl_oracle/scheduler/__init__.py -- NHL freeze-cycle job skeleton (no live provider, no contest entry).
 - nhl-oracle/src/nhl_oracle/scheduler/freeze.py -- NHL freeze-cycle job skeleton.
+- nhl-oracle/src/nhl_oracle/scheduler/live_cycle.py -- Live IO for one T-40 runner cycle (#675).
 - nhl-oracle/src/nhl_oracle/scheduler/readiness.py -- T-40 win-freeze readiness for a live NHL slate (observation only).
+- nhl-oracle/src/nhl_oracle/scheduler/runner.py -- Hosted T-40 runner: collect the Real pool, project, freeze, persist (#675).
 - nhl-oracle/src/nhl_oracle/scheduler/t40.py -- T-40 freeze publication policy coherent with NHL contest algebra (#535).
 - nhl-oracle/src/nhl_oracle/scheduler/watchdog.py -- Public-schedule T-40 watchdog for the NHL daily five (observation only).
 
@@ -724,6 +726,7 @@ Generated from `git ls-files`. 1180 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/src/nhl_oracle/service/__init__.py -- Minimal NHL staging HTTP service and pipeline CLI.
 - nhl-oracle/src/nhl_oracle/service/app.py -- Read-only NHL staging API scaffold.
 - nhl-oracle/src/nhl_oracle/service/cli.py -- CLI entrypoints for NHL staging API serve and idle worker roles.
+- nhl-oracle/src/nhl_oracle/service/lineup_store.py -- Postgres store for T-40 lineups written by the worker and read by the API (#675).
 
 ## nhl-oracle/tests/
 - nhl-oracle/tests/test_append_game_stats_matchup.py -- NHL public boxscore -> durable matchup corpus append.
@@ -744,6 +747,7 @@ Generated from `git ls-files`. 1180 tracked files. Regenerate with `scripts/gene
 - nhl-oracle/tests/test_realsports_auth_bootstrap.py
 - nhl-oracle/tests/test_redact.py
 - nhl-oracle/tests/test_service_scaffold.py -- Staging HTTP service and Docker/Railway scaffold contracts.
+- nhl-oracle/tests/test_t40_runner.py -- Hosted T-40 runner: pool parsing, projection, freeze decision (#675).
 - nhl-oracle/tests/test_t40_watchdog.py -- Public T-40 runner: zero boost, full roster, no invented five.
 - nhl-oracle/tests/test_win_freeze_readiness.py -- T-40 win freeze: complete pool, zero boost until every team has played.
 
