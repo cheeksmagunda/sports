@@ -1,8 +1,8 @@
 # Status
 
-Last verified: 2026-09-29T20:44Z (#675 hosted T-40 runner; continues #630
-staging readiness probe, #601 T-40 win-freeze readiness, #535 HV
-train/backtest wiring, #501 zero-boost gate, #482 nhl-staging image)
+Last verified: 2026-09-29T22:43Z (#675 hosted T-40 runner live on Railway;
+continues #630 staging readiness probe, #601 T-40 win-freeze readiness, #535
+HV train/backtest wiring, #501 zero-boost gate, #482 nhl-staging image)
 
 ## Hosted T-40 runner (#675)  -  2026-09-29
 
@@ -18,10 +18,23 @@ train/backtest wiring, #501 zero-boost gate, #482 nhl-staging image)
   `DATABASE_URL` `846ad823` and `REALSPORTS_STORAGE_STATE_B64GZ` `c4a729e2`
   (same hash as `wnba-cron-job1`). `nhl-api` has the same `DATABASE_URL`.
   No variable was changed.
+- **Live on Railway (PR #677, merge `7d790d7`):** `nhl-worker`
+  `507eaa04-b188-4777-80ee-c305691ee25d` and `nhl-api`
+  `42af31f7-fe9c-4266-882e-622349f3d447`, both SUCCESS 2026-09-29T22:33Z.
+  First worker cycle 22:41Z captured Real headers in the container, wrote
+  `nhl_t40_lineups`, and `GET /lineup/2026-09-29` returned `preview`,
+  contest 2210, pool 239, the same five as the Codespace proof.
+- **Clock-order fix (this change):** that first Railway cycle reported
+  `clock_freshness` because the worker passed a decision clock read before
+  collect. `run_cycle` now reads the clock after every fetch, so an
+  in-window cycle can freeze. Test:
+  `test_run_cycle_reads_decision_clock_after_collect`.
+- **Next slate:** 2026-09-30, first puck PIT@PHI and NYI@TOR 23:30Z, so
+  T-40 opens 22:50Z. LAK@COL 02:00Z. The first hosted freeze is unverified
+  until that window.
 - **Unverified:** whether `rankings.primaryValue` moves to 2026-27 totals once
   games are played. If it does, set `NHL_PRIMARY_VALUE_SEASON_ID=20262027` on
-  `nhl-worker`. Recheck after the first slate settles. The first hosted
-  freeze on Railway is also unverified until the post-merge deploy runs.
+  `nhl-worker`. Recheck after the first slate settles.
 - **Rollback:** set `NHL_T40_RUNNER=0` on `nhl-worker` (heartbeat only), or
   redeploy the pre-runner images: `nhl-worker`
   `2a809ef6-8f3a-4823-9b96-77ec0c9245d8`, `nhl-api`

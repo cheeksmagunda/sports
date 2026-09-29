@@ -82,7 +82,7 @@ class _Runner:
         from nhl_oracle.scheduler.live_cycle import run_cycle
 
         self.last_run = now
-        outcome = asyncio.run(run_cycle(now))
+        outcome = asyncio.run(run_cycle())
         if outcome is None:
             self.last = None
             _log({"role": "worker", "status": "no_nhl_draft", "message": "no NHL draft on Real"})
