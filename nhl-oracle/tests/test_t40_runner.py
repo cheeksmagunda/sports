@@ -178,7 +178,7 @@ def test_worker_runner_logs_cycle_without_database(
     monkeypatch.delenv("NHL_DATABASE_URL", raising=False)
     monkeypatch.setenv("NHL_T40_RUNNER", "1")
 
-    async def fake_cycle(now: datetime | None = None) -> Any:
+    async def fake_cycle() -> Any:
         return score_cycle(
             _snapshot(players, captured=LOCK - timedelta(hours=3)),
             prior_games_played=gp,
@@ -201,7 +201,7 @@ def test_worker_cycle_error_does_not_crash(
     monkeypatch.delenv("NHL_DATABASE_URL", raising=False)
     monkeypatch.setenv("NHL_T40_RUNNER", "1")
 
-    async def broken(now: datetime | None = None) -> Any:
+    async def broken() -> Any:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(live_cycle, "run_cycle", broken)
@@ -245,3 +245,35 @@ def test_store_upsert_never_replaces_a_frozen_row() -> None:
 
     source = inspect.getsource(lineup_store.save_outcome)
     assert 'where=lineups.c.status != "frozen"' in source
+
+
+async def test_run_cycle_reads_decision_clock_after_collect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The worker must never pass a pre-collect clock (#675 opening-night bug)."""
+
+    players, gp = _pool()
+    inside = LOCK - timedelta(minutes=30)
+    ticks = iter([inside - timedelta(seconds=2), inside])
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> datetime:  # type: ignore[override]
+            return next(ticks)
+
+    async def fake_collect(client: Any) -> SlateSnapshot:
+        return _snapshot(players, captured=Clock.now(UTC))
+
+    async def fake_summary(client: Any, kind: str, season_id: str) -> dict[str, Any]:
+        if kind == "team":
+            return {"data": []}
+        rows = [{"playerId": pid, "gamesPlayed": games} for pid, games in gp.items()]
+        return {"data": rows if kind == "skater" else []}
+
+    monkeypatch.setattr(live_cycle, "datetime", Clock)
+    monkeypatch.setattr(live_cycle, "collect_snapshot", fake_collect)
+    monkeypatch.setattr(live_cycle, "_summary", fake_summary)
+    outcome = await live_cycle.run_cycle()
+    assert outcome is not None
+    assert "clock_freshness" not in outcome.readiness.blocked_reasons
+    assert outcome.status == "frozen"

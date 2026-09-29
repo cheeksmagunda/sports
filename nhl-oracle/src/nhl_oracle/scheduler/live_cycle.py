@@ -96,8 +96,13 @@ async def collect_snapshot(client: httpx.AsyncClient) -> SlateSnapshot | None:
     )
 
 
-async def run_cycle(now: datetime | None = None) -> CycleOutcome | None:
-    """Collect and score one cycle. None when Real advertises no NHL draft."""
+async def run_cycle() -> CycleOutcome | None:
+    """Collect and score one cycle. None when Real advertises no NHL draft.
+
+    The decision clock is read after every fetch, never passed in. A clock
+    read before collect makes every capture look like future evidence and
+    ``clock_freshness`` blocks the freeze forever (NFL 241201a, #675).
+    """
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         snapshot = await collect_snapshot(client)
@@ -109,7 +114,7 @@ async def run_cycle(now: datetime | None = None) -> CycleOutcome | None:
             _summary(client, "goalie", prior),
             _summary(client, "team", season_id_for_date(snapshot.day)),
         )
-    decided_at = now or datetime.now(UTC)
+    decided_at = datetime.now(UTC)
     return score_cycle(
         snapshot,
         prior_games_played=prior_games_played_from_summaries(skaters, goalies),
