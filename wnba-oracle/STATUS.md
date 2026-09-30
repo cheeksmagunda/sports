@@ -1,5 +1,14 @@
 # Status
 
+## All services paused for the refactor (#681)  -  2026-09-30
+
+Operator order. Verified 2026-09-30: no active deployment on `wnba-api`, `wnba-frontend`, `wnba-cron-job1`, `wnba-cron-job1-late`, `wnba-cron-job2`, `wnba-cron-dayclose` (mono `wnba-production`), plus legacy `wnba-oracle` project `api`, `frontend`, `cron-*`; GitHub
+deploy triggers deleted, so pushes to `main` do not rebuild; cron schedules
+null; public URLs return 404. Scheduled ops workflows are disabled. No picks
+are served or frozen while paused. Postgres/Redis stay up and data is
+untouched. Everything below this section describes the pre-pause state.
+Restore: the table and order on issue #681.
+
 Last verified: 2026-09-28T17:20:00Z
 
 ## T-40 hook map (#604)  -  2026-09-28
