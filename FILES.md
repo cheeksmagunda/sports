@@ -1,6 +1,6 @@
 # File manifest (generated, do not hand-edit)
 
-Generated from `git ls-files`. 1184 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
+Generated from `git ls-files`. 1206 tracked files. Regenerate with `scripts/generate_file_manifest.py`.
 
 ## (repo root)
 - .agent.md -- Sports Oracle Portfolio Instructions
@@ -52,6 +52,7 @@ Generated from `git ls-files`. 1184 tracked files. Regenerate with `scripts/gene
 - .github/workflows/context-freshness.yml -- GitHub Actions workflow
 - .github/workflows/corpus-backup.yml -- GitHub Actions workflow
 - .github/workflows/devcontainer-smoke.yml -- GitHub Actions workflow
+- .github/workflows/frontend-shell.yml -- GitHub Actions workflow
 - .github/workflows/frontend.yml -- GitHub Actions workflow
 - .github/workflows/game-stats-matchup-corpus.yml -- GitHub Actions workflow
 - .github/workflows/hv-leaderboard-corpus.yml -- GitHub Actions workflow
@@ -113,6 +114,39 @@ Generated from `git ls-files`. 1184 tracked files. Regenerate with `scripts/gene
 - drive/nfl_probe_out/nfl_history_probe2_results.json
 - drive/nfl_probe_out/nfl_history_probe3_games.json
 - drive/nfl_probe_out/nfl_history_probe_results.json
+
+## frontend/
+- frontend/.gitignore
+- frontend/Dockerfile
+- frontend/eslint.config.mjs
+- frontend/index.html -- Static frontend page
+- frontend/package-lock.json
+- frontend/package.json
+- frontend/railway.toml -- Package/tool configuration
+- frontend/tsconfig.json
+- frontend/vite.config.ts
+- frontend/vitest.config.ts
+
+## frontend/server/
+- frontend/server/index.mjs
+- frontend/server/routes.mjs
+- frontend/server/routes.test.mjs
+
+## frontend/src/
+- frontend/src/App.tsx
+- frontend/src/main.tsx
+- frontend/src/vite-env.d.ts
+
+## frontend/src/lib/
+- frontend/src/lib/api.test.ts
+- frontend/src/lib/api.ts
+- frontend/src/lib/sports.ts
+
+## frontend/src/pages/
+- frontend/src/pages/SportPage.tsx
+
+## frontend/src/styles/
+- frontend/src/styles/main.css
 
 ## nba-oracle/
 - nba-oracle/.agent.md -- NBA Oracle agent instructions
