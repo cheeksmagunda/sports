@@ -1,5 +1,14 @@
 # Status
 
+## All services paused for the refactor (#681)  -  2026-09-30
+
+Operator order. Verified 2026-09-30: no active deployment on `nhl-api`, `nhl-worker`, `nhl-frontend` (mono `nhl-staging`); GitHub
+deploy triggers deleted, so pushes to `main` do not rebuild; cron schedules
+null; public URLs return 404. Scheduled ops workflows are disabled. No picks
+are served or frozen while paused. Postgres/Redis stay up and data is
+untouched. Everything below this section describes the pre-pause state.
+Restore: the table and order on issue #681.
+
 Last verified: 2026-09-29T22:43Z (#675 hosted T-40 runner live on Railway;
 continues #630 staging readiness probe, #601 T-40 win-freeze readiness, #535
 HV train/backtest wiring, #501 zero-boost gate, #482 nhl-staging image)

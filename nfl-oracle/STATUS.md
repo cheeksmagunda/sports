@@ -1,5 +1,14 @@
 # Status
 
+## All services paused for the refactor (#681)  -  2026-09-30
+
+Operator order. Verified 2026-09-30: no active deployment on `nfl-api` and `nfl-oracle-worker` (mono `nfl-production`), plus legacy `nfl-oracle-staging` `nfl-oracle` and `nfl-oracle-worker`; GitHub
+deploy triggers deleted, so pushes to `main` do not rebuild; cron schedules
+null; public URLs return 404. Scheduled ops workflows are disabled. No picks
+are served or frozen while paused. Postgres/Redis stay up and data is
+untouched. Everything below this section describes the pre-pause state.
+Restore: the table and order on issue #681.
+
 Last verified: 2026-09-28T17:26Z
 
 ## T-40 hook map (#604)  -  2026-09-28
