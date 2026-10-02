@@ -1,0 +1,66 @@
+name: frontend-shell
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-shell.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-shell.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+      - name: Build the exact production container path
+        working-directory: ${{ github.workspace }}
+        run: docker build --tag sports-frontend:ci frontend
+
+      - name: Smoke routing, proxy refusals, and response assurance
+        working-directory: ${{ github.workspace }}
+        run: |
+          container_id=$(docker run --detach --publish 8080:8080 sports-frontend:ci)
+          cleanup() {
+            docker rm --force "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8080/nhl | grep --fixed-strings '<div id="root">'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/api/nfl/health)" = 503
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/api/wnba/health)" = 404
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST http://127.0.0.1:8080/api/nfl/health)" = 405
+          curl --fail --silent --head http://127.0.0.1:8080/ > "$RUNNER_TEMP/frontend.headers"
+          grep --ignore-case "^content-security-policy:.*connect-src 'self'" "$RUNNER_TEMP/frontend.headers"
+          grep --ignore-case '^strict-transport-security: max-age=31536000' "$RUNNER_TEMP/frontend.headers"
+          grep --ignore-case '^x-content-type-options: nosniff' "$RUNNER_TEMP/frontend.headers"

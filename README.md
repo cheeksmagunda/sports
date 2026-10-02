@@ -210,6 +210,20 @@ workflow set, and rollback procedure. The repository may be the deployment
 source when an application needs to import `oracle-core`, but deployment
 configuration and production facts remain application-owned.
 
+### Unified frontend
+
+`frontend/` is one Vite + React app with a tab per sport (NFL, NBA, NHL),
+served by the `sports` service in the `sports-oracle` production environment.
+WNBA is not part of it and keeps its own frontend service. The runtime is a
+small Node server (`frontend/server/`) that serves `dist/` and proxies
+read-only `GET /api/<sport>/{health,readiness,history,lineup/<day>,slate/<day>}`
+to each sport's API, so the browser stays same-origin and no API needs CORS.
+Upstreams are runtime variables: `NFL_API_URL`, `NBA_API_URL`, `NHL_API_URL`
+(an unset sport answers 503 and its tab shows "not reachable"). Sport
+applications stay the owners of their APIs and domain behavior; the frontend
+holds presentation only. Local checks: `cd frontend && npm ci && npm run lint
+&& npm run typecheck && npm test && npm run build`.
+
 Production source deploys are limited to `main` and wait for the applicable
 application checks. Each application defines its own serving dependencies,
 scheduled jobs, data authority, backup boundaries, and rollback requirements in
